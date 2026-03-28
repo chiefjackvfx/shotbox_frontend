@@ -12,7 +12,7 @@ debug_modes:
   suppress_qt_multimedia_warnings: true
   ui_updates: false
 django_username: 1
-last_job_id: 83
+last_job_id: 76
 last_scroll_position: 0
 last_timeline_index: 0
 notifications: 'off'
