@@ -2,6 +2,20 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.2.0 - 2026-03-28
+
+### Changed
+
+- Improved Assignment Board sync with NukeDash so current job and timeline selection stay aligned when the board opens or refreshes.
+- Added a Show hidden checkbox to Assignment Board so hidden tasks can be displayed without changing the Hide done/approved filter.
+- Added a Stop auto refresh checkbox to Assignment Board to pause NukeDash auto-refresh directly from the board.
+- Updated refresh pause handling so drag-and-drop pauses and the new manual auto-refresh pause work together correctly.
+- Added focused test coverage for Assignment Board job sync, hidden-task filtering, and auto-refresh pause behavior.
+
+### Fixed
+
+- Fixed Assignment Board startup sync so it now loads the same active job as NukeDash instead of defaulting to the first job.
+
 ## 1.1.0 - 2026-03-28
 
 ### Added
