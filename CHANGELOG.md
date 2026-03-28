@@ -2,6 +2,13 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.0.0 - 2026-03-28
+
+### Changed
+
+- Reduced task-load cost in Nuke Dash by switching task creation from eager all-at-once rendering to queued incremental materialization. Tasks are now built in small batches, and only for the current timeline instead of every timeline in the project.
+- Also added a simple task-load status label in the UI so it shows Loading tasks... while the current timeline is filling in, then Tasks loaded when finished.
+
 ## 0.1.4 - 2026-03-28
 
 ### Changed
