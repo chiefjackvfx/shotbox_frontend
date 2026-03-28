@@ -173,6 +173,8 @@ class MainWindow(QMainWindow):
         self._review_sync_in_progress = False
         self._review_files_io = filesIO.Folders()
         self._review_refresh_requested = False
+        self._assignment_drag_refresh_pause = False
+        self._assignment_manual_refresh_pause = False
         
         # Apply saved window settings
         self._apply_window_settings()
@@ -465,6 +467,9 @@ class MainWindow(QMainWindow):
         self.page_nukedash.active_job_changed.connect(self._on_active_job_changed_for_assignment)
         self.page_nukedash.active_timeline_changed.connect(self._on_active_timeline_changed_for_assignment)
         self.page_assignment_board.drag_state_changed.connect(self._on_assignment_drag_state_changed)
+        self.page_assignment_board.auto_refresh_pause_changed.connect(
+            self._on_assignment_auto_refresh_pause_changed
+        )
         if hasattr(self, "tabs"):
             self.tabs.currentChanged.connect(self._on_tab_changed)
         QTimer.singleShot(0, self._sync_assignment_board_from_nukedash)
@@ -479,15 +484,31 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "page_assignment_board") or not hasattr(self, "page_nukedash"):
             return
         jobs_by_id = getattr(self.page_nukedash, "_jobs_by_id", None)
-        if not jobs_by_id:
-            return
-        jobs = list(jobs_by_id.values())
-        if jobs:
-            self._on_jobs_data_updated_for_assignment(jobs)
+        if jobs_by_id:
+            jobs = list(jobs_by_id.values())
+            if jobs:
+                self._on_jobs_data_updated_for_assignment(jobs)
+        job_data = self._get_active_job_data()
+        if job_data:
+            self._on_active_job_changed_for_assignment(job_data)
+            if hasattr(self.page_nukedash, "timelines_tabs"):
+                self._on_active_timeline_changed_for_assignment(
+                    self.page_nukedash.timelines_tabs.currentIndex()
+                )
 
     def _on_assignment_drag_state_changed(self, active: bool) -> None:
+        self._assignment_drag_refresh_pause = active
+        self._apply_assignment_refresh_pause()
+
+    def _on_assignment_auto_refresh_pause_changed(self, paused: bool) -> None:
+        self._assignment_manual_refresh_pause = paused
+        self._apply_assignment_refresh_pause()
+
+    def _apply_assignment_refresh_pause(self) -> None:
         if hasattr(self, "page_nukedash") and hasattr(self.page_nukedash, "set_auto_refresh_paused"):
-            self.page_nukedash.set_auto_refresh_paused(active)
+            self.page_nukedash.set_auto_refresh_paused(
+                self._assignment_drag_refresh_pause or self._assignment_manual_refresh_pause
+            )
 
     def _on_jobs_data_updated_for_assignment(self, jobs: list):
         if not hasattr(self, "page_assignment_board"):
@@ -497,6 +518,9 @@ class MainWindow(QMainWindow):
     def _on_active_job_changed_for_assignment(self, job_data: dict):
         if not hasattr(self, "page_assignment_board"):
             return
+        jobs_by_id = getattr(self.page_nukedash, "_jobs_by_id", None)
+        if jobs_by_id:
+            self.page_assignment_board.set_jobs_data(list(jobs_by_id.values()))
         job_id = job_data.get("id")
         if job_id is not None:
             self.page_assignment_board.set_active_job_id(job_id)

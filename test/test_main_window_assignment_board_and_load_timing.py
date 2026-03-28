@@ -119,6 +119,38 @@ class FakeNotificationSystem:
     pass
 
 
+class FakeAssignmentBoardSyncPage:
+    def __init__(self):
+        self.jobs_data_calls = []
+        self.active_job_calls = []
+        self.active_timeline_calls = []
+
+    def set_jobs_data(self, jobs, force=False):
+        self.jobs_data_calls.append((jobs, force))
+
+    def set_active_job_id(self, job_id):
+        self.active_job_calls.append(job_id)
+
+    def set_active_timeline_id(self, timeline_id):
+        self.active_timeline_calls.append(timeline_id)
+
+
+class FakePauseableNukeDash:
+    def __init__(self):
+        self.pause_calls = []
+
+    def set_auto_refresh_paused(self, paused: bool):
+        self.pause_calls.append(paused)
+
+
+class FakeTimelineTabs:
+    def __init__(self, index: int = 0):
+        self._index = index
+
+    def currentIndex(self):
+        return self._index
+
+
 def import_main_module():
     sys.modules.pop("main", None)
 
@@ -249,6 +281,63 @@ class TimingHarness(QMainWindow):
         return
 
 
+def build_assignment_sync_harness(main_module):
+    job_one = {"id": 1, "title": "Job A", "timelines": [{"id": 101, "title": "TL 1"}]}
+    job_two = {
+        "id": 2,
+        "title": "Job B",
+        "timelines": [
+            {"id": 201, "title": "TL 1"},
+            {"id": 202, "title": "TL 2"},
+        ],
+    }
+
+    class AssignmentSyncHarness:
+        _sync_assignment_board_from_nukedash = (
+            main_module.MainWindow._sync_assignment_board_from_nukedash
+        )
+        _on_jobs_data_updated_for_assignment = (
+            main_module.MainWindow._on_jobs_data_updated_for_assignment
+        )
+        _on_active_job_changed_for_assignment = (
+            main_module.MainWindow._on_active_job_changed_for_assignment
+        )
+        _on_active_timeline_changed_for_assignment = (
+            main_module.MainWindow._on_active_timeline_changed_for_assignment
+        )
+        _get_active_job_data = main_module.MainWindow._get_active_job_data
+
+        def __init__(self):
+            self.page_assignment_board = FakeAssignmentBoardSyncPage()
+            self.page_nukedash = types.SimpleNamespace(
+                _jobs_by_id={1: job_one, 2: job_two},
+                _active_job_id=2,
+                timelines_tabs=FakeTimelineTabs(1),
+            )
+
+    return AssignmentSyncHarness()
+
+
+def build_assignment_refresh_harness(main_module):
+    class AssignmentRefreshHarness:
+        _on_assignment_drag_state_changed = (
+            main_module.MainWindow._on_assignment_drag_state_changed
+        )
+        _on_assignment_auto_refresh_pause_changed = (
+            main_module.MainWindow._on_assignment_auto_refresh_pause_changed
+        )
+        _apply_assignment_refresh_pause = (
+            main_module.MainWindow._apply_assignment_refresh_pause
+        )
+
+        def __init__(self):
+            self._assignment_drag_refresh_pause = False
+            self._assignment_manual_refresh_pause = False
+            self.page_nukedash = FakePauseableNukeDash()
+
+    return AssignmentRefreshHarness()
+
+
 class MainWindowAssignmentBoardTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -323,6 +412,50 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
             window.close()
             window.deleteLater()
             self.app.processEvents()
+
+
+class MainWindowAssignmentBoardSyncTests(unittest.TestCase):
+    def test_active_job_sync_pushes_jobs_snapshot_to_assignment_board(self):
+        main_module, fake_modules = import_main_module()
+        with mock.patch.dict(sys.modules, fake_modules, clear=False):
+            harness = build_assignment_sync_harness(main_module)
+            active_job = harness.page_nukedash._jobs_by_id[2]
+
+            harness._on_active_job_changed_for_assignment(active_job)
+
+            self.assertEqual(
+                harness.page_assignment_board.jobs_data_calls[-1][0],
+                list(harness.page_nukedash._jobs_by_id.values()),
+            )
+            self.assertEqual(harness.page_assignment_board.active_job_calls[-1], 2)
+
+    def test_sync_from_nukedash_applies_current_job_and_timeline(self):
+        main_module, fake_modules = import_main_module()
+        with mock.patch.dict(sys.modules, fake_modules, clear=False):
+            harness = build_assignment_sync_harness(main_module)
+
+            harness._sync_assignment_board_from_nukedash()
+
+            self.assertEqual(
+                harness.page_assignment_board.jobs_data_calls[-1][0],
+                list(harness.page_nukedash._jobs_by_id.values()),
+            )
+            self.assertEqual(harness.page_assignment_board.active_job_calls[-1], 2)
+            self.assertEqual(harness.page_assignment_board.active_timeline_calls[-1], 202)
+
+
+class MainWindowAssignmentBoardRefreshPauseTests(unittest.TestCase):
+    def test_manual_pause_and_drag_pause_are_combined(self):
+        main_module, fake_modules = import_main_module()
+        with mock.patch.dict(sys.modules, fake_modules, clear=False):
+            harness = build_assignment_refresh_harness(main_module)
+
+            harness._on_assignment_auto_refresh_pause_changed(True)
+            harness._on_assignment_drag_state_changed(True)
+            harness._on_assignment_drag_state_changed(False)
+            harness._on_assignment_auto_refresh_pause_changed(False)
+
+            self.assertEqual(harness.page_nukedash.pause_calls, [True, True, True, False])
 
 
 class NukeDashLoadTimingTests(unittest.TestCase):

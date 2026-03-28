@@ -2,7 +2,7 @@ activity_auto_refresh: true
 activity_refresh_interval: 30
 always_on_top: false
 auto_refresh_enabled: true
-auto_refresh_interval: 1
+auto_refresh_interval: 5
 card_spacing: 5
 compact_view_enabled: false
 debug_modes:
@@ -13,11 +13,11 @@ debug_modes:
   suppress_qt_multimedia_warnings: true
   ui_updates: false
 django_username: 1
-enable_activity_page: false
+enable_activity_page: true
 enable_assignment_board: true
-enable_import_page: false
-enable_review_page: false
-enable_xml_import_page: false
+enable_import_page: true
+enable_review_page: true
+enable_xml_import_page: true
 last_job_id: 83
 last_scroll_position: 0
 last_timeline_index: 0
@@ -36,7 +36,7 @@ nukedash_filter_state:
   show_to_conform: false
   sort_mode: title_asc
   status_values: []
-polling_interval: 1
+polling_interval: 5
 preview_output_subdir: renders/precomp/previews
 preview_overwrite: true
 preview_quality: medium

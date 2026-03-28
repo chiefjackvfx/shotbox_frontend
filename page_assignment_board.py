@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 ShotBox Assignment Board - PyQt6
 Kanban-style drag-and-drop interface for assigning tasks to artists.
@@ -706,6 +708,7 @@ class AssignmentBoardPage(QWidget):
     """Kanban-style assignment board embedded as a tab."""
 
     drag_state_changed = pyqtSignal(bool)
+    auto_refresh_pause_changed = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -719,6 +722,8 @@ class AssignmentBoardPage(QWidget):
         self._pending_jobs_data = None
         self._deferred_jobs_data = None
         self._hide_done_approved = True
+        self._show_hidden_tasks = False
+        self._pause_auto_refresh = False
         self._build_token = 0
         self._pending_tasks = []
         self._pending_task_index = 0
@@ -759,6 +764,18 @@ class AssignmentBoardPage(QWidget):
         self.hide_done_checkbox.toggled.connect(self._on_hide_done_toggled)
         header_layout.addWidget(self.hide_done_checkbox)
 
+        self.show_hidden_checkbox = QCheckBox("Show hidden")
+        self.show_hidden_checkbox.setChecked(self._show_hidden_tasks)
+        self.show_hidden_checkbox.toggled.connect(self._on_show_hidden_toggled)
+        header_layout.addWidget(self.show_hidden_checkbox)
+
+        self.pause_auto_refresh_checkbox = QCheckBox("Stop auto refresh")
+        self.pause_auto_refresh_checkbox.setChecked(self._pause_auto_refresh)
+        self.pause_auto_refresh_checkbox.toggled.connect(
+            self._on_pause_auto_refresh_toggled
+        )
+        header_layout.addWidget(self.pause_auto_refresh_checkbox)
+
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.clicked.connect(self._refresh_from_api)
         header_layout.addWidget(self.refresh_btn)
@@ -796,9 +813,6 @@ class AssignmentBoardPage(QWidget):
         self.set_jobs_data(jobs, force=True)
 
     def set_jobs_data(self, jobs: list, force: bool = False):
-        if self.isVisible() and not force:
-            self._deferred_jobs_data = jobs
-            return
         if not self.isVisible():
             self._deferred_jobs_data = jobs
             return
@@ -823,10 +837,10 @@ class AssignmentBoardPage(QWidget):
     def set_active_job_id(self, job_id: int | None):
         if job_id is None:
             return
+        self._active_job_id = job_id
         for i in range(self.job_combo.count()):
             if self.job_combo.itemData(i) == job_id:
                 if self.job_combo.currentIndex() == i:
-                    self._active_job_id = job_id
                     if not self.columns:
                         self._populate_timeline_combo()
                         self._rebuild_board()
@@ -933,6 +947,14 @@ class AssignmentBoardPage(QWidget):
     def _on_hide_done_toggled(self, checked: bool) -> None:
         self._hide_done_approved = checked
         self._rebuild_board()
+
+    def _on_show_hidden_toggled(self, checked: bool) -> None:
+        self._show_hidden_tasks = checked
+        self._rebuild_board()
+
+    def _on_pause_auto_refresh_toggled(self, checked: bool) -> None:
+        self._pause_auto_refresh = checked
+        self.auto_refresh_pause_changed.emit(checked)
 
     def _clear_board(self):
         while self.board_layout.count():
@@ -1057,7 +1079,7 @@ class AssignmentBoardPage(QWidget):
         return tasks
 
     def _should_show_task(self, task_data: dict) -> bool:
-        if task_data.get("hidden"):
+        if task_data.get("hidden") and not self._show_hidden_tasks:
             return False
         if not self._hide_done_approved:
             return True
