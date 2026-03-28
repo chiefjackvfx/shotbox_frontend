@@ -264,13 +264,13 @@ def setup_shot_card_ui(widget):
     
     widget.btn_open_assets = QPushButton(widget.shot_btns)
     widget.btn_open_assets.setObjectName("btn_open_assets")
-    widget.btn_open_assets.setText("assets folder")
+    widget.btn_open_assets.setText("Assets")
     
     widget.horizontalLayout_3.addWidget(widget.btn_open_assets)
     
     widget.btn_open_precomp = QPushButton(widget.shot_btns)
     widget.btn_open_precomp.setObjectName("btn_open_precomp")
-    widget.btn_open_precomp.setText("Precomp folder")
+    widget.btn_open_precomp.setText("Precomp")
     
     widget.horizontalLayout_3.addWidget(widget.btn_open_precomp)
     

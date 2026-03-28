@@ -61,7 +61,7 @@ DEFAULT_SETTINGS = {
     # UI density settings
     "shots_layout_mode": "list",  # list/grid
     "compact_view_enabled": False,
-    "preview_thumbnail_size": "Medium",  # Tiny/Small/Medium/Large
+    "preview_thumbnail_size": "Medium",  # NoThumb/Tiny/Small/Medium/Large
     "card_spacing": 8,  # px between shot cards
     "row_height": 0,  # px, 0 = auto
     
@@ -77,6 +77,7 @@ DEFAULT_SETTINGS = {
         "api_calls": False,
         "ui_updates": False,
         "notifications": False,
+        "project_load_profiler": False,
         "suppress_qt_multimedia_warnings": False,
     },
     
@@ -100,6 +101,11 @@ DEFAULT_SETTINGS = {
     # Startup behavior
     "startup_tab": 0,  # 0=Tasks, 1=Review, 2=XML Import, 3=Activity, 4=Settings
     "show_startup_loading_dialog": True,
+    "enable_assignment_board": False,
+    "enable_review_page": False,
+    "enable_activity_page": False,
+    "enable_import_page": False,
+    "enable_xml_import_page": False,
     
     # Notifications (future feature)
     "notifications": "off",  # "off", "silent", "on"
@@ -423,6 +429,12 @@ class SettingsPage(QWidget):
         self.debug_notifications_check.setToolTip("Log activity notification diagnostics")
         debug_layout.addWidget(self.debug_notifications_check)
 
+        self.debug_project_load_profiler_check = QCheckBox("Project Load Profiler")
+        self.debug_project_load_profiler_check.setToolTip(
+            "Print a per-project switch timing breakdown to the console"
+        )
+        debug_layout.addWidget(self.debug_project_load_profiler_check)
+
         self.debug_qt_multimedia_check = QCheckBox("Suppress Qt Multimedia Warnings")
         self.debug_qt_multimedia_check.setToolTip(
             "Hide noisy QFFmpeg disconnect warnings in the console"
@@ -457,7 +469,7 @@ class SettingsPage(QWidget):
         density_layout = QFormLayout(density_group)
 
         self.preview_size_combo = NoScrollComboBox()
-        self.preview_size_combo.addItems(["Tiny", "Small", "Medium", "Large"])
+        self.preview_size_combo.addItems(["NoThumb", "Tiny", "Small", "Medium", "Large"])
         density_layout.addRow("Preview Size:", self.preview_size_combo)
 
         self.card_spacing_spin = NoScrollSpinBox()
@@ -521,6 +533,28 @@ class SettingsPage(QWidget):
 
         self.show_startup_loading_check = QCheckBox("Show Loading Dialog on Startup")
         startup_layout.addRow("", self.show_startup_loading_check)
+
+        self.enable_assignment_board_check = QCheckBox("Enable Assignment Board Tab")
+        startup_layout.addRow("", self.enable_assignment_board_check)
+
+        self.enable_review_page_check = QCheckBox("Enable Review Tab")
+        startup_layout.addRow("", self.enable_review_page_check)
+
+        self.enable_activity_page_check = QCheckBox("Enable Activity Tab")
+        startup_layout.addRow("", self.enable_activity_page_check)
+
+        self.enable_import_page_check = QCheckBox("Enable Import Tab")
+        startup_layout.addRow("", self.enable_import_page_check)
+
+        self.enable_xml_import_page_check = QCheckBox("Enable XML Import Tab")
+        startup_layout.addRow("", self.enable_xml_import_page_check)
+
+        startup_pages_note = QLabel(
+            "Optional page toggles apply on the next app launch."
+        )
+        startup_pages_note.setWordWrap(True)
+        startup_pages_note.setObjectName("startup_pages_note")
+        startup_layout.addRow("", startup_pages_note)
 
         container_layout.addWidget(startup_group)
         
@@ -711,6 +745,9 @@ class SettingsPage(QWidget):
         self.debug_notifications_check.setChecked(
             self._settings.get("debug_modes.notifications", False)
         )
+        self.debug_project_load_profiler_check.setChecked(
+            self._settings.get("debug_modes.project_load_profiler", False)
+        )
         self.debug_qt_multimedia_check.setChecked(
             self._settings.get("debug_modes.suppress_qt_multimedia_warnings", False)
         )
@@ -746,6 +783,21 @@ class SettingsPage(QWidget):
             self.startup_tab_combo.setCurrentIndex(idx)
         self.show_startup_loading_check.setChecked(
             self._settings.get("show_startup_loading_dialog", True)
+        )
+        self.enable_assignment_board_check.setChecked(
+            self._settings.get("enable_assignment_board", False)
+        )
+        self.enable_review_page_check.setChecked(
+            self._settings.get("enable_review_page", False)
+        )
+        self.enable_activity_page_check.setChecked(
+            self._settings.get("enable_activity_page", False)
+        )
+        self.enable_import_page_check.setChecked(
+            self._settings.get("enable_import_page", False)
+        )
+        self.enable_xml_import_page_check.setChecked(
+            self._settings.get("enable_xml_import_page", False)
         )
         
         # Notifications
@@ -833,6 +885,11 @@ class SettingsPage(QWidget):
             "debug_modes.notifications", self.debug_notifications_check.isChecked(), save=False
         )
         self._settings.set(
+            "debug_modes.project_load_profiler",
+            self.debug_project_load_profiler_check.isChecked(),
+            save=False,
+        )
+        self._settings.set(
             "debug_modes.suppress_qt_multimedia_warnings",
             self.debug_qt_multimedia_check.isChecked(),
             save=False,
@@ -863,6 +920,11 @@ class SettingsPage(QWidget):
         # Startup
         self._settings.set("startup_tab", self.startup_tab_combo.currentData(), save=False)
         self._settings.set("show_startup_loading_dialog", self.show_startup_loading_check.isChecked(), save=False)
+        self._settings.set("enable_assignment_board", self.enable_assignment_board_check.isChecked(), save=False)
+        self._settings.set("enable_review_page", self.enable_review_page_check.isChecked(), save=False)
+        self._settings.set("enable_activity_page", self.enable_activity_page_check.isChecked(), save=False)
+        self._settings.set("enable_import_page", self.enable_import_page_check.isChecked(), save=False)
+        self._settings.set("enable_xml_import_page", self.enable_xml_import_page_check.isChecked(), save=False)
         
         # Notifications
         if self.notif_off_radio.isChecked():
@@ -903,7 +965,8 @@ class SettingsPage(QWidget):
             QMessageBox.information(
                 self,
                 "Settings Saved",
-                "Your settings have been saved successfully."
+                "Your settings have been saved successfully.\n\n"
+                "Startup page toggles apply on the next app launch."
             )
             # Emit signals for settings that can be applied immediately
             self.settings_changed.emit("auto_refresh_enabled", self.auto_refresh_check.isChecked())
@@ -941,6 +1004,10 @@ class SettingsPage(QWidget):
             self.settings_changed.emit("debug_modes.ui_updates", self.debug_ui_check.isChecked())
             self.settings_changed.emit(
                 "debug_modes.notifications", self.debug_notifications_check.isChecked()
+            )
+            self.settings_changed.emit(
+                "debug_modes.project_load_profiler",
+                self.debug_project_load_profiler_check.isChecked(),
             )
             self.settings_changed.emit(
                 "debug_modes.suppress_qt_multimedia_warnings",

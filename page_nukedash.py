@@ -30,6 +30,7 @@ import widgets
 import http_help
 import filesIO
 import nuke_detector
+import project_load_profiler
 from nuke_lock_utils import display_owner_name, parse_lock_info
 from settings import get_settings_manager
 
@@ -262,9 +263,13 @@ class page_nukedash(QMainWindow):
         ui_path = os.path.join(SCRIPT_DIR, "basic.ui")
         uic.loadUi(ui_path, self)
 
+        self._load_timing_context = None
+        self._load_timing_started_at = None
+        self._set_loaded_time_text("--")
+
 
         # Populate preview size options
-        self.comboBox_preview_size.addItems(["Tiny", "Small", "Medium", "Large"])
+        self.comboBox_preview_size.addItems(["NoThumb", "Tiny", "Small", "Medium", "Large"])
         self.comboBox_preview_size.setCurrentText("Medium")
 
         sort_combo = getattr(self, "comboBox_sort", None)
@@ -291,6 +296,7 @@ class page_nukedash(QMainWindow):
 
         # Define mapping of labels to pixel widths
         self._preview_size_map = {
+            "NoThumb": 240,
             "Tiny" : 80,
             "Small": 160,
             "Medium": 240,
@@ -397,6 +403,17 @@ class page_nukedash(QMainWindow):
         self._lock_interval_ms = 45_000
         self._lock_release_grace_sec = 90
         self._owned_locks_by_shot_id = {}
+        self._project_load_profiler = project_load_profiler.ProjectLoadProfiler(
+            enabled=bool(
+                self._settings_manager.get("debug_modes.project_load_profiler", False)
+            )
+        )
+        project_load_profiler.install_profiler(self._project_load_profiler)
+        self._project_load_report_timer = QTimer(self)
+        self._project_load_report_timer.setSingleShot(True)
+        self._project_load_report_timer.timeout.connect(self._emit_project_load_report_if_ready)
+        self._project_load_report_poll_ms = 50
+        self._project_load_report_grace_seconds = 2.0
 
         self._lock_sync_timer = QTimer(self)
         self._lock_sync_timer.setInterval(self._lock_interval_ms)
@@ -410,6 +427,7 @@ class page_nukedash(QMainWindow):
         self._lock_heartbeat_timer.setInterval(self._lock_interval_ms)
         self._lock_heartbeat_timer.timeout.connect(self._on_lock_heartbeat_tick)
 
+        self._start_load_timing("startup")
         self._worker.fetch()
         self._start_lock_maintenance_timers()
         
@@ -438,6 +456,78 @@ class page_nukedash(QMainWindow):
                 vbar = scroll_area.verticalScrollBar()
                 if vbar:
                     vbar.valueChanged.connect(self._on_scroll_activity)
+
+    def _set_loaded_time_text(self, value: str) -> None:
+        label = getattr(self, "label_loaded_time", None)
+        if label is not None:
+            label.setText(f"Loaded in: {value}")
+
+    def _start_load_timing(self, context: str) -> None:
+        self._load_timing_context = context
+        self._load_timing_started_at = time.perf_counter()
+        self._set_loaded_time_text("loading...")
+
+    def _finish_load_timing(self) -> None:
+        if self._load_timing_started_at is None:
+            self._load_timing_context = None
+            return
+        elapsed = max(0.0, time.perf_counter() - self._load_timing_started_at)
+        self._set_loaded_time_text(f"{elapsed:.1f}s")
+        self._load_timing_context = None
+        self._load_timing_started_at = None
+
+    def _fail_load_timing(self) -> None:
+        if self._load_timing_context is None:
+            return
+        self._set_loaded_time_text("failed")
+        self._load_timing_context = None
+        self._load_timing_started_at = None
+
+    def _finish_timed_load_after_data(self) -> None:
+        if self._load_timing_context == "manual_refresh":
+            self._finish_load_timing()
+        elif self._load_timing_context == "startup" and self.comboBox_jobs.count() == 0:
+            self._finish_load_timing()
+
+    def _set_project_load_profiler_enabled(self, enabled: bool) -> None:
+        enabled = bool(enabled)
+        if not enabled and self._project_load_profiler.has_active_session():
+            self._project_load_profiler.mark_incomplete("disabled")
+            self._emit_project_load_report_if_ready(force=True)
+        self._project_load_profiler.set_enabled(enabled)
+
+    def _start_project_switch_profile(self, job_data: dict) -> None:
+        if not self._project_load_profiler.enabled:
+            return
+        if self._project_load_profiler.has_active_session():
+            self._project_load_profiler.mark_incomplete("replaced_by_new_switch")
+            self._emit_project_load_report_if_ready(force=True)
+        self._project_load_report_timer.stop()
+        self._project_load_profiler.start_session(
+            job_data.get("id"), job_data.get("title", "Untitled Job")
+        )
+
+    def _complete_project_switch_profile(self) -> None:
+        if not self._project_load_profiler.has_active_session():
+            return
+        self._project_load_profiler.mark_success()
+        self._emit_project_load_report_if_ready()
+
+    def _fail_project_switch_profile(self, reason: str) -> None:
+        if not self._project_load_profiler.has_active_session():
+            return
+        self._project_load_profiler.mark_failed(reason)
+        self._emit_project_load_report_if_ready(force=True)
+
+    def _emit_project_load_report_if_ready(self, force: bool = False) -> None:
+        emitted = self._project_load_profiler.emit_report_if_ready(
+            grace_seconds=self._project_load_report_grace_seconds,
+            force=force,
+        )
+        if emitted or not self._project_load_profiler.has_pending_report():
+            self._project_load_report_timer.stop()
+            return
+        self._project_load_report_timer.start(self._project_load_report_poll_ms)
     
     def _on_scroll_activity(self, value):
         """Called when user scrolls - defer expensive operations."""
@@ -1189,12 +1279,19 @@ class page_nukedash(QMainWindow):
 
     def _on_preview_size_changed(self, text):
         width = self._preview_size_map.get(text, 240)
+        thumbnails_enabled = text != "NoThumb"
+        if hasattr(widgets, "set_global_thumbnail_mode"):
+            widgets.set_global_thumbnail_mode(thumbnails_enabled, width)
 
         tabs = self.timelines_tabs
         for i in range(tabs.count()):
             container = tabs.widget(i)
             # find all ShotCard descendants in this tab
             for shot in container.findChildren(widgets.ShotCard):
+                if hasattr(shot, "set_thumbnails_enabled"):
+                    shot.set_thumbnails_enabled(thumbnails_enabled)
+                if not thumbnails_enabled:
+                    continue
                 if hasattr(shot, "set_thumbnail_width"):
                     shot.set_thumbnail_width(width)
 
@@ -1322,6 +1419,7 @@ class page_nukedash(QMainWindow):
 
 
     def refresh_clicked(self):
+        self._start_load_timing("manual_refresh")
         parent_window = self.window()
         self._loading_dialog.show_loading(parent_window, "Refreshing...")
         self._worker.fetch()
@@ -1586,6 +1684,8 @@ class page_nukedash(QMainWindow):
     @pyqtSlot(str)
     def _on_error(self, msg):
         self._loading_dialog.hide_loading()  # Hide loading dialog on error
+        self._fail_load_timing()
+        self._fail_project_switch_profile(str(msg))
         pass  # Could log to file if needed
         # print("API error:", msg)
 
@@ -1696,6 +1796,7 @@ class page_nukedash(QMainWindow):
         # Use force=True to apply even if user happens to be scrolling
         QTimer.singleShot(50, lambda: self._apply_filters(force=True))
         self.jobs_data_updated.emit(jobs)
+        self._finish_timed_load_after_data()
         
     def _on_job_selected(self, index):
         if index < 0:
@@ -1703,20 +1804,28 @@ class page_nukedash(QMainWindow):
         job_id = self.comboBox_jobs.itemData(index)
         job = self._jobs_by_id.get(job_id)
         if job:
-            # Stop any existing loading and reset the loading flag
-            self._chunked_loader.stop()
-            self._is_chunked_loading = False  # BUGFIX: Reset flag when stopping
-            
-            # Clear pending scroll restore since user is manually selecting a job
-            self._pending_scroll_restore = None
-            
-            # Find the top-level window for proper centering
-            parent_window = self.window()
-            
-            # Show loading dialog
-            job_title = job.get("title", "job")
-            self._loading_dialog.show_loading(parent_window, f"Loading {job_title}...")
-            
+            is_explicit_switch = not (
+                self._initial_load and self._load_timing_context == "startup"
+            )
+            if is_explicit_switch:
+                self._start_project_switch_profile(job)
+            with self._project_load_profiler.measure_wall("job_lookup"):
+                if is_explicit_switch:
+                    self._start_load_timing("job_switch")
+                # Stop any existing loading and reset the loading flag
+                self._chunked_loader.stop()
+                self._is_chunked_loading = False  # BUGFIX: Reset flag when stopping
+                
+                # Clear pending scroll restore since user is manually selecting a job
+                self._pending_scroll_restore = None
+                
+                # Find the top-level window for proper centering
+                parent_window = self.window()
+                
+                # Show loading dialog
+                job_title = job.get("title", "job")
+                self._loading_dialog.show_loading(parent_window, f"Loading {job_title}...")
+                
             # Start chunked loading after dialog is shown
             QTimer.singleShot(50, lambda: self._start_job_loading(job))
     
@@ -1726,171 +1835,173 @@ class page_nukedash(QMainWindow):
         self._active_job_id = job_data.get("id")
         effective_layout_mode = self._effective_shots_layout_mode()
 
-        # Build list of tasks to execute - each task is (callable, description)
-        tasks = []
-        tabs = self.timelines_tabs
-        
-        # First, collect existing tabs
-        existing_tabs = {tabs.widget(i).objectName(): tabs.widget(i)
-                    for i in range(tabs.count())
-                    if tabs.widget(i) and tabs.widget(i).objectName()}
-        
-        timelines = job_data.get("timelines", [])
-        keep_tab_names = set()
-        
-        # We'll store references to timeline widgets we create/find
-        self._timeline_widgets = {}
-        
-        # Phase 1: Create/prepare timeline containers (without shots)
-        for tl in timelines:
-            tid = tl.get("id")
-            name = f"timeline-{tid}"
-            title = tl.get("title", f"Timeline {tid}")
-            keep_tab_names.add(name)
+        with self._project_load_profiler.measure_wall("timeline_build"):
+            # Build list of tasks to execute - each task is (callable, description)
+            tasks = []
+            tabs = self.timelines_tabs
             
-            if name in existing_tabs:
-                # Store existing widget reference
-                self._timeline_widgets[name] = existing_tabs[name]
-                # Task: clear existing shots to prepare for reload
-                w = existing_tabs[name]
-                def prepare_existing_task(widget=w, t=title):
-                    idx = tabs.indexOf(widget)
-                    if idx >= 0:
-                        tabs.setTabText(idx, t)
-                    if hasattr(widget, "set_nuke_open_handler"):
-                        widget.set_nuke_open_handler(self._handle_nuke_open_request)
-                    if hasattr(widget, "set_layout_mode"):
-                        widget.set_layout_mode(effective_layout_mode, self._card_spacing)
-                    if hasattr(widget, "set_compact_mode"):
-                        widget.set_compact_mode(self._compact_view_enabled)
-                    # Clear existing shot cards
-                    if hasattr(widget, 'shots_layout'):
-                        layout = widget.shots_layout
-                        layout.setSpacing(max(0, int(self._card_spacing)))
-                        while layout.count():
-                            item = layout.takeAt(0)
-                            if item.widget():
-                                item.widget().deleteLater()
-                tasks.append((prepare_existing_task, f"Preparing {title}..."))
-            else:
-                # Task: create new empty timeline container
-                def create_timeline_task(data=tl, t=title, n=name, tid_=tid):
-                    # Create a minimal TimelineFrame without populating shots
-                    w = widgets.TimelineFrame.__new__(widgets.TimelineFrame)
-                    QWidget.__init__(w)
-                    w.show_hidden = self.show_hidden_shots
-                    w._last_timeline = data
-                    w._layout_mode = effective_layout_mode
-                    w._compact_mode = self._compact_view_enabled
-                    w._nuke_open_handler = self._handle_nuke_open_request
-                    w.setObjectName(n)
-
-                    # Set up the basic layout structure
-                    w.frame = QFrame()
-                    w.frame.setFrameShape(QFrame.Shape.StyledPanel)
-                    frame_layout = QVBoxLayout()
-                    w.shots_layout = widgets._create_shots_layout(effective_layout_mode, self._card_spacing)
-                    w.shots_layout.setSpacing(max(0, int(self._card_spacing)))
-                    frame_layout.addLayout(w.shots_layout)
-                    w.frame.setLayout(frame_layout)
-                    
-                    main_layout = QVBoxLayout(w)
-                    main_layout.addWidget(w.frame)
-                    w.setLayout(main_layout)
-                    
-                    tabs.addTab(w, t)
-                    self._timeline_widgets[n] = w
-                tasks.append((create_timeline_task, f"Creating {title}..."))
-        
-        # Tasks: remove stale tabs
-        for name, w in existing_tabs.items():
-            if name not in keep_tab_names:
-                def remove_task(widget=w, tab_name=name):
-                    idx = tabs.indexOf(widget)
-                    if idx >= 0:
-                        tabs.removeTab(idx)
-                    widget.deleteLater()
-                tasks.append((remove_task, "Cleaning up..."))
-        
-        # Phase 2: Create individual shot cards for each timeline
-        hide_hidden_tasks = not self.show_hidden_tasks
-        for tl in timelines:
-            tid = tl.get("id")
-            tl_name = f"timeline-{tid}"
-            tl_title = tl.get("title", f"Timeline {tid}")
-            shots = tl.get("shots", [])
-
-            shot_entries = []
-            for shot in shots:
-                shot_id = shot.get("id")
-                try:
-                    shot_id_value = int(shot_id)
-                except (TypeError, ValueError):
-                    shot_id_value = 0
-                shot_entries.append(
-                    {
-                        "shot": shot,
-                        "title": str(shot.get("title", "") or "").lower(),
-                        "shot_id": shot_id_value,
-                        "task_count": self._count_sortable_tasks(shot, hide_hidden_tasks),
-                    }
-                )
-
-            for entry in self._sort_shot_entries(shot_entries):
-                shot = entry["shot"]
-                shot_id = shot.get("id")
-                shot_title = shot.get("title", f"Shot {shot_id}")
+            # First, collect existing tabs
+            existing_tabs = {tabs.widget(i).objectName(): tabs.widget(i)
+                        for i in range(tabs.count())
+                        if tabs.widget(i) and tabs.widget(i).objectName()}
+            
+            timelines = job_data.get("timelines", [])
+            keep_tab_names = set()
+            
+            # We'll store references to timeline widgets we create/find
+            self._timeline_widgets = {}
+            
+            # Phase 1: Create/prepare timeline containers (without shots)
+            for tl in timelines:
+                tid = tl.get("id")
+                name = f"timeline-{tid}"
+                title = tl.get("title", f"Timeline {tid}")
+                keep_tab_names.add(name)
                 
-                # Task: create one shot card
-                def create_shot_task(shot_data=shot, timeline_name=tl_name):
+                if name in existing_tabs:
+                    # Store existing widget reference
+                    self._timeline_widgets[name] = existing_tabs[name]
+                    # Task: clear existing shots to prepare for reload
+                    w = existing_tabs[name]
+                    def prepare_existing_task(widget=w, t=title):
+                        idx = tabs.indexOf(widget)
+                        if idx >= 0:
+                            tabs.setTabText(idx, t)
+                        if hasattr(widget, "set_nuke_open_handler"):
+                            widget.set_nuke_open_handler(self._handle_nuke_open_request)
+                        if hasattr(widget, "set_layout_mode"):
+                            widget.set_layout_mode(effective_layout_mode, self._card_spacing)
+                        if hasattr(widget, "set_compact_mode"):
+                            widget.set_compact_mode(self._compact_view_enabled)
+                        # Clear existing shot cards
+                        if hasattr(widget, 'shots_layout'):
+                            layout = widget.shots_layout
+                            layout.setSpacing(max(0, int(self._card_spacing)))
+                            while layout.count():
+                                item = layout.takeAt(0)
+                                if item.widget():
+                                    item.widget().deleteLater()
+                    tasks.append((prepare_existing_task, f"Preparing {title}..."))
+                else:
+                    # Task: create new empty timeline container
+                    def create_timeline_task(data=tl, t=title, n=name, tid_=tid):
+                        # Create a minimal TimelineFrame without populating shots
+                        w = widgets.TimelineFrame.__new__(widgets.TimelineFrame)
+                        QWidget.__init__(w)
+                        w.show_hidden = self.show_hidden_shots
+                        w._last_timeline = data
+                        w._layout_mode = effective_layout_mode
+                        w._compact_mode = self._compact_view_enabled
+                        w._nuke_open_handler = self._handle_nuke_open_request
+                        w.setObjectName(n)
+
+                        # Set up the basic layout structure
+                        w.frame = QFrame()
+                        w.frame.setFrameShape(QFrame.Shape.StyledPanel)
+                        frame_layout = QVBoxLayout()
+                        w.shots_layout = widgets._create_shots_layout(effective_layout_mode, self._card_spacing)
+                        w.shots_layout.setSpacing(max(0, int(self._card_spacing)))
+                        frame_layout.addLayout(w.shots_layout)
+                        w.frame.setLayout(frame_layout)
+                        
+                        main_layout = QVBoxLayout(w)
+                        main_layout.addWidget(w.frame)
+                        w.setLayout(main_layout)
+                        
+                        tabs.addTab(w, t)
+                        self._timeline_widgets[n] = w
+                    tasks.append((create_timeline_task, f"Creating {title}..."))
+            
+            # Tasks: remove stale tabs
+            for name, w in existing_tabs.items():
+                if name not in keep_tab_names:
+                    def remove_task(widget=w, tab_name=name):
+                        idx = tabs.indexOf(widget)
+                        if idx >= 0:
+                            tabs.removeTab(idx)
+                        widget.deleteLater()
+                    tasks.append((remove_task, "Cleaning up..."))
+            
+            # Phase 2: Create individual shot cards for each timeline
+            hide_hidden_tasks = not self.show_hidden_tasks
+            for tl in timelines:
+                tid = tl.get("id")
+                tl_name = f"timeline-{tid}"
+                tl_title = tl.get("title", f"Timeline {tid}")
+                shots = tl.get("shots", [])
+
+                shot_entries = []
+                for shot in shots:
+                    shot_id = shot.get("id")
+                    try:
+                        shot_id_value = int(shot_id)
+                    except (TypeError, ValueError):
+                        shot_id_value = 0
+                    shot_entries.append(
+                        {
+                            "shot": shot,
+                            "title": str(shot.get("title", "") or "").lower(),
+                            "shot_id": shot_id_value,
+                            "task_count": self._count_sortable_tasks(shot, hide_hidden_tasks),
+                        }
+                    )
+
+                for entry in self._sort_shot_entries(shot_entries):
+                    shot = entry["shot"]
+                    shot_id = shot.get("id")
+                    shot_title = shot.get("title", f"Shot {shot_id}")
+                    
+                    # Task: create one shot card
+                    def create_shot_task(shot_data=shot, timeline_name=tl_name):
+                        timeline_widget = self._timeline_widgets.get(timeline_name)
+                        if timeline_widget and hasattr(timeline_widget, 'shots_layout'):
+                            # BUGFIX: Check for existing shot card to prevent duplicates
+                            shot_name = f"shot-{shot_data.get('id')}"
+                            layout = timeline_widget.shots_layout
+                            for i in range(layout.count()):
+                                item = layout.itemAt(i)
+                                if item and item.widget() and item.widget().objectName() == shot_name:
+                                    # Already exists, update it instead of creating duplicate
+                                    item.widget().update_from_data(shot_data)
+                                    if hasattr(item.widget(), "set_nuke_open_handler"):
+                                        item.widget().set_nuke_open_handler(self._handle_nuke_open_request)
+                                    return
+
+                            with self._project_load_profiler.measure_work("shot_card_create"):
+                                card = widgets.ShotCard(shot_data)
+                            card.setObjectName(shot_name)
+                            card.set_nuke_open_handler(self._handle_nuke_open_request)
+                            card.set_compact_mode(self._compact_view_enabled)
+                            if (
+                                (not self._compact_view_enabled)
+                                and self._row_height
+                                and int(self._row_height) > 0
+                            ):
+                                card.setMinimumHeight(int(self._row_height))
+                            # Don't set visibility here - _apply_filters will handle it after loading
+                            timeline_widget.shots_layout.addWidget(card)
+                    
+                    tasks.append((create_shot_task, f"{tl_title}: {shot_title}"))
+            
+            # Phase 3: Add spacers to each timeline after shots are loaded
+            for tl in timelines:
+                tid = tl.get("id")
+                tl_name = f"timeline-{tid}"
+                
+                def add_spacer_task(timeline_name=tl_name):
                     timeline_widget = self._timeline_widgets.get(timeline_name)
                     if timeline_widget and hasattr(timeline_widget, 'shots_layout'):
-                        # BUGFIX: Check for existing shot card to prevent duplicates
-                        shot_name = f"shot-{shot_data.get('id')}"
-                        layout = timeline_widget.shots_layout
-                        for i in range(layout.count()):
-                            item = layout.itemAt(i)
-                            if item and item.widget() and item.widget().objectName() == shot_name:
-                                # Already exists, update it instead of creating duplicate
-                                item.widget().update_from_data(shot_data)
-                                if hasattr(item.widget(), "set_nuke_open_handler"):
-                                    item.widget().set_nuke_open_handler(self._handle_nuke_open_request)
-                                return
-
-                        card = widgets.ShotCard(shot_data)
-                        card.setObjectName(shot_name)
-                        card.set_nuke_open_handler(self._handle_nuke_open_request)
-                        card.set_compact_mode(self._compact_view_enabled)
-                        if (
-                            (not self._compact_view_enabled)
-                            and self._row_height
-                            and int(self._row_height) > 0
-                        ):
-                            card.setMinimumHeight(int(self._row_height))
-                        # Don't set visibility here - _apply_filters will handle it after loading
-                        timeline_widget.shots_layout.addWidget(card)
-                
-                tasks.append((create_shot_task, f"{tl_title}: {shot_title}"))
-        
-        # Phase 3: Add spacers to each timeline after shots are loaded
-        for tl in timelines:
-            tid = tl.get("id")
-            tl_name = f"timeline-{tid}"
+                        from PyQt6.QtWidgets import QSpacerItem, QSizePolicy
+                        if effective_layout_mode == "list":
+                            spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+                            timeline_widget.shots_layout.addItem(spacer)
+                tasks.append((add_spacer_task, "Finalizing..."))
             
-            def add_spacer_task(timeline_name=tl_name):
-                timeline_widget = self._timeline_widgets.get(timeline_name)
-                if timeline_widget and hasattr(timeline_widget, 'shots_layout'):
-                    from PyQt6.QtWidgets import QSpacerItem, QSizePolicy
-                    if effective_layout_mode == "list":
-                        spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
-                        timeline_widget.shots_layout.addItem(spacer)
-            tasks.append((add_spacer_task, "Finalizing..."))
-        
-        # Store job data for after loading completes
-        self._pending_job_data = job_data
-        
-        # Start the chunked loader
-        self._chunked_loader.start_loading(tasks, self._on_job_load_complete)
+            # Store job data for after loading completes
+            self._pending_job_data = job_data
+            
+            # Start the chunked loader
+            self._chunked_loader.start_loading(tasks, self._on_job_load_complete)
     
     def _on_load_progress(self, current: int, total: int, message: str):
         """Handle progress updates from chunked loader."""
@@ -1916,6 +2027,8 @@ class page_nukedash(QMainWindow):
         
         # Hide loading dialog
         self._loading_dialog.hide_loading()
+        self._finish_load_timing()
+        self._complete_project_switch_profile()
         self._initial_load = False
         
         # Restore timeline tab and scroll position if pending

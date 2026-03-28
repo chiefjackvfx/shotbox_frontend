@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 # main.py
 """
 ShotBox Main Application
@@ -5,25 +7,34 @@ ShotBox Main Application
 import os
 import sys
 import platform
+import importlib
 from pathlib import Path
 
 from PyQt6 import QtWidgets
 from PyQt6.QtCore import QTimer, Qt, qInstallMessageHandler
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QTabWidget, QSizePolicy
-from activity_page import ActivityPage
-from review_page import ReviewPage
 import http_help
 import filesIO
-from importer_page import ImporterPage
-from import_xml_v2 import XMLImportPage
 from duration_updater import DurationUpdaterPage
 from settings import SettingsPage, get_settings_manager
 from page_nukedash import page_nukedash
-from page_assignment_board import AssignmentBoardPage
 from nuke_headless_tasks import PreviewConfig
 import widgets as widgets_module  # For updating BASE_URL
 from shotbox_notifications import NotificationSystem
+
+ENABLE_ASSIGNMENT_BOARD = False  # Default for restoring the Assignment Board tab on next launch.
+ENABLE_REVIEW_PAGE = False  # Default for restoring the Review tab on next launch.
+ENABLE_ACTIVITY_PAGE = False  # Default for restoring the Activity tab on next launch.
+ENABLE_IMPORT_PAGE = False  # Default for restoring the Import tab on next launch.
+ENABLE_XML_IMPORT_PAGE = False  # Default for restoring the XML Import tab on next launch.
+
+
+def _load_optional_class(enabled: bool, module_name: str, class_name: str):
+    if not enabled:
+        return None
+    module = importlib.import_module(module_name)
+    return getattr(module, class_name, None)
 
 
 
@@ -38,6 +49,7 @@ DEBUG_GENERAL = False
 DEBUG_API = False
 DEBUG_UI = False
 DEBUG_NOTIFICATIONS = False
+DEBUG_PROJECT_LOAD_PROFILER = False
 
 _qt_message_handler_prev = None
 
@@ -74,6 +86,22 @@ class MainWindow(QMainWindow):
         user_id = self._settings_manager.get("django_username")
         if user_id:
             http_help.DjangoAPI.set_current_user_by_id(user_id)
+
+        self._enable_assignment_board = bool(
+            self._settings_manager.get("enable_assignment_board", ENABLE_ASSIGNMENT_BOARD)
+        )
+        self._enable_review_page = bool(
+            self._settings_manager.get("enable_review_page", ENABLE_REVIEW_PAGE)
+        )
+        self._enable_activity_page = bool(
+            self._settings_manager.get("enable_activity_page", ENABLE_ACTIVITY_PAGE)
+        )
+        self._enable_import_page = bool(
+            self._settings_manager.get("enable_import_page", ENABLE_IMPORT_PAGE)
+        )
+        self._enable_xml_import_page = bool(
+            self._settings_manager.get("enable_xml_import_page", ENABLE_XML_IMPORT_PAGE)
+        )
         
         # Apply settings to modules before creating pages
         self._apply_initial_settings()
@@ -88,27 +116,47 @@ class MainWindow(QMainWindow):
         self.page_nukedash = page_nukedash()
         
         # Create the importer page
-        self.page_importer = ImporterPage()
-        #self.tabs.addTab(self.page_importer, "impoter")
+        importer_page_class = _load_optional_class(
+            self._enable_import_page, "importer_page", "ImporterPage"
+        )
+        if importer_page_class is not None:
+            self.page_importer = importer_page_class()
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self.page_nukedash, 'Tasks / Nuke dash')
-        self.page_assignment_board = AssignmentBoardPage()
-        self.tabs.addTab(self.page_assignment_board, 'Assignment Board')
-        self.page_review = ReviewPage()
-        self.tabs.addTab(self.page_review, 'Review')
-        self.tabs.addTab(self.page_importer, 'Import')
+        assignment_board_class = _load_optional_class(
+            self._enable_assignment_board, "page_assignment_board", "AssignmentBoardPage"
+        )
+        if assignment_board_class is not None:
+            self.page_assignment_board = assignment_board_class()
+            self.tabs.addTab(self.page_assignment_board, 'Assignment Board')
+        review_page_class = _load_optional_class(
+            self._enable_review_page, "review_page", "ReviewPage"
+        )
+        if review_page_class is not None:
+            self.page_review = review_page_class()
+            self.tabs.addTab(self.page_review, 'Review')
+        if hasattr(self, "page_importer"):
+            self.tabs.addTab(self.page_importer, 'Import')
 
         # XML Import V2 (combined XML parsing + Nuke setup + Django import)
-        self.page_xmlImport = XMLImportPage()
-        self.tabs.addTab(self.page_xmlImport, 'XML Import')
+        xml_import_page_class = _load_optional_class(
+            self._enable_xml_import_page, "import_xml_v2", "XMLImportPage"
+        )
+        if xml_import_page_class is not None:
+            self.page_xmlImport = xml_import_page_class()
+            self.tabs.addTab(self.page_xmlImport, 'XML Import')
 
         self.page_DurationUpdaterPage = DurationUpdaterPage()
         #self.tabs.addTab(self.page_DurationUpdaterPage, "Duration Updater")
         
         # Activity Page
-        self.page_activity = ActivityPage()
-        self.tabs.addTab(self.page_activity, '📋 Activity')
+        activity_page_class = _load_optional_class(
+            self._enable_activity_page, "activity_page", "ActivityPage"
+        )
+        if activity_page_class is not None:
+            self.page_activity = activity_page_class()
+            self.tabs.addTab(self.page_activity, '📋 Activity')
         
         # Settings page (keep at the end)
         self.page_settings = SettingsPage(self._settings_manager)
@@ -131,9 +179,12 @@ class MainWindow(QMainWindow):
         
         # Apply runtime settings into pages
         self._apply_runtime_settings_to_pages()
-        self._wire_review_page()
-        self._wire_assignment_board()
-        self._wire_activity_page()
+        if hasattr(self, "page_review"):
+            self._wire_review_page()
+        if hasattr(self, "page_assignment_board"):
+            self._wire_assignment_board()
+        if hasattr(self, "page_activity"):
+            self._wire_activity_page()
         self._apply_startup_tab()
 
     def _relax_minimum_sizes(self):
@@ -144,12 +195,18 @@ class MainWindow(QMainWindow):
 
         pages = [
             self.page_nukedash,
-            self.page_assignment_board,
-            self.page_review,
-            self.page_xmlImport,
-            self.page_activity,
             self.page_settings,
         ]
+        if hasattr(self, "page_assignment_board"):
+            pages.insert(1, self.page_assignment_board)
+        if hasattr(self, "page_review"):
+            pages.insert(1, self.page_review)
+        if hasattr(self, "page_importer"):
+            pages.insert(-1, self.page_importer)
+        if hasattr(self, "page_xmlImport"):
+            pages.insert(-1, self.page_xmlImport)
+        if hasattr(self, "page_activity"):
+            pages.insert(-1, self.page_activity)
         for page in pages:
             page.setMinimumSize(0, 0)
             page.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
@@ -178,12 +235,15 @@ class MainWindow(QMainWindow):
         self._apply_theme_file(theme_file)
 
         # Apply debug flags early (modules/pages can read these globals)
-        global DEBUG_GENERAL, DEBUG_API, DEBUG_UI, DEBUG_NOTIFICATIONS
+        global DEBUG_GENERAL, DEBUG_API, DEBUG_UI, DEBUG_NOTIFICATIONS, DEBUG_PROJECT_LOAD_PROFILER
         DEBUG_GENERAL = bool(self._settings_manager.get("debug_modes.general", False))
         DEBUG_API = bool(self._settings_manager.get("debug_modes.api_calls", False))
         DEBUG_UI = bool(self._settings_manager.get("debug_modes.ui_updates", False))
         DEBUG_NOTIFICATIONS = bool(
             self._settings_manager.get("debug_modes.notifications", False)
+        )
+        DEBUG_PROJECT_LOAD_PROFILER = bool(
+            self._settings_manager.get("debug_modes.project_load_profiler", False)
         )
         self._debug_notifications = DEBUG_NOTIFICATIONS
 
@@ -253,11 +313,24 @@ class MainWindow(QMainWindow):
         if self._settings_manager.get("always_on_top", False):
             self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
+    def _startup_tab_widget(self, startup_tab: int):
+        logical_tabs = {
+            0: getattr(self, "page_nukedash", None),
+            1: getattr(self, "page_review", None),
+            2: getattr(self, "page_xmlImport", None),
+            3: getattr(self, "page_activity", None),
+            4: getattr(self, "page_settings", None),
+        }
+        return logical_tabs.get(startup_tab)
+
     def _apply_startup_tab(self) -> None:
-        """Select the configured startup tab if possible."""
+        """Select the configured startup tab using stable logical tab ids."""
         startup_tab = self._settings_manager.get("startup_tab", 0)
-        if isinstance(startup_tab, int) and 0 <= startup_tab < self.tabs.count():
-            self.tabs.setCurrentIndex(startup_tab)
+        if not isinstance(startup_tab, int):
+            return
+        widget = self._startup_tab_widget(startup_tab)
+        if widget is not None:
+            self.tabs.setCurrentWidget(widget)
     
     def _apply_runtime_settings_to_pages(self) -> None:
         """Push saved settings into already-created page widgets/timers."""
@@ -672,8 +745,10 @@ class MainWindow(QMainWindow):
                 self.page_nukedash.checkBox_compact_view.setChecked(bool(value))
 
         elif key == "startup_tab":
-            if isinstance(value, int) and 0 <= value < self.tabs.count():
-                self.tabs.setCurrentIndex(value)
+            if isinstance(value, int):
+                widget = self._startup_tab_widget(value)
+                if widget is not None:
+                    self.tabs.setCurrentWidget(widget)
         
         elif key == "debug_modes.general":
             # Store in a global or module-level variable for general debugging
@@ -696,6 +771,14 @@ class MainWindow(QMainWindow):
             self._debug_notifications = DEBUG_NOTIFICATIONS
             if hasattr(self, "page_activity"):
                 self.page_activity.set_notifications_debug(DEBUG_NOTIFICATIONS)
+
+        elif key == "debug_modes.project_load_profiler":
+            global DEBUG_PROJECT_LOAD_PROFILER
+            DEBUG_PROJECT_LOAD_PROFILER = bool(value)
+            if hasattr(self, "page_nukedash") and hasattr(
+                self.page_nukedash, "_set_project_load_profiler_enabled"
+            ):
+                self.page_nukedash._set_project_load_profiler_enabled(bool(value))
     
     def _on_server_url_changed(self, url: str):
         """Handle server URL change."""

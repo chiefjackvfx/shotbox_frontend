@@ -1,18 +1,24 @@
 activity_auto_refresh: false
 activity_refresh_interval: 30
 always_on_top: false
-auto_refresh_enabled: true
+auto_refresh_enabled: false
 auto_refresh_interval: 35
 card_spacing: 5
 compact_view_enabled: false
 debug_modes:
   api_calls: false
   general: false
-  notifications: true
+  notifications: false
+  project_load_profiler: true
   suppress_qt_multimedia_warnings: true
   ui_updates: false
 django_username: 1
-last_job_id: 76
+enable_activity_page: false
+enable_assignment_board: false
+enable_import_page: false
+enable_review_page: false
+enable_xml_import_page: false
+last_job_id: 41
 last_scroll_position: 0
 last_timeline_index: 0
 notifications: 'off'
@@ -26,7 +32,7 @@ polling_interval: 35
 preview_output_subdir: renders/precomp/previews
 preview_overwrite: true
 preview_quality: medium
-preview_thumbnail_size: Large
+preview_thumbnail_size: Small
 remember_last_session: true
 remember_window_size: true
 row_height: 5
@@ -35,7 +41,7 @@ shots_layout_mode: grid
 show_startup_loading_dialog: true
 startup_tab: 0
 theme_file: dark_v01.qss
-window_height: 1419
-window_width: 2560
-window_x: 0
-window_y: 0
+window_height: 1059
+window_width: 1561
+window_x: 307
+window_y: 125

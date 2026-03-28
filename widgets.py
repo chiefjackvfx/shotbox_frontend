@@ -38,6 +38,7 @@ except ImportError:
 
 import http_help
 import filesIO
+import project_load_profiler
 from nuke_lock_utils import parse_lock_info
 from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
@@ -62,6 +63,15 @@ from shot_card import setup_shot_card_ui
 from task_card import setup_task_widget_ui
 
 BASE_URL = "http://192.168.10.207:8000"
+THUMBNAILS_ENABLED = True
+THUMBNAIL_TARGET_WIDTH = 240
+
+
+def set_global_thumbnail_mode(enabled: bool, width: int | None = None) -> None:
+    global THUMBNAILS_ENABLED, THUMBNAIL_TARGET_WIDTH
+    THUMBNAILS_ENABLED = bool(enabled)
+    if width is not None:
+        THUMBNAIL_TARGET_WIDTH = max(1, int(width))
 
 def clear_container(container):
     if isinstance(container, QLayout):
@@ -661,9 +671,11 @@ class ShotCard(QWidget):
         # cache
         self._thumb_sig = None
         self._thumb_orig = None           # full-res original
-        self._thumb_target_width = 240    # base width from density settings
-        self._base_thumb_target_width = 240
+        self._thumb_target_width = THUMBNAIL_TARGET_WIDTH    # base width from density settings
+        self._base_thumb_target_width = THUMBNAIL_TARGET_WIDTH
         self._thumb_pending_url = None
+        self._current_thumbnail_url = None
+        self._thumbnails_enabled = bool(THUMBNAILS_ENABLED)
         self._compact_mode = False
 
         # make sure label will not auto-stretch
@@ -717,7 +729,8 @@ class ShotCard(QWidget):
         self.btn_edit_shot_notes.clicked.connect(self._on_add_note_clicked)
 
         # Initial setup for nuke button
-        latest_nk = self.filesIO.latest_nk(self.shot_dir)
+        with project_load_profiler.measure_installed_work("disk_latest_nk"):
+            latest_nk = self.filesIO.latest_nk(self.shot_dir)
         if latest_nk:
             self.btn_open_nuke.setText(latest_nk.name)
             self.btn_open_nuke.setProperty("file_path", str(latest_nk))  # Store path on button
@@ -733,7 +746,8 @@ class ShotCard(QWidget):
         self.btn_open_assets.clicked.connect(lambda: self.filesIO.openFileLocation(assets_dir))
         self.btn_open_precomp.clicked.connect(lambda: self.filesIO.openFileLocation(Path(self.shot_dir) / "renders" / "precomp" ))
 
-        render_info = self.filesIO.latest_render_info(self.shot_dir)
+        with project_load_profiler.measure_installed_work("disk_latest_render_info"):
+            render_info = self.filesIO.latest_render_info(self.shot_dir)
         if render_info:
             render_path = render_info.get("render_path")
             render_display = render_info.get("display_name", "")
@@ -766,6 +780,7 @@ class ShotCard(QWidget):
         self._setup_nk_polling()
         self._setup_render_polling()
         self._setup_preview_polling()
+        self.set_thumbnails_enabled(self._thumbnails_enabled)
 
         self.update_from_data(data)
     
@@ -915,6 +930,30 @@ class ShotCard(QWidget):
             return max(72, int(width * 0.6))
         return width
 
+    def _thumbnail_display_widget(self):
+        if hasattr(self, "_preview_stack") and self._preview_stack is not None:
+            return self._preview_stack
+        return getattr(self, "label_thumbnail", None)
+
+    def set_thumbnails_enabled(self, enabled: bool) -> None:
+        self._thumbnails_enabled = bool(enabled)
+        display_widget = self._thumbnail_display_widget()
+        if display_widget is not None:
+            display_widget.setVisible(self._thumbnails_enabled)
+        if not self._thumbnails_enabled:
+            self._thumb_pending_url = None
+            if hasattr(self, "_video_player") and self._video_player:
+                try:
+                    self._video_player.stop()
+                except Exception:
+                    pass
+            return
+        if self._thumb_orig is not None:
+            self._apply_thumb_scale()
+            return
+        if self._current_thumbnail_url:
+            self.set_thumbnail(self._current_thumbnail_url)
+
     def _set_render_button_text(self) -> None:
         render_display = self.btn_latest_render.property("render_display")
         has_render = bool(self.btn_latest_render.property("file_path"))
@@ -1056,11 +1095,11 @@ class ShotCard(QWidget):
         if hasattr(self, "bnt_addTask") and self.bnt_addTask:
             self.bnt_addTask.setText("Add" if self._compact_mode else "Add task")
         if hasattr(self, "btn_open_assets") and self.btn_open_assets:
-            self.btn_open_assets.setText("Ast" if self._compact_mode else "assets folder")
+            #self.btn_open_assets.setText("Ast" if self._compact_mode else "assets folder")
             self.btn_open_assets.setToolTip("Open assets folder")
             self.btn_open_assets.setVisible(not self._compact_mode)
         if hasattr(self, "btn_open_precomp") and self.btn_open_precomp:
-            self.btn_open_precomp.setText("Pre" if self._compact_mode else "Precomp folder")
+            #self.btn_open_precomp.setText("Pre" if self._compact_mode else "Precomp folder")
             self.btn_open_precomp.setToolTip("Open precomp folder")
             self.btn_open_precomp.setVisible(not self._compact_mode)
 
@@ -1155,6 +1194,7 @@ class ShotCard(QWidget):
 
             thumb_path = data.get("thumbnail")
             url = f"{BASE_URL}{thumb_path}" if thumb_path else None
+            self._current_thumbnail_url = url
             self.set_thumbnail(url)
 
             # Update preview video from API data
@@ -1176,7 +1216,8 @@ class ShotCard(QWidget):
                 if name in existing:
                     existing[name].update_from_data(t)
                 else:
-                    task_widget = TaskWidget(t)
+                    with project_load_profiler.measure_installed_work("task_card_create"):
+                        task_widget = TaskWidget(t)
                     task_widget.set_compact_mode(self._compact_mode)
                     layout.addWidget(task_widget)
 
@@ -2324,18 +2365,25 @@ class ShotCard(QWidget):
     def set_thumbnail_width(self, width: int):
         self._thumb_target_width = max(1, int(width))
         self._base_thumb_target_width = self._thumb_target_width
-        self._apply_thumb_scale()
+        if self._thumbnails_enabled:
+            self._apply_thumb_scale()
 
     def set_thumbnail(self, url: str | None):
+        self._current_thumbnail_url = url
         if not url:
+            return
+        if not self._thumbnails_enabled:
+            self._thumb_pending_url = None
             return
         if url == self._thumb_sig and self._thumb_orig is not None:
             # same image, just reapply scale in case width changed
             self._apply_thumb_scale()
             return
         self._thumb_pending_url = url
+        thumb_token = project_load_profiler.start_installed_async_work("thumbnail_load")
 
         def _on_loaded(pixmap: QPixmap | None) -> None:
+            project_load_profiler.finish_installed_async_work(thumb_token)
             try:
                 if self._thumb_pending_url != url:
                     return

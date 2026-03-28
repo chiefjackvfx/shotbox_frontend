@@ -190,6 +190,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QLabel" name="label_loaded_time">
+               <property name="text">
+                <string>Loaded in:</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <spacer name="horizontalSpacer_2">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>
