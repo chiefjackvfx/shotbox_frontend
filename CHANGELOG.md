@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.1.0 - 2026-03-28
+
+### Added
+
+- change log in settings
+
 ## 1.0.1 - 2026-03-28
 
 ### Fixed
