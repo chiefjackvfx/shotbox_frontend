@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.0.1 - 2026-03-28
+
+### Fixed
+
+- fixed gap in tasks load when filterd away
+
 ## 1.0.0 - 2026-03-28
 
 ### Changed
