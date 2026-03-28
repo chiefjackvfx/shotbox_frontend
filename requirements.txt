@@ -1,0 +1,14 @@
+# Core desktop app
+PyQt6
+PyYAML
+requests
+psutil
+
+# Review / media
+av
+numpy
+
+# XML / image helpers
+opencv-python
+Pillow
+pyperclip
