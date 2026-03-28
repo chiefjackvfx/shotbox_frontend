@@ -1,0 +1,3750 @@
+#! /opt/Nuke15.2v2/libnuke-15.2.2.so -nx
+version 15.2 v2
+define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
+<layout version="1.0">
+    <window x="2560" y="0" w="2560" h="1419" maximized="1" screen="0">
+        <splitter orientation="1">
+            <split size="40"/>
+            <dock id="" hideTitles="1" activePageId="Toolbar.1">
+                <page id="Toolbar.1"/>
+            </dock>
+            <split size="1897" stretch="1"/>
+            <splitter orientation="2">
+                <split size="1377"/>
+                <dock id="" activePageId="DAG.1">
+                    <page id="DAG.1"/>
+                    <page id="Curve Editor.1"/>
+                    <page id="DopeSheet.1"/>
+                    <page id="DAG.2"/>
+                </dock>
+            </splitter>
+            <split size="615"/>
+            <splitter orientation="2">
+                <split size="1102"/>
+                <dock id="" activePageId="Properties.1">
+                    <page id="Properties.1"/>
+                    <page id="uk.co.thefoundry.backgroundrenderview.1"/>
+                </dock>
+                <split size="271"/>
+                <dock id="" activePageId="com.adrianpueyo.KnobScripterPane">
+                    <page id="com.adrianpueyo.KnobScripterPane"/>
+                </dock>
+            </splitter>
+        </splitter>
+    </window>
+    <window x="0" y="0" w="2560" h="1415" screen="1">
+        <splitter orientation="2">
+            <split size="1415"/>
+            <dock id="" activePageId="Viewer.1">
+                <page id="Viewer.1"/>
+            </dock>
+        </splitter>
+    </window>
+</layout>
+}
+Root {
+ inputs 0
+ name /mnt/projects/2_Repository/18_NUKE_TOOLS/pythonDev/Shotbox/shotbox_app_v02/template_v05.nk
+ project_directory "\[python \{nuke.script_directory()\}]"
+ frame 1001
+ first_frame 1001
+ last_frame find&replace last_frame
+ lock_range true
+ fps find&replace fps
+ format "find&replace format"
+ colorManagement OCIO
+ OCIO_config custom
+ customOCIOConfigPath Z:/PROJECTS/2_Repository/18_NUKE_TOOLS/technical/aces_1.2_custom_v01/config_custom_v01.ocio
+ defaultViewerLUT "OCIO LUTs"
+ workingSpaceLUT scene_linear
+ monitorLut ACES/sRGB
+ monitorOutLUT "sRGB (ACES)"
+ int8Lut matte_paint
+ int16Lut texture_paint
+ logLut compositing_log
+ floatLut scene_linear
+}
+BackdropNode {
+ inputs 0
+ name Backdrop_Adjust1
+ knobChanged "n = nuke.thisNode()\nk = nuke.thisKnob()\nkn = k.name()\nif kn == 'appearance_custom':\n    if n\['appearance_custom'].value() == 'Border':\n        n\['appearance'].setValue('Border')\n    else:\n        n\['appearance'].setValue('Border')\n"
+ tile_color 0x997d4d00
+ label "<p align=\"\[value align]\"><font color=\[value note_color]> \[if \{\[value bold]==true\} \{return <b>\} \{return \"\"\}] \[if \{\[value italian]==true\} \{return <i>\} \{return \"\"\}] \[if \{\[value under]==true\} \{return <u>\} \{return \"\"\}] \[if \{\[value strike]==true\} \{return <s>\} \{return \"\"\}] \[value note]"
+ note_font "MS Shell Dlg 2"
+ note_font_size 82
+ xpos -470
+ ypos 1523
+ appearance Border
+ border_width 10
+ bdwidth 1161
+ bdheight 1802
+ z_order -1
+ addUserKnob {20 User}
+ addUserKnob {22 cover l "<big><font color=yellow>Cover Selected Area</big></font>" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.coverSelectedArea()" +STARTLINE}
+ addUserKnob {26 _1 l "" -STARTLINE T "   "}
+ addUserKnob {22 extend l "<big><font color=yellow>Extend to Selected Area</big></font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.extendSelectedArea()"}
+ addUserKnob {26 label_1 l <b>Label</b>}
+ addUserKnob {43 note l Note}
+ note OUTPUT
+ addUserKnob {4 note_color l "Note Color" M {Orange White Silver Gray Black Red Maroon Yellow Olive Lime Green Aqua Teal Blue Navy Fuchsia Purple}}
+ note_color Black
+ addUserKnob {4 align l Align -STARTLINE M {Center Left Right "" "" ""}}
+ addUserKnob {6 bold l "<b>&nbsp;&nbsp;T" +STARTLINE}
+ bold true
+ addUserKnob {6 italian l "&nbsp;&nbsp;<i>T" -STARTLINE}
+ addUserKnob {6 under l "&nbsp;&nbsp;<u>T" -STARTLINE}
+ addUserKnob {6 strike l "&nbsp;&nbsp;<s>T" -STARTLINE}
+ addUserKnob {26 font_size l "Note size"}
+ addUserKnob {22 size_plus_10 l "<font color=orange>▲ 10</font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.fontPlusTen()"}
+ addUserKnob {22 size_min_10 l "<font color=aqua>▼ 10</font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.fontMinusTen()"}
+ addUserKnob {26 tasks l <b>Tasks</b>}
+ addUserKnob {22 plate l "<big><font style=\"background-color:#559d63;\">&nbsp;<font color=black>Plate</font>&nbsp;" T "# plate\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1436110080)\nbd\['note'].setValue('PLATE')\nbd\['note_font_size'].setValue(102)\nbd\['note_color'].setValue('Black')" +STARTLINE}
+ addUserKnob {22 denoise l "<big><font style=\"background-color:#85994d;\">&nbsp;<font color=black>Denoise</font>&nbsp;" -STARTLINE T "# denoise\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2241416448)\nbd\['note'].setValue('DENOISE')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 reference l "<big><font style=\"background-color:#4d9976;\">&nbsp;<font color=black>Reference</font>&nbsp;" -STARTLINE T "# reference\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1301902848)\nbd\['note'].setValue('REF')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 precomp l "<big><font style=\"background-color:#994d63;\">&nbsp;<font color=black>Precomp</font>&nbsp;" T "# precomp\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2571985664)\nbd\['note'].setValue('PRECOMP')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')" +STARTLINE}
+ addUserKnob {22 merge l "<big><font style=\"background-color:#4d8c99;\">&nbsp;<font color=black>Merge</font>&nbsp;" -STARTLINE T "# merge\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1301059840)\nbd\['note'].setValue('MERGE')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 output l "<big><font style=\"background-color:#997d4d;\">&nbsp;<font color=black>Output</font>&nbsp;" -STARTLINE T "# output\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2575125760)\nbd\['note'].setValue('OUTPUT')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 Foreground l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>FG</font>&nbsp;" T "# fg\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('FG')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n" +STARTLINE}
+ addUserKnob {22 background l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>BG</font>&nbsp;" -STARTLINE T "# background\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('BG')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 versions l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>Versions</font>&nbsp;" -STARTLINE T "# versions\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('VERSIONS')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 threed l "<big><font style=\"background-color:#806069;\">&nbsp;<font color=black>3D</font>&nbsp;" T "# 3d\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2153801984)\nbd\['note'].setValue('3D')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n" +STARTLINE}
+ addUserKnob {22 camera l "<big><font style=\"background-color:#806060;\">&nbsp;<font color=black>Camera</font>&nbsp;" -STARTLINE T "# camera\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2153799680)\nbd\['note'].setValue('CAMERA')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 track l "<big><font style=\"background-color:#80607d;\">&nbsp;<font color=black>Track</font>&nbsp;" -STARTLINE T "# track\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2153807104)\nbd\['note'].setValue('TRACK')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 matte l "<big><font style=\"background-color:#807460;\">&nbsp;<font color=black>DMP</font>&nbsp;" T "# matte\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2155110400)\nbd\['note'].setValue('DMP')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')" +STARTLINE}
+ addUserKnob {22 grade l "<big><font style=\"background-color:#607a80;\">&nbsp;<font color=black>Grade</font>&nbsp;" -STARTLINE T "# grade\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1618640896)\nbd\['note'].setValue('GRADE')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n"}
+ addUserKnob {22 lens_effect l "<big><font style=\"background-color:#6d6080;\">&nbsp;<font color=black>Lens Effect</font>&nbsp;" -STARTLINE T "# lens effect\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1835040768)\nbd\['note'].setValue('LENS\\nEFFECT')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 key l "<big><font style=\"background-color:#608071;\">&nbsp;<font color=black>Key</font>&nbsp;" T "# key\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1619030272)\nbd\['note'].setValue('KEY')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')" +STARTLINE}
+ addUserKnob {22 roto l "<big><font style=\"background-color:#638060;\">&nbsp;<font color=black>Roto</font>&nbsp;" -STARTLINE T "# roto\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1669357568)\nbd\['note'].setValue('ROTO')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 paint l "<big><font style=\"background-color:#778060;\">&nbsp;<font color=black>paint</font>&nbsp;" -STARTLINE T "# paint\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2004901888)\nbd\['note'].setValue('PAINT')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 grain l "<big><font style=\"background-color:#AAAAAA;\">&nbsp;<font color=black>Grain</font>&nbsp;" -STARTLINE T "# grain\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2576980479)\nbd\['note'].setValue('GRAIN')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('White')"}
+ addUserKnob {26 node_color l "<b>Node Color</b>"}
+ addUserKnob {4 appearance_custom l Appearance M {Fill Border "" ""}}
+ addUserKnob {22 change_colors l "<big><font style=\"background-color:#806060;\">D<font style=\"background-color:#807460;\">u<font style=\"background-color:#778060;\">l<font style=\"background-color:#608071;\">l<font style=\"background-color:#607a80;\"> <font style=\"background-color:#606680;\">C<font style=\"background-color:#606680;\">o<font style=\"background-color:#6d6080;\">l<font style=\"background-color:#80607d;\">o<font style=\"background-color:#806069;\">r<font style=\"background-color:#806060;\">s" t "By clicking on it can toggle between the \"Dull Colors\" and the \"Vivid Colors\" palettes" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.dullVividColor()" +STARTLINE}
+ addUserKnob {22 darken l "<big><font style=\"background-color:#333333;\">&nbsp;<font color=#cccccc>Darken</font>&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.darkenTileColor()"}
+ addUserKnob {22 brighten l "<big><font style=\"background-color:#aaaaaa;\">&nbsp;<font color=black>Brighten</font>&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.brightenTileColor()"}
+ addUserKnob {22 color_0 l "<font color=#806060><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(2153799680)" +STARTLINE}
+ addUserKnob {22 color_1 l "<font color=#807460><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2155110400)"}
+ addUserKnob {22 color_2 l "<font color=#778060><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2004901888)"}
+ addUserKnob {22 color_3 l "<font color=#638060><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1669357568)"}
+ addUserKnob {22 color_4 l "<font color=#608071><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1619030272)"}
+ addUserKnob {22 color_5 l "<font color=#607a80><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(1618640896)" +STARTLINE}
+ addUserKnob {22 color_6 l "<font color=#606680><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1617330176)"}
+ addUserKnob {22 color_7 l "<font color=#6d6080><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1835040768)"}
+ addUserKnob {22 color_8 l "<font color=#80607d><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2153807104)"}
+ addUserKnob {22 color_9 l "<font color=#806069><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2153801984)"}
+ addUserKnob {22 grey_1 l "<font color=#DDDDDD><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(3149642751)" +STARTLINE}
+ addUserKnob {22 grey_2 l "<font color=#AAAAAA><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2576980479)"}
+ addUserKnob {22 grey_3 l "<font color=#777777><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1717987071)"}
+ addUserKnob {22 grey_4 l "<font color=#333333><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1145324799)"}
+ addUserKnob {22 grey_5 l "<font color=#222222><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(572662527)"}
+ addUserKnob {20 re_size l "Re Size" n 1}
+ re_size 0
+ addUserKnob {26 upscale l Upscale}
+ addUserKnob {22 upleft500 l "<font color=yellow><big>↖" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft500()" +STARTLINE}
+ addUserKnob {22 space1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 up500 l "<font color=yellow><h3>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up500()"}
+ addUserKnob {22 space1_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 upright500 l "<font color=yellow><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright500()"}
+ addUserKnob {22 space2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 upleft100 l "<font color=orange><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft100()"}
+ addUserKnob {22 up100 l "<font color=orange><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up100()"}
+ addUserKnob {22 upright100 l "<font color=orange><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright100()"}
+ addUserKnob {22 space2_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 left500 l "<font color=yellow><big>&nbsp;◄" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left500()" +STARTLINE}
+ addUserKnob {22 left100 l "<font color=orange><big>◄" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left100()"}
+ addUserKnob {22 center1 l "<font color=crimson><big>⦿" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.center()"}
+ addUserKnob {22 right100 l "<font color=orange><big>►" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right100()"}
+ addUserKnob {22 right500 l "<font color=yellow><big>►&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right500()"}
+ addUserKnob {22 space3 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 downleft100 l "<font color=orange><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft100()"}
+ addUserKnob {22 down100 l "<font color=orange><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down100()"}
+ addUserKnob {22 downright100 l "<font color=orange><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright100()"}
+ addUserKnob {22 space3_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downleft500 l "<font color=yellow><big>↙" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft500()" +STARTLINE}
+ addUserKnob {22 space4 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 down500 l "<font color=yellow><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down500()"}
+ addUserKnob {22 space4_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downright500 l "<font color=yellow><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright500()"}
+ addUserKnob {26 downscale l Downscale}
+ addUserKnob {22 upleft500_2 l "<font color=LightSkyBlue><big>↘" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft500_2()" +STARTLINE}
+ addUserKnob {22 space1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 up500_2 l "<font color=LightSkyBlue><h3>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up500_2()"}
+ addUserKnob {22 space1_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 upright500_2 l "<font color=LightSkyBlue><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright500_2()"}
+ addUserKnob {22 space2_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 upleft100_2 l "<font color=SteelBlue><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft100_2()"}
+ addUserKnob {22 up100_2 l "<font color=SteelBlue><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up100_2()"}
+ addUserKnob {22 upright100_2 l "<font color=SteelBlue><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright100_2()"}
+ addUserKnob {22 space2_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 left500_2 l "<font color=LightSkyBlue><big>&nbsp;►" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left500_2()" +STARTLINE}
+ addUserKnob {22 left100_2 l "<font color=SteelBlue><big>►" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left100_2()"}
+ addUserKnob {22 center1_2 l "<font color=blue><big>⦿" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.center_2()"}
+ addUserKnob {22 right100_2 l "<font color=SteelBlue><big>◄" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right100_2()"}
+ addUserKnob {22 right500_2 l "<font color=LightSkyBlue><big>◄&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right500_2()"}
+ addUserKnob {22 space3_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 downleft100_2 l "<font color=SteelBlue><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft100_2()"}
+ addUserKnob {22 down100_2 l "<font color=SteelBlue><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down100_2()"}
+ addUserKnob {22 downright100_2 l "<font color=SteelBlue><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright100_2()"}
+ addUserKnob {22 space3_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downleft500_2 l "<font color=LightSkyBlue><big>↗" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft500_2()" +STARTLINE}
+ addUserKnob {22 space4_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 down500_2 l "<font color=LightSkyBlue><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down500_2()"}
+ addUserKnob {22 space4_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downright500_2 l "<font color=LightSkyBlue><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright500_2()"}
+ addUserKnob {20 endGroup n -1}
+ addUserKnob {26 ""}
+ addUserKnob {26 TEXT l "" -STARTLINE T "<font color=#808080 size=\"5\" >1.9 (beta) version</font>"}
+ addUserKnob {26 _2 l "" -STARTLINE T "   "}
+ addUserKnob {22 info l Tutorial/Info -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.openWebsite()"}
+ addUserKnob {26 HeadlineB l "" +STARTLINE T "<font color=#808080 size=\"2\">Backdrop_Adjust by Attila Gasparetz</font>"}
+}
+BackdropNode {
+ inputs 0
+ name BackdropINFO
+ label "find&replace info"
+ note_font_size 20
+ xpos -771
+ ypos 68
+ appearance Border
+ border_width 10
+ bdwidth 663
+ bdheight 296
+}
+BackdropNode {
+ inputs 0
+ name BackdropNode4
+ tile_color 0x8e388e00
+ label Regrain
+ note_font_size 42
+ xpos -357
+ ypos 1723
+ appearance Border
+ bdwidth 935
+ bdheight 681
+}
+BackdropNode {
+ inputs 0
+ name BackdropNodeWrite
+ tile_color 0x158827ff
+ label "Reformate and write\n"
+ note_font_size 20
+ xpos -12
+ ypos 2459
+ appearance Border
+ border_width 10
+ bdwidth 465
+ bdheight 841
+}
+BackdropNode {
+ inputs 0
+ name Backdrop_Adjust2
+ knobChanged "n = nuke.thisNode()\nk = nuke.thisKnob()\nkn = k.name()\nif kn == 'appearance_custom':\n    if n\['appearance_custom'].value() == 'Border':\n        n\['appearance'].setValue('Border')\n    else:\n        n\['appearance'].setValue('Border')\n"
+ tile_color 0x55994d00
+ label "<p align=\"\[value align]\"><font color=\[value note_color]> \[if \{\[value bold]==true\} \{return <b>\} \{return \"\"\}] \[if \{\[value italian]==true\} \{return <i>\} \{return \"\"\}] \[if \{\[value under]==true\} \{return <u>\} \{return \"\"\}] \[if \{\[value strike]==true\} \{return <s>\} \{return \"\"\}] \[value note]"
+ note_font "MS Shell Dlg 2"
+ note_font_size 64
+ xpos 8
+ ypos -111
+ appearance Border
+ border_width 10
+ bdwidth 1084
+ bdheight 653
+ addUserKnob {20 User}
+ addUserKnob {22 cover l "<big><font color=yellow>Cover Selected Area</big></font>" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.coverSelectedArea()" +STARTLINE}
+ addUserKnob {26 _1 l "" -STARTLINE T "   "}
+ addUserKnob {22 extend l "<big><font color=yellow>Extend to Selected Area</big></font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.extendSelectedArea()"}
+ addUserKnob {26 label_1 l <b>Label</b>}
+ addUserKnob {43 note l Note}
+ note "PLATE/s & ASSETS"
+ addUserKnob {4 note_color l "Note Color" M {Orange White Silver Gray Black Red Maroon Yellow Olive Lime Green Aqua Teal Blue Navy Fuchsia Purple}}
+ note_color Black
+ addUserKnob {4 align l Align -STARTLINE M {Center Left Right "" "" ""}}
+ addUserKnob {6 bold l "<b>&nbsp;&nbsp;T" +STARTLINE}
+ bold true
+ addUserKnob {6 italian l "&nbsp;&nbsp;<i>T" -STARTLINE}
+ addUserKnob {6 under l "&nbsp;&nbsp;<u>T" -STARTLINE}
+ addUserKnob {6 strike l "&nbsp;&nbsp;<s>T" -STARTLINE}
+ addUserKnob {26 font_size l "Note size"}
+ addUserKnob {22 size_plus_10 l "<font color=orange>▲ 10</font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.fontPlusTen()"}
+ addUserKnob {22 size_min_10 l "<font color=aqua>▼ 10</font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.fontMinusTen()"}
+ addUserKnob {26 tasks l <b>Tasks</b>}
+ addUserKnob {22 plate l "<big><font style=\"background-color:#559d63;\">&nbsp;<font color=black>Plate</font>&nbsp;" T "# plate\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1436110080)\nbd\['note'].setValue('PLATE')\nbd\['note_font_size'].setValue(102)\nbd\['note_color'].setValue('Black')" +STARTLINE}
+ addUserKnob {22 denoise l "<big><font style=\"background-color:#85994d;\">&nbsp;<font color=black>Denoise</font>&nbsp;" -STARTLINE T "# denoise\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2241416448)\nbd\['note'].setValue('DENOISE')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 reference l "<big><font style=\"background-color:#4d9976;\">&nbsp;<font color=black>Reference</font>&nbsp;" -STARTLINE T "# reference\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1301902848)\nbd\['note'].setValue('REF')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 precomp l "<big><font style=\"background-color:#994d63;\">&nbsp;<font color=black>Precomp</font>&nbsp;" T "# precomp\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2571985664)\nbd\['note'].setValue('PRECOMP')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')" +STARTLINE}
+ addUserKnob {22 merge l "<big><font style=\"background-color:#4d8c99;\">&nbsp;<font color=black>Merge</font>&nbsp;" -STARTLINE T "# merge\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1301059840)\nbd\['note'].setValue('MERGE')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 output l "<big><font style=\"background-color:#997d4d;\">&nbsp;<font color=black>Output</font>&nbsp;" -STARTLINE T "# output\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2575125760)\nbd\['note'].setValue('OUTPUT')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 Foreground l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>FG</font>&nbsp;" T "# fg\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('FG')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n" +STARTLINE}
+ addUserKnob {22 background l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>BG</font>&nbsp;" -STARTLINE T "# background\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('BG')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 versions l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>Versions</font>&nbsp;" -STARTLINE T "# versions\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('VERSIONS')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 threed l "<big><font style=\"background-color:#806069;\">&nbsp;<font color=black>3D</font>&nbsp;" T "# 3d\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2153801984)\nbd\['note'].setValue('3D')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n" +STARTLINE}
+ addUserKnob {22 camera l "<big><font style=\"background-color:#806060;\">&nbsp;<font color=black>Camera</font>&nbsp;" -STARTLINE T "# camera\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2153799680)\nbd\['note'].setValue('CAMERA')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 track l "<big><font style=\"background-color:#80607d;\">&nbsp;<font color=black>Track</font>&nbsp;" -STARTLINE T "# track\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2153807104)\nbd\['note'].setValue('TRACK')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 matte l "<big><font style=\"background-color:#807460;\">&nbsp;<font color=black>DMP</font>&nbsp;" T "# matte\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2155110400)\nbd\['note'].setValue('DMP')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')" +STARTLINE}
+ addUserKnob {22 grade l "<big><font style=\"background-color:#607a80;\">&nbsp;<font color=black>Grade</font>&nbsp;" -STARTLINE T "# grade\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1618640896)\nbd\['note'].setValue('GRADE')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n"}
+ addUserKnob {22 lens_effect l "<big><font style=\"background-color:#6d6080;\">&nbsp;<font color=black>Lens Effect</font>&nbsp;" -STARTLINE T "# lens effect\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1835040768)\nbd\['note'].setValue('LENS\\nEFFECT')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 key l "<big><font style=\"background-color:#608071;\">&nbsp;<font color=black>Key</font>&nbsp;" T "# key\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1619030272)\nbd\['note'].setValue('KEY')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')" +STARTLINE}
+ addUserKnob {22 roto l "<big><font style=\"background-color:#638060;\">&nbsp;<font color=black>Roto</font>&nbsp;" -STARTLINE T "# roto\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1669357568)\nbd\['note'].setValue('ROTO')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 paint l "<big><font style=\"background-color:#778060;\">&nbsp;<font color=black>paint</font>&nbsp;" -STARTLINE T "# paint\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2004901888)\nbd\['note'].setValue('PAINT')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 grain l "<big><font style=\"background-color:#AAAAAA;\">&nbsp;<font color=black>Grain</font>&nbsp;" -STARTLINE T "# grain\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2576980479)\nbd\['note'].setValue('GRAIN')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('White')"}
+ addUserKnob {26 node_color l "<b>Node Color</b>"}
+ addUserKnob {4 appearance_custom l Appearance M {Fill Border "" ""}}
+ addUserKnob {22 change_colors l "<big><font style=\"background-color:#806060;\">D<font style=\"background-color:#807460;\">u<font style=\"background-color:#778060;\">l<font style=\"background-color:#608071;\">l<font style=\"background-color:#607a80;\"> <font style=\"background-color:#606680;\">C<font style=\"background-color:#606680;\">o<font style=\"background-color:#6d6080;\">l<font style=\"background-color:#80607d;\">o<font style=\"background-color:#806069;\">r<font style=\"background-color:#806060;\">s" t "By clicking on it can toggle between the \"Dull Colors\" and the \"Vivid Colors\" palettes" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.dullVividColor()" +STARTLINE}
+ addUserKnob {22 darken l "<big><font style=\"background-color:#333333;\">&nbsp;<font color=#cccccc>Darken</font>&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.darkenTileColor()"}
+ addUserKnob {22 brighten l "<big><font style=\"background-color:#aaaaaa;\">&nbsp;<font color=black>Brighten</font>&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.brightenTileColor()"}
+ addUserKnob {22 color_0 l "<font color=#806060><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(2153799680)" +STARTLINE}
+ addUserKnob {22 color_1 l "<font color=#807460><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2155110400)"}
+ addUserKnob {22 color_2 l "<font color=#778060><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2004901888)"}
+ addUserKnob {22 color_3 l "<font color=#638060><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1669357568)"}
+ addUserKnob {22 color_4 l "<font color=#608071><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1619030272)"}
+ addUserKnob {22 color_5 l "<font color=#607a80><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(1618640896)" +STARTLINE}
+ addUserKnob {22 color_6 l "<font color=#606680><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1617330176)"}
+ addUserKnob {22 color_7 l "<font color=#6d6080><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1835040768)"}
+ addUserKnob {22 color_8 l "<font color=#80607d><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2153807104)"}
+ addUserKnob {22 color_9 l "<font color=#806069><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2153801984)"}
+ addUserKnob {22 grey_1 l "<font color=#DDDDDD><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(3149642751)" +STARTLINE}
+ addUserKnob {22 grey_2 l "<font color=#AAAAAA><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2576980479)"}
+ addUserKnob {22 grey_3 l "<font color=#777777><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1717987071)"}
+ addUserKnob {22 grey_4 l "<font color=#333333><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1145324799)"}
+ addUserKnob {22 grey_5 l "<font color=#222222><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(572662527)"}
+ addUserKnob {20 re_size l "Re Size" n 1}
+ re_size 0
+ addUserKnob {26 upscale l Upscale}
+ addUserKnob {22 upleft500 l "<font color=yellow><big>↖" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft500()" +STARTLINE}
+ addUserKnob {22 space1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 up500 l "<font color=yellow><h3>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up500()"}
+ addUserKnob {22 space1_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 upright500 l "<font color=yellow><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright500()"}
+ addUserKnob {22 space2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 upleft100 l "<font color=orange><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft100()"}
+ addUserKnob {22 up100 l "<font color=orange><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up100()"}
+ addUserKnob {22 upright100 l "<font color=orange><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright100()"}
+ addUserKnob {22 space2_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 left500 l "<font color=yellow><big>&nbsp;◄" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left500()" +STARTLINE}
+ addUserKnob {22 left100 l "<font color=orange><big>◄" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left100()"}
+ addUserKnob {22 center1 l "<font color=crimson><big>⦿" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.center()"}
+ addUserKnob {22 right100 l "<font color=orange><big>►" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right100()"}
+ addUserKnob {22 right500 l "<font color=yellow><big>►&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right500()"}
+ addUserKnob {22 space3 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 downleft100 l "<font color=orange><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft100()"}
+ addUserKnob {22 down100 l "<font color=orange><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down100()"}
+ addUserKnob {22 downright100 l "<font color=orange><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright100()"}
+ addUserKnob {22 space3_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downleft500 l "<font color=yellow><big>↙" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft500()" +STARTLINE}
+ addUserKnob {22 space4 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 down500 l "<font color=yellow><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down500()"}
+ addUserKnob {22 space4_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downright500 l "<font color=yellow><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright500()"}
+ addUserKnob {26 downscale l Downscale}
+ addUserKnob {22 upleft500_2 l "<font color=LightSkyBlue><big>↘" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft500_2()" +STARTLINE}
+ addUserKnob {22 space1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 up500_2 l "<font color=LightSkyBlue><h3>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up500_2()"}
+ addUserKnob {22 space1_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 upright500_2 l "<font color=LightSkyBlue><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright500_2()"}
+ addUserKnob {22 space2_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 upleft100_2 l "<font color=SteelBlue><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft100_2()"}
+ addUserKnob {22 up100_2 l "<font color=SteelBlue><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up100_2()"}
+ addUserKnob {22 upright100_2 l "<font color=SteelBlue><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright100_2()"}
+ addUserKnob {22 space2_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 left500_2 l "<font color=LightSkyBlue><big>&nbsp;►" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left500_2()" +STARTLINE}
+ addUserKnob {22 left100_2 l "<font color=SteelBlue><big>►" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left100_2()"}
+ addUserKnob {22 center1_2 l "<font color=blue><big>⦿" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.center_2()"}
+ addUserKnob {22 right100_2 l "<font color=SteelBlue><big>◄" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right100_2()"}
+ addUserKnob {22 right500_2 l "<font color=LightSkyBlue><big>◄&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right500_2()"}
+ addUserKnob {22 space3_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 downleft100_2 l "<font color=SteelBlue><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft100_2()"}
+ addUserKnob {22 down100_2 l "<font color=SteelBlue><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down100_2()"}
+ addUserKnob {22 downright100_2 l "<font color=SteelBlue><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright100_2()"}
+ addUserKnob {22 space3_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downleft500_2 l "<font color=LightSkyBlue><big>↗" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft500_2()" +STARTLINE}
+ addUserKnob {22 space4_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 down500_2 l "<font color=LightSkyBlue><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down500_2()"}
+ addUserKnob {22 space4_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downright500_2 l "<font color=LightSkyBlue><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright500_2()"}
+ addUserKnob {20 endGroup n -1}
+ addUserKnob {26 ""}
+ addUserKnob {26 TEXT l "" -STARTLINE T "<font color=#808080 size=\"5\" >1.9 (beta) version</font>"}
+ addUserKnob {26 _2 l "" -STARTLINE T "   "}
+ addUserKnob {22 info l Tutorial/Info -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.openWebsite()"}
+ addUserKnob {26 HeadlineB l "" +STARTLINE T "<font color=#808080 size=\"2\">Backdrop_Adjust by Attila Gasparetz</font>"}
+}
+BackdropNode {
+ inputs 0
+ name Backdrop_Adjust3
+ knobChanged "n = nuke.thisNode()\nk = nuke.thisKnob()\nkn = k.name()\nif kn == 'appearance_custom':\n    if n\['appearance_custom'].value() == 'Border':\n        n\['appearance'].setValue('Border')\n    else:\n        n\['appearance'].setValue('Border')\n"
+ tile_color 0x85994d00
+ label "<p align=\"\[value align]\"><font color=\[value note_color]> \[if \{\[value bold]==true\} \{return <b>\} \{return \"\"\}] \[if \{\[value italian]==true\} \{return <i>\} \{return \"\"\}] \[if \{\[value under]==true\} \{return <u>\} \{return \"\"\}] \[if \{\[value strike]==true\} \{return <s>\} \{return \"\"\}] \[value note]"
+ note_font "MS Shell Dlg 2"
+ note_font_size 82
+ xpos -5
+ ypos 610
+ appearance Border
+ border_width 10
+ bdwidth 450
+ bdheight 796
+ addUserKnob {20 User}
+ addUserKnob {22 cover l "<big><font color=yellow>Cover Selected Area</big></font>" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.coverSelectedArea()" +STARTLINE}
+ addUserKnob {26 _1 l "" -STARTLINE T "   "}
+ addUserKnob {22 extend l "<big><font color=yellow>Extend to Selected Area</big></font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.extendSelectedArea()"}
+ addUserKnob {26 label_1 l <b>Label</b>}
+ addUserKnob {43 note l Note}
+ note DENOISE
+ addUserKnob {4 note_color l "Note Color" M {Orange White Silver Gray Black Red Maroon Yellow Olive Lime Green Aqua Teal Blue Navy Fuchsia Purple}}
+ note_color Black
+ addUserKnob {4 align l Align -STARTLINE M {Center Left Right "" "" ""}}
+ addUserKnob {6 bold l "<b>&nbsp;&nbsp;T" +STARTLINE}
+ bold true
+ addUserKnob {6 italian l "&nbsp;&nbsp;<i>T" -STARTLINE}
+ addUserKnob {6 under l "&nbsp;&nbsp;<u>T" -STARTLINE}
+ addUserKnob {6 strike l "&nbsp;&nbsp;<s>T" -STARTLINE}
+ addUserKnob {26 font_size l "Note size"}
+ addUserKnob {22 size_plus_10 l "<font color=orange>▲ 10</font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.fontPlusTen()"}
+ addUserKnob {22 size_min_10 l "<font color=aqua>▼ 10</font>" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.fontMinusTen()"}
+ addUserKnob {26 tasks l <b>Tasks</b>}
+ addUserKnob {22 plate l "<big><font style=\"background-color:#559d63;\">&nbsp;<font color=black>Plate</font>&nbsp;" T "# plate\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1436110080)\nbd\['note'].setValue('PLATE')\nbd\['note_font_size'].setValue(102)\nbd\['note_color'].setValue('Black')" +STARTLINE}
+ addUserKnob {22 denoise l "<big><font style=\"background-color:#85994d;\">&nbsp;<font color=black>Denoise</font>&nbsp;" -STARTLINE T "# denoise\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2241416448)\nbd\['note'].setValue('DENOISE')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 reference l "<big><font style=\"background-color:#4d9976;\">&nbsp;<font color=black>Reference</font>&nbsp;" -STARTLINE T "# reference\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1301902848)\nbd\['note'].setValue('REF')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 precomp l "<big><font style=\"background-color:#994d63;\">&nbsp;<font color=black>Precomp</font>&nbsp;" T "# precomp\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2571985664)\nbd\['note'].setValue('PRECOMP')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')" +STARTLINE}
+ addUserKnob {22 merge l "<big><font style=\"background-color:#4d8c99;\">&nbsp;<font color=black>Merge</font>&nbsp;" -STARTLINE T "# merge\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1301059840)\nbd\['note'].setValue('MERGE')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 output l "<big><font style=\"background-color:#997d4d;\">&nbsp;<font color=black>Output</font>&nbsp;" -STARTLINE T "# output\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2575125760)\nbd\['note'].setValue('OUTPUT')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 Foreground l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>FG</font>&nbsp;" T "# fg\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('FG')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n" +STARTLINE}
+ addUserKnob {22 background l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>BG</font>&nbsp;" -STARTLINE T "# background\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('BG')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 versions l "<big><font style=\"background-color:#777777;\">&nbsp;<font color=black>Versions</font>&nbsp;" -STARTLINE T "# versions\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(1717987071)\nbd\['note'].setValue('VERSIONS')\nbd\['note_font_size'].setValue(82)\nbd\['note_color'].setValue('Black')"}
+ addUserKnob {22 threed l "<big><font style=\"background-color:#806069;\">&nbsp;<font color=black>3D</font>&nbsp;" T "# 3d\n\nbd = nuke.thisNode()\nbd\['tile_color'].setValue(2153801984)\nbd\['note'].setValue('3D')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n" +STARTLINE}
+ addUserKnob {22 camera l "<big><font style=\"background-color:#806060;\">&nbsp;<font color=black>Camera</font>&nbsp;" -STARTLINE T "# camera\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2153799680)\nbd\['note'].setValue('CAMERA')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 track l "<big><font style=\"background-color:#80607d;\">&nbsp;<font color=black>Track</font>&nbsp;" -STARTLINE T "# track\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2153807104)\nbd\['note'].setValue('TRACK')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 matte l "<big><font style=\"background-color:#807460;\">&nbsp;<font color=black>DMP</font>&nbsp;" T "# matte\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2155110400)\nbd\['note'].setValue('DMP')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')" +STARTLINE}
+ addUserKnob {22 grade l "<big><font style=\"background-color:#607a80;\">&nbsp;<font color=black>Grade</font>&nbsp;" -STARTLINE T "# grade\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1618640896)\nbd\['note'].setValue('GRADE')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')\n"}
+ addUserKnob {22 lens_effect l "<big><font style=\"background-color:#6d6080;\">&nbsp;<font color=black>Lens Effect</font>&nbsp;" -STARTLINE T "# lens effect\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1835040768)\nbd\['note'].setValue('LENS\\nEFFECT')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 key l "<big><font style=\"background-color:#608071;\">&nbsp;<font color=black>Key</font>&nbsp;" T "# key\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1619030272)\nbd\['note'].setValue('KEY')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')" +STARTLINE}
+ addUserKnob {22 roto l "<big><font style=\"background-color:#638060;\">&nbsp;<font color=black>Roto</font>&nbsp;" -STARTLINE T "# roto\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(1669357568)\nbd\['note'].setValue('ROTO')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 paint l "<big><font style=\"background-color:#778060;\">&nbsp;<font color=black>paint</font>&nbsp;" -STARTLINE T "# paint\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2004901888)\nbd\['note'].setValue('PAINT')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('Silver')"}
+ addUserKnob {22 grain l "<big><font style=\"background-color:#AAAAAA;\">&nbsp;<font color=black>Grain</font>&nbsp;" -STARTLINE T "# grain\n\nbd = nuke.thisNode()\n\nbd\['tile_color'].setValue(2576980479)\nbd\['note'].setValue('GRAIN')\nbd\['note_font_size'].setValue(72)\nbd\['note_color'].setValue('White')"}
+ addUserKnob {26 node_color l "<b>Node Color</b>"}
+ addUserKnob {4 appearance_custom l Appearance M {Fill Border "" ""}}
+ addUserKnob {22 change_colors l "<big><font style=\"background-color:#806060;\">D<font style=\"background-color:#807460;\">u<font style=\"background-color:#778060;\">l<font style=\"background-color:#608071;\">l<font style=\"background-color:#607a80;\"> <font style=\"background-color:#606680;\">C<font style=\"background-color:#606680;\">o<font style=\"background-color:#6d6080;\">l<font style=\"background-color:#80607d;\">o<font style=\"background-color:#806069;\">r<font style=\"background-color:#806060;\">s" t "By clicking on it can toggle between the \"Dull Colors\" and the \"Vivid Colors\" palettes" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.dullVividColor()" +STARTLINE}
+ addUserKnob {22 darken l "<big><font style=\"background-color:#333333;\">&nbsp;<font color=#cccccc>Darken</font>&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.darkenTileColor()"}
+ addUserKnob {22 brighten l "<big><font style=\"background-color:#aaaaaa;\">&nbsp;<font color=black>Brighten</font>&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.brightenTileColor()"}
+ addUserKnob {22 color_0 l "<font color=#806060><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(2153799680)" +STARTLINE}
+ addUserKnob {22 color_1 l "<font color=#807460><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2155110400)"}
+ addUserKnob {22 color_2 l "<font color=#778060><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2004901888)"}
+ addUserKnob {22 color_3 l "<font color=#638060><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1669357568)"}
+ addUserKnob {22 color_4 l "<font color=#608071><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1619030272)"}
+ addUserKnob {22 color_5 l "<font color=#607a80><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(1618640896)" +STARTLINE}
+ addUserKnob {22 color_6 l "<font color=#606680><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1617330176)"}
+ addUserKnob {22 color_7 l "<font color=#6d6080><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1835040768)"}
+ addUserKnob {22 color_8 l "<font color=#80607d><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2153807104)"}
+ addUserKnob {22 color_9 l "<font color=#806069><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2153801984)"}
+ addUserKnob {22 grey_1 l "<font color=#DDDDDD><big>█</big></font>" T "nuke.thisNode()\['tile_color'].setValue(3149642751)" +STARTLINE}
+ addUserKnob {22 grey_2 l "<font color=#AAAAAA><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(2576980479)"}
+ addUserKnob {22 grey_3 l "<font color=#777777><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1717987071)"}
+ addUserKnob {22 grey_4 l "<font color=#333333><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(1145324799)"}
+ addUserKnob {22 grey_5 l "<font color=#222222><big>█</big></font>" -STARTLINE T "nuke.thisNode()\['tile_color'].setValue(572662527)"}
+ addUserKnob {20 re_size l "Re Size" n 1}
+ re_size 0
+ addUserKnob {26 upscale l Upscale}
+ addUserKnob {22 upleft500 l "<font color=yellow><big>↖" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft500()" +STARTLINE}
+ addUserKnob {22 space1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 up500 l "<font color=yellow><h3>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up500()"}
+ addUserKnob {22 space1_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 upright500 l "<font color=yellow><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright500()"}
+ addUserKnob {22 space2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 upleft100 l "<font color=orange><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft100()"}
+ addUserKnob {22 up100 l "<font color=orange><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up100()"}
+ addUserKnob {22 upright100 l "<font color=orange><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright100()"}
+ addUserKnob {22 space2_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 left500 l "<font color=yellow><big>&nbsp;◄" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left500()" +STARTLINE}
+ addUserKnob {22 left100 l "<font color=orange><big>◄" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left100()"}
+ addUserKnob {22 center1 l "<font color=crimson><big>⦿" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.center()"}
+ addUserKnob {22 right100 l "<font color=orange><big>►" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right100()"}
+ addUserKnob {22 right500 l "<font color=yellow><big>►&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right500()"}
+ addUserKnob {22 space3 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 downleft100 l "<font color=orange><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft100()"}
+ addUserKnob {22 down100 l "<font color=orange><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down100()"}
+ addUserKnob {22 downright100 l "<font color=orange><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright100()"}
+ addUserKnob {22 space3_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downleft500 l "<font color=yellow><big>↙" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft500()" +STARTLINE}
+ addUserKnob {22 space4 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 down500 l "<font color=yellow><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down500()"}
+ addUserKnob {22 space4_1 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downright500 l "<font color=yellow><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright500()"}
+ addUserKnob {26 downscale l Downscale}
+ addUserKnob {22 upleft500_2 l "<font color=LightSkyBlue><big>↘" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft500_2()" +STARTLINE}
+ addUserKnob {22 space1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 up500_2 l "<font color=LightSkyBlue><h3>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up500_2()"}
+ addUserKnob {22 space1_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 upright500_2 l "<font color=LightSkyBlue><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright500_2()"}
+ addUserKnob {22 space2_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 upleft100_2 l "<font color=SteelBlue><big>↘" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upleft100_2()"}
+ addUserKnob {22 up100_2 l "<font color=SteelBlue><big>▼" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.up100_2()"}
+ addUserKnob {22 upright100_2 l "<font color=SteelBlue><big>↙" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.upright100_2()"}
+ addUserKnob {22 space2_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 left500_2 l "<font color=LightSkyBlue><big>&nbsp;►" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left500_2()" +STARTLINE}
+ addUserKnob {22 left100_2 l "<font color=SteelBlue><big>►" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.left100_2()"}
+ addUserKnob {22 center1_2 l "<font color=blue><big>⦿" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.center_2()"}
+ addUserKnob {22 right100_2 l "<font color=SteelBlue><big>◄" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right100_2()"}
+ addUserKnob {22 right500_2 l "<font color=LightSkyBlue><big>◄&nbsp;" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.right500_2()"}
+ addUserKnob {22 space3_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" +STARTLINE}
+ addUserKnob {22 downleft100_2 l "<font color=SteelBlue><big>↗" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft100_2()"}
+ addUserKnob {22 down100_2 l "<font color=SteelBlue><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down100_2()"}
+ addUserKnob {22 downright100_2 l "<font color=SteelBlue><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright100_2()"}
+ addUserKnob {22 space3_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downleft500_2 l "<font color=LightSkyBlue><big>↗" T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downleft500_2()" +STARTLINE}
+ addUserKnob {22 space4_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 down500_2 l "<font color=LightSkyBlue><big>▲" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.down500_2()"}
+ addUserKnob {22 space4_1_2 l "<big>&nbsp;&nbsp;&nbsp;&nbsp;" -STARTLINE}
+ addUserKnob {22 downright500_2 l "<font color=LightSkyBlue><big>↖" -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.downright500_2()"}
+ addUserKnob {20 endGroup n -1}
+ addUserKnob {26 ""}
+ addUserKnob {26 TEXT l "" -STARTLINE T "<font color=#808080 size=\"5\" >1.9 (beta) version</font>"}
+ addUserKnob {26 _2 l "" -STARTLINE T "   "}
+ addUserKnob {22 info l Tutorial/Info -STARTLINE T "import Backdrop_Adjust_utils\n\nBackdrop_Adjust_utils.openWebsite()"}
+ addUserKnob {26 HeadlineB l "" +STARTLINE T "<font color=#808080 size=\"2\">Backdrop_Adjust by Attila Gasparetz</font>"}
+}
+Read {
+ inputs 0
+ file_type mov
+ file "find&replace read1_path"
+ last find&replace duration
+ origlast find&replace duration
+ origset true
+ version 1
+ colorspace "find&replace colourspace"
+ name Read1
+ label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
+ xpos 180
+ ypos 87
+}
+Retime {
+ input.last find&replace duration
+ output.first 1001
+ output.first_lock true
+ output.last find&replace last_frame
+ time ""
+ name Retime1
+ xpos 180
+ ypos 254
+}
+NoOp {
+ name Anchor_3a190e900
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.anchorOnCreate()\n    except:\n        pass"
+ knobChanged stamps.anchorKnobChanged()
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0xffffff01
+ note_font_size 20
+ xpos 180
+ ypos 322
+ addUserKnob {20 anchor_tab l "Anchor Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T anchor}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the real/internal name of the Stamps."}
+ title master
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T master}
+ addUserKnob {26 prev_name l "" +STARTLINE +HIDDEN T Anchor_3a190e900}
+ addUserKnob {3 showing l "" +STARTLINE +HIDDEN}
+ addUserKnob {1 tags l Tags t "Comma-separated tags you can define for each Anchor, that will help you find it when invoking the Stamp Selector by pressing the Stamps shortkey with nothing selected."}
+ tags 2D,
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 createStamp l new t "Create a new Stamp for this Anchor." -STARTLINE T stamps.stampCreateWired(nuke.thisNode())}
+ addUserKnob {22 selectStamps l select t "Reconnect all of this Anchor's Stamps." -STARTLINE T stamps.wiredSelectSimilar(nuke.thisNode().name())}
+ addUserKnob {22 reconnectStamps l reconnect -STARTLINE T stamps.anchorReconnectWired()}
+ addUserKnob {22 zoomNext l "zoom next" t "Navigate to this Anchor's next Stamp on the Node Graph." -STARTLINE T stamps.wiredZoomNext(nuke.thisNode().name())}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"> <big>Stamps v1.1</big></b></a>"}
+}
+set N12698d50 [stack 0]
+PostageStamp {
+ name Stamp1
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredOnCreate()\n    except:\n        pass\n"
+ knobChanged "import stamps; stamps.wiredKnobChanged()"
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0x1000001
+ note_font Verdana
+ note_font_size 20
+ xpos 180
+ ypos 394
+ hide_input true
+ addUserKnob {20 wired_tab l "Wired Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T wired}
+ addUserKnob {3 lockCallbacks l "" +STARTLINE +HIDDEN}
+ addUserKnob {6 toReconnect -STARTLINE +HIDDEN}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the real/internal name of the Stamps."}
+ title master
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T master}
+ addUserKnob {26 tags l Tags: t "Tags of this stamp's Anchor, for information purpose only.\nClick \"show anchor\" to change them." T <i>2D</i>}
+ addUserKnob {26 backdrops l Backdrops: t "Labels of backdrop nodes which contain this stamp's Anchor." T <i>Read</i>}
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {6 postageStamp_show l "postage stamp" t "Enable the postage stamp thumbnail in this node.\nYou're seeing this because the class of this node includes the postage_stamp knob." +STARTLINE}
+ addUserKnob {26 anchor_label l Anchor: T " "}
+ addUserKnob {22 show_anchor l " show anchor " t "Show the properties panel for this Stamp's Anchor." -STARTLINE T stamps.wiredShowAnchor()}
+ addUserKnob {22 zoom_anchor l "zoom anchor" t "Navigate to this Stamp's Anchor on the Node Graph." -STARTLINE T stamps.wiredZoomAnchor()}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 zoomNext l " zoom next " t "Navigate to this Stamp's next sibling on the Node Graph." -STARTLINE T stamps.wiredZoomNext()}
+ addUserKnob {22 selectSimilar l " select similar " t "Select all similar Stamps to this one on the Node Graph." -STARTLINE T stamps.wiredSelectSimilar()}
+ addUserKnob {26 space_1 l "" +STARTLINE T " "}
+ addUserKnob {26 reconnect_label l Reconnect: t "Reconnect by the stored Anchor name." T " "}
+ addUserKnob {22 reconnect_this l this t "Reconnect this Stamp to its Anchor, by its stored Anchor name." -STARTLINE T "n = nuke.thisNode()\ntry:\n    n.setInput(0,nuke.toNode(n.knob(\"anchor\").value()))\nexcept:\n    nuke.message(\"Unable to reconnect.\")\ntry:\n    import stamps\n    stamps.wiredGetStyle(n)\nexcept:\n    pass\n"}
+ addUserKnob {22 reconnect_similar l similar t "Reconnect this Stamp and similar ones to their Anchor, by their stored anchor name." -STARTLINE T stamps.wiredReconnectSimilar()}
+ addUserKnob {22 reconnect_all l all t "Reconnect all the Stamps to their Anchors, by their stored anchor names." -STARTLINE T stamps.wiredReconnectAll()}
+ addUserKnob {26 space_2 l "" +STARTLINE T " "}
+ addUserKnob {20 advanced_reconnection l "Advanced Reconnection" n 2}
+ addUserKnob {26 reconnect_by_title_label l "<font color=gold>By Title:" t "Reconnect by searching for a matching title." T " "}
+ addUserKnob {22 reconnect_by_title_this l this t "Look for an Anchor that shares this Stamp's title, and connect this Stamp to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitle()}
+ addUserKnob {22 reconnect_by_title_similar l similar t "Look for an Anchor that shares this Stamp's title, and connect this Stamp and similar ones to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSimilar()}
+ addUserKnob {22 reconnect_by_title_selected l selected t "For each Stamp selected, look for an Anchor that shares its title, and connect to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSelected()}
+ addUserKnob {26 reconnect_by_selection_label l "<font color=orangered>By Selection:" t "Force reconnect to a selected Anchor." T " "}
+ addUserKnob {22 reconnect_by_selection_this l this t "Force reconnect this Stamp to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelection()}
+ addUserKnob {22 reconnect_by_selection_similar l similar t "Force reconnect this Stamp and similar ones to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSimilar()}
+ addUserKnob {22 reconnect_by_selection_selected l selected t "Force reconnect all selected Stamps to an also selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSelected()}
+ addUserKnob {1 anchor l Anchor}
+ anchor Anchor_3a190e900
+ addUserKnob {6 auto_reconnect_by_title l "<font color=#ED9977>&nbsp; auto-reconnect by title" t "When creating this stamp again (like on copy-paste), auto-reconnect it by title instead of doing it by the saved anchor's name, and auto-turn this off immediately.\nIMPORTANT: Should be off by default. Only use this for setting up templates." +STARTLINE}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"> <big>Stamps v1.1</big></b></a>"}
+}
+Read {
+ inputs 0
+ file_type exr
+ file ../renders/precomp/find&replace shotname_DN_v01/find&replace shotname_DN_v01_####.exr
+ first 1001
+ last find&replace last_frame
+ origfirst 1001
+ origlast find&replace last_frame
+ origset true
+ version 4
+ name ReadDN1
+ xpos 180
+ ypos 1065
+}
+NoOp {
+ name Anchor_be06e6828
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.anchorOnCreate()\n    except:\n        pass"
+ knobChanged stamps.anchorKnobChanged()
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0xffffff01
+ note_font_size 20
+ xpos 180
+ ypos 1210
+ addUserKnob {20 anchor_tab l "Anchor Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T anchor}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the real/internal name of the Stamps."}
+ title degrain
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T degrain}
+ addUserKnob {26 prev_name l "" +STARTLINE +HIDDEN T Anchor_be06e6828}
+ addUserKnob {3 showing l "" +STARTLINE +HIDDEN}
+ addUserKnob {1 tags l Tags t "Comma-separated tags you can define for each Anchor, that will help you find it when invoking the Stamp Selector by pressing the Stamps shortkey with nothing selected."}
+ tags 2D,
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 createStamp l new t "Create a new Stamp for this Anchor." -STARTLINE T stamps.stampCreateWired(nuke.thisNode())}
+ addUserKnob {22 selectStamps l select t "Reconnect all of this Anchor's Stamps." -STARTLINE T stamps.wiredSelectSimilar(nuke.thisNode().name())}
+ addUserKnob {22 reconnectStamps l reconnect -STARTLINE T stamps.anchorReconnectWired()}
+ addUserKnob {22 zoomNext l "zoom next" t "Navigate to this Anchor's next Stamp on the Node Graph." -STARTLINE T stamps.wiredZoomNext(nuke.thisNode().name())}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"> <big>Stamps v1.1</big></b></a>"}
+}
+set N12d6a660 [stack 0]
+PostageStamp {
+ name Stamp5
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredOnCreate()\n    except:\n        pass\n"
+ knobChanged "import stamps; stamps.wiredKnobChanged()"
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0x1000001
+ note_font Verdana
+ note_font_size 20
+ xpos 180
+ ypos 1282
+ hide_input true
+ addUserKnob {20 wired_tab l "Wired Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T wired}
+ addUserKnob {3 lockCallbacks l "" +STARTLINE +HIDDEN}
+ addUserKnob {6 toReconnect -STARTLINE +HIDDEN}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the real/internal name of the Stamps."}
+ title degrain
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T degrain}
+ addUserKnob {26 tags l Tags: t "Tags of this stamp's Anchor, for information purpose only.\nClick \"show anchor\" to change them." T <i>2D</i>}
+ addUserKnob {26 backdrops l Backdrops: t "Labels of backdrop nodes which contain this stamp's Anchor." T <i>degrain</i>}
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {6 postageStamp_show l "postage stamp" t "Enable the postage stamp thumbnail in this node.\nYou're seeing this because the class of this node includes the postage_stamp knob." +STARTLINE}
+ addUserKnob {26 anchor_label l Anchor: T " "}
+ addUserKnob {22 show_anchor l " show anchor " t "Show the properties panel for this Stamp's Anchor." -STARTLINE T stamps.wiredShowAnchor()}
+ addUserKnob {22 zoom_anchor l "zoom anchor" t "Navigate to this Stamp's Anchor on the Node Graph." -STARTLINE T stamps.wiredZoomAnchor()}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 zoomNext l " zoom next " t "Navigate to this Stamp's next sibling on the Node Graph." -STARTLINE T stamps.wiredZoomNext()}
+ addUserKnob {22 selectSimilar l " select similar " t "Select all similar Stamps to this one on the Node Graph." -STARTLINE T stamps.wiredSelectSimilar()}
+ addUserKnob {26 space_1 l "" +STARTLINE T " "}
+ addUserKnob {26 reconnect_label l Reconnect: t "Reconnect by the stored Anchor name." T " "}
+ addUserKnob {22 reconnect_this l this t "Reconnect this Stamp to its Anchor, by its stored Anchor name." -STARTLINE T "n = nuke.thisNode()\ntry:\n    n.setInput(0,nuke.toNode(n.knob(\"anchor\").value()))\nexcept:\n    nuke.message(\"Unable to reconnect.\")\ntry:\n    import stamps\n    stamps.wiredGetStyle(n)\nexcept:\n    pass\n"}
+ addUserKnob {22 reconnect_similar l similar t "Reconnect this Stamp and similar ones to their Anchor, by their stored anchor name." -STARTLINE T stamps.wiredReconnectSimilar()}
+ addUserKnob {22 reconnect_all l all t "Reconnect all the Stamps to their Anchors, by their stored anchor names." -STARTLINE T stamps.wiredReconnectAll()}
+ addUserKnob {26 space_2 l "" +STARTLINE T " "}
+ addUserKnob {20 advanced_reconnection l "Advanced Reconnection" n 2}
+ addUserKnob {26 reconnect_by_title_label l "<font color=gold>By Title:" t "Reconnect by searching for a matching title." T " "}
+ addUserKnob {22 reconnect_by_title_this l this t "Look for an Anchor that shares this Stamp's title, and connect this Stamp to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitle()}
+ addUserKnob {22 reconnect_by_title_similar l similar t "Look for an Anchor that shares this Stamp's title, and connect this Stamp and similar ones to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSimilar()}
+ addUserKnob {22 reconnect_by_title_selected l selected t "For each Stamp selected, look for an Anchor that shares its title, and connect to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSelected()}
+ addUserKnob {26 reconnect_by_selection_label l "<font color=orangered>By Selection:" t "Force reconnect to a selected Anchor." T " "}
+ addUserKnob {22 reconnect_by_selection_this l this t "Force reconnect this Stamp to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelection()}
+ addUserKnob {22 reconnect_by_selection_similar l similar t "Force reconnect this Stamp and similar ones to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSimilar()}
+ addUserKnob {22 reconnect_by_selection_selected l selected t "Force reconnect all selected Stamps to an also selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSelected()}
+ addUserKnob {1 anchor l Anchor}
+ anchor Anchor_be06e6828
+ addUserKnob {6 auto_reconnect_by_title l "<font color=#ED9977>&nbsp; auto-reconnect by title" t "When creating this stamp again (like on copy-paste), auto-reconnect it by title instead of doing it by the saved anchor's name, and auto-turn this off immediately.\nIMPORTANT: Should be off by default. Only use this for setting up templates." +STARTLINE}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"> <big>Stamps v1.1</big></b></a>"}
+}
+push $N12d6a660
+PostageStamp {
+ name Stamp8
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredOnCreate()\n    except:\n        pass\n"
+ knobChanged "import stamps; stamps.wiredKnobChanged()"
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0x1000001
+ note_font Verdana
+ note_font_size 20
+ xpos -260
+ ypos 1810
+ hide_input true
+ postage_stamp true
+ addUserKnob {20 wired_tab l "Wired Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T wired}
+ addUserKnob {3 lockCallbacks l "" +STARTLINE +HIDDEN}
+ addUserKnob {6 toReconnect -STARTLINE +HIDDEN}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the real/internal name of the Stamps."}
+ title degrain
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T degrain}
+ addUserKnob {26 tags l Tags: t "Tags of this stamp's Anchor, for information purpose only.\nClick \"show anchor\" to change them." T <i>2D</i>}
+ addUserKnob {26 backdrops l Backdrops: t "Labels of backdrop nodes which contain this stamp's Anchor." T <i>degrain</i>}
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {6 postageStamp_show l "postage stamp" t "Enable the postage stamp thumbnail in this node.\nYou're seeing this because the class of this node includes the postage_stamp knob." +STARTLINE}
+ postageStamp_show true
+ addUserKnob {26 anchor_label l Anchor: T " "}
+ addUserKnob {22 show_anchor l " show anchor " t "Show the properties panel for this Stamp's Anchor." -STARTLINE T stamps.wiredShowAnchor()}
+ addUserKnob {22 zoom_anchor l "zoom anchor" t "Navigate to this Stamp's Anchor on the Node Graph." -STARTLINE T stamps.wiredZoomAnchor()}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 zoomNext l " zoom next " t "Navigate to this Stamp's next sibling on the Node Graph." -STARTLINE T stamps.wiredZoomNext()}
+ addUserKnob {22 selectSimilar l " select similar " t "Select all similar Stamps to this one on the Node Graph." -STARTLINE T stamps.wiredSelectSimilar()}
+ addUserKnob {26 space_1 l "" +STARTLINE T " "}
+ addUserKnob {26 reconnect_label l Reconnect: t "Reconnect by the stored Anchor name." T " "}
+ addUserKnob {22 reconnect_this l this t "Reconnect this Stamp to its Anchor, by its stored Anchor name." -STARTLINE T "n = nuke.thisNode()\ntry:\n    n.setInput(0,nuke.toNode(n.knob(\"anchor\").value()))\nexcept:\n    nuke.message(\"Unable to reconnect.\")\ntry:\n    import stamps\n    stamps.wiredGetStyle(n)\nexcept:\n    pass\n"}
+ addUserKnob {22 reconnect_similar l similar t "Reconnect this Stamp and similar ones to their Anchor, by their stored anchor name." -STARTLINE T stamps.wiredReconnectSimilar()}
+ addUserKnob {22 reconnect_all l all t "Reconnect all the Stamps to their Anchors, by their stored anchor names." -STARTLINE T stamps.wiredReconnectAll()}
+ addUserKnob {26 space_2 l "" +STARTLINE T " "}
+ addUserKnob {20 advanced_reconnection l "Advanced Reconnection" n 2}
+ advanced_reconnection 1
+ addUserKnob {26 reconnect_by_title_label l "<font color=gold>By Title:" t "Reconnect by searching for a matching title." T " "}
+ addUserKnob {22 reconnect_by_title_this l this t "Look for an Anchor that shares this Stamp's title, and connect this Stamp to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitle()}
+ addUserKnob {22 reconnect_by_title_similar l similar t "Look for an Anchor that shares this Stamp's title, and connect this Stamp and similar ones to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSimilar()}
+ addUserKnob {22 reconnect_by_title_selected l selected t "For each Stamp selected, look for an Anchor that shares its title, and connect to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSelected()}
+ addUserKnob {26 reconnect_by_selection_label l "<font color=orangered>By Selection:" t "Force reconnect to a selected Anchor." T " "}
+ addUserKnob {22 reconnect_by_selection_this l this t "Force reconnect this Stamp to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelection()}
+ addUserKnob {22 reconnect_by_selection_similar l similar t "Force reconnect this Stamp and similar ones to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSimilar()}
+ addUserKnob {22 reconnect_by_selection_selected l selected t "Force reconnect all selected Stamps to an also selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSelected()}
+ addUserKnob {1 anchor l Anchor}
+ anchor Anchor_be06e6828
+ addUserKnob {6 auto_reconnect_by_title l "<font color=#ED9977>&nbsp; auto-reconnect by title" t "When creating this stamp again (like on copy-paste), auto-reconnect it by title instead of doing it by the saved anchor's name, and auto-turn this off immediately.\nIMPORTANT: Should be off by default. Only use this for setting up templates." +STARTLINE}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"> <big>Stamps v1.1</big></b></a>"}
+}
+Dot {
+ name Dot10
+ xpos -226
+ ypos 1914
+}
+set N15c2cfb0 [stack 0]
+Dot {
+ inputs 0
+ name Dot11
+ tile_color 0xff0000ff
+ label comp
+ note_font_size 42
+ note_font_color 0xff
+ xpos 214
+ ypos 1842
+}
+Dot {
+ name Dot57
+ xpos 214
+ ypos 1962
+}
+set N15b554e0 [stack 0]
+Group {
+ inputs 2
+ name common_key1
+ xpos -260
+ ypos 1953
+ addUserKnob {20 CommonKey}
+ addUserKnob {41 tolerance T MergeExpression1.tolerance}
+}
+ Input {
+  inputs 0
+  name Input2
+  xpos -189
+  ypos -333
+  number 1
+ }
+ Input {
+  inputs 0
+  name Input1
+  xpos 9
+  ypos -333
+ }
+ MergeExpression {
+  inputs 2
+  expr3 "abs(Br-Ar) > tolerance || abs(Bg-Ag) > tolerance || abs(Bb-Ab)\n > tolerance?1:0"
+  name MergeExpression1
+  xpos -98
+  ypos -270
+  addUserKnob {20 User}
+  addUserKnob {7 tolerance R 0 0.1}
+  tolerance 0.0001
+ }
+ Shuffle {
+  red alpha
+  green alpha
+  blue alpha
+  name Shuffle1
+  xpos -98
+  ypos -242
+ }
+ Clamp {
+  name Clamp1
+  xpos -98
+  ypos -210
+ }
+ Output {
+  name Output1
+  xpos -98
+  ypos -99
+ }
+end_group
+Group {
+ name L_ExponBlur_v03_1
+ help "L_ExponBlur_v03 The ExponBlur blurs an image with an exponential falloff based upon an alpha. Most often used with roto shapes. The effect is applied to RGBA only. (For any questions, comments or suggestions please email gizmos@luma-pictures.com)"
+ tile_color 0xcc804eff
+ xpos -260
+ ypos 2001
+ addUserKnob {20 ExponBlur}
+ addUserKnob {14 size R -40 40}
+ size 5.4
+ addUserKnob {7 Multiplier R 0 10}
+ Multiplier 2
+ addUserKnob {6 crop l "crop to format" +STARTLINE}
+ crop true
+ addUserKnob {26 ""}
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos -407
+  ypos 305
+ }
+set N15c49b80 [stack 0]
+ Invert {
+  name Invert4
+  xpos -407
+  ypos 360
+  disable {{"parent.size>=0 ? 1 : 0" i}}
+ }
+set N15e37e90 [stack 0]
+ Blur {
+  size {{parent.size.w i} {parent.size.h i}}
+  crop {{parent.crop i}}
+  name Blur1
+  label "\[value size]"
+  xpos -615
+  ypos 477
+ }
+push $N15e37e90
+ Blur {
+  size {{parent.size.w*parent.Multiplier i} {parent.size.h*parent.Multiplier i}}
+  crop {{parent.crop i}}
+  name Blur2
+  label "\[value size]"
+  xpos -480
+  ypos 476
+ }
+ Merge2 {
+  inputs 2
+  name Merge7
+  xpos -537
+  ypos 572
+ }
+push $N15e37e90
+ Blur {
+  size {{parent.size.w*parent.Multiplier*2 i} {parent.size.h*parent.Multiplier*2 i}}
+  crop {{parent.crop i}}
+  name Blur3
+  label "\[value size]"
+  xpos -357
+  ypos 475
+ }
+ Merge2 {
+  inputs 2
+  name Merge8
+  xpos -477
+  ypos 637
+ }
+push $N15e37e90
+ Blur {
+  size {{parent.size.w*parent.Multiplier*4 i} {parent.size.h*parent.Multiplier*4 i}}
+  crop {{parent.crop i}}
+  name Blur4
+  label "\[value size]"
+  xpos -229
+  ypos 475
+ }
+ Merge2 {
+  inputs 2
+  name Merge9
+  xpos -402
+  ypos 707
+ }
+ Invert {
+  name Invert5
+  xpos -402
+  ypos 768
+  disable {{"parent.size>=0 ? 1 : 0" i}}
+ }
+push $N15c49b80
+ Dot {
+  name Dot2
+  xpos -101
+  ypos 308
+ }
+ Dot {
+  name Dot1
+  xpos -101
+  ypos 859
+ }
+ ShuffleCopy {
+  inputs 2
+  red red
+  green green
+  blue blue
+  name ChannelsPassThrough
+  xpos -402
+  ypos 856
+ }
+ Output {
+  name Output1
+  xpos -402
+  ypos 926
+ }
+end_group
+Dot {
+ name Dot58
+ xpos -226
+ ypos 2130
+}
+set N161de170 [stack 0]
+Dot {
+ name Dot12
+ xpos -226
+ ypos 2274
+}
+push $N161de170
+push $N15c2cfb0
+Dot {
+ name Dot13
+ xpos 104
+ ypos 1914
+}
+Dot {
+ name Dot14
+ xpos 104
+ ypos 2058
+}
+push $N12698d50
+PostageStamp {
+ name Stamp9
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredOnCreate()\n    except:\n        pass\n"
+ knobChanged "import stamps; stamps.wiredKnobChanged()"
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0x1000001
+ note_font Verdana
+ note_font_size 20
+ xpos 400
+ ypos 1978
+ hide_input true
+ postage_stamp true
+ addUserKnob {20 wired_tab l "Wired Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T wired}
+ addUserKnob {3 lockCallbacks l "" +STARTLINE +HIDDEN}
+ addUserKnob {6 toReconnect -STARTLINE +HIDDEN}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the real/internal name of the Stamps."}
+ title master
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T master}
+ addUserKnob {26 tags l Tags: t "Tags of this stamp's Anchor, for information purpose only.\nClick \"show anchor\" to change them." T <i>2D</i>}
+ addUserKnob {26 backdrops l Backdrops: t "Labels of backdrop nodes which contain this stamp's Anchor." T <i>Read</i>}
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {6 postageStamp_show l "postage stamp" t "Enable the postage stamp thumbnail in this node.\nYou're seeing this because the class of this node includes the postage_stamp knob." +STARTLINE}
+ postageStamp_show true
+ addUserKnob {26 anchor_label l Anchor: T " "}
+ addUserKnob {22 show_anchor l " show anchor " t "Show the properties panel for this Stamp's Anchor." -STARTLINE T stamps.wiredShowAnchor()}
+ addUserKnob {22 zoom_anchor l "zoom anchor" t "Navigate to this Stamp's Anchor on the Node Graph." -STARTLINE T stamps.wiredZoomAnchor()}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 zoomNext l " zoom next " t "Navigate to this Stamp's next sibling on the Node Graph." -STARTLINE T stamps.wiredZoomNext()}
+ addUserKnob {22 selectSimilar l " select similar " t "Select all similar Stamps to this one on the Node Graph." -STARTLINE T stamps.wiredSelectSimilar()}
+ addUserKnob {26 space_1 l "" +STARTLINE T " "}
+ addUserKnob {26 reconnect_label l Reconnect: t "Reconnect by the stored Anchor name." T " "}
+ addUserKnob {22 reconnect_this l this t "Reconnect this Stamp to its Anchor, by its stored Anchor name." -STARTLINE T "n = nuke.thisNode()\ntry:\n    n.setInput(0,nuke.toNode(n.knob(\"anchor\").value()))\nexcept:\n    nuke.message(\"Unable to reconnect.\")\ntry:\n    import stamps\n    stamps.wiredGetStyle(n)\nexcept:\n    pass\n"}
+ addUserKnob {22 reconnect_similar l similar t "Reconnect this Stamp and similar ones to their Anchor, by their stored anchor name." -STARTLINE T stamps.wiredReconnectSimilar()}
+ addUserKnob {22 reconnect_all l all t "Reconnect all the Stamps to their Anchors, by their stored anchor names." -STARTLINE T stamps.wiredReconnectAll()}
+ addUserKnob {26 space_2 l "" +STARTLINE T " "}
+ addUserKnob {20 advanced_reconnection l "Advanced Reconnection" n 2}
+ advanced_reconnection 1
+ addUserKnob {26 reconnect_by_title_label l "<font color=gold>By Title:" t "Reconnect by searching for a matching title." T " "}
+ addUserKnob {22 reconnect_by_title_this l this t "Look for an Anchor that shares this Stamp's title, and connect this Stamp to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitle()}
+ addUserKnob {22 reconnect_by_title_similar l similar t "Look for an Anchor that shares this Stamp's title, and connect this Stamp and similar ones to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSimilar()}
+ addUserKnob {22 reconnect_by_title_selected l selected t "For each Stamp selected, look for an Anchor that shares its title, and connect to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSelected()}
+ addUserKnob {26 reconnect_by_selection_label l "<font color=orangered>By Selection:" t "Force reconnect to a selected Anchor." T " "}
+ addUserKnob {22 reconnect_by_selection_this l this t "Force reconnect this Stamp to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelection()}
+ addUserKnob {22 reconnect_by_selection_similar l similar t "Force reconnect this Stamp and similar ones to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSimilar()}
+ addUserKnob {22 reconnect_by_selection_selected l selected t "Force reconnect all selected Stamps to an also selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSelected()}
+ addUserKnob {1 anchor l Anchor}
+ anchor Anchor_3a190e900
+ addUserKnob {6 auto_reconnect_by_title l "<font color=#ED9977>&nbsp; auto-reconnect by title" t "When creating this stamp again (like on copy-paste), auto-reconnect it by title instead of doing it by the saved anchor's name, and auto-turn this off immediately.\nIMPORTANT: Should be off by default. Only use this for setting up templates." +STARTLINE}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"> <big>Stamps v1.1</big></b></a>"}
+}
+Dot {
+ name Dot15
+ xpos 434
+ ypos 2130
+}
+set N1627ad60 [stack 0]
+push $N15b554e0
+Group {
+ inputs 4
+ name DasGrain
+ help "DasGrain makes regraining as simple as clicking a few buttons.\n\nFollow the steps in the Help tab and you'll have a perfect regrain in no time!"
+ onCreate "import random\n\ntestimonials = \[\n    \"Such an elegant solution, love it!\",\n    \"Your gizmo is beyond expectation\",\n    \"Totally awesome!\",\n    \"DasGrain is officially the best thing ever\",\n    \"It's really working!\",\n    \"Das bringt Tr&auml;nen in meine Augen\",\n    \"DasGrain is the salvation we waited for\",\n    \"I save a lot of time, and definitely my nerves :)\",\n    \"It's alright\",\n    \"My new favourite node, thanks!<br>Having said that, ...\"\n    ]\n\nnode = nuke.thisNode()\nnode\['testimonial'].setValue('<br><br><br><i>&laquo;%s&raquo;</i><br>&mdash; anonymous<br><br>' % random.choice(testimonials))\nnode\['box'].setFlag(nuke.NO_ANIMATION)"
+ knobChanged "n = nuke.thisNode()\nk = nuke.thisKnob()\n\nif k.name() == 'box':\n    this_frame = nuke.frame()\n    n\['sample_frame'].setValue(this_frame)\n\nif k.name() == 'scatter':\n    n\['divider04'].setVisible(k.value() == False)\n    n\['divider05'].setVisible(k.value() == True)"
+ tile_color 0x7f7f7fff
+ xpos 180
+ ypos 2115
+ addUserKnob {20 DasGrain_tab l DasGrain}
+ addUserKnob {41 output t "<strong>regrained comp</strong> it is what it sais\n<strong>plate grain</strong> plate minus degrained plate\n<strong>normalised grain</strong> check if the normalization worked. It should be as even as possible. This is what you want to output if you want to prerender a grain plate. Later you can plug it into the <i>external grain</i> input of another DasGrain\n<strong>adapted grain</strong> check if the adaptation worked. Output this if you want to further manipulate the grain (who knows what the sup is gonna come up with...). After, simply plus it to your comp (at that point the comp has to be in the <i>camera</i> colorspace, as set in the <i>Analyze</i> tab).\n<strong>grain QC</strong> check if voronoi seams are visible (&#8594; edgeblend), or the scattered grain looks different to the original plate grain (&#8594; maybe bad sample area or wrong luminance degrain amount)" T Output.output}
+ addUserKnob {4 meta l "metadata from" t "Chances are you want to use the metadata from the plate, but who am I to assume :)" M {COMP PLATE}}
+ addUserKnob {26 spacer01_1 l " " T " "}
+ addUserKnob {20 GrainGroupBegin l "" +STARTLINE n -2}
+ addUserKnob {20 Analyze_tab l Analyze}
+ addUserKnob {26 text l <strong>Colorspace}
+ addUserKnob {41 project_colorspace l project t "set this to the project color space" T OCIOColorSpace1.in_colorspace}
+ addUserKnob {22 python_button l "What's this all about?" -STARTLINE T "nuke.message(\"Regraining in other color spaces than the camera native linear space can lead to unexpected behaviour.\\n\\nFor example converting Alexa plates to ACEScg might introduce negative values due to ACEScg's smaller gamut. In that case converting back to ARRI Linear ALEXA Wide Gamut will probably help.\\nJust set <i>project</i> to ACEScg and <i>camera</i> to ARRI Linear ALEXA Wide Gamut.\\n\\nThis might be transferable to other cameras, but I've only tested with Alexas.\\n---------\\nBypass by setting both knobs to the same value.\")"}
+ addUserKnob {41 camera_colorspace l camera t "set this to the camera native linear space" T OCIOColorSpace1.out_colorspace}
+ addUserKnob {26 text_2 l " " T " "}
+ addUserKnob {26 level l "<strong>Degrain amount"}
+ addUserKnob {78 luminance t "Leave this at 1 if you're working on a completely degrained plate.\n\nIn case you decided to leave some luminance grain in the degrained plate (use the DegrainHelper node for this!), set this to the same value as in the DegrainHelper in order to compensate.\n\nIf the luminance degrain amount was set to 0.8, this needs to be set to 0.8 as well.\n\nYou need to select a mask of all elements that cover the plate, otherwise the grain of whole comp will be too strong " n 1}
+ luminance 1
+ addUserKnob {26 divider01 l " "}
+ addUserKnob {41 degrain_amount_mask l "degrain amount mask" t "Use this channel from the mask input to specify in what area of the comp the missing luminance grain needs to be compensated." T Multiply1.maskChannelMask}
+ addUserKnob {41 invert_mask l invert -STARTLINE T Multiply1.invert_mask}
+ addUserKnob {26 spacer02 l " " T " "}
+ addUserKnob {26 divider02 l <strong>Analyze}
+ addUserKnob {3 number_of_frames l "number of frames" t "Set the number of sample frames to be spread across the input range.\n\nMore frames lead to higher accuracy.\n\nIf there are particularly bright or dark frames, set them manually in the knob below to make sure they are part of the analysis.\n\nIf you want to set all sample frames manually, set this to 0 and add the frames in the knob below."}
+ number_of_frames 10
+ addUserKnob {1 additional_frames l "additional frames" t "Set additional frames like this:\n\n1001,1020,1053 (single frames)\n1020-1040 (frame ranges)\n1020-1040x4 (frame ranges with step)"}
+ addUserKnob {3 sample_count l "sample count" t "The samples are spread across the sample range (which gets calculated automatically) based on the AlexaV3LogC curve. This results in more samples in the dark areas and less samples in the brights.\n\nMore samples lead to a more detailed response curve (while the accuracy is limited by the quality of the degrain)."}
+ sample_count 20
+ addUserKnob {22 analyze l Analyze t "this is where the magic happens" T "import base64\nthis = nuke.thisNode()\n\n\ndef _sample_count(this):\n    \"\"\"returns the sample count\"\"\"\n\n    sample_count = int(this\['sample_count'].value())\n\n    if sample_count <= 0:\n        raise RuntimeError('Enter a sample count greater than 0')\n\n    else:\n        return sample_count\n\n\ndef _generate_frame_list(this):\n    \"\"\"converts the frames submitted by the user into a list\"\"\"\n\n    frame_list = \[]\n    number_of_frames = int(this\['number_of_frames'].value())\n    additional_frames = this\['additional_frames'].value()\n\n    if number_of_frames < 1 and additional_frames is '':\n        raise RuntimeError('Either set the number of frames > 0\\nor define additional frames')\n\n    first_frame = max(this.input(1).firstFrame(), this.input(2).firstFrame())\n    last_frame = min(this.input(1).lastFrame(), this.input(2).lastFrame())\n\n    if number_of_frames > 0:\n        distance = (last_frame - first_frame) / (number_of_frames)\n        frame = first_frame + distance / 2\n\n        for x in range(number_of_frames):\n            int_frame = int(round(frame))\n            if int_frame not in frame_list:\n                frame_list.append(int_frame)\n\n            frame += distance\n\n    frange = nuke.FrameRanges(additional_frames.split(','))\n\n    for r in frange:\n        for f in r:\n            if f >= first_frame and f <= last_frame:\n                if f not in frame_list:\n                    frame_list.append(f)\n\n    frame_list.sort()\n\n    return frame_list\n\n\ndef _setup_for_multiframe(frame_list):\n    \"\"\" arranges all sample frames next to each other, starting at frame 0\n    and sets the frame number knob of the FrameBlend node\"\"\"\n\n    time_warp = nuke.toNode('TimeWarp1')\n    time_warp\['lookup'].clearAnimated()\n    time_warp\['lookup'].setAnimated()\n    anim_list = \[]\n\n    for n, frame in enumerate(frame_list):\n        anim_list.append(nuke.AnimationKey(n, frame))\n\n    anim = time_warp\['lookup'].animation(0)\n    anim.addKey(anim_list)\n\n    frame_blend = nuke.toNode('FrameBlend1')\n    frame_blend\['endframe'].setValue(len(frame_list)-1)\n\n\ndef _generate_sample_list(sample_count, sample_range, sample_radius):\n    \"\"\"generate a list of sample values spread equally between the\n    min and max values of the sample range\"\"\"\n\n    sample_list = \[]\n\n    for item in range(0, sample_count):\n        sample_list.append(float(item) / sample_count * (sample_range\[1] - sample_range\[0]) + sample_range\[0] + sample_radius)\n\n    return sample_list\n\n\ndef _get_sample_range(channel, channel_list, frame_list):\n    \"\"\" samples the minimum and maximum values of the given frame range and\n    sets the sample range to those values\"\"\"\n\n    curve_tool = nuke.toNode('CurveTool_Range')\n    min_knob = curve_tool\['minlumapixvalue']\n    max_knob = curve_tool\['maxlumapixvalue']\n\n    min_knob.setAnimated()\n    max_knob.setAnimated()\n\n    curve_tool\['channels'].setValue(channel)\n\n    nuke.execute(curve_tool, nuke.FrameRanges(frame_list))\n\n    index = channel_list.index(channel)\n    min_list = \[key.y for key in min_knob.animation(index).keys()]\n    max_list = \[key.y for key in max_knob.animation(index).keys()]\n\n    min_value = min(min_list)\n    max_value = max(max_list)\n\n    min_knob.clearAnimated()\n    max_knob.clearAnimated()\n    curve_tool\['minlumapixdata'].clearAnimated()\n    curve_tool\['maxlumapixdata'].clearAnimated()\n\n    return \[min_value, max_value]\n\n\ndef _sample_it(keyer, curve_tool, sample, sample_radius):\n    \"\"\"analyze the grain level per channel and sample value in the sample range\"\"\"\n\n    keyer\['temp_expr0'].setValue(str(sample - sample_radius))\n    keyer\['temp_expr1'].setValue(str(sample + sample_radius))\n\n    intensity_knob = curve_tool\['intensitydata']\n    intensity_knob.clearAnimated()\n    intensity_knob.setAnimated()\n\n    nuke.execute(curve_tool, nuke.frame(), nuke.frame())\n    sample_values = intensity_knob.value()\n    intensity_knob.clearAnimated()\n\n    return sample_values\n\n\ndef check_inputs(this):\n    if this.input(1) is None:\n        raise RuntimeError('no plate connected')\n\n    if this.input(2) is None:\n        raise RuntimeError('no degrained plate connected')\n\n    def format_tuple(node):\n        return node.format().width(), node.format().height(), node.format().pixelAspect()\n\n    if format_tuple(this.input(1)) != format_tuple(this.input(2)):\n        raise RuntimeError(\"Format missmatch: Make sure the formats of plate and degrained plate match.\")\n\n\ndef start(this):\n    \"\"\"let's do this!\"\"\"\n\n    check_inputs(this)\n\n    with this:\n        frame_list = _generate_frame_list(this)\n        _setup_for_multiframe(frame_list)\n        sample_count = _sample_count(this)\n\n        blank = base64.b64decode('cmVkIHtjdXJ2ZX0KZ3JlZW4ge2N1cnZlfQpibHVlIHtjdXJ2ZX0=').decode('ascii')\n\n        lut = nuke.toNode('Sampler1')\['lut']\n        lut.fromScript(blank)\n\n        channel_list = \['red', 'green', 'blue']\n\n        keyer = nuke.toNode('Expression2')\n        copy = nuke.toNode('Copy2')\n\n        curve_tool = nuke.toNode('CurveTool')\n        pixel = curve_tool\['ROI'].value()\[2] * curve_tool\['ROI'].value()\[3]\n\n        task = nuke.ProgressTask('Analysing...')\n        step = 100.0 / 3 / sample_count\n        progress = step\n\n        time_warp = nuke.toNode('TimeWarp1')\n        frame_blend = nuke.toNode('FrameBlend1')\n\n        time_warp\['disable'].setValue(False)\n        frame_blend\['disable'].setValue(False)\n\n        for channel in channel_list:\n            task.setMessage('\{\} range'.format(channel))\n\n            copy\['from0'].setValue('rgba.\{\}'.format(channel))\n\n            sample_range = _get_sample_range(channel, channel_list, frame_list)\n            sample_radius = (sample_range\[1] - sample_range\[0]) / sample_count / 2\n            sample_list = _generate_sample_list(sample_count, sample_range, sample_radius)\n\n            for sample in sample_list:\n                if task.isCancelled():\n                    return\n\n                task.setProgress(int(progress))\n\n                sample_values = _sample_it(keyer, curve_tool, sample, sample_radius)\n\n                task.setMessage('\{\} channel at \{\}'.format(channel, round(sample, 2)))\n\n                if sample_values\[3] * pixel >= 10:\n                    lut.setValueAt(sample_values\[0] / sample_values\[3], sample_values\[1] / sample_values\[3], channel_list.index(channel))\n\n                progress += step\n\n        time_warp\['lookup'].clearAnimated()\n        time_warp\['disable'].setValue(True)  # hopefully prevents slowing down the comp\n        frame_blend\['disable'].setValue(True)  # hopefully prevents slowing down the comp\n\n    del task\n\n\nstart(this)\n" +STARTLINE}
+ addUserKnob {26 divider03 l " "}
+ addUserKnob {41 analysis_mask l "analysis mask" t "Use this channel from the mask input to control what area of the plate will be analyzed.\n\nUsefull if the degrain is obviously bad in some areas." T ChannelMerge1.A}
+ addUserKnob {6 invert_1 l invert -STARTLINE}
+ addUserKnob {20 Adjust_tab l Adjust}
+ addUserKnob {22 whatsthis l "What am I looking at?" T "nuke.message(\"After the analysis you'll see the sampled grain response curves here. On the x-axis is the brightness of the image and on the y-axis the grain intensity. Grain increases with brightness, so <strong>the slope of the curves should always be positive</strong> (they should always go up &#8599;).<br><br>The quality of the curves depends entirely on the quality of the degrain. If the curves look wrong (for example they go up and down), try to improve the degrain first. If they still look wrong and the resulting regrain doesn't work well enough, you can try to improve the curves here by deleting/correcting all points that don't follow an upwards trend.<br><br>You can also extend the curves (again: with an upwards trend) if the comp has values that don't exist in the plate.<br><br>Note: The curve is used for both the normalization as well as the adaptation of the grain, so it doesn't give direct control of the grain intensity.\")" +STARTLINE}
+ addUserKnob {41 lut l "" +STARTLINE T Sampler1.lut}
+ addUserKnob {20 Replace_tab l Replace}
+ addUserKnob {6 external_grain l "use external grain" t "Use external grain from a second DasGrain, with the output set to 'normalised grain', to replace masked area.\nConnect it to the 'external grain' input of this DasGrain (it's a bit hidden on the left side of the node)." +STARTLINE}
+ addUserKnob {26 divider04 l <strong>Scatter}
+ addUserKnob {26 divider05 l <strong>Scatter +HIDDEN T "<span style=\"color:red\">Make sure you're sampling an area without any plate detail.</a>"}
+ addUserKnob {6 scatter l activate t "Activates the scatter function. It generates a new grain based on the plate grain in the sample box using a Voronoi noise." +STARTLINE}
+ addUserKnob {41 useGPUIfAvailable l "Use GPU if available" -STARTLINE T VoronoiScatter.useGPUIfAvailable}
+ addUserKnob {15 box l "sample box" t "Define an area that is used as a source for the scatter function. The plate grain in this area should be as even as possible, without any visible detail."}
+ box {384 968 784 1168}
+ addUserKnob {3 sample_frame l "sample frame" t "The frame at which the grain is being sampled. Is set automatically once the sample box is changed." +DISABLED}
+ sample_frame 44
+ addUserKnob {4 stereo l "stereo behaviour" t "randomize offset per view: same voronoy pattern for all views, but different offset\n\nrandomize pattern per view: different voronoy pattern for every view" M {none "randomize offset per view" "randomize pattern per view" ""}}
+ addUserKnob {26 spacer06 l "" +STARTLINE T " "}
+ addUserKnob {6 overlay l "overlay cell pattern" t "Overlay the cell pattern of the voronoy noise. Useful to check where the seams are and if distortion or blending is necessary." +STARTLINE}
+ addUserKnob {7 cell_size l "cell size" t "Cell size of the scatter. Shoudn't be too small, as lower grain frequencies might break.\nCan't be too big either, to prevent it from breaking the border of the samplebox (will error if it does)." R 5 100}
+ cell_size 40
+ addUserKnob {26 spacer07 l "" +STARTLINE T " "}
+ addUserKnob {20 concealer l "edge concealer" n 1}
+ concealer 0
+ addUserKnob {26 concealer_help l " " T "If you can see the voronoi pattern in the grain QC output,\nincrease the edge blend size."}
+ addUserKnob {3 edge_blend_size l "edge blend size" t "Set the output to grain QC. If you see the cell seams, increase the edge blend size to conceal them.\n\nThis is a bit hacky and slow."}
+ addUserKnob {26 tip l "" -STARTLINE T "sloooow - keep this below 3 if possible"}
+ addUserKnob {26 distortion_help l " " T "\nDistortion might help as well, if somehow the straight\nseams are visible (you might want to toggle the overlay\nwhile adjusting)."}
+ addUserKnob {7 amplitude R 0 50}
+ addUserKnob {7 frequency R 0 50}
+ frequency 15
+ addUserKnob {20 endGroup n -1}
+ addUserKnob {26 divider06 l "" +STARTLINE}
+ addUserKnob {41 replace_mask l "replace mask" t "Use this channel from the mask input to specify where you want to use scattered grain instead of the adapted plate grain." -STARTLINE T Merge9.maskChannelMask}
+ addUserKnob {41 invert_mask_1 l invert -STARTLINE T Merge9.invert_mask}
+ addUserKnob {20 GrainGroupEnd l "" +STARTLINE n -3}
+ addUserKnob {20 Help_tab l Help}
+ addUserKnob {26 basic_setup l "" +STARTLINE T "<font size=\"5\">Basic setup</font>"}
+ addUserKnob {26 ""}
+ addUserKnob {26 explanation l "" +STARTLINE T "<strong>Bold</strong> steps are always necessary"}
+ addUserKnob {26 steps l "" +STARTLINE T "<br><strong>1. This should be the only regrain node in your comp.<br>2. Connect <i>plate</i>, <i>degrained plate</i> and <i>comp</i>.<br>&nbsp;&nbsp;&nbsp;&nbsp;The comp should be done on the degrained plate!</strong><br>3. Set the <i>luminance degrain amount</i>.<br><strong>4. Press the <i>Analyze</i> button.</strong><br>5. Correct the response curves in the <i>Adjust</i> tab.<br>6. Move the <i>sample box</i> to an area without any plate detail and activate <i>scatter</i>.<br>7. If necessary, activate <i>edge blend</i> and/or <i>distortion</i> to conceal seams."}
+ addUserKnob {26 in_depth l "" +STARTLINE T "<br>For an in depth explanation of the steps, read the tooltips and check out this video:<br><a href=\"https://vimeo.com/284820390/\"><span style=\"color:#C8C8C8;\">https://vimeo.com/284820390</a>"}
+ addUserKnob {26 pushthebutton l "" +STARTLINE T "<br><br>If the result is not as expected and you don't know why, push this button:"}
+ addUserKnob {22 troubleshoot l Troubleshoot t HEEEEEEELP T "import base64\n\nmessages = \[]\n\nthis = nuke.thisNode()\n\n#########################\n\nif this.input(0) is None or this.input(1) is None or this.input(2) is None:\n    messages.append(\"<font color='red'><strong>ERROR</strong></font> Plate, degrained plate and comp need to be connected to the appropriate inputs.\")\n\n#########################\n\nelse:\n\n    def format_to_tuple(g):\n        \"\"\"returns (1024, 786, 2.0)\n        \"\"\"\n        return (g.format().width(), g.format().height(), g.format().pixelAspect())\n\n    format_set = set(\[\n        format_to_tuple(this.input(0)),\n        format_to_tuple(this.input(1)),\n        format_to_tuple(this.input(2)),\n        ])\n    if len(format_set) != 1:\n        messages.append(\"<font color='orange'><strong>WARNING</strong></font> Format missmatch: Make sure formats of plate, degrained plate and comp match.\")\n\n    if (this.input(1).firstFrame() != this.input(2).firstFrame()) or (this.input(1).lastFrame() != this.input(2).lastFrame()):\n        messages.append(\"<font color='orange'><strong>WARNING</strong></font> The frame ranges of plate and degrained plate don't match. Double check that they belong together.\")\n\n#########################\n\nmessages.append(\"Double check that plate and degrained plate haven't been modified in any way (paint, despill, etc).\")\n\n#########################\n\nif this\['luminance'].getValue() == 1:\n    messages.append(\"Are you working on a completely degrained plate? If not, you might have to set the luminance degrain amount.\")\n\n#########################\n\nblank = base64.b64decode('cmVkIHtjdXJ2ZX0KZ3JlZW4ge2N1cnZlfQpibHVlIHtjdXJ2ZX0=').decode('ascii')\n\nwith this:\n    Sampler = nuke.toNode('Sampler1')     \n    if Sampler\['lut'].toScript() == blank:\n        messages.append(\"<font color='red'><strong>ERROR</strong></font> You haven't pressed the Analyze button yet!\")\n\n#########################\n\nclass BadThings(Exception): pass\n\ndef thingy():\n    with this:\n        Sampler = nuke.toNode('Sampler1')\n        list = this\['lut'].toScript().replace('\}','').split('\\n')\n        for item in list:\n            sample_value = 0\n            for value in item.split(' '):\n                try:\n                    value == float(value)\n                    if value < sample_value:\n                        raise BadThings(\"<font color='orange'><strong>WARNING</strong></font> Check and fix the response curves. Their slopes should always be positive (the curves should always go up &#8599;).\")\n                        \n                    else:\n                        sample_value = value\n                except ValueError:\n                    # Ignore non-numeric things like x-values of \"x5.46\" and channel names like \"red\{\" etc\n                    pass\ntry:\n    thingy()\nexcept BadThings as e:\n    messages.append(str(e))\n    \n#########################\n\nif this\['scatter'].value() == True:\n    if this\['box'].getValue() == \[100.0, 100.0, 500.0, 300.0]:\n        messages.append(\"<font color='orange'><strong>WARNING</strong></font> Scatter has been activated, but the sample box is still in its default position. Are you sure that's a good area to sample?\")\n\n#########################\n\nmessages.append(\"Did you copy/paste DasGrain from another script? Make sure to reanalyze and to reset the sample area if you are using scatter.\")\n\n#########################\n\nif len(messages) > 0:\n    nuke.message(\"<font size=\\\"5\\\">Things worth checking</font><br><br>\"\n                               \"%s<br><br><br>If any of this doesn't make sense to you, it might be worth checking out the video on vimeo.\" % (\n                                  \"<hr>\".join(\"%s: %s\" % (i+1, m) for i, m in enumerate(messages))))\n" +STARTLINE}
+ addUserKnob {26 dont_despair l "" +STARTLINE T "<br>If it still doesn't work and you're about to flip the table, send me a <a href=\"mailto:holtzf+nuke@gmail.com?subject=Help with DasGrain v1.7.8\"><span style=\"color:#C8C8C8;\">mail</a>.<br>I'm happy to help! :)"}
+ addUserKnob {20 Info_tab l Info}
+ addUserKnob {26 dasname l "" +STARTLINE T "<font size='5'>DasGrain</font> v1.8<br>"}
+ addUserKnob {26 text_1 l "" +STARTLINE T "DasGrain makes regraining as simple as clicking a few buttons.<br>Follow the steps in the <i>Help</i> tab and you'll have a perfect\nregrain<br>in no time!"}
+ addUserKnob {26 ""}
+ addUserKnob {26 info l "" +STARTLINE T "Last change: 2021-03-07\n\n"}
+ addUserKnob {26 name_1 l "" +STARTLINE T "Fabian Holtz"}
+ addUserKnob {26 mail l "" +STARTLINE T "<a href=\"mailto:holtzf+nuke@gmail.com?subject=Help with DasGrain v1.7.8\"><span style=\"color:#C8C8C8;\">holtzf+nuke@gmail.com</a>"}
+ addUserKnob {26 testimonial l "" +STARTLINE T "<br><br><br><i>&laquo;I save a lot of time, and definitely my nerves :)&raquo;</i><br>&mdash; anonymous<br><br>"}
+ addUserKnob {26 ""}
+ addUserKnob {26 credit l "" +STARTLINE T "<br>VoronoiScatter based on <a href=\"http://www.nukepedia.com/blink/image/voronoi/\"><span style=\"color:#C8C8C8;\">Ivan Busquets' implementation</a> of<br> libNoise's\nVoronoi generator"}
+ addUserKnob {26 thanks l "" +STARTLINE T "<br>Special thanks to Ben Dickson for bearing with my questions and<br>problems and RSP comp for the valuable feedback."}
+}
+ BackdropNode {
+  inputs 0
+  name BackdropNode1
+  tile_color 0x7f7f7fff
+  label "normalise grain"
+  note_font_size 30
+  xpos 170
+  ypos 1662
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode11
+  tile_color 0x7f7f7fff
+  label "add grain"
+  note_font_size 30
+  xpos 830
+  ypos 2766
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode13
+  tile_color 0x7f7f7fff
+  label scatter
+  note_font_size 30
+  xpos -50
+  ypos 2022
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode14
+  tile_color 0x7f7f7fff
+  label "analyze grain"
+  note_font_size 30
+  xpos -159
+  ypos 606
+  bdwidth 319
+  bdheight 877
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode2
+  tile_color 0x7f7f7fff
+  label "grain response curve"
+  note_font_size 30
+  xpos 610
+  ypos 2574
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode3
+  tile_color 0x7f7f7fff
+  label QC
+  note_font_size 30
+  xpos 1050
+  ypos 3222
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode4
+  tile_color 0x7f7f7fff
+  label "grain response curve"
+  note_font_size 30
+  xpos 610
+  ypos 1422
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode5
+  tile_color 0x7f7f7fff
+  label "adapt grain"
+  note_font_size 30
+  xpos 170
+  ypos 2574
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode6
+  tile_color 0x7f7f7fff
+  label "sample range"
+  note_font_size 30
+  xpos -490
+  ypos 606
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode7
+  tile_color 0x7f7f7fff
+  label "luminance level"
+  note_font_size 30
+  xpos 280
+  ypos -282
+  bdwidth 760
+  bdheight 685
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode8
+  tile_color 0x7f7f7fff
+  label "plate grain"
+  note_font_size 30
+  xpos 170
+  ypos 606
+  bdwidth 320
+  bdheight 110
+ }
+ BackdropNode {
+  inputs 0
+  name BackdropNode9
+  tile_color 0x7f7f7fff
+  label replace
+  note_font_size 30
+  xpos 60
+  ypos 2191
+  bdwidth 540
+  bdheight 226
+ }
+ Input {
+  inputs 0
+  name DEGRAINED_PLATE
+  label "\[value number]"
+  note_font_size 30
+  xpos 730
+  ypos -896
+  number 2
+ }
+ OCIOColorSpace {
+  in_colorspace {{OCIOColorSpace1.in_colorspace}}
+  out_colorspace {{OCIOColorSpace1.out_colorspace}}
+  name OCIOColorSpace2
+  xpos 730
+  ypos -490
+ }
+ Dot {
+  name Dot9
+  xpos 764
+  ypos -390
+ }
+set N16c512e0 [stack 0]
+ Dot {
+  name Dot28
+  xpos 764
+  ypos -198
+ }
+set N15f213f0 [stack 0]
+ Dot {
+  name Dot32
+  xpos 764
+  ypos 234
+ }
+set N15f276a0 [stack 0]
+push $N15f213f0
+ Dot {
+  name Dot27
+  xpos 624
+  ypos -198
+ }
+ Colorspace {
+  colorspace_out YCbCr
+  name Colorspace1
+  xpos 590
+  ypos -130
+ }
+ Dot {
+  name Dot7
+  xpos 624
+  ypos -54
+ }
+set N15f4f140 [stack 0]
+ Input {
+  inputs 0
+  name PLATE
+  label "\[value number]"
+  note_font_size 30
+  xpos 290
+  ypos -892
+  number 1
+ }
+ Dot {
+  name Dot50
+  xpos 324
+  ypos -726
+ }
+set N15f5c2e0 [stack 0]
+ OCIOColorSpace {
+  in_colorspace scene_linear
+  out_colorspace scene_linear
+  name OCIOColorSpace1
+  xpos 290
+  ypos -490
+ }
+ Dot {
+  name Dot29
+  xpos 324
+  ypos -198
+ }
+set N15fb1f20 [stack 0]
+ Dot {
+  name Dot6
+  xpos 464
+  ypos -198
+ }
+ Colorspace {
+  colorspace_out YCbCr
+  name Colorspace2
+  xpos 430
+  ypos -130
+ }
+ Merge2 {
+  inputs 2
+  operation from
+  bbox B
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge4
+  xpos 430
+  ypos -58
+ }
+ Multiply {
+  channels rgb
+  value {{"1 / parent.luminance - 1"} 0 0 0}
+  name Multiply6
+  xpos 430
+  ypos 14
+ }
+ Dot {
+  name Dot31
+  xpos 464
+  ypos 90
+ }
+push $N15f4f140
+ Merge2 {
+  inputs 2
+  operation plus
+  bbox B
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge5
+  xpos 590
+  ypos 86
+ }
+ Colorspace {
+  colorspace_in YCbCr
+  name Colorspace3
+  xpos 590
+  ypos 158
+ }
+ Merge2 {
+  inputs 2
+  operation from
+  bbox B
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge6
+  xpos 590
+  ypos 230
+ }
+ Dot {
+  name Dot35
+  xpos 624
+  ypos 306
+ }
+set N16853f90 [stack 0]
+push $N15f276a0
+ Merge2 {
+  inputs 2
+  operation from
+  bbox B
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge7
+  xpos 730
+  ypos 302
+  disable {{"Multiply6.value.r == 0"}}
+ }
+ Dot {
+  name Dot2
+  xpos 764
+  ypos 522
+ }
+set N1686ea40 [stack 0]
+ Dot {
+  name Dot30
+  xpos 764
+  ypos 690
+ }
+set N16875060 [stack 0]
+ Dot {
+  name Dot55
+  xpos 764
+  ypos 1170
+ }
+set N1687b800 [stack 0]
+ Input {
+  inputs 0
+  name mask
+  label "\[value number]"
+  note_font_size 30
+  xpos 1170
+  ypos -896
+  number 3
+ }
+ Dot {
+  name Dot39
+  xpos 1204
+  ypos 258
+ }
+set N168888c0 [stack 0]
+ Dot {
+  name Dot26
+  xpos 1204
+  ypos 1074
+ }
+set N1688ef20 [stack 0]
+ Invert {
+  name Invert2
+  xpos 180
+  ypos 1064
+  disable {{!parent.invert_1}}
+ }
+push $N16875060
+push $N15fb1f20
+ Merge2 {
+  inputs 2
+  operation from
+  bbox B
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge27
+  xpos 290
+  ypos 686
+ }
+ Dot {
+  name Dot3
+  xpos 324
+  ypos 786
+ }
+set N168b8930 [stack 0]
+ Dot {
+  name Dot5
+  xpos 104
+  ypos 786
+ }
+set N168bef10 [stack 0]
+push $N168bef10
+ Copy {
+  inputs 2
+  from0 {{{parent.Copy2.from0}}}
+  to0 rgba.red
+  name Copy3
+  xpos 70
+  ypos 848
+ }
+ Expression {
+  expr0 abs(r)
+  channel1 {none none none rgba.alpha}
+  expr1 "r == 0"
+  channel2 none
+  channel3 none
+  name Expression4
+  xpos 70
+  ypos 926
+ }
+set N168d8080 [stack 0]
+push $N1686ea40
+ Colorspace {
+  colorspace_out AlexaV3LogC
+  name Colorspace5
+  xpos 70
+  ypos 518
+ }
+ Clamp {
+  maximum_enable false
+  name Clamp2
+  xpos -40
+  ypos 512
+ }
+ Dot {
+  name Dot1
+  xpos -116
+  ypos 522
+ }
+set N16918930 [stack 0]
+ Dot {
+  name Dot48
+  xpos -116
+  ypos 786
+ }
+set N1691f370 [stack 0]
+push $N1691f370
+ Copy {
+  inputs 2
+  from0 rgba.blue
+  to0 rgba.red
+  name Copy2
+  xpos -150
+  ypos 848
+ }
+ Expression {
+  temp_name0 min
+  temp_expr0 0.6615400094538927
+  temp_name1 max
+  temp_expr1 0.6914241313934325
+  channel0 {none none none rgba.alpha}
+  expr0 "r >= min && r <= max"
+  channel1 none
+  channel2 none
+  channel3 none
+  name Expression2
+  xpos -150
+  ypos 926
+ }
+ Dot {
+  name Dot4
+  xpos -116
+  ypos 1002
+ }
+ ChannelMerge {
+  inputs 2
+  operation stencil
+  name ChannelMerge2
+  xpos -40
+  ypos 985
+ }
+push $N168d8080
+ Copy {
+  inputs 2
+  from0 rgba.alpha
+  to0 rgba.alpha
+  name Copy1
+  xpos 70
+  ypos 992
+ }
+ ChannelMerge {
+  inputs 2
+  A -rgba.green
+  operation multiply
+  name ChannelMerge1
+  xpos 70
+  ypos 1057
+  disable {{!A}}
+ }
+ Copy {
+  inputs 2
+  from0 {{{parent.Copy2.from0}}}
+  to0 rgba.green
+  name Copy4
+  xpos 70
+  ypos 1160
+ }
+ Premult {
+  channels {rgba.red rgba.green -rgba.blue none}
+  name Premult1
+  xpos 70
+  ypos 1238
+ }
+ TimeWarp {
+  lookup 74
+  time ""
+  filter nearest
+  name TimeWarp1
+  xpos 70
+  ypos 1286
+  disable true
+ }
+ FrameBlend {
+  channels {rgba.red rgba.green -rgba.blue rgba.alpha}
+  startframe 0
+  endframe 9
+  userange true
+  name FrameBlend1
+  xpos 70
+  ypos 1352
+  disable true
+ }
+ CurveTool {
+  avgframes 0
+  channels {rgba.red rgba.green -rgba.blue rgba.alpha}
+  ROI {0 0 {width} {height}}
+  intensitydata {1.590925697e-06 0.0002318061274 0 9.735446275e-05}
+  name CurveTool
+  xpos 70
+  ypos 1424
+ }
+push $N16918930
+ Dot {
+  name Dot16
+  xpos -336
+  ypos 522
+ }
+ CurveTool {
+  operation "Max Luma Pixel"
+  channels {-rgba.red -rgba.green rgba.blue none}
+  ROI {0 0 {width} {height}}
+  maxlumapixdata {3234 2215}
+  maxlumapixvalue {0 0 0.684233129}
+  minlumapixdata {2358 803}
+  minlumapixvalue {0 0 0.09562914073}
+  name CurveTool_Range
+  xpos -370
+  ypos 680
+ }
+ Sampler {
+  inputs 0
+  lut {red {curve x0.00382891763 0.0002557597445 x0.007590188179 0.0002960292788 x0.01285281964 0.0003363993789 x0.0197017882 0.0004224070649 x0.02941314131 0.0004961362375 x0.04079099745 0.0005678633893 x0.05852931738 0.0006819239172 x0.07195483893 0.0008004350806 x0.1015054211 0.000923921764 x0.1350959986 0.001097035256 x0.178611353 0.001195716955 x0.2347512543 0.00138423128 x0.3000544012 0.00175979199 x0.4047375619 0.002084045775 x0.5263175964 0.002373547234 x0.6850759983 0.003520714591 x0.8822851777 0.004078153046 x1.164262295 0.003909756967 x1.558669448 0.004522861415 x1.988148332 0.005021561272}
+    green {curve x0.003711296478 0.000228290672 x0.00752239069 0.0002777326388 x0.01282531768 0.0003431596138 x0.01957163773 0.0004233585387 x0.02957309969 0.0005010017398 x0.04255396128 0.0005697342155 x0.05230312794 0.0006560944666 x0.07768156379 0.0008302581421 x0.1069452241 0.0009818514125 x0.1418192834 0.00110276636 x0.1902978122 0.001210422582 x0.2489623725 0.00135910487 x0.3250946105 0.001683609345 x0.4230386317 0.002488715383 x0.5720658302 0.002665413228 x0.744649291 0.002871624463 x0.9612778425 0.003067108714 x1.274642944 0.003294979647 x1.730567336 0.003553862424 x1.992088437 0.003587888249}
+    blue {curve x0.004890392534 0.0005901798482 x0.008868174627 0.0006230813795 x0.01431187335 0.0006939853466 x0.02187098935 0.0008481804116 x0.03275571391 0.0009593088462 x0.04656527936 0.001115569193 x0.06097916886 0.001253890969 x0.08970202506 0.001677459379 x0.1094387174 0.00180902847 x0.1661929488 0.002502330924 x0.2128064185 0.00275682109 x0.2859900296 0.00314036173 x0.376678884 0.003612615267 x0.4992854595 0.004178006489 x0.6469807625 0.00575488757 x0.886995554 0.008772991805 x1.173847318 0.01023875908 x1.527727485 0.01121378619 x1.928818226 0.0127440863 x2.381052971 0.01634157955}}
+  name Sampler1
+  onCreate "n = nuke.thisNode()\nn\['sampler'].setEnabled(False)"
+  knobChanged "n = nuke.thisNode()\nk = nuke.thisKnob()\np = nuke.thisParent()\n\nif k.name() == 'lut':\n    with p:\n        for c in \['ColorLookup1','ColorLookup2']:\n           nuke.toNode(c)\['lut'].fromScript(k.toScript())"
+  xpos 840
+  ypos 1502
+ }
+push $N15f5c2e0
+ Dot {
+  name Dot51
+  xpos 115
+  ypos -726
+ }
+ Input {
+  inputs 0
+  name COMP
+  label "\[value number]"
+  note_font_size 30
+  xpos 950
+  ypos -896
+ }
+ Dot {
+  name Dot49
+  xpos 984
+  ypos -605
+ }
+set N16a09930 [stack 0]
+ Switch {
+  inputs 2
+  which {{parent.meta}}
+  name Switch1
+  xpos 81
+  ypos -609
+ }
+ Dot {
+  name Dot54
+  xpos 115
+  ypos -486
+ }
+ Dot {
+  name Dot52
+  xpos -685
+  ypos -486
+ }
+ Dot {
+  name Dot53
+  xpos -685
+  ypos 3762
+ }
+push $N168888c0
+ Dot {
+  name Dot40
+  xpos 874
+  ypos 258
+ }
+push $N16853f90
+ Dot {
+  name Dot34
+  xpos 624
+  ypos 378
+ }
+ Multiply {
+  inputs 1+1
+  channels rgb
+  value 0
+  maskChannelMask -rgba.red
+  name Multiply1
+  xpos 840
+  ypos 374
+ }
+push $N16a09930
+ OCIOColorSpace {
+  in_colorspace {{OCIOColorSpace1.in_colorspace}}
+  out_colorspace {{OCIOColorSpace1.out_colorspace}}
+  name OCIOColorSpace3
+  xpos 950
+  ypos -490
+ }
+ Dot {
+  name Dot44
+  xpos 984
+  ypos -390
+ }
+set N16a99760 [stack 0]
+ Merge2 {
+  inputs 2
+  operation from
+  bbox B
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge8
+  xpos 950
+  ypos 374
+  disable {{"Multiply6.value.r == 0"}}
+ }
+ Dot {
+  name Dot18
+  xpos 984
+  ypos 2658
+ }
+set N16aee6c0 [stack 0]
+ ColorLookup {
+  lut {master {}
+    red {curve x0.00382891763 0.0002557597445 x0.007590188179 0.0002960292788 x0.01285281964 0.0003363993789 x0.0197017882 0.0004224070649 x0.02941314131 0.0004961362375 x0.04079099745 0.0005678633893 x0.05852931738 0.0006819239172 x0.07195483893 0.0008004350806 x0.1015054211 0.000923921764 x0.1350959986 0.001097035256 x0.178611353 0.001195716955 x0.2347512543 0.00138423128 x0.3000544012 0.00175979199 x0.4047375619 0.002084045775 x0.5263175964 0.002373547234 x0.6850759983 0.003520714591 x0.8822851777 0.004078153046 x1.164262295 0.003909756967 x1.558669448 0.004522861415 x1.988148332 0.005021561272}
+    green {curve x0.003711296478 0.000228290672 x0.00752239069 0.0002777326388 x0.01282531768 0.0003431596138 x0.01957163773 0.0004233585387 x0.02957309969 0.0005010017398 x0.04255396128 0.0005697342155 x0.05230312794 0.0006560944666 x0.07768156379 0.0008302581421 x0.1069452241 0.0009818514125 x0.1418192834 0.00110276636 x0.1902978122 0.001210422582 x0.2489623725 0.00135910487 x0.3250946105 0.001683609345 x0.4230386317 0.002488715383 x0.5720658302 0.002665413228 x0.744649291 0.002871624463 x0.9612778425 0.003067108714 x1.274642944 0.003294979647 x1.730567336 0.003553862424 x1.992088437 0.003587888249}
+    blue {curve x0.004890392534 0.0005901798482 x0.008868174627 0.0006230813795 x0.01431187335 0.0006939853466 x0.02187098935 0.0008481804116 x0.03275571391 0.0009593088462 x0.04656527936 0.001115569193 x0.06097916886 0.001253890969 x0.08970202506 0.001677459379 x0.1094387174 0.00180902847 x0.1661929488 0.002502330924 x0.2128064185 0.00275682109 x0.2859900296 0.00314036173 x0.376678884 0.003612615267 x0.4992854595 0.004178006489 x0.6469807625 0.00575488757 x0.886995554 0.008772991805 x1.173847318 0.01023875908 x1.527727485 0.01121378619 x1.928818226 0.0127440863 x2.381052971 0.01634157955}
+    alpha {}}
+  name ColorLookup2
+  xpos 730
+  ypos 2654
+ }
+push $N1688ef20
+ Dot {
+  name Dot38
+  xpos 1204
+  ypos 1842
+ }
+ Dot {
+  name Dot37
+  xpos 544
+  ypos 1842
+ }
+ Dot {
+  name Dot22
+  xpos 544
+  ypos 2271
+ }
+set N16b19970 [stack 0]
+ Dot {
+  name Dot20
+  xpos 544
+  ypos 2391
+ }
+push $N16b19970
+ Dot {
+  name Dot17
+  xpos 434
+  ypos 2271
+ }
+set N16b26890 [stack 0]
+ Dot {
+  name Dot13
+  xpos 214
+  ypos 2271
+ }
+ Input {
+  inputs 0
+  name external_grain
+  label "\[value number]"
+  note_font_size 30
+  xpos -150
+  ypos 1716
+  number 4
+ }
+ Dot {
+  name Dot21
+  xpos -116
+  ypos 1938
+ }
+push $N1687b800
+ ColorLookup {
+  channels rgb
+  lut {master {}
+    red {curve x0.00382891763 0.0002557597445 x0.007590188179 0.0002960292788 x0.01285281964 0.0003363993789 x0.0197017882 0.0004224070649 x0.02941314131 0.0004961362375 x0.04079099745 0.0005678633893 x0.05852931738 0.0006819239172 x0.07195483893 0.0008004350806 x0.1015054211 0.000923921764 x0.1350959986 0.001097035256 x0.178611353 0.001195716955 x0.2347512543 0.00138423128 x0.3000544012 0.00175979199 x0.4047375619 0.002084045775 x0.5263175964 0.002373547234 x0.6850759983 0.003520714591 x0.8822851777 0.004078153046 x1.164262295 0.003909756967 x1.558669448 0.004522861415 x1.988148332 0.005021561272}
+    green {curve x0.003711296478 0.000228290672 x0.00752239069 0.0002777326388 x0.01282531768 0.0003431596138 x0.01957163773 0.0004233585387 x0.02957309969 0.0005010017398 x0.04255396128 0.0005697342155 x0.05230312794 0.0006560944666 x0.07768156379 0.0008302581421 x0.1069452241 0.0009818514125 x0.1418192834 0.00110276636 x0.1902978122 0.001210422582 x0.2489623725 0.00135910487 x0.3250946105 0.001683609345 x0.4230386317 0.002488715383 x0.5720658302 0.002665413228 x0.744649291 0.002871624463 x0.9612778425 0.003067108714 x1.274642944 0.003294979647 x1.730567336 0.003553862424 x1.992088437 0.003587888249}
+    blue {curve x0.004890392534 0.0005901798482 x0.008868174627 0.0006230813795 x0.01431187335 0.0006939853466 x0.02187098935 0.0008481804116 x0.03275571391 0.0009593088462 x0.04656527936 0.001115569193 x0.06097916886 0.001253890969 x0.08970202506 0.001677459379 x0.1094387174 0.00180902847 x0.1661929488 0.002502330924 x0.2128064185 0.00275682109 x0.2859900296 0.00314036173 x0.376678884 0.003612615267 x0.4992854595 0.004178006489 x0.6469807625 0.00575488757 x0.886995554 0.008772991805 x1.173847318 0.01023875908 x1.527727485 0.01121378619 x1.928818226 0.0127440863 x2.381052971 0.01634157955}
+    alpha {}}
+  name ColorLookup1
+  xpos 730
+  ypos 1502
+ }
+ Dot {
+  name Dot24
+  xpos 764
+  ypos 1746
+ }
+push $N168b8930
+ Dot {
+  name Dot33
+  xpos 324
+  ypos 1386
+ }
+ MergeExpression {
+  inputs 2
+  temp_name0 target
+  temp_expr0 .01
+  expr0 "Br * (target / Ar)"
+  expr1 "Bg * (target / Ag)"
+  expr2 "Bb * (target / Ab)"
+  channel3 none
+  name MergeExpression1
+  xpos 290
+  ypos 1742
+ }
+ Dot {
+  name Dot15
+  xpos 324
+  ypos 1842
+ }
+set N16b76200 [stack 0]
+ Dot {
+  name Dot25
+  xpos 104
+  ypos 1842
+ }
+ Switch {
+  inputs 2
+  which {{parent.external_grain}}
+  name Switch2
+  xpos 70
+  ypos 1934
+ }
+ Group {
+  name VoronoiScatter
+  xpos 70
+  ypos 2102
+  disable {{!parent.scatter}}
+  addUserKnob {20 User}
+  addUserKnob {41 useGPUIfAvailable l "Use GPU if available" T VoroNoise.useGPUIfAvailable}
+  addUserKnob {41 vectorize l "Vectorize on CPU" -STARTLINE T VoroNoise.vectorize}
+  addUserKnob {15 box}
+  box {{parent.box x1004 0 x1036 -75} {parent.box x1004 100 x1036 120} {parent.box x1004 496 x1036 325} {parent.box x1004 916 x1036 320}}
+  addUserKnob {3 sample_frame l "sample frame"}
+  sample_frame {{parent.sample_frame}}
+  addUserKnob {7 cell_size l "cell size" R 0 100}
+  cell_size {{parent.cell_size}}
+  addUserKnob {6 overlay_pattern l "overlay pattern" -STARTLINE}
+  overlay_pattern {{parent.overlay}}
+  addUserKnob {3 edge_blend_size l "edge blend size"}
+  edge_blend_size {{parent.edge_blend_size}}
+  addUserKnob {7 amplitude R 0 100}
+  amplitude {{parent.amplitude}}
+  addUserKnob {7 frequency R 0 100}
+  frequency {{parent.frequency}}
+  addUserKnob {41 VoroNoise_Seed l Seed T VoroNoise.VoroNoise_Seed}
+ }
+  Input {
+   inputs 0
+   name Input1
+   xpos 180
+   ypos -879
+  }
+  Dot {
+   name Dot14
+   xpos 214
+   ypos -750
+  }
+set N16ba5820 [stack 0]
+  Dot {
+   name Dot16
+   xpos 434
+   ypos -750
+  }
+  Remove {
+   name Remove1
+   xpos 400
+   ypos -687
+  }
+  Dot {
+   name Dot6
+   xpos 434
+   ypos -606
+  }
+set N16efd3f0 [stack 0]
+  Dot {
+   name Dot15
+   xpos 654
+   ypos -606
+  }
+set N16f03a70 [stack 0]
+  Dot {
+   name Dot7
+   xpos 874
+   ypos -606
+  }
+  Noise {
+   output {rgba.red -rgba.green -rgba.blue none}
+   replace true
+   size {{parent.frequency} {"parent.frequency * pixel_aspect"}}
+   zoffset {{"x + 1000"}}
+   gamma 1
+   name Noise1
+   xpos 840
+   ypos -514
+  }
+  Noise {
+   output {-rgba.red rgba.green -rgba.blue none}
+   replace true
+   size {{parent.Noise1.size} {parent.Noise1.size}}
+   zoffset {{x}}
+   gamma 1
+   name Noise2
+   xpos 840
+   ypos -466
+  }
+  Clamp {
+   name Clamp1
+   xpos 840
+   ypos -424
+  }
+  Dot {
+   name Dot11
+   xpos 874
+   ypos -366
+  }
+push $N16f03a70
+  BlinkScript {
+   ProgramGroup 1
+   KernelDescription "3 \"VoroNoise\" iterate pixelWise c117be128a07c11b6d82fd34148d66b3bcac41976ec9c2082affe38e890c2c0f 2 \"src\" Read Point \"dst\" Write Point 6 \"Frequency\" Float 1 AABIQg== \"Seed\" Int 1 AAAAAA== \"aspect ratio\" Float 1 AACAPw== \"width\" Int 1 AAAAAA== \"height\" Int 1 AAAAAA== \"Randomness\" Float 1 AAAAPw== 6 \"frequency\" 1 1 Default \"seed\" 1 1 Default \"aspect_ratio\" 1 1 Default \"width\" 1 1 Default \"height\" 1 1 Default \"randomness\" 1 1 Default 0"
+   kernelSource "// Voronoi.blink\n// A test implementation of libNoise's Voronoi generator using Blink\n// Ivan Busquets - August 2013\n// Modified for DasGrain by Fabian Holtz - April 2019\n\n#define X_NOISE_GEN  1619\n#define Y_NOISE_GEN  31337\n#define Z_NOISE_GEN  6971\n#define SEED_NOISE_GEN  1013\n#define SQRT_3 1.73205081\n\ninline int IntValueNoise3D (int x, int y, int z, int seed)\n\{\n  // All constants are primes and must remain prime in order for this noise\n  // function to work correctly.\n  int n = (\n      X_NOISE_GEN    * x\n    + Y_NOISE_GEN    * y\n    + Z_NOISE_GEN    * z\n    + SEED_NOISE_GEN * seed)\n    & 0x7fffffff;\n  n = (n >> 13) ^ n;\n  return (n * (n * n * 60493 + 19990303) + 1376312589) & 0x7fffffff;\n\}\n\ninline float ValueNoise3D (int x, int y, int z, int seed)\n\{\n  return 1.0 - ((float)IntValueNoise3D (x, y, z, seed) / 1073741824.0);\n\}\n\nkernel VoroNoise : ImageComputationKernel<ePixelWise>\n\{\n  Image<eRead> src;\n  Image<eWrite, eAccessPoint> dst;\n\nparam:\n  float frequency;\n  int seed;\n  float aspect_ratio;\n  int width;\n  int height;\n  float randomness;\n\n\n  void define() \{\n    defineParam(frequency, \"Frequency\", 50.0f);\n    defineParam(aspect_ratio, \"aspect ratio\", 1.0f);\n    defineParam(seed, \"Seed\", 0);\n    defineParam(randomness, \"Randomness\", 0.5f);\n  \}\n\n\n\n\n  void process(int2 pos) \{\n   float x = pos.x * aspect_ratio * frequency / width;\n   float y = pos.y * frequency / width;\n   int xInt = (x > 0.0) ? x : x - 1;\n   int yInt = (y > 0.0) ? y : y - 1;\n\n\n    float minDist = 2147483647.0;\n    float xCandidate = 0;\n    float yCandidate = 0;\n\n    float dist;\n\nfor (int yCur = yInt - 2; yCur <= yInt + 2; yCur++) \{\n      for (int xCur = xInt - 2; xCur <= xInt + 2; xCur++) \{\n\n        // Calculate the position and distance to the seed point inside of\n        // this unit cube. Limited by the randomness value\n        float xPos = xCur + (ValueNoise3D (xCur, yCur, 0, seed    ) + 1 ) * randomness + (1-randomness) - 1;\n        float yPos = yCur + (ValueNoise3D (xCur, yCur, 0, seed + 1) + 1 ) * randomness + (1-randomness) - 1;\n\n        float xDist = xPos - x;\n        float yDist = yPos - y;\n\n        dist = pow(xDist, 2) + pow(yDist, 2);\n        if (dist < minDist) \{\n          // This seed point is closer to any others found so far, so record\n          // this seed point.\n          minDist = dist;\n          xCandidate = xPos;\n          yCandidate = yPos;\n\t\}\n    \}\n\}\n\n    SampleType(dst) sample(0.0f);\n\n    sample.x = xCandidate / aspect_ratio / frequency;\n    sample.y = yCandidate / height * width / frequency;\n    sample.z = 0;\n\n    dst() = sample;\n\}\n\};"
+   rebuild ""
+   VoroNoise_Frequency {{"width / parent.cell_size"}}
+   VoroNoise_Seed {{"(x + (parent.parent.stereo == 2 ? \[lsearch \[value root.views] \[view]] / 2 : 0)) * 5"}}
+   "VoroNoise_aspect ratio" {{pixel_aspect}}
+   VoroNoise_width {{width}}
+   VoroNoise_height {{height}}
+   rebuild_finalise ""
+   name VoroNoise
+   xpos 620
+   ypos -520
+  }
+  Copy {
+   inputs 2
+   from0 rgba.red
+   to0 forward.u
+   from1 rgba.green
+   to1 forward.v
+   name Copy1
+   xpos 620
+   ypos -382
+   disable {{"parent.amplitude == 0"}}
+  }
+  IDistort {
+   uv forward
+   uv_offset 0.5
+   uv_scale {{parent.amplitude} {"uv_scale.w * pixel_aspect"}}
+   filter impulse
+   name IDistort1
+   xpos 620
+   ypos -280
+   disable {{"parent.amplitude == 0"}}
+  }
+  Dot {
+   name Dot5
+   xpos 654
+   ypos -246
+  }
+  NoTimeBlur {
+   rounding floor
+   name NoTimeBlur3
+   xpos 620
+   ypos -154
+  }
+  Transform {
+   translate {{"floor((x * size) % 1 * (size)) - int(size / 2)"} {"floor(x % 1 * (size)) - int(size/2)"}}
+   filter impulse
+   black_outside false
+   name Transform1
+   xpos 620
+   ypos -58
+   disable {{"parent.edge_blend_size < 1"}}
+   addUserKnob {20 User}
+   addUserKnob {3 size}
+   size {{"parent.edge_blend_size + 1"}}
+  }
+  Dot {
+   name Dot9
+   xpos 654
+   ypos 42
+  }
+set N16ff1b90 [stack 0]
+push $N16efd3f0
+  Expression {
+   expr0 "(x + .5) / width"
+   expr1 "(y + .5) / height"
+   expr2 0
+   name STMapGenerator
+   xpos 400
+   ypos -514
+  }
+  NoTimeBlur {
+   rounding floor
+   name NoTimeBlur2
+   xpos 400
+   ypos -154
+  }
+  Merge2 {
+   inputs 2
+   operation from
+   Achannels {rgba.red rgba.green -rgba.blue none}
+   Bchannels {rgba.red rgba.green -rgba.blue none}
+   output {rgba.red rgba.green -rgba.blue none}
+   name Merge2
+   xpos 400
+   ypos 38
+  }
+  Dot {
+   name Dot10
+   xpos 434
+   ypos 210
+  }
+push $N16ff1b90
+  Expression {
+   temp_name0 view_index
+   temp_expr0 "parent.parent.stereo == 1 ? \[lsearch \[value root.views] \[view]] / 2 : 0"
+   expr0 "random((r + view_index) * 1000000, 0) * (maxx - minx) + minx"
+   expr1 "random((g + view_index) * 1000000, 0) * (maxy - miny) + miny"
+   channel2 none
+   channel3 none
+   name Expression3
+   xpos 620
+   ypos 110
+   addUserKnob {20 User}
+   addUserKnob {7 frequency R 0 100}
+   frequency {{parent.parent.cell_size}}
+   addUserKnob {7 multiplier R 0 3}
+   multiplier 0.5
+   addUserKnob {15 shrink}
+   shrink {{"frequency * multiplier + ceil(parent.edge_blend_size / 2) + IDistort1.uv_scale.w / 2"} {"frequency * multiplier + ceil(parent.edge_blend_size / 2) + IDistort1.uv_scale.h / 2"} {"frequency * multiplier + floor(parent.edge_blend_size / 2) + IDistort1.uv_scale.w / 2"} {"frequency * multiplier + floor(parent.edge_blend_size / 2) + IDistort1.uv_scale.h / 2"}}
+   addUserKnob {26 ""}
+   addUserKnob {7 minx}
+   minx {{"(parent.box.x + shrink.x + .5) / width"}}
+   addUserKnob {7 maxx}
+   maxx {{"(parent.box.r - shrink.r - .5) / width"}}
+   addUserKnob {7 miny}
+   miny {{"(parent.box.y + shrink.y + .5) / height"}}
+   addUserKnob {7 maxy}
+   maxy {{"(parent.box.t - shrink.t - .5) / height"}}
+  }
+  Merge2 {
+   inputs 2
+   operation plus
+   Achannels {rgba.red rgba.green -rgba.blue none}
+   Bchannels {rgba.red rgba.green -rgba.blue none}
+   output {rgba.red rgba.green -rgba.blue none}
+   name Merge3
+   xpos 620
+   ypos 206
+  }
+  Expression {
+   expr0 "(r + (maxx - minx) - minx) % (maxx - minx) + minx"
+   expr1 "(g + (maxy - miny) - miny) % (maxy - miny) + miny"
+   channel2 none
+   channel3 none
+   name Expression7
+   xpos 620
+   ypos 278
+   addUserKnob {20 User}
+   addUserKnob {7 minx}
+   minx {{"(parent.box.x + rint(x % 1 * parent.edge_blend_size) + .5) / width"}}
+   addUserKnob {7 maxx}
+   maxx {{"(parent.box.r + rint(x % 1 * parent.edge_blend_size) - .5) / width"}}
+   addUserKnob {7 miny}
+   miny {{"(parent.box.y + rint(x % 1 * parent.edge_blend_size) + .5) / height"}}
+   addUserKnob {7 maxy}
+   maxy {{"(parent.box.t + rint(x % 1 * parent.edge_blend_size) - .5) / height"}}
+  }
+  Dot {
+   name Dot3
+   xpos 654
+   ypos 354
+  }
+set N1706b6b0 [stack 0]
+  Dot {
+   name Dot13
+   xpos 654
+   ypos 546
+  }
+push $N1706b6b0
+  Dot {
+   name Dot8
+   xpos 874
+   ypos 354
+  }
+  Blur {
+   channels rgb
+   size {{pixel_aspect} 1}
+   name Blur1
+   label "\[value size]"
+   xpos 840
+   ypos 440
+  }
+  Difference {
+   inputs 2
+   name Difference2
+   xpos 840
+   ypos 536
+  }
+  Expression {
+   channel0 {none none none rgba.alpha}
+   expr0 "a > 1e-9"
+   channel1 none
+   channel2 none
+   channel3 none
+   name Expression2
+   xpos 840
+   ypos 614
+  }
+  Shuffle {
+   red alpha
+   green alpha
+   blue alpha
+   name Shuffle1
+   label "\[value in]:\[value out]"
+   xpos 840
+   ypos 680
+  }
+  Dot {
+   name Dot4
+   xpos 874
+   ypos 762
+  }
+push $N1706b6b0
+push $N16ba5820
+  FrameHold {
+   firstFrame {{parent.sample_frame}}
+   name FrameHold1
+   xpos 180
+   ypos -256
+  }
+  NoTimeBlur {
+   rounding floor
+   name NoTimeBlur1
+   xpos 180
+   ypos -154
+  }
+  STMap {
+   inputs 2
+   channels rgb
+   uv rgb
+   filter impulse
+   name STMap1
+   xpos 180
+   ypos 350
+  }
+set N170e0330 [stack 0]
+  TimeBlur {
+   divisions {{"max(Transform1.size == 1 ? 2 : pow2(Transform1.size), 1)"}}
+   shutter 1
+   shuttercustomoffset {{"1 / divisions / 2"}}
+   name TimeBlur1
+   xpos 180
+   ypos 446
+   disable {{"parent.edge_blend_size < 1"}}
+  }
+set N170ef8b0 [stack 0]
+push $N170e0330
+  Dot {
+   name Dot1
+   xpos -6
+   ypos 354
+  }
+  Difference {
+   inputs 2
+   name Difference1
+   xpos -40
+   ypos 440
+  }
+  Expression {
+   channel0 {none none none rgba.alpha}
+   expr0 "a > 1e-10"
+   channel1 none
+   channel2 none
+   channel3 none
+   name Expression1
+   xpos -40
+   ypos 494
+  }
+  Blur {
+   channels alpha
+   size {{parent.parent.edge_blend_size}}
+   name Blur2
+   xpos -40
+   ypos 536
+  }
+  Grade {
+   channels alpha
+   blackpoint 0.5
+   white_clamp true
+   name Grade2
+   xpos -40
+   ypos 584
+  }
+  Dot {
+   name Dot2
+   xpos -6
+   ypos 666
+  }
+push $N170ef8b0
+  Grade {
+   inputs 1+1
+   white 1.4
+   black_clamp false
+   name Grade1
+   xpos 180
+   ypos 662
+   disable {{"parent.edge_blend_size < 1"}}
+  }
+  Merge2 {
+   inputs 2
+   Achannels rgb
+   Bchannels rgb
+   output rgb
+   name Merge1
+   xpos 180
+   ypos 758
+   disable {{!parent.overlay_pattern}}
+  }
+  Assert {
+   expression {{"Expression3.maxx > Expression3.minx && Expression3.maxy > Expression3.miny"}}
+   message "increase sample box size or decrease cell size"
+   name error
+   xpos 180
+   ypos 854
+  }
+  Output {
+   name Output1
+   xpos 180
+   ypos 950
+  }
+ end_group
+ Multiply {
+  inputs 1+1
+  channels rgb
+  value 1.8
+  maskChannelMask {{{parent.Merge9.maskChannelMask}}}
+  invert_mask {{!Merge9.invert_mask}}
+  name Multiply7
+  xpos 70
+  ypos 2315
+  disable {{"!maskChannelMask || !\[exists parent.input3.name]"}}
+ }
+ Dot {
+  name Dot23
+  xpos 104
+  ypos 2391
+ }
+push $N16b26890
+push $N16b76200
+ Multiply {
+  inputs 1+1
+  channels rgb
+  value 1.8
+  maskChannelMask {{{parent.Merge9.maskChannelMask}}}
+  invert_mask {{parent.Merge9.invert_mask}}
+  name Multiply2
+  xpos 290
+  ypos 2315
+  disable {{"!maskChannelMask || (!parent.scatter && !parent.external_grain)"}}
+ }
+ Merge2 {
+  inputs 2+1
+  operation copy
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  maskChannelMask -rgba.alpha
+  name Merge9
+  xpos 290
+  ypos 2387
+  disable {{"!(parent.scatter || parent.external_grain)"}}
+ }
+ Dot {
+  name Dot11
+  xpos 324
+  ypos 2490
+ }
+set N171c46f0 [stack 0]
+ MergeExpression {
+  inputs 2
+  temp_name0 reverse
+  temp_expr0 "1 / MergeExpression1.temp_expr0"
+  expr0 "Br * Ar * reverse"
+  expr1 "Bg * Ag * reverse"
+  expr2 "Bb * Ab * reverse"
+  name MergeExpression2
+  xpos 290
+  ypos 2654
+ }
+ Dot {
+  name Dot8
+  xpos 324
+  ypos 2850
+ }
+push $N16aee6c0
+ Merge2 {
+  inputs 2
+  operation plus
+  bbox B
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge3
+  xpos 950
+  ypos 2846
+ }
+ Dot {
+  name Dot42
+  xpos 984
+  ypos 3018
+ }
+set N171f6f30 [stack 0]
+ OCIOColorSpace {
+  in_colorspace {{OCIOColorSpace1.out_colorspace}}
+  out_colorspace {{OCIOColorSpace1.in_colorspace}}
+  name OCIOColorSpace4
+  xpos 950
+  ypos 3086
+ }
+ Dot {
+  name Dot19
+  xpos 984
+  ypos 3162
+ }
+set N1724ccd0 [stack 0]
+ Dot {
+  name Dot41
+  xpos 1204
+  ypos 3162
+ }
+set N1728d3c0 [stack 0]
+ Dot {
+  name Dot36
+  xpos 1314
+  ypos 3162
+ }
+ Blur {
+  channels rgb
+  size 1
+  name Blur1
+  xpos 1280
+  ypos 3254
+ }
+push $N1728d3c0
+ Merge2 {
+  inputs 2
+  operation difference
+  bbox B
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge10
+  xpos 1170
+  ypos 3254
+ }
+ Multiply {
+  channels rgb
+  value 50
+  name Multiply3
+  xpos 1170
+  ypos 3302
+ }
+ Dot {
+  name Dot43
+  xpos 1204
+  ypos 3402
+ }
+push $N16a99760
+ Dot {
+  name Dot45
+  xpos 1424
+  ypos -390
+ }
+push $N171f6f30
+ Merge2 {
+  inputs 2
+  operation from
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge11
+  xpos 1390
+  ypos 3014
+ }
+ Dot {
+  name Dot46
+  xpos 1424
+  ypos 3522
+ }
+push $N171c46f0
+ Dot {
+  name Dot14
+  xpos 104
+  ypos 2490
+ }
+ Dot {
+  name Dot12
+  xpos 104
+  ypos 3402
+ }
+push $N16c512e0
+ Dot {
+  name Dot47
+  xpos -556
+  ypos -390
+ }
+push $N15fb1f20
+ Merge2 {
+  inputs 2
+  operation from
+  Achannels rgb
+  Bchannels rgb
+  output rgb
+  name Merge12
+  xpos -590
+  ypos -202
+ }
+ Dot {
+  name Dot10
+  xpos -556
+  ypos 3522
+ }
+push $N1724ccd0
+ Switch {
+  inputs 5
+  which {{output}}
+  name Output
+  xpos 950
+  ypos 3656
+  addUserKnob {20 User}
+  addUserKnob {4 output M {"regrained comp" "plate grain" "normalised grain" "adapted grain" "grain QC"}}
+ }
+ CopyMetaData {
+  inputs 2
+  mergeMode "Meta only"
+  name CopyMetaData1
+  xpos 950
+  ypos 3758
+ }
+ Output {
+  name Output1
+  xpos 950
+  ypos 3854
+ }
+end_group
+push $N1627ad60
+Dot {
+ name Dot61
+ xpos 434
+ ypos 2274
+}
+Keymix {
+ inputs 3
+ name Keymix3
+ xpos 180
+ ypos 2264
+}
+Reformat {
+ name Reformat1
+ xpos 180
+ ypos 2606
+}
+set N1569e520 [stack 0]
+Write {
+ file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3].mov"
+ file_type mov
+ mov64_format "mov (QuickTime / MOV)"
+ mov64_codec appr
+ mov_prores_codec_profile "ProRes 4:4:4:4 12-bit"
+ mov_h264_codec_profile "High 4:2:0 8-bit"
+ mov64_pixel_format {
+  {0}
+ }
+ mov64_quality High
+ mov64_fast_start true
+ mov64_write_timecode true
+ mov64_gop_size 12
+ mov64_b_frames 0
+ mov64_bitrate 20000
+ mov64_bitrate_tolerance 4000000
+ mov64_quality_min 1
+ mov64_quality_max 3
+ colorspace "find&replace colourspace"
+ create_directories true
+ checkHashOnRead false
+ version 4
+ ocioColorspace scene_linear
+ display ACES
+ view sRGB
+ name WriteCompMov
+ xpos 70
+ ypos 2666
+}
+push $N1569e520
+Write {
+ file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3]/\[string range  \[basename \[value root.name]] 0 end-3]_####.exr"
+ file_type exr
+ first_part rgba
+ colorspace "find&replace colourspace"
+ create_directories true
+ checkHashOnRead false
+ version 4
+ ocioColorspace scene_linear
+ display ACES
+ view sRGB
+ name WriteCompEXR
+ xpos 290
+ ypos 2666
+}
+push $N12698d50
+PostageStamp {
+ name Stamp2
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredOnCreate()\n    except:\n        pass\n"
+ knobChanged "import stamps; stamps.wiredKnobChanged()"
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0x1000001
+ note_font Verdana
+ note_font_size 20
+ xpos 180
+ ypos 730
+ hide_input true
+ addUserKnob {20 wired_tab l "Wired Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T wired}
+ addUserKnob {3 lockCallbacks l "" +STARTLINE +HIDDEN}
+ addUserKnob {6 toReconnect -STARTLINE +HIDDEN}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the real/internal name of the Stamps."}
+ title master
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T master}
+ addUserKnob {26 tags l Tags: t "Tags of this stamp's Anchor, for information purpose only.\nClick \"show anchor\" to change them." T <i>2D</i>}
+ addUserKnob {26 backdrops l Backdrops: t "Labels of backdrop nodes which contain this stamp's Anchor." T <i>Read</i>}
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {6 postageStamp_show l "postage stamp" t "Enable the postage stamp thumbnail in this node.\nYou're seeing this because the class of this node includes the postage_stamp knob." +STARTLINE}
+ addUserKnob {26 anchor_label l Anchor: T " "}
+ addUserKnob {22 show_anchor l " show anchor " t "Show the properties panel for this Stamp's Anchor." -STARTLINE T stamps.wiredShowAnchor()}
+ addUserKnob {22 zoom_anchor l "zoom anchor" t "Navigate to this Stamp's Anchor on the Node Graph." -STARTLINE T stamps.wiredZoomAnchor()}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 zoomNext l " zoom next " t "Navigate to this Stamp's next sibling on the Node Graph." -STARTLINE T stamps.wiredZoomNext()}
+ addUserKnob {22 selectSimilar l " select similar " t "Select all similar Stamps to this one on the Node Graph." -STARTLINE T stamps.wiredSelectSimilar()}
+ addUserKnob {26 space_1 l "" +STARTLINE T " "}
+ addUserKnob {26 reconnect_label l Reconnect: t "Reconnect by the stored Anchor name." T " "}
+ addUserKnob {22 reconnect_this l this t "Reconnect this Stamp to its Anchor, by its stored Anchor name." -STARTLINE T "n = nuke.thisNode()\ntry:\n    n.setInput(0,nuke.toNode(n.knob(\"anchor\").value()))\nexcept:\n    nuke.message(\"Unable to reconnect.\")\ntry:\n    import stamps\n    stamps.wiredGetStyle(n)\nexcept:\n    pass\n"}
+ addUserKnob {22 reconnect_similar l similar t "Reconnect this Stamp and similar ones to their Anchor, by their stored anchor name." -STARTLINE T stamps.wiredReconnectSimilar()}
+ addUserKnob {22 reconnect_all l all t "Reconnect all the Stamps to their Anchors, by their stored anchor names." -STARTLINE T stamps.wiredReconnectAll()}
+ addUserKnob {26 space_2 l "" +STARTLINE T " "}
+ addUserKnob {20 advanced_reconnection l "Advanced Reconnection" n 2}
+ addUserKnob {26 reconnect_by_title_label l "<font color=gold>By Title:" t "Reconnect by searching for a matching title." T " "}
+ addUserKnob {22 reconnect_by_title_this l this t "Look for an Anchor that shares this Stamp's title, and connect this Stamp to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitle()}
+ addUserKnob {22 reconnect_by_title_similar l similar t "Look for an Anchor that shares this Stamp's title, and connect this Stamp and similar ones to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSimilar()}
+ addUserKnob {22 reconnect_by_title_selected l selected t "For each Stamp selected, look for an Anchor that shares its title, and connect to it.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectByTitleSelected()}
+ addUserKnob {26 reconnect_by_selection_label l "<font color=orangered>By Selection:" t "Force reconnect to a selected Anchor." T " "}
+ addUserKnob {22 reconnect_by_selection_this l this t "Force reconnect this Stamp to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelection()}
+ addUserKnob {22 reconnect_by_selection_similar l similar t "Force reconnect this Stamp and similar ones to a selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSimilar()}
+ addUserKnob {22 reconnect_by_selection_selected l selected t "Force reconnect all selected Stamps to an also selected Anchor, whatever its name or title.\nIMPORTANT: Use this carefully, and only when the normal reconnection doesn't work." -STARTLINE T stamps.wiredReconnectBySelectionSelected()}
+ addUserKnob {1 anchor l Anchor}
+ anchor Anchor_3a190e900
+ addUserKnob {6 auto_reconnect_by_title l "<font color=#ED9977>&nbsp; auto-reconnect by title" t "When creating this stamp again (like on copy-paste), auto-reconnect it by title instead of doing it by the saved anchor's name, and auto-turn this off immediately.\nIMPORTANT: Should be off by default. Only use this for setting up templates." +STARTLINE}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"> <big>Stamps v1.1</big></b></a>"}
+}
+Dot {
+ name Dot1
+ xpos 214
+ ypos 786
+}
+set N17444800 [stack 0]
+Dot {
+ name Dot3
+ xpos 104
+ ypos 786
+}
+VectorGenerator {
+ motionEstimation Regularized
+ vectorDetailReg 1
+ name VectorGenerator1
+ xpos 70
+ ypos 848
+}
+push $N17444800
+Denoise2 {
+ enable_temporal true
+ "Noise Analysis" 1
+ "Tune Frequencies" 1
+ processVeryLow true
+ userMessage "The noise input has changed. Move the analysis region to analyse noise or press Lock Noise Analysis to disable this message."
+ profileCurve {profile {curve 0 x0.125 0 0 0 0 0 0 0 0}}
+ serializeKnob "0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 
+18446744073709551615"
+ name Denoise1
+ xpos 180
+ ypos 920
+}
+Write {
+ file ../renders/precomp/find&replace shotname_DN_v01/find&replace shotname_DN_v01_####.exr
+ file_type exr
+ first_part rgba
+ create_directories true
+ checkHashOnRead false
+ version 4
+ ocioColorspace scene_linear
+ display ACES
+ view sRGB
+ name WriteDN1
+ xpos 180
+ ypos 986
+}
+Read {
+ inputs 0
+ file_type mov
+ file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3].mov"
+ last find&replace duration
+ origlast find&replace duration
+ origset true
+ version 2
+ name ReadCompMov
+ colorspace "find&replace colourspace"
+ label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
+ xpos 70
+ ypos 2757
+}
+Retime {
+ input.last find&replace duration
+ output.first 1001
+ output.first_lock true
+ output.last find&replace last_frame
+ time ""
+ name Retime2
+ xpos 70
+ ypos 2894
+}
+
+Group {
+ inputs 0
+ name VIEWER_INPUT
+ note_font "JetBrains Mono"
+ xpos -370
+ ypos 177
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos 0
+ }
+ Output {
+  name Output1
+  xpos 0
+  ypos 300
+ }
+end_group
+Read {
+ inputs 0
+ file_type exr
+ file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3]/\[string range  \[basename \[value root.name]] 0 end-3]_####.exr"
+ last find&replace last_frame
+ origlast find&replace last_frame
+ origset true
+ version 2
+ name ReadCompEXR
+ colorspace "find&replace colourspace"
+ label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
+ xpos 290
+ ypos 2757
+}
+Reformat {
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ name Reformat2
+ xpos 290
+ ypos 2864
+}
+Group {
+name MS_slate_overlay
+tile_color 0xefb500ff
+note_font "Verdana Bold Italic"
+selected true
+xpos 290
+ypos 2922
+addUserKnob {20 settings t "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
+addUserKnob {26 text l "" +STARTLINE T "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
+addUserKnob {26 ""}
+addUserKnob {7 slateextend l "slate area" R 0 200}
+slateextend 60
+addUserKnob {41 color l "overlay color" T Constant1.color}
+addUserKnob {6 enableline l "use line" +STARTLINE}
+enableline true
+addUserKnob {3 linewidth l "&nbsp;&nbsp;&nbsp;&nbsp;width&nbsp;" -STARTLINE}
+linewidth 2
+addUserKnob {26 elements l "<b><span style=\"color:#ffaf24\">Elements</span>"}
+addUserKnob {6 framecount l "frame count" +STARTLINE}
+framecount true
+addUserKnob {6 timecode1 l timecode -STARTLINE}
+timecode1 true
+addUserKnob {6 date1 l date -STARTLINE}
+date1 true
+addUserKnob {6 fpscounter l framerate +STARTLINE}
+fpscounter true
+addUserKnob {6 compname l "comp name" -STARTLINE}
+compname true
+addUserKnob {3 startfr l "start frame"}
+startfr 1001
+addUserKnob {6 duration t "\nDisplay duration of entire timeline based on project sttings." -STARTLINE}
+duration true
+addUserKnob {4 durationtype l "" -STARTLINE M {frames timecode both ""}}
+durationtype both
+addUserKnob {41 set l "apply duration" t "\nPress this to run the timeline calculation.\n\nRun this again if the timeline range changes during production." -STARTLINE T readtime.set}
+addUserKnob {6 project +STARTLINE}
+addUserKnob {1 projecttext l "" -STARTLINE}
+projecttext project
+addUserKnob {6 artist +STARTLINE}
+addUserKnob {1 artisttext l "" -STARTLINE}
+artisttext artist
+addUserKnob {6 comment +STARTLINE}
+addUserKnob {1 commenttext l "" -STARTLINE}
+commenttext "add comment here"
+addUserKnob {26 Font l "<b><span style=\"color:#ffaf24\">Font</span>"}
+addUserKnob {3 fontsize1 l "font size" t "\nControls all fonts at once"}
+fontsize1 3
+addUserKnob {3 commentsize l "&nbsp;&nbsp;comment size&nbsp;" -STARTLINE}
+commentsize 3
+addUserKnob {3 xedgedistance l "&nbsp;distance to side&nbsp;" t "\nSets the distance from the markers to the format baoundarys." -STARTLINE}
+xedgedistance 20
+}
+Input {
+inputs 0
+name Input1
+xpos -760
+ypos -1292
+}
+Dot {
+name Dot5
+xpos -728
+ypos -1049
+}
+set N15b3e0b0 [stack 0]
+Shuffle2 {
+fromInput1 {
+{0}
+B
+}
+fromInput2 {
+{0}
+B
+}
+mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
+name Shuffle4
+label "\[value in1]"
+xpos -941
+ypos -1057
+}
+Dot {
+name Dot1
+xpos -1089
+ypos -1047
+}
+set N15b93bd0 [stack 0]
+Dot {
+name Dot13
+xpos -1808
+ypos -1048
+}
+Shuffle2 {
+fromInput1 {
+{0}
+B
+}
+fromInput2 {
+{0}
+B
+}
+mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
+name Shuffle1
+label emtpy
+xpos -1840
+ypos -576
+}
+set N15ab4470 [stack 0]
+AddTimeCode {
+frame {{"\[value startfr]"}}
+useFrame true
+name AddTimeCode1
+xpos -1840
+ypos -410
+}
+set N15ac1310 [stack 0]
+Dot {
+name Dot14
+xpos -2527
+ypos -408
+}
+Dot {
+name Dot12
+xpos -2527
+ypos 793
+}
+set N15ad3500 [stack 0]
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "total:  \[value readtime.durationframe] / \[value readtime.tc1]"
+old_message {
+{116 111 116 97 108 58 32 32 51 49 57 32 47 32 48 48 58 48 48 58 48 50 58 49 50}
+}
+old_expression_markers {
+{8 10 14 24}
+}
+box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+xjustify center
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 8
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.1)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text12
+label "duration both\n"
+note_font "Verdana Bold"
+xpos -2380
+ypos 864
+}
+push $N15ad3500
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "total: \[value readtime.tc1]"
+old_message {
+{116 111 116 97 108 58 32 48 48 58 48 48 58 48 50 58 49 50}
+}
+old_expression_markers {
+{7 17}
+}
+box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+xjustify center
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 5
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.1)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text11
+label "duration time\n"
+note_font "Verdana Bold"
+xpos -2380
+ypos 784
+}
+push $N15ad3500
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "total: \[value readtime.durationframe]"
+old_message {
+{116 111 116 97 108 58 32 49 48 48}
+}
+old_expression_markers {
+{7 9}
+}
+box {0 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+xjustify center
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 5
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.1)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text10
+label "duration frame\n"
+note_font "Verdana Bold"
+xpos -2380
+ypos 704
+}
+Switch {
+inputs 3
+which {{parent.durationtype}}
+name Switch1
+xpos -2200
+ypos 790
+}
+push $N15ab4470
+Dot {
+name Dot3
+xpos -1987
+ypos -567
+}
+set N162fce80 [stack 0]
+Dot {
+name Dot6
+xpos -2168
+ypos -567
+}
+set N16303220 [stack 0]
+Dot {
+name Dot7
+xpos -2347
+ypos -567
+}
+set N163098c0 [stack 0]
+Reformat {
+type "to box"
+box_width {{parent.utility.inres.u}}
+box_height {{parent.utility.inres.v+utility.addres}}
+box_fixed true
+resize none
+black_outside true
+name Reformat2
+label height
+xpos -2740
+ypos -575
+}
+set N16310030 [stack 0]
+Dot {
+name Dot8
+xpos -2888
+ypos -567
+}
+set N16329450 [stack 0]
+Dot {
+name Dot9
+xpos -3067
+ypos -567
+}
+set N1632f920 [stack 0]
+Dot {
+name Dot10
+xpos -3247
+ypos -567
+}
+set N16336090 [stack 0]
+Dot {
+name Dot11
+xpos -3428
+ypos -567
+}
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "fps: \[python \{(nuke.root().fps() )\}]"
+old_message {
+{102 112 115 58 32 50 53}
+}
+old_expression_markers {
+{5 6}
+}
+box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? timecode1==0 ? parent.utility.inres.u-xedgedistance-(fontsize1*40) : parent.utility.inres.u-xedgedistance-(fontsize1*120) : timecode1==1 ?  parent.utility.inres.u-xedgedistance-(fontsize1*70) : parent.utility.inres.u-xedgedistance-(fontsize1*70)\n||\nframecount==0 && timecode1==0 ? parent.utility.inres.u-xedgedistance:0"} {abs(parent.utility.addres/2)}}
+xjustify right
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 36
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.1)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text9
+label "framerate\n"
+note_font "Verdana Bold"
+xpos -3460
+ypos 624
+}
+push $N16336090
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "   \[value \[python nuke.thisGroup().name()].artisttext]\n"
+old_message {
+{32 32 32 97 114 116 105 115 116 10}
+}
+old_expression_markers {
+{3 8}
+}
+box {{parent.utility.inres.u/2} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u} {parent.utility.inres.v+(utility.addres)}}
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 3
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.07)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text8
+label artist
+note_font "Verdana Bold"
+xpos -3280
+ypos 544
+}
+push $N1632f920
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 0 0 ] \"\"].\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 1 1 ] \"\"]\n"
+old_message {
+{97 111 99 48 50 48 95 118 48 49 46 110 107 10}
+}
+old_expression_markers {
+{0 9 11 12}
+}
+box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
+yjustify center
+transforms {
+{0 2}
+}
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.07) x1000 1.375}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text7
+label "comp name"
+note_font "Verdana Bold"
+xpos -3100
+ypos 464
+}
+push $N16329450
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "\[value \[python nuke.thisGroup().name()].projecttext]   "
+old_message {
+{112 114 111 106 101 99 116 32 32 32}
+}
+old_expression_markers {
+{0 6}
+}
+box {0 {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u/2} {parent.utility.inres.v+(utility.addres)}}
+xjustify center
+yjustify center
+transforms {
+{0 2}
+}
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.12)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text6
+label project
+note_font "Verdana Bold"
+xpos -2920
+ypos 384
+}
+push $N16310030
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "\[date %d/%m/%y]"
+old_message {
+{50 48 47 48 54 47 50 53}
+}
+old_expression_markers {
+{0 7}
+}
+box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
+xjustify right
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 15
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.09)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text4
+label date
+note_font "Verdana Bold"
+xpos -2740
+ypos 304
+}
+push $N163098c0
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "\[value \[python nuke.thisGroup().name()].commenttext]"
+old_message {
+{97 100 100 32 99 111 109 109 101 110 116 32 104 101 114 101}
+}
+old_expression_markers {
+{0 15}
+}
+box {{parent.xedgedistance x1000 0} 0 {parent.utility.inres.u/2.7} {abs(parent.utility.addres/2)}}
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 52
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*((commentsize)*0.01))+0.1}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text3
+label comment
+note_font "Verdana Bold"
+xpos -2381
+ypos 224
+}
+push $N16303220
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message |
+old_message {
+{124}
+}
+box {0 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*33) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
+xjustify right
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 1
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.1)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text2
+label divider
+note_font "Verdana Bold"
+xpos -2200
+ypos 144
+}
+push $N162fce80
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "\[frame]"
+old_message {
+{49 49 48 53}
+}
+old_expression_markers {
+{0 3}
+}
+box {0 0 {parent.utility.inres.u-xedgedistance} {abs(parent.utility.addres/2)}}
+xjustify right
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 7
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.1)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text1
+label frame
+note_font "Verdana Bold"
+xpos -2021
+ypos 64
+}
+push $N15ac1310
+Text2 {
+font_size_toolbar 100
+font_width_toolbar 100
+font_height_toolbar 100
+message "\[timecode]"
+old_message {
+{48 49 58 48 48 58 48 52 58 48 56}
+}
+old_expression_markers {
+{0 10}
+}
+box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*50) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
+xjustify right
+yjustify center
+transforms {
+{0 2}
+}
+cursor_position 10
+font {{ Courier : Regular : Courier.pfa : 0 }}
+global_font_scale {{(parent.fontsize1*0.1)}}
+center {960 540}
+cursor_initialised true
+autofit_bbox false
+initial_cursor_position {
+{0 1080}
+}
+group_animations {
+{0}
+imported:
+0
+selected:
+0
+items:
+"root transform/"
+}
+animation_layers {
+{1 11 960 540 0 0 1 1 0 0 0 0}
+}
+name Text5
+label time
+note_font "Verdana Bold"
+xpos -1840
+ypos -16
+}
+push $N15b93bd0
+NoOp {
+name utility
+xpos -1120
+ypos -810
+addUserKnob {20 User}
+addUserKnob {30 inres l "in res"}
+inres {{"\[value input.format.r]"} {"slateextend<0 ? \[value input.format.t]+slateextend : \[value input.format.t]"}}
+addUserKnob {7 addres l "add res" R -500 500}
+addres {{parent.slateextend*2}}
+}
+set N164aca50 [stack 0]
+Shuffle2 {
+fromInput1 {
+{0}
+B
+}
+fromInput2 {
+{0}
+B
+}
+mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
+name Shuffle2
+label "\[value in1]"
+xpos -1480
+ypos -816
+}
+Reformat {
+type "to box"
+box_width {{parent.utility.inres.u}}
+box_height {{parent.utility.inres.v+utility.addres}}
+box_fixed true
+resize none
+black_outside true
+name Reformat3
+label height
+xpos -1480
+ypos -734
+}
+push $N164aca50
+Reformat {
+type "to box"
+box_width {{parent.utility.inres.u}}
+box_height {{parent.utility.inres.v}}
+box_fixed true
+resize none
+black_outside true
+name Reformat1
+label height
+xpos -1120
+ypos -736
+}
+set N164da170 [stack 0]
+Shuffle2 {
+fromInput1 {
+{0}
+B
+}
+fromInput2 {
+{0}
+B
+}
+mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
+name Shuffle3
+label "\[value in1]"
+xpos -1300
+ypos -736
+}
+Dot {
+name Dot4
+xpos -1267
+ypos -646
+}
+Merge2 {
+inputs 2
+operation mask
+name Merge3
+xpos -1480
+ypos -648
+}
+Dot {
+name Dot2
+xpos -1447
+ypos -487
+}
+set N16519820 [stack 0]
+push $N16519820
+Dilate {
+size {{parent.linewidth}}
+name Dilate1
+xpos -1299
+ypos -497
+}
+Merge2 {
+inputs 2
+operation from
+name Merge4
+xpos -1480
+ypos -410
+}
+Dot {
+name Dot17
+xpos -1448
+ypos -247
+}
+push $N164da170
+Merge2 {
+inputs 2
+name Merge5
+xpos -1120
+ypos -249
+disable {{!parent.enableline}}
+}
+Merge2 {
+inputs 2
+name Merge1
+xpos -1120
+ypos -10
+disable {{"slateextend==0 ? 1: !parent.timecode1"}}
+}
+Merge2 {
+inputs 2
+name Merge2
+xpos -1120
+ypos 70
+disable {{"slateextend==0 ? 1:!parent.framecount"}}
+}
+Merge2 {
+inputs 2
+name Merge7
+xpos -1120
+ypos 150
+disable {{"slateextend==0 ? 1:framecount==1 && timecode1==1 ? 0:1"}}
+}
+Merge2 {
+inputs 2
+name Merge8
+xpos -1120
+ypos 230
+disable {{"slateextend==0 ? 1:!parent.comment"}}
+}
+Merge2 {
+inputs 2
+name Merge9
+xpos -1120
+ypos 310
+disable {{"slateextend==0 ? 1:!parent.date1"}}
+}
+Merge2 {
+inputs 2
+name Merge10
+xpos -1120
+ypos 390
+disable {{"slateextend==0 ? 1:!parent.project"}}
+}
+Merge2 {
+inputs 2
+name Merge11
+xpos -1120
+ypos 470
+disable {{"slateextend==0 ? 1:!parent.compname"}}
+}
+Merge2 {
+inputs 2
+name Merge12
+xpos -1120
+ypos 551
+disable {{"slateextend==0 ? 1:!parent.artist"}}
+}
+Merge2 {
+inputs 2
+name Merge13
+xpos -1120
+ypos 630
+disable {{"slateextend==0 ? 1:!parent.fpscounter"}}
+}
+Merge2 {
+inputs 2
+name Merge14
+xpos -1120
+ypos 790
+disable {{"slateextend==0 ? 1:!parent.duration"}}
+}
+Constant {
+inputs 0
+color {0.9822503924 0.1274376512 0.02217387967 0}
+name Constant1
+xpos -1300
+ypos 925
+}
+Reformat {
+type "to box"
+box_width {{parent.utility.inres.u}}
+box_height {{parent.utility.inres.v+utility.addres}}
+box_fixed true
+name Reformat5
+label height
+xpos -1300
+ypos 1023
+}
+Copy {
+inputs 2
+from0 rgba.alpha
+to0 rgba.alpha
+name Copy1
+xpos -1120
+ypos 1023
+}
+Premult {
+name Premult1
+xpos -1120
+ypos 1109
+}
+Crop {
+box {0 0 {"\[value input.format.r]"} {"\[value input.format.t]"}}
+name Crop1
+xpos -1120
+ypos 1189
+}
+push $N15b3e0b0
+Reformat {
+type "to box"
+box_width {{parent.utility.inres.u}}
+box_height {{parent.utility.inres.v+utility.addres}}
+box_fixed true
+resize none
+black_outside true
+name Reformat4
+label height
+xpos -761
+ypos -897
+}
+Merge2 {
+inputs 2
+bbox A
+name Merge6
+xpos -761
+ypos 1189
+}
+Output {
+name Output1
+xpos -760
+ypos 1429
+}
+StickyNote {
+inputs 0
+name StickyNote1
+label "\[frames \{first\}] - \[frames \{last\}]\n\nimport re\n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.Root().firstFrame()\nlast_frame = nuke.Root().lastFrame()\n\n# Function to convert frames to timecode\ndef frames_to_timecode(frames, fps=24):\n    hours = int(frames // (fps * 3600))\n    minutes = int((frames % (fps * 3600)) // (fps * 60))\n    seconds = int((frames % (fps * 60)) // fps)\n    frames_remaining = int(frames % fps)\n    return f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames_remaining:02\}\"\n\n# Calculate the total frames\ntotal_frames = last_frame - first_frame\n\n# Get the FPS from the project settings\nfps = nuke.Root()\['fps'].value()\n\n# Convert to timecode using the project FPS\ntimecode = frames_to_timecode(total_frames, fps=fps)\n\n# Function to replace or append the timecode in a given text\ndef replace_last_timecode(text, new_timecode):\n    # Regular expression to match timecode patterns\n    pattern = re.compile(r'\\b\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}\\b')\n    # Replace the last match with the new timecode\n    if pattern.search(text):\n        return pattern.sub(new_timecode, text, count=1)\n    else:\n        # If no timecode is found, just append the new timecode\n        return f\"\{text\}\\n\{new_timecode\}\" if text else new_timecode\n\n# Update Text11 with the timecode in the first line\ntext11_node = nuke.toNode(\"Text11\")  # Replace \"Text11\" with the correct node name\nif text11_node:\n    current_text11 = text11_node.knob(\"message\").value()\n    # Replace the old timecode with the new one, or prepend it if none exists\n    updated_text11 = replace_last_timecode(current_text11, timecode)\n    # Ensure the timecode is in the first line\n    if not re.search(r'^\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}', updated_text11):\n        updated_text11 = f\"\{timecode\}\\n\{updated_text11\}\"\n    text11_node.knob(\"message\").setValue(updated_text11)\nelse:\n    nuke.message(\"Text11 node not found\")\n\n# Update Text12 with the timecode while keeping existing content\ntext12_node = nuke.toNode(\"Text12\")  # Replace \"Text12\" with the correct node name\nif text12_node:\n    current_text12 = text12_node.knob(\"message\").value()\n    updated_text12 = replace_last_timecode(current_text12, timecode)\n    text12_node.knob(\"message\").setValue(updated_text12)\nelse:\n    nuke.message(\"Text12 node not found\")\n    \n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.root().firstFrame()\nlast_frame = nuke.root().lastFrame()\n\n# Calculate the total frames minus one\ntotal_frames_minus_one = last_frame - first_frame\n\n# Update Text10 with the total duration in frames minus one\ntext10_node = nuke.toNode(\"Text10\")  # Replace \"Text10\" with the correct node name\nif text10_node:\n    # Set the text to the total duration in frames minus one\n    text10_node.knob(\"message\").setValue(str(total_frames_minus_one))\nelse:\n    nuke.message(\"Text10 node not found\")\n\n"
+xpos -2082
+ypos 826
+}
+push $N15ac1310
+NoOp {
+name readtime
+xpos -2740
+ypos 790
+hide_input true
+addUserKnob {20 User}
+addUserKnob {30 intime l "in time"}
+intime {{root.first_frame} {root.last_frame}}
+addUserKnob {3 durationframe l duration}
+durationframe {{intime.v-intime.u+1}}
+addUserKnob {22 set T "import nuke\n\n# Get the current node where the Python knob is being executed\nnode = nuke.thisNode()\n\n# Ensure the 'durationframe' knob exists and get the frame count from it\nif 'durationframe' in node.knobs():\n    frame_count = node\['durationframe'].value()\nelse:\n    nuke.message(\"Error: 'durationframe' knob not found in the current node.\")\n    raise ValueError(\"'durationframe' knob not found\")\n\n# Get the frame rate from the project settings\nframe_rate = nuke.root().fps()\n\n# Calculate hours, minutes, seconds, and frames\nhours = int(frame_count / (3600 * frame_rate))\nminutes = int((frame_count % (3600 * frame_rate)) / (60 * frame_rate))\nseconds = int((frame_count % (60 * frame_rate)) / frame_rate)\nframes = int(frame_count % frame_rate)\n\n# Format the timecode as HH:MM:SS:FF\ntimecode = f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames:02\}\"\n\n# Ensure the 'tc1' knob exists in the node\nif 'tc1' in node.knobs():\n    # Update the 'tc1' knob with the new timecode\n    node\['tc1'].setValue(timecode)\n    print(f\"Timecode updated to: \{timecode\} in 'tc1' knob.\")\nelse:\n    nuke.message(\"Error: 'tc1' knob not found in the current node.\")\n    raise ValueError(\"'tc1' knob not found\")\n" +STARTLINE}
+addUserKnob {1 tc1 l timecode}
+tc1 00:00:02:12
+}
+end_group
+
+set N16ed9940 [stack 0]
+Write {
+ file "../renders/precomp/previews/\[string range  \[basename \[value root.name]] 0 end-3].mp4"
+ file_type mov
+ mov64_format "mp4 (MP4 (MPEG-4 Part 14))"
+ mov64_codec h264
+ mov_prores_codec_profile "ProRes 4:4:4:4 12-bit"
+ mov_h264_codec_profile "High 4:2:0 8-bit"
+ mov64_pixel_format {
+  {0}
+ }
+ mov64_quality High
+ mov64_fast_start true
+ mov64_write_timecode true
+ mov64_gop_size 12
+ mov64_b_frames 0
+ mov64_bitrate 28000
+ mov64_bitrate_tolerance 0
+ mov64_quality_min 1
+ mov64_quality_max 3
+ colorspace color_picking
+ create_directories true
+ checkHashOnRead false
+ version 6
+ ocioColorspace scene_linear
+ display ACES
+ view sRGB
+ name WriteCompMP4
+ xpos 290
+ ypos 2984
+}
+
+push $N16ed9940
+Viewer {
+ frame 1001
+ frame_range 1001-0
+ viewerProcess "sRGB (ACES)"
+ monitorOutNDISenderName "NukeX - template_v05 - Viewer1"
+ name Viewer1
+ xpos -700
+ ypos 182
+}

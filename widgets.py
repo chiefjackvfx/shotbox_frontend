@@ -1,0 +1,2525 @@
+from __future__ import annotations
+
+import os
+import random
+from pathlib import Path
+
+from PyQt6 import uic
+from PyQt6.QtCore import Qt, QSignalBlocker, QTimer, QUrl, QEvent
+from PyQt6.QtGui import QAction, QActionGroup, QPixmap
+from PyQt6.QtWidgets import (
+    QWidget,
+    QVBoxLayout,
+    QLabel,
+    QPushButton,
+    QFrame,
+    QLayout,
+    QComboBox,
+    QHBoxLayout,
+    QBoxLayout,
+    QMenu,
+    QToolButton,
+    QInputDialog,
+    QDialog,
+    QPlainTextEdit,
+    QDialogButtonBox,
+    QSpacerItem,
+    QSizePolicy,
+    QStackedWidget,
+    QMessageBox,
+)
+try:
+    from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+    from PyQt6.QtMultimediaWidgets import QVideoWidget
+    HAS_MULTIMEDIA = True
+except ImportError:
+    HAS_MULTIMEDIA = False
+    print("PyQt6-Multimedia not installed. Video preview will be disabled.")
+
+import http_help
+import filesIO
+from nuke_lock_utils import parse_lock_info
+from task_create_dialog import TaskCreateDialog
+from image_loader import ImageLoader
+from flow_layout import FlowLayout
+
+# Get the directory where this script is located (for cross-platform path handling)
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+COLOURSPACE_PRESETS = [
+    "Input - ARRI - V3 LogC (EI800) - Wide Gamut",
+    "Input - ARRI - V4 LogC (EI800) - Wide Gamut4",
+    "Input - Sony - Linear - Venice S-Gamut3.Cine",
+    "Input - Sony - S-Log3 - Venice S-Gamut3.Cine",
+    "Input - Canon - Curve - Canon-Log3",
+    "Input - RED - REDLog3G10 - REDWideGamutRGB",
+    "color_picking",
+    "Output - Rec.709",
+    "ACES - ACEScg",
+]
+
+# Import the UI setup functions (replaces uic.loadUi)
+from shot_card import setup_shot_card_ui
+from task_card import setup_task_widget_ui
+
+BASE_URL = "http://192.168.10.207:8000"
+
+def clear_container(container):
+    if isinstance(container, QLayout):
+        while container.count():
+            item = container.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+    elif isinstance(container, QWidget):
+        layout = container.layout()
+        if layout is not None:
+            clear_container(layout)
+
+def _children_by_object_name(layout: QLayout) -> dict[str, QWidget]:
+    out = {}
+    for i in range(layout.count()):
+        w = layout.itemAt(i).widget()
+        if w is not None and w.objectName():
+            out[w.objectName()] = w
+    return out
+
+def _ensure_order(layout: QLayout, desired_names: list[str]):
+    """Move existing widgets to match desired order without recreating."""
+    # For FlowLayout and similar layouts that don't support insertWidget,
+    # we need to remove all and re-add in order
+    
+    # Collect all widgets by name
+    widgets_by_name = {}
+    for i in range(layout.count()):
+        w = layout.itemAt(i).widget()
+        if w is not None and w.objectName():
+            widgets_by_name[w.objectName()] = w
+    
+    # Check if layout supports insertWidget (QVBoxLayout, QHBoxLayout, etc.)
+    has_insert = hasattr(layout, 'insertWidget')
+    
+    if has_insert:
+        # Original behavior for layouts that support insertWidget
+        pos = 0
+        for desired in desired_names:
+            for i in range(layout.count()):
+                w = layout.itemAt(i).widget()
+                if w and w.objectName() == desired:
+                    if i != pos:
+                        layout.removeWidget(w)
+                        layout.insertWidget(pos, w)
+                    pos += 1
+                    break
+    else:
+        # For FlowLayout and similar: remove all and re-add in order
+        # First, collect all widgets
+        all_widgets = []
+        while layout.count():
+            item = layout.takeAt(0)
+            if item.widget():
+                all_widgets.append(item.widget())
+        
+        # Re-add in desired order
+        for name in desired_names:
+            if name in widgets_by_name:
+                layout.addWidget(widgets_by_name[name])
+
+
+def _normalize_layout_mode(mode: str) -> str:
+    if str(mode).lower() == "grid":
+        return "grid"
+    return "list"
+
+
+def _create_shots_layout(mode: str, spacing: int | None = None) -> QLayout:
+    layout_mode = _normalize_layout_mode(mode)
+    if layout_mode == "grid":
+        layout = FlowLayout(None, margin=0, h_spacing=10, v_spacing=10)
+    else:
+        layout = QVBoxLayout()
+    if spacing is not None:
+        layout.setSpacing(max(0, int(spacing)))
+    return layout
+
+
+def _set_dynamic_property(widget: QWidget | None, name: str, value) -> None:
+    if widget is None:
+        return
+    widget.setProperty(name, value)
+    style = widget.style()
+    if style is not None:
+        style.unpolish(widget)
+        style.polish(widget)
+    widget.update()
+
+
+def _compact_text(value, limit: int) -> str:
+    text = str(value or "")
+    if limit <= 3 or len(text) <= limit:
+        return text
+    return f"{text[:limit - 3].rstrip()}..."
+
+
+class PlainTextEditDialog(QDialog):
+    def __init__(self, parent=None, title="Edit text", text=""):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        self.edit = QPlainTextEdit(self)
+        self.edit.setPlainText(text)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.edit)
+        layout.addWidget(buttons)
+
+    def value(self) -> str:
+        return self.edit.toPlainText()
+
+class TaskWidget(QWidget):
+    def __init__(self, task_data=None):
+        super().__init__()
+        task_data = task_data or {}
+
+        # Use Python UI setup instead of uic.loadUi
+        setup_task_widget_ui(self)
+
+        self.setObjectName(f"task-{task_data.get('id','unknown')}")
+        self._api = http_help.DjangoAPI()
+        self._task_id = task_data.get("id")
+        self._data = {}
+        self._compact_mode = False
+
+        if hasattr(self, "drag_handle"):
+            self.drag_handle.setVisible(False)
+
+        # ----- Status button and menu -----
+        self.btn_status = getattr(self, "btn_status", None)
+
+        # connect delete button
+        if hasattr(self, "btn_delete_task"):
+            self.btn_delete_task.clicked.connect(self._on_delete_clicked)
+
+        self._status_menu = QMenu(self)
+        for value, label in http_help.TASK_STATUS_CHOICES:
+            act = QAction(label, self._status_menu)
+            act.setData(value)
+            self._status_menu.addAction(act)
+
+        # OPEN ON LEFT CLICK
+        self.btn_status.clicked.connect(lambda: self._open_menu_below(self.btn_status, self._status_menu))
+        self._status_menu.triggered.connect(self._on_status_action)
+
+        self.btn_task_title.clicked.connect(self._on_title_clicked)
+        self.btn_notes.clicked.connect(self._on_notes_clicked)
+
+        # ----- Assign button and menu -----
+        self.btn_assigned = getattr(self, "btn_assigned", None)
+        self._artist_menu = QMenu(self)
+
+        # OPEN ON LEFT CLICK (rebuild the menu each time to fetch latest users)
+        self.btn_assigned.clicked.connect(self._on_assign_clicked)
+        self._artist_menu.triggered.connect(self._on_artist_action)
+
+        # ----- Priority button and menu (NEW) -----
+        self.btn_priority = getattr(self, "btn_priority", None)
+        self._priority_menu = QMenu(self)
+
+        for prio in range(10, 0, -1):  # 10 highest first
+            act = QAction(f"Priority {prio}", self._priority_menu)
+            act.setData(prio)
+            self._priority_menu.addAction(act)
+
+        if self.btn_priority:
+            self.btn_priority.clicked.connect(lambda: self._open_menu_below(self.btn_priority, self._priority_menu))
+            self._priority_menu.triggered.connect(self._on_priority_action)
+
+        # ----- Budget hours button (NEW) -----
+        self.btn_budget_hours = getattr(self, "btn_budget_hours", None)
+        if self.btn_budget_hours:
+            self.btn_budget_hours.clicked.connect(self._on_budget_hours_clicked)
+
+        if hasattr(self, "btn_hide_task") and self.btn_hide_task:
+            self.btn_hide_task.clicked.connect(self._on_hide_clicked)
+
+        self.update_from_data(task_data)
+
+    # ----- helpers -----
+    def _on_delete_clicked(self):
+        if not self._task_id:
+            return
+        try:
+            self._api.delete_task(self._task_id)
+            self.setParent(None)
+            self.deleteLater()
+        except Exception as e:
+            pass
+
+    def _on_hide_clicked(self):
+        if self._task_id is None:
+            return
+        current_hidden = (self._data or {}).get("hidden", False)
+        new_hidden = not current_hidden
+        try:
+            updated = self._api.update_task(self._task_id, hidden=new_hidden)
+            if updated:
+                self.update_from_data(updated)
+                self._sync_parent_task_data(updated)
+                self._notify_filter_state_changed()
+            else:
+                self._data["hidden"] = new_hidden
+                if self.btn_hide_task:
+                    self.set_compact_mode(self._compact_mode)
+                self._sync_parent_task_data({"hidden": new_hidden})
+                self._notify_filter_state_changed()
+        except Exception as e:
+            pass
+
+    def _sync_parent_task_data(self, updated_task: dict) -> None:
+        parent = self.parent()
+        while parent is not None:
+            if isinstance(parent, ShotCard):
+                parent_data = getattr(parent, "data", None) or {}
+                tasks = parent_data.get("tasks", [])
+                for task in tasks:
+                    if task.get("id") == self._task_id:
+                        if isinstance(updated_task, dict):
+                            task.update(updated_task)
+                        break
+                break
+            parent = parent.parent()
+
+    def _notify_filter_state_changed(self) -> None:
+        window = self.window()
+        apply_filters = getattr(window, "_apply_filters", None)
+        if not callable(apply_filters):
+            return
+        if hasattr(window, "_last_filter_sig"):
+            delattr(window, "_last_filter_sig")
+        try:
+            apply_filters(force=True)
+        except TypeError:
+            apply_filters()
+
+    def _open_menu_below(self, widget: QPushButton, menu: QMenu):
+        pos = widget.mapToGlobal(widget.rect().bottomLeft())
+        menu.exec(pos)
+
+    def _status_label(self, value: str) -> str:
+        mapping = dict(http_help.TASK_STATUS_CHOICES)
+        return mapping.get(value, value or "")
+
+    def _artist_label(self, user_id) -> str:
+        if user_id in (None, "", 0):
+            return "Unassigned"
+        try:
+            name = self._api.username_from_id(user_id)
+            return name or "Unassigned"
+        except Exception:
+            return "Unassigned"
+
+    # NEW
+    def _priority_label(self, value) -> str:
+        try:
+            v = int(value)
+        except Exception:
+            v = 5
+        v = max(1, min(10, v))
+        return f"P{v}"
+
+    # NEW
+    def _format_hours(self, value) -> str:
+        try:
+            hours = float(value or 0)
+        except Exception:
+            hours = 0.0
+        return f"{hours:.1f}h"
+
+    def _apply_compact_properties(self, enabled: bool) -> None:
+        compact_value = "true" if enabled else "false"
+        for widget in (
+            getattr(self, "task_frame", None),
+            getattr(self, "btn_task_title", None),
+            getattr(self, "btn_status", None),
+            getattr(self, "btn_assigned", None),
+            getattr(self, "btn_priority", None),
+            getattr(self, "btn_budget_hours", None),
+            getattr(self, "btn_hide_task", None),
+        ):
+            _set_dynamic_property(widget, "compact", compact_value)
+
+    def set_compact_mode(self, enabled: bool) -> None:
+        self._compact_mode = bool(enabled)
+        self._apply_compact_properties(self._compact_mode)
+
+        task_layout = getattr(self, "task_layout", None)
+        top_row = getattr(self, "top_row", None)
+        middle_row = getattr(self, "middle_row", None)
+        planning_row = getattr(self, "planning_row", None)
+        notes_row = getattr(self, "notes_row", None)
+
+        if task_layout is not None:
+            if self._compact_mode:
+                task_layout.setContentsMargins(4, 4, 4, 4)
+                task_layout.setSpacing(2)
+            else:
+                task_layout.setContentsMargins(6, 6, 6, 6)
+                task_layout.setSpacing(4)
+
+        for row in (top_row, middle_row, planning_row, notes_row):
+            if row is None:
+                continue
+            row.setSpacing(2 if self._compact_mode else 4)
+
+        self.setMinimumWidth(120 if self._compact_mode else 160)
+        self.setMaximumWidth(160 if self._compact_mode else 240)
+
+        if hasattr(self, "btn_delete_task") and self.btn_delete_task:
+            self.btn_delete_task.setVisible(not self._compact_mode)
+        if hasattr(self, "btn_notes") and self.btn_notes:
+            self.btn_notes.setVisible(not self._compact_mode)
+        if hasattr(self, "drag_handle") and self.drag_handle and self._compact_mode:
+            self.drag_handle.setVisible(False)
+
+        if hasattr(self, "btn_status") and self.btn_status:
+            self.btn_status.setMinimumWidth(56 if self._compact_mode else 70)
+            self.btn_status.setMaximumWidth(78 if self._compact_mode else 16777215)
+        if hasattr(self, "btn_assigned") and self.btn_assigned:
+            self.btn_assigned.setMinimumWidth(56 if self._compact_mode else 70)
+            self.btn_assigned.setMaximumWidth(84 if self._compact_mode else 16777215)
+        if hasattr(self, "btn_priority") and self.btn_priority:
+            self.btn_priority.setMaximumWidth(36 if self._compact_mode else 16777215)
+        if hasattr(self, "btn_budget_hours") and self.btn_budget_hours:
+            self.btn_budget_hours.setMaximumWidth(48 if self._compact_mode else 16777215)
+        if hasattr(self, "btn_hide_task") and self.btn_hide_task:
+            self.btn_hide_task.setFixedSize(24 if self._compact_mode else 30, 18 if self._compact_mode else 20)
+
+        title = (self._data or {}).get("title") or "Task"
+        notes = (self._data or {}).get("notes") or ""
+        status_text = self._status_label((self._data or {}).get("status"))
+        artist_text = self._artist_label((self._data or {}).get("artist"))
+        priority_text = self._priority_label((self._data or {}).get("priority", 5))
+        hours_text = self._format_hours((self._data or {}).get("budget_hours", 0))
+        is_hidden = bool((self._data or {}).get("hidden", False))
+
+        if self._compact_mode:
+            self.btn_task_title.setText(_compact_text(title, 14))
+            self.btn_status.setText(_compact_text(status_text, 10))
+            self.btn_assigned.setText(_compact_text(artist_text, 9))
+            if hasattr(self, "btn_priority") and self.btn_priority:
+                self.btn_priority.setText(priority_text)
+            if hasattr(self, "btn_budget_hours") and self.btn_budget_hours:
+                self.btn_budget_hours.setText(hours_text)
+            if hasattr(self, "btn_hide_task") and self.btn_hide_task:
+                self.btn_hide_task.setText("U" if is_hidden else "H")
+                self.btn_hide_task.setToolTip("Unhide task" if is_hidden else "Hide task")
+
+            tooltip_parts = [title]
+            if notes:
+                tooltip_parts.append(notes)
+            tooltip_text = "\n".join(tooltip_parts)
+            self.btn_task_title.setToolTip(tooltip_text)
+            if hasattr(self, "task_frame") and self.task_frame:
+                self.task_frame.setToolTip(tooltip_text)
+            self.btn_status.setToolTip(status_text)
+            self.btn_assigned.setToolTip(artist_text)
+        else:
+            self.btn_task_title.setText(title)
+            self.btn_task_title.setToolTip(title)
+            if hasattr(self, "btn_notes") and self.btn_notes:
+                self.btn_notes.setToolTip(notes)
+            self.btn_status.setText(status_text)
+            self.btn_status.setToolTip(status_text)
+            self.btn_assigned.setText(artist_text)
+            self.btn_assigned.setToolTip(artist_text)
+            if hasattr(self, "btn_priority") and self.btn_priority:
+                self.btn_priority.setText(priority_text)
+            if hasattr(self, "btn_budget_hours") and self.btn_budget_hours:
+                self.btn_budget_hours.setText(hours_text)
+            if hasattr(self, "btn_hide_task") and self.btn_hide_task:
+                self.btn_hide_task.setText("Unhide" if is_hidden else "Hide")
+                self.btn_hide_task.setToolTip("Hide/Unhide task")
+            if hasattr(self, "task_frame") and self.task_frame:
+                self.task_frame.setToolTip(notes)
+
+    # ----- status flow -----
+    def _on_status_action(self, action: QAction):
+        if self._task_id is None:
+            return
+        new_value = action.data()
+        if not new_value:
+            return
+
+        prev_value = (self._data or {}).get("status", None)
+        try:
+            updated = self._api.update_task(self._task_id, status=new_value)
+            self.update_from_data(updated)
+            self._sync_parent_task_data(updated)
+            self._notify_filter_state_changed()
+        except Exception as e:
+            if prev_value is not None:
+                self.btn_status.setText(self._status_label(prev_value))
+
+    # NEW: priority flow (menu, same pattern as status)
+    def _on_priority_action(self, action: QAction):
+        if self._task_id is None:
+            return
+        new_priority = action.data()
+        if new_priority is None:
+            return
+
+        prev_priority = (self._data or {}).get("priority", None)
+        try:
+            updated = self._api.update_task(self._task_id, priority=int(new_priority))
+            self.update_from_data(updated)
+            self._sync_parent_task_data(updated)
+            self._notify_filter_state_changed()
+        except Exception as e:
+            if prev_priority is not None and self.btn_priority:
+                self.btn_priority.setText(self._priority_label(prev_priority))
+
+    # NEW: budget flow (dialog, same pattern as title/notes)
+    def _on_budget_hours_clicked(self):
+        if self._task_id is None:
+            return
+
+        current_value = (self._data or {}).get("budget_hours", None)
+        if current_value is None and self.btn_budget_hours:
+            current_value = (self.btn_budget_hours.text() or "").lower().replace("h", "").strip() or "0"
+
+        dlg = PlainTextEditDialog(self, title="Edit budget hours", text=str(current_value))
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_text = dlg.value().strip().lower().replace("h", "")
+            if not new_text:
+                return
+            try:
+                new_hours = float(new_text)
+            except Exception:
+                return
+            if new_hours < 0:
+                return
+
+            prev_hours = (self._data or {}).get("budget_hours", None)
+            try:
+                updated = self._api.update_task(self._task_id, budget_hours=new_hours)
+                self.update_from_data(updated)
+                self._sync_parent_task_data(updated)
+                self._notify_filter_state_changed()
+            except Exception as e:
+                if self.btn_budget_hours:
+                    self.btn_budget_hours.setText(self._format_hours(prev_hours))
+
+    # ----- assign flow -----
+    def _on_assign_clicked(self):
+        self._artist_menu.clear()
+
+        act_clear = QAction("Unassigned", self._artist_menu)
+        act_clear.setData(None)
+        self._artist_menu.addAction(act_clear)
+        self._artist_menu.addSeparator()
+
+        try:
+            users = self._api.get_users()
+            users = sorted(users, key=lambda u: (u.get("username") or "").lower())
+            for u in users:
+                label = u.get("username") or f"User {u.get('id')}"
+                act = QAction(label, self._artist_menu)
+                act.setData(u.get("id"))
+                self._artist_menu.addAction(act)
+        except Exception as e:
+            err = QAction("Failed to load users", self._artist_menu)
+            err.setEnabled(False)
+            self._artist_menu.addAction(err)
+
+        self._open_menu_below(self.btn_assigned, self._artist_menu)
+
+    def _on_artist_action(self, action: QAction):
+        if self._task_id is None:
+            return
+        new_artist_id = action.data()
+        prev_artist_id = (self._data or {}).get("artist", None)
+        try:
+            updated = self._api.update_task(self._task_id, artist=new_artist_id)
+            self.update_from_data(updated)
+            self._sync_parent_task_data(updated)
+            self._notify_filter_state_changed()
+        except Exception as e:
+            self.btn_assigned.setText(self._artist_label(prev_artist_id))
+
+    # ----- render -----
+    def update_from_data(self, task_data: dict):
+        # NEW: keep latest task data for title/notes fallback and rollbacks
+        task_data = task_data or {}
+        self._data = task_data
+
+        title = task_data.get("title") or ""
+        notes = task_data.get("notes") or "No notes"
+        status_value = task_data.get("status")
+        artist_id = task_data.get("artist")
+
+        # NEW: fetch new fields
+        priority_value = task_data.get("priority", 5)
+        budget_hours_value = task_data.get("budget_hours", 0)
+
+        self.btn_task_title.setText(title)
+        self.btn_notes.setText(notes)
+
+        if task_data.get("hidden") == True:
+            self.btn_hide_task.setText("Unhide")
+        else:
+            self.btn_hide_task.setText("Hide")
+
+        self.btn_status.setText(self._status_label(status_value))
+
+        status_prop = status_value if status_value else "unassigned"
+        self.btn_status.setProperty("status", status_prop)
+        self.btn_status.style().unpolish(self.btn_status)
+        self.btn_status.style().polish(self.btn_status)
+
+        if hasattr(self, "btn_assigned") and self.btn_assigned:
+            self.btn_assigned.setText(self._artist_label(artist_id))
+        elif hasattr(self, "label_assigned") and self.label_assigned:
+            self.label_assigned.setText(self._artist_label(artist_id))
+
+        # NEW: update button text
+        if hasattr(self, "btn_priority") and self.btn_priority:
+            self.btn_priority.setText(self._priority_label(priority_value))
+
+        if hasattr(self, "btn_budget_hours") and self.btn_budget_hours:
+            self.btn_budget_hours.setText(self._format_hours(budget_hours_value))
+
+        self.set_compact_mode(self._compact_mode)
+
+    def _on_title_clicked(self):
+        if self._task_id is None:
+            return
+
+        current_title = (self._data or {}).get("title") or self.btn_task_title.text() or ""
+
+        dlg = PlainTextEditDialog(self, title="Edit title", text=current_title)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_title = dlg.value().strip()
+            if not new_title or new_title == current_title:
+                return
+
+            prev_title = current_title
+            try:
+                updated = self._api.update_task(self._task_id, title=new_title)
+                self.update_from_data(updated)
+                self._sync_parent_task_data(updated)
+                self._notify_filter_state_changed()
+            except Exception as e:
+                self.btn_task_title.setText(prev_title)
+
+    def _on_notes_clicked(self):
+        if self._task_id is None:
+            return
+
+        current_note = (self._data or {}).get("notes") or self.btn_notes.text() or ""
+
+        dlg = PlainTextEditDialog(self, title="Edit notes", text=current_note)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            new_note = dlg.value().strip()
+            if not new_note or new_note == current_note:
+                return
+
+            prev_note = current_note
+            try:
+                updated = self._api.update_task(self._task_id, notes=new_note)
+                self.update_from_data(updated)
+                self._sync_parent_task_data(updated)
+                self._notify_filter_state_changed()
+            except Exception as e:
+                self.btn_notes.setText(prev_note)
+
+class ShotCard(QWidget):
+    # Color code mapping - centralized for easy maintenance
+    COLOR_MAP = {
+        "red": "#99604C",
+        "amber": "#B28659",
+        "green": "#678542",
+        "blue": "#4A7BA7",      # Ready to add more colors
+        "purple": "#8B6FA3",
+        "None": "#333333"       # Default/no color
+    }
+    
+    def __init__(self, data=None, parent=None):
+        super().__init__(parent)
+        data = data or {}
+        self.data = data
+        
+        # Use Python UI setup instead of uic.loadUi
+        setup_shot_card_ui(self)
+    
+        self.setObjectName(f"shot-{data.get('id','unknown')}")
+        
+        # cache
+        self._thumb_sig = None
+        self._thumb_orig = None           # full-res original
+        self._thumb_target_width = 240    # base width from density settings
+        self._base_thumb_target_width = 240
+        self._thumb_pending_url = None
+        self._compact_mode = False
+
+        # make sure label will not auto-stretch
+        self.label_thumbnail.setScaledContents(False)
+        self.label_thumbnail.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
+        
+        # Video preview setup
+        self._preview_video_path = None
+        self._has_preview = False
+        self._video_player = None
+        self._video_widget = None
+        self._audio_output = None
+        self._setup_video_preview_stack()
+        
+        self._shot_id = data.get("id")
+        self.shot_dir = data.get("base_path")
+        self._api = http_help.DjangoAPI()
+        self.filesIO = filesIO.Folders()
+        self._nuke_open_handler = None
+        self._lock_state = "none"
+        self._lock_owner_machine = None
+        self._lock_script_name = None
+
+        # Color buttons are now styled via QSS (styles_v02.qss)
+        # Initial color indicator will be set in update_from_data via _apply_colour_code
+
+        self.btn_red.clicked.connect(lambda: self.on_colour_btn("red"))
+        self.btn_amber.clicked.connect(lambda: self.on_colour_btn("amber"))
+        self.btn_green.clicked.connect(lambda: self.on_colour_btn("green"))
+        self.btn_colour_none.clicked.connect(lambda: self.on_colour_btn("none"))
+        
+        if data.get("hidden") == True:
+            self.btn_hide_shot.setText("Unhide")
+        else:
+            self.btn_hide_shot.setText("Hide")
+        self.btn_hide_shot.clicked.connect(self.on_hide_btn)  # Fixed: no lambda, no stale data
+
+        if hasattr(self, "label_colourspace"):
+            self.label_colourspace.setToolTip("Right-click to set colourspace")
+            self.label_colourspace.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.label_colourspace.customContextMenuRequested.connect(self._on_colourspace_context_menu)
+
+        
+
+        # NEW: add-task click
+        if hasattr(self, "bnt_addTask"):
+            self.bnt_addTask.clicked.connect(self._on_add_task_clicked)
+
+        self.btn_edit_shot_notes.clicked.connect(self._on_add_note_clicked)
+
+        # Initial setup for nuke button
+        latest_nk = self.filesIO.latest_nk(self.shot_dir)
+        if latest_nk:
+            self.btn_open_nuke.setText(latest_nk.name)
+            self.btn_open_nuke.setProperty("file_path", str(latest_nk))  # Store path on button
+            self.btn_open_nuke.clicked.connect(
+                lambda checked=False, path=latest_nk: self._on_open_nuke_clicked(path)
+            )
+        else:
+            self.btn_open_nuke.setText("No .nk file")
+            self.btn_open_nuke.setProperty("file_path", None)
+        _set_dynamic_property(self.btn_open_nuke, "lock_state", "none")
+        
+        assets_dir = Path(self.shot_dir) / "assets"
+        self.btn_open_assets.clicked.connect(lambda: self.filesIO.openFileLocation(assets_dir))
+        self.btn_open_precomp.clicked.connect(lambda: self.filesIO.openFileLocation(Path(self.shot_dir) / "renders" / "precomp" ))
+
+        render_info = self.filesIO.latest_render_info(self.shot_dir)
+        if render_info:
+            render_path = render_info.get("render_path")
+            render_display = render_info.get("display_name", "")
+            render_relpath = render_info.get("render_relpath")
+            render_sequence_path = render_info.get("sequence_path")
+            render_dir = render_info.get("render_dir")
+            render_version = render_info.get("version")
+            self.btn_latest_render.setProperty("file_path", render_path)  # Store path on button
+            self.btn_latest_render.setProperty("render_relpath", render_relpath)
+            self.btn_latest_render.setProperty("render_display", render_display)
+            self.btn_latest_render.setProperty("render_type", render_info.get("type"))
+            self.btn_latest_render.setProperty("render_sequence_path", render_sequence_path)
+            self.btn_latest_render.setProperty("render_dir", render_dir)
+            self.btn_latest_render.setProperty("render_version", render_version)
+        else:
+            self.btn_latest_render.setProperty("file_path", None)
+            self.btn_latest_render.setProperty("render_relpath", None)
+            self.btn_latest_render.setProperty("render_display", None)
+            self.btn_latest_render.setProperty("render_type", None)
+            self.btn_latest_render.setProperty("render_sequence_path", None)
+            self.btn_latest_render.setProperty("render_dir", None)
+            self.btn_latest_render.setProperty("render_version", None)
+        self._set_render_button_text()
+        self.btn_latest_render.clicked.connect(self._on_push_to_dvr_clicked)  # Use new handler 
+
+        # Replace the frame_tasks layout with FlowLayout for responsive grid
+        self._setup_flow_layout()
+
+        # Set up automatic file polling
+        self._setup_nk_polling()
+        self._setup_render_polling()
+        self._setup_preview_polling()
+
+        self.update_from_data(data)
+    
+    def _apply_colour_code(self, colour_code):
+        """Apply color code to the shot card color indicator strip."""
+        # Normalize the color code
+        if colour_code in (None, "", "None", "none"):
+            colour_code = "none"
+        elif colour_code not in ("red", "amber", "green"):
+            colour_code = "none"
+        
+        # Set the property on the color indicator strip
+        if hasattr(self, 'color_indicator'):
+            self.color_indicator.setProperty("shot_color", colour_code)
+            # Force style refresh
+            self.color_indicator.style().unpolish(self.color_indicator)
+            self.color_indicator.style().polish(self.color_indicator)
+
+    def _on_colourspace_context_menu(self, pos):
+        if not hasattr(self, "label_colourspace"):
+            return
+        menu = QMenu(self)
+        current = (self.data or {}).get("colourspace")
+        for preset in COLOURSPACE_PRESETS:
+            action = menu.addAction(preset)
+            action.setCheckable(True)
+            if current == preset:
+                action.setChecked(True)
+            action.triggered.connect(lambda checked=False, value=preset: self._set_colourspace(value))
+        menu.exec(self.label_colourspace.mapToGlobal(pos))
+
+    def _set_colourspace(self, colourspace: str) -> None:
+        if self._shot_id is None:
+            return
+        try:
+            updated = self._api.update_shot(self._shot_id, colourspace=colourspace)
+            if updated:
+                self.update_from_data(updated)
+            else:
+                self.data["colourspace"] = colourspace
+                if hasattr(self, "label_colourspace"):
+                    self.label_colourspace.setText(f"Colourspace: ...{colourspace[-8:-5]}...")
+        except Exception:
+            pass
+
+    def _normalize_render_label(self, value: str) -> str:
+        """Strip render type suffix for comparisons."""
+        if not value:
+            return ""
+        text = value.strip()
+        upper = text.upper()
+        if upper.endswith("(MOV)") or upper.endswith("(EXR)"):
+            text = text.rsplit("(", 1)[0].strip()
+        parts = text.rsplit(" ", 1)
+        if len(parts) == 2:
+            tail = parts[1]
+            if "-" in tail:
+                left, right = tail.split("-", 1)
+                if left.isdigit() and right.isdigit():
+                    return parts[0].strip()
+        return text
+    
+    def _get_nuke_base_label(self) -> str:
+        """Return base Nuke button label from file_path property."""
+        file_path = self.btn_open_nuke.property("file_path")
+        if not file_path:
+            return "No .nk file"
+        try:
+            return Path(str(file_path)).name
+        except Exception:
+            return str(file_path)
+    
+    def set_nuke_open_handler(self, handler):
+        self._nuke_open_handler = handler
+
+    def set_lock_state(self, lock_state: str, owner_machine: str | None = None, script_name: str | None = None):
+        self._lock_state = lock_state or "none"
+        self._lock_owner_machine = owner_machine
+        self._lock_script_name = script_name
+        _set_dynamic_property(self.btn_open_nuke, "lock_state", self._lock_state)
+        self._set_nuke_button_label()
+        self._set_nuke_button_tooltip()
+
+    def refresh_lock_state_from_data(self):
+        lock_info = parse_lock_info((self.data or {}).get("nuke_in_use"))
+        if lock_info is None:
+            self.set_lock_state("none")
+            return
+
+        script_name = self._get_nuke_base_label()
+        owner = lock_info.display_owner
+        if lock_info.is_stale():
+            self.set_lock_state("stale", owner_machine=owner, script_name=script_name)
+            return
+
+        if lock_info.matches_system(self._api.get_system_id()):
+            self.set_lock_state("mine", owner_machine=owner, script_name=script_name)
+            return
+
+        self.set_lock_state("foreign_active", owner_machine=owner, script_name=script_name)
+    
+    def _set_nuke_button_label(self):
+        """Render the Nuke button label from the current file path."""
+        base_label = self._get_nuke_base_label()
+        lock_state = getattr(self, "_lock_state", "none")
+        lock_owner = getattr(self, "_lock_owner_machine", None) or "unknown"
+        lock_script = getattr(self, "_lock_script_name", None) or base_label
+
+        if lock_state == "foreign_active":
+            text = _compact_text(f"{lock_script} @ {lock_owner}", 20 if self._compact_mode else 48)
+            self.btn_open_nuke.setText(text or "Locked")
+            return
+        if lock_state == "mine":
+            if self._compact_mode:
+                self.btn_open_nuke.setText("Locked by you")
+            else:
+                self.btn_open_nuke.setText(_compact_text(f"{base_label} (You)", 48))
+            return
+
+        if self._compact_mode:
+            self.btn_open_nuke.setText("Nuke" if base_label != "No .nk file" else "No Nuke")
+            return
+        self.btn_open_nuke.setText(base_label)
+    
+    def _set_nuke_button_tooltip(self):
+        """Render modified-time tooltip for the current .nk file."""
+        lock_state = getattr(self, "_lock_state", "none")
+        if lock_state == "foreign_active":
+            owner = getattr(self, "_lock_owner_machine", None) or "unknown"
+            script = getattr(self, "_lock_script_name", None) or self._get_nuke_base_label()
+            self.btn_open_nuke.setToolTip(f"Locked by: {owner}\nScript: {script}")
+            return
+        if lock_state == "mine":
+            script = getattr(self, "_lock_script_name", None) or self._get_nuke_base_label()
+            self.btn_open_nuke.setToolTip(f"Locked by you\nScript: {script}")
+            return
+
+        last_nk_mtime = getattr(self, "_last_nk_mtime", None)
+        if last_nk_mtime:
+            self.btn_open_nuke.setToolTip(f"Modified {self._format_time_ago(last_nk_mtime)}")
+        else:
+            self.btn_open_nuke.setToolTip("No .nk file found")
+
+    def _current_thumb_target_width(self) -> int:
+        width = max(1, int(getattr(self, "_base_thumb_target_width", self._thumb_target_width)))
+        if self._compact_mode:
+            return max(72, int(width * 0.6))
+        return width
+
+    def _set_render_button_text(self) -> None:
+        render_display = self.btn_latest_render.property("render_display")
+        has_render = bool(self.btn_latest_render.property("file_path"))
+        if self._compact_mode:
+            self.btn_latest_render.setText("Render" if has_render else "No Render")
+            return
+        if render_display:
+            self.btn_latest_render.setText(str(render_display))
+        else:
+            self.btn_latest_render.setText("No Render")
+
+    def _set_hide_button_label(self) -> None:
+        hidden = bool((self.data or {}).get("hidden", False))
+        if self._compact_mode:
+            self.btn_hide_shot.setText("U" if hidden else "H")
+            self.btn_hide_shot.setToolTip("Unhide shot" if hidden else "Hide shot")
+            return
+        self.btn_hide_shot.setText("Unhide" if hidden else "Hide")
+        self.btn_hide_shot.setToolTip("Hide/Unhide shot")
+
+    def _apply_compact_tooltips(self) -> None:
+        title = str((self.data or {}).get("title", "") or "")
+        notes = str((self.data or {}).get("notes", "") or "")
+        tooltip_parts = [part for part in (title, notes) if part]
+        if hasattr(self, "label_colourspace"):
+            colourspace = str((self.data or {}).get("colourspace", "") or "")
+            if colourspace:
+                tooltip_parts.append(f"Colourspace: {colourspace}")
+        original_clip = str((self.data or {}).get("original_clip", "") or "")
+        if original_clip:
+            tooltip_parts.append(f"Clip: {Path(original_clip).name}")
+        if tooltip_parts:
+            tooltip_text = "\n".join(tooltip_parts)
+            self.frame_7.setToolTip(tooltip_text)
+            self.label_shot.setToolTip(tooltip_text)
+        else:
+            self.frame_7.setToolTip("")
+            self.label_shot.setToolTip("")
+
+        render_parts = []
+        last_render_mtime = getattr(self, "_last_render_mtime", None)
+        if last_render_mtime:
+            render_parts.append(f"Rendered {self._format_time_ago(last_render_mtime)}")
+        elif self.btn_latest_render.property("file_path"):
+            render_display = self.btn_latest_render.property("render_display") or "Render ready"
+            render_parts.append(str(render_display))
+        else:
+            render_parts.append("No render found")
+        last_conform = (self.data or {}).get("last_conform")
+        if self._compact_mode and last_conform not in (None, "None", ""):
+            render_parts.append(f"Last conform: {last_conform}")
+        self.btn_latest_render.setToolTip("\n".join(render_parts))
+
+    def _apply_compact_properties(self, enabled: bool) -> None:
+        compact_value = "true" if enabled else "false"
+        for widget in (
+            getattr(self, "frame_7", None),
+            getattr(self, "content_container", None),
+            getattr(self, "label_shot", None),
+            getattr(self, "label_frame_range", None),
+            getattr(self, "btn_hide_shot", None),
+            getattr(self, "btn_open_nuke", None),
+            getattr(self, "btn_latest_render", None),
+            getattr(self, "bnt_addTask", None),
+            getattr(self, "btn_open_assets", None),
+            getattr(self, "btn_open_precomp", None),
+            getattr(self, "frame_tasks", None),
+        ):
+            _set_dynamic_property(widget, "compact", compact_value)
+
+    def set_compact_mode(self, enabled: bool) -> None:
+        self._compact_mode = bool(enabled)
+        self._apply_compact_properties(self._compact_mode)
+
+        if hasattr(self, "horizontalLayout_2") and self.horizontalLayout_2:
+            direction = (
+                QBoxLayout.Direction.TopToBottom
+                if self._compact_mode
+                else QBoxLayout.Direction.LeftToRight
+            )
+            self.horizontalLayout_2.setDirection(direction)
+            self.horizontalLayout_2.setSpacing(6 if self._compact_mode else 0)
+
+        if hasattr(self, "verticalLayout_5") and self.verticalLayout_5:
+            margins = 6 if self._compact_mode else 8
+            self.verticalLayout_5.setContentsMargins(margins, margins, margins, margins)
+            self.verticalLayout_5.setSpacing(4 if self._compact_mode else 6)
+
+        if hasattr(self, "frame_tasks") and self.frame_tasks:
+            self.frame_tasks.setFrameShape(
+                QFrame.Shape.NoFrame if self._compact_mode else QFrame.Shape.Box
+            )
+            tasks_layout = self.frame_tasks.layout()
+            if tasks_layout is not None:
+                tasks_layout.setSpacing(6 if self._compact_mode else 10)
+                for i in range(tasks_layout.count()):
+                    item = tasks_layout.itemAt(i)
+                    child = item.widget() if item else None
+                    if isinstance(child, TaskWidget):
+                        child.set_compact_mode(self._compact_mode)
+
+        if hasattr(self, "frame_metadata"):
+            self.frame_metadata.setVisible(not self._compact_mode)
+        if hasattr(self, "frame_2"):
+            self.frame_2.setVisible(not self._compact_mode)
+        if hasattr(self, "label_last_conform"):
+            self.label_last_conform.setVisible(not self._compact_mode)
+        if hasattr(self, "label_4"):
+            self.label_4.setVisible(not self._compact_mode)
+
+        for widget in (
+            getattr(self, "label_edit_inpoint", None),
+            getattr(self, "label_edit_outpoint", None),
+            getattr(self, "btn_red", None),
+            getattr(self, "btn_amber", None),
+            getattr(self, "btn_green", None),
+            getattr(self, "btn_colour_none", None),
+        ):
+            if widget is not None:
+                widget.setVisible(not self._compact_mode)
+
+        if hasattr(self, "horizontalSpacer_meta1"):
+            self.horizontalSpacer_meta1.changeSize(
+                0 if self._compact_mode else 10,
+                20,
+                QSizePolicy.Policy.Fixed,
+                QSizePolicy.Policy.Minimum,
+            )
+        if hasattr(self, "horizontalSpacer_meta2"):
+            self.horizontalSpacer_meta2.changeSize(
+                0 if self._compact_mode else 10,
+                20,
+                QSizePolicy.Policy.Fixed,
+                QSizePolicy.Policy.Minimum,
+            )
+        if hasattr(self, "horizontalLayout_6") and self.horizontalLayout_6:
+            self.horizontalLayout_6.invalidate()
+
+        if hasattr(self, "bnt_addTask") and self.bnt_addTask:
+            self.bnt_addTask.setText("Add" if self._compact_mode else "Add task")
+        if hasattr(self, "btn_open_assets") and self.btn_open_assets:
+            self.btn_open_assets.setText("Ast" if self._compact_mode else "assets folder")
+            self.btn_open_assets.setToolTip("Open assets folder")
+            self.btn_open_assets.setVisible(not self._compact_mode)
+        if hasattr(self, "btn_open_precomp") and self.btn_open_precomp:
+            self.btn_open_precomp.setText("Pre" if self._compact_mode else "Precomp folder")
+            self.btn_open_precomp.setToolTip("Open precomp folder")
+            self.btn_open_precomp.setVisible(not self._compact_mode)
+
+        self._set_hide_button_label()
+        self._set_nuke_button_label()
+        self._set_render_button_text()
+        self._apply_compact_tooltips()
+        self._apply_thumb_scale()
+
+    def update_from_data(self, data: dict):
+            # Store the latest data
+            data = data or {}
+            self.data = data
+            
+            self.label_shot.setText(data.get("title", "") or "")
+            self.label_notes.setText(data.get("notes", "") or "")
+            
+            
+            # Update frame range label from duration (styled same as notes)
+            if hasattr(self, 'label_frame_range'):
+                duration = data.get("duration")
+                if duration and duration not in (None, "", 0):
+                    try:
+                        duration_int = int(duration)
+                        end_frame = 1000 + duration_int
+                        self.label_frame_range.setText(f"1001-{end_frame}")
+                    except (ValueError, TypeError):
+                        self.label_frame_range.setText("")
+                else:
+                    self.label_frame_range.setText("")
+
+            # Update edit in/out labels
+            if hasattr(self, 'label_edit_inpoint'):
+                edit_in = data.get("edit_inpoint", "—")
+                self.label_edit_inpoint.setText(f"In: {edit_in if edit_in else '—'}")
+            
+            if hasattr(self, 'label_edit_outpoint'):
+                edit_out = data.get("edit_outpoint", "—")
+                self.label_edit_outpoint.setText(f"Out: {edit_out if edit_out else '—'}")
+            
+            # Update colourspace label
+            if hasattr(self, 'label_colourspace'):
+                colourspace = data.get("colourspace", "—")
+                self.label_colourspace.setText(f"Colourspace.: {colourspace[8:-12] if colourspace else '—'}")
+            
+            # Update original clip label (show just filename, not full path)
+            if hasattr(self, 'label_original_clip'):
+                original_clip = data.get("original_clip", "—")
+                if original_clip and original_clip != "—":
+                    # Extract just the filename from the path
+                    from pathlib import Path
+                    clip_name = Path(original_clip).name
+                    self.label_original_clip.setText(f"Clip: {clip_name[8:-5]}")
+                    # Store full path as property and tooltip for reference
+                    self.label_original_clip.setProperty("clip_path", original_clip)
+                    self.label_original_clip.setToolTip(f"{original_clip}\n(Right-click for options)")
+                else:
+                    self.label_original_clip.setText("Clip: —")
+                    self.label_original_clip.setProperty("clip_path", None)
+                    self.label_original_clip.setToolTip("")
+
+            # Apply color code using centralized mapping
+            self._apply_colour_code(data.get("colour_code"))
+            self._set_hide_button_label()
+
+            # Update last_conform label
+            if hasattr(self, 'label_last_conform'):
+                last_conform = data.get("last_conform")
+                if last_conform and last_conform not in (None, "None", ""):
+                    self.label_last_conform.setText(last_conform)
+                    # Check if last_conform matches the current latest render
+                    current_render = None
+                    if hasattr(self, 'btn_latest_render'):
+                        current_render = (
+                            self.btn_latest_render.property("render_display")
+                            or self.btn_latest_render.text()
+                        )
+                    if current_render and self._normalize_render_label(last_conform) == self._normalize_render_label(current_render):
+                        # Match - make label green
+                        self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
+                    else:
+                        # No match - reset to default style
+                        self.label_last_conform.setStyleSheet("")
+                else:
+                    self.label_last_conform.setText("None")
+                    self.label_last_conform.setStyleSheet("")
+
+            if hasattr(self, 'btn_open_nuke'):
+                self.refresh_lock_state_from_data()
+                self._set_nuke_button_label()
+                self._set_nuke_button_tooltip()
+
+            thumb_path = data.get("thumbnail")
+            url = f"{BASE_URL}{thumb_path}" if thumb_path else None
+            self.set_thumbnail(url)
+
+            # Update preview video from API data
+            preview_video = data.get("preview_video")
+            self._update_preview_from_data(preview_video)
+
+            # reconcile tasks
+            layout = self.frame_tasks.layout()
+            existing = _children_by_object_name(layout)
+            desired_order = []
+
+            for t in data.get("tasks", []):
+                tid = t.get("id")
+                if tid is None:
+                    continue
+                name = f"task-{tid}"
+                
+                desired_order.append(name)
+                if name in existing:
+                    existing[name].update_from_data(t)
+                else:
+                    task_widget = TaskWidget(t)
+                    task_widget.set_compact_mode(self._compact_mode)
+                    layout.addWidget(task_widget)
+
+            # remove stale
+            for name, widget in list(existing.items()):
+                if name not in desired_order:
+                    layout.removeWidget(widget)
+                    widget.deleteLater()
+
+            # fix order
+            _ensure_order(layout, desired_order)
+            self.set_compact_mode(self._compact_mode)
+        
+    def _setup_flow_layout(self):
+        """Replace the existing layout in frame_tasks with a FlowLayout for responsive grid."""
+        # Get the old layout
+        old_layout = self.frame_tasks.layout()
+        
+        # If there's an existing layout, remove it
+        if old_layout is not None:
+            # Remove all widgets from old layout first
+            while old_layout.count():
+                item = old_layout.takeAt(0)
+                if item.widget():
+                    item.widget().setParent(None)  # Don't delete, just unparent
+            
+            # Delete the old layout
+            QWidget().setLayout(old_layout)
+        
+        # Create and set new FlowLayout
+        # h_spacing=10, v_spacing=10 gives a nice grid gap
+        flow_layout = FlowLayout(self.frame_tasks, margin=0, h_spacing=10, v_spacing=10)
+        self.frame_tasks.setLayout(flow_layout)
+    
+    def _setup_nk_polling(self):
+        """Poll for new .nk files every 10 seconds (with staggered start)."""
+        if not hasattr(self, 'shot_dir') or not self.shot_dir:
+            return
+        
+        shot_dir = self.filesIO.convert_path(self.shot_dir)
+        scripts_dir = Path(shot_dir) / "scripts"
+        
+        if not scripts_dir.exists():
+            # print(f"Scripts directory does not exist: {scripts_dir}")  # Debug only
+            return
+        
+        # Store the last known file AND modification time
+        self._last_nk_file = None
+        self._last_nk_mtime = None
+        
+        latest = self.filesIO.latest_nk(self.shot_dir)
+        if latest:
+            self._last_nk_file = latest.name
+            try:
+                self._last_nk_mtime = latest.stat().st_mtime
+            except:
+                pass
+        
+        # Create timer for checking new files
+        self._nk_poll_timer = QTimer(self)
+        self._nk_poll_timer.timeout.connect(self._check_for_new_nk)
+        
+        # Create timer for updating tooltip (every 30 seconds)
+        self._nk_tooltip_timer = QTimer(self)
+        self._nk_tooltip_timer.timeout.connect(self._update_nk_tooltip)
+        self._nk_tooltip_timer.start(30000)  # Update every 30 seconds
+        
+        # Start with random offset (0-9 seconds) to stagger timers across all shots
+        # This prevents all 100+ shots from checking at the exact same time
+        initial_delay = random.randint(0, 9000)
+        
+        # Safe callback that won't crash if widget is deleted
+        def safe_start_nk_timer():
+            try:
+                if hasattr(self, '_nk_poll_timer') and self._nk_poll_timer:
+                    self._nk_poll_timer.start(10000)
+            except (RuntimeError, AttributeError):
+                pass  # Widget was deleted, ignore
+        
+        QTimer.singleShot(initial_delay, safe_start_nk_timer)
+        
+        # Set initial tooltip
+        self._update_nk_tooltip()
+        
+        # Debug: uncomment to see polling setup
+        # print(f"✓ Polling .nk files every 10s (starting in {initial_delay/1000:.1f}s) for: {scripts_dir}")
+
+    def _update_nk_tooltip(self):
+        """Update the tooltip to show how long ago the .nk file was modified."""
+        self._set_nuke_button_tooltip()
+    
+    def _format_time_ago(self, timestamp):
+        """Format a timestamp as 'X mins/hours/days ago'."""
+        import time
+        now = time.time()
+        diff_seconds = now - timestamp
+        
+        if diff_seconds < 60:
+            return "just now"
+        elif diff_seconds < 3600:  # Less than 1 hour
+            mins = int(diff_seconds / 60)
+            return f"{mins} min{'s' if mins != 1 else ''} ago"
+        elif diff_seconds < 86400:  # Less than 1 day
+            hours = int(diff_seconds / 3600)
+            return f"{hours} hour{'s' if hours != 1 else ''} ago"
+        else:  # 1 day or more
+            days = int(diff_seconds / 86400)
+            return f"{days} day{'s' if days != 1 else ''} ago"
+    
+    def _on_open_nuke_clicked(self, nk_path):
+        """Open the shot .nk file directly or delegate to lock-aware handler."""
+        if not nk_path:
+            return
+
+        open_handler = getattr(self, "_nuke_open_handler", None)
+        if callable(open_handler):
+            open_handler(self, str(nk_path))
+            return
+
+        self.filesIO.open_file(str(nk_path))
+    def _check_for_new_nk(self):
+        """Check if a new .nk file has appeared or been modified."""
+        try:
+            latest_nk = self.filesIO.latest_nk(self.shot_dir)
+            
+            if not latest_nk:
+                if self._last_nk_file is not None:
+                    self._last_nk_file = None
+                    self._last_nk_mtime = None
+                    self.btn_open_nuke.setProperty("file_path", None)  # Clear stored path
+                    self._set_nuke_button_label()
+                    self._set_nuke_button_tooltip()
+                return
+            
+            current_file = latest_nk.name
+            current_mtime = None
+            try:
+                current_mtime = latest_nk.stat().st_mtime
+            except:
+                pass
+            
+            # Check if file changed (name OR modification time)
+            file_changed = (self._last_nk_file != current_file)
+            file_modified = (self._last_nk_mtime != current_mtime) if (self._last_nk_mtime and current_mtime) else False
+            
+            if file_changed or file_modified:
+                # Debug: uncomment to see file changes
+                # if file_changed:
+                #     print(f"🆕 New .nk file detected: {self._last_nk_file} → {current_file}")
+                # else:
+                #     print(f"📝 .nk file updated: {current_file}")
+                
+                # Store file path on button for context menu
+                self.btn_open_nuke.setProperty("file_path", str(latest_nk))
+                self.refresh_lock_state_from_data()
+                self._set_nuke_button_label()
+                
+                # Reconnect button (disconnect old connection first)
+                try:
+                    self.btn_open_nuke.clicked.disconnect()
+                except:
+                    pass
+                
+                # Capture latest_nk in closure to avoid stale reference
+                nk_path = latest_nk
+                self.btn_open_nuke.clicked.connect(
+                    lambda checked=False, path=nk_path: self._on_open_nuke_clicked(path)
+                )
+                
+                # Visual feedback (green flash)
+                self._flash_button_green(self.btn_open_nuke)
+                
+                # Update tracking variables
+                self._last_nk_file = current_file
+                self._last_nk_mtime = current_mtime
+                
+                # Update tooltip immediately
+                self._update_nk_tooltip()
+                
+        except Exception as e:
+            pass  # Silent fail - could log to file if needed
+
+    def _setup_render_polling(self):
+        """Poll for new render files every 10 seconds (with staggered start)."""
+        if not hasattr(self, 'shot_dir') or not self.shot_dir:
+            return
+        
+        shot_dir = self.filesIO.convert_path(self.shot_dir)
+        renders_dir = Path(shot_dir) / "renders" / "comp"
+        
+        if not renders_dir.exists():
+            # print(f"Renders directory does not exist: {renders_dir}")  # Debug only
+            return
+        
+        # Store last known render
+        self._last_render_file = None
+        self._last_render_mtime = None
+        
+        render_info = self.filesIO.latest_render_info(self.shot_dir)
+        if render_info:
+            self._last_render_file = render_info.get("render_relpath")
+            self._last_render_mtime = render_info.get("mtime")
+        
+        # Create timer for checking new files
+        self._render_poll_timer = QTimer(self)
+        self._render_poll_timer.timeout.connect(self._check_for_new_render)
+        
+        # Create timer for updating tooltip (every 30 seconds)
+        self._render_tooltip_timer = QTimer(self)
+        self._render_tooltip_timer.timeout.connect(self._update_render_tooltip)
+        self._render_tooltip_timer.start(30000)  # Update every 30 seconds
+        
+        # Staggered start (different offset than .nk to spread load even more)
+        initial_delay = random.randint(0, 9000)
+        
+        # Safe callback that won't crash if widget is deleted
+        def safe_start_render_timer():
+            try:
+                if hasattr(self, '_render_poll_timer') and self._render_poll_timer:
+                    self._render_poll_timer.start(10000)
+            except (RuntimeError, AttributeError):
+                pass  # Widget was deleted, ignore
+        
+        QTimer.singleShot(initial_delay, safe_start_render_timer)
+        
+        # Set initial tooltip
+        self._update_render_tooltip()
+        
+        # Debug: uncomment to see polling setup
+        # print(f"✓ Polling renders every 10s (starting in {initial_delay/1000:.1f}s) for: {renders_dir}")
+
+    def _update_render_tooltip(self):
+        """Update the tooltip to show how long ago the render file was modified."""
+        self._apply_compact_tooltips()
+
+    def _check_for_new_render(self):
+        """Check if a new render file has appeared."""
+        try:
+            render_info = self.filesIO.latest_render_info(self.shot_dir)
+
+            if not render_info:
+                if self._last_render_file is not None:
+                    self._last_render_file = None
+                    self._last_render_mtime = None
+                    self.btn_latest_render.setProperty("file_path", None)  # Clear stored path
+                    self.btn_latest_render.setProperty("render_relpath", None)
+                    self.btn_latest_render.setProperty("render_display", None)
+                    self.btn_latest_render.setProperty("render_type", None)
+                    self.btn_latest_render.setProperty("render_sequence_path", None)
+                    self.btn_latest_render.setProperty("render_dir", None)
+                    self.btn_latest_render.setProperty("render_version", None)
+                    self._set_render_button_text()
+                    self._apply_compact_tooltips()
+                return
+
+            render_path = render_info.get("render_path")
+            render_display = render_info.get("display_name", "No Render")
+            render_relpath = render_info.get("render_relpath")
+            render_sequence_path = render_info.get("sequence_path")
+            render_dir = render_info.get("render_dir")
+            render_version = render_info.get("version")
+            current_mtime = render_info.get("mtime")
+            render_id = render_relpath or render_display
+
+            # Check if changed
+            file_changed = (self._last_render_file != render_id)
+            file_modified = (self._last_render_mtime != current_mtime) if (self._last_render_mtime and current_mtime) else False
+            
+            if file_changed or file_modified:
+                # Debug: uncomment to see file changes
+                # if file_changed:
+                #     print(f"🎬 New render: {self._last_render_file} → {render_display}")
+                # else:
+                #     print(f"📝 Render updated: {render_display}")
+                
+                # Store file path on button for context menu
+                self.btn_latest_render.setProperty("file_path", render_path)
+                self.btn_latest_render.setProperty("render_relpath", render_relpath)
+                self.btn_latest_render.setProperty("render_display", render_display)
+                self.btn_latest_render.setProperty("render_type", render_info.get("type"))
+                self.btn_latest_render.setProperty("render_sequence_path", render_sequence_path)
+                self.btn_latest_render.setProperty("render_dir", render_dir)
+                self.btn_latest_render.setProperty("render_version", render_version)
+                self._set_render_button_text()
+                
+                # Reconnect button
+                try:
+                    self.btn_latest_render.clicked.disconnect()
+                except:
+                    pass
+                
+                # Capture in closure
+                rpath = render_path
+                self.btn_latest_render.clicked.connect(self._on_push_to_dvr_clicked)
+                
+                # Visual feedback
+                self._flash_button_green(self.btn_latest_render)
+                
+                # Update tracking
+                self._last_render_file = render_id
+                self._last_render_mtime = current_mtime
+                
+                # Update tooltip immediately
+                self._update_render_tooltip()
+                
+                # Update last_conform label color based on whether it matches new render
+                if hasattr(self, 'label_last_conform'):
+                    last_conform = self.data.get("last_conform") if self.data else None
+                    if last_conform and self._normalize_render_label(last_conform) == self._normalize_render_label(render_display):
+                        self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
+                    else:
+                        self.label_last_conform.setStyleSheet("")
+                
+                # Update API with new render name
+                if render_relpath:
+                    try:
+                        self._api.update_shot(self._shot_id, last_render=render_relpath)
+                        # Update local data to stay in sync
+                        if self.data:
+                            self.data['last_render'] = render_relpath
+                    except Exception as api_error:
+                        pass  # Silent fail - don't break polling on API error
+                
+        except Exception as e:
+            pass  # Silent fail - could log to file if needed
+
+    def _flash_button_green(self, button):
+        """Flash a button green for 2 seconds to show a file was detected."""
+        original_style = button.styleSheet()
+        button.setStyleSheet(original_style + " background-color: #4CAF50; font-weight: bold;")
+        QTimer.singleShot(2000, lambda: button.setStyleSheet(original_style))
+
+    # ==================== VIDEO PREVIEW METHODS ====================
+    
+    def _setup_video_preview_stack(self):
+        """Set up stacked widget for thumbnail/video switching on hover."""
+        if not HAS_MULTIMEDIA:
+            return
+            
+        # Get the parent of the thumbnail label
+        thumb_parent = self.label_thumbnail.parent()
+        thumb_layout = thumb_parent.layout() if thumb_parent else None
+        
+        # Create a stacked widget to hold thumbnail and video
+        self._preview_stack = QStackedWidget()
+        # Don't set fixed size here - let it be set when thumbnail loads
+        self._preview_stack.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
+        
+        # Create a container for the thumbnail
+        self._thumb_container = QWidget()
+        self._thumb_container.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
+        thumb_container_layout = QVBoxLayout(self._thumb_container)
+        thumb_container_layout.setContentsMargins(0, 0, 0, 0)
+        thumb_container_layout.setSpacing(0)
+        
+        # Move the thumbnail label into the container
+        if thumb_layout:
+            thumb_layout.removeWidget(self.label_thumbnail)
+        self.label_thumbnail.setParent(self._thumb_container)
+        thumb_container_layout.addWidget(self.label_thumbnail)
+        
+        # Create video widget - don't set fixed size yet
+        self._video_widget = QVideoWidget()
+        self._video_widget.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
+        
+        # Create media player
+        self._video_player = QMediaPlayer()
+        self._audio_output = QAudioOutput()
+        self._audio_output.setVolume(0.5)
+        self._video_player.setAudioOutput(self._audio_output)
+        self._video_player.setVideoOutput(self._video_widget)
+        self._video_player.setLoops(QMediaPlayer.Loops.Infinite)
+        
+        # Add to stack (thumbnail first, video second)
+        self._preview_stack.addWidget(self._thumb_container)  # Index 0
+        self._preview_stack.addWidget(self._video_widget)      # Index 1
+        self._preview_stack.setCurrentIndex(0)  # Show thumbnail by default
+        
+        # Add stack to the original layout
+        if thumb_layout:
+            thumb_layout.insertWidget(0, self._preview_stack)
+        
+        # Create preview indicator label
+        self._preview_indicator = QLabel("▶ Preview")
+        self._preview_indicator.setStyleSheet("""
+            QLabel {
+                background-color: rgba(0, 0, 0, 0.7);
+                color: #4CAF50;
+                padding: 2px 6px;
+                border-radius: 3px;
+                font-size: 10px;
+                font-weight: bold;
+            }
+        """)
+        self._preview_indicator.setParent(self._thumb_container)
+        self._preview_indicator.hide()
+        
+        # Install event filter for hover detection
+        self._preview_stack.installEventFilter(self)
+    
+    def _position_preview_indicator(self):
+        """Position the preview indicator at bottom-left of thumbnail."""
+        if hasattr(self, '_preview_indicator') and self._preview_indicator:
+            self._preview_indicator.adjustSize()
+            # Position at bottom-left with small margin
+            y_pos = self.label_thumbnail.height() - self._preview_indicator.height() - 5
+            self._preview_indicator.move(5, y_pos)
+    
+    def eventFilter(self, obj, event):
+        """Handle hover events for video preview."""
+        if not HAS_MULTIMEDIA:
+            return super().eventFilter(obj, event)
+            
+        if hasattr(self, '_preview_stack') and obj == self._preview_stack:
+            if event.type() == QEvent.Type.Enter:
+                self._on_preview_hover_enter()
+            elif event.type() == QEvent.Type.Leave:
+                self._on_preview_hover_leave()
+        return super().eventFilter(obj, event)
+    
+    def _on_preview_hover_enter(self):
+        """Start video playback on hover."""
+        if not self._has_preview or not self._preview_video_path:
+            return
+        if not HAS_MULTIMEDIA or not self._video_player:
+            return
+            
+        try:
+            # Set video source and play
+            self._video_player.setSource(QUrl.fromLocalFile(self._preview_video_path))
+            self._preview_stack.setCurrentIndex(1)  # Show video
+            self._video_player.play()
+        except Exception as e:
+            pass  # Silent fail
+    
+    def _on_preview_hover_leave(self):
+        """Stop video and show thumbnail on leave."""
+        if not HAS_MULTIMEDIA or not self._video_player:
+            return
+            
+        try:
+            self._video_player.stop()
+            self._preview_stack.setCurrentIndex(0)  # Show thumbnail
+        except Exception as e:
+            pass  # Silent fail
+    
+    def _setup_preview_polling(self):
+        """Poll for preview videos and update API when new one found."""
+        if not hasattr(self, 'shot_dir') or not self.shot_dir:
+            #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: No shot_dir, skipping preview polling")
+            return
+        
+        #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: Setting up preview polling for {self.shot_dir}")
+        
+        # Store last known preview version for change detection
+        # Initialize to None - let _update_preview_from_data set it from API data
+        # This way polling will detect if filesystem has a newer version than API
+        self._last_preview_version = None
+        
+        # Create timer for checking new files
+        self._preview_poll_timer = QTimer(self)
+        self._preview_poll_timer.timeout.connect(self._check_for_new_preview)
+        
+        # Staggered start
+        initial_delay = random.randint(0, 9000)
+        
+        def safe_start_preview_timer():
+            try:
+                if hasattr(self, '_preview_poll_timer') and self._preview_poll_timer:
+                    self._preview_poll_timer.start(10000)
+            except (RuntimeError, AttributeError):
+                pass
+        
+        QTimer.singleShot(initial_delay, safe_start_preview_timer)
+    
+    def _extract_version(self, filename):
+        """Extract version number from filename like sho010_v01.mp4 -> 1"""
+        if not filename:
+            return None
+        import re
+        match = re.search(r'_v(\d+)\.mp4$', filename, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        return None
+    
+    def _check_for_new_preview(self):
+        """Check if a new preview video has appeared and update API if found."""
+        try:
+            preview_path, preview_name = self.filesIO.latest_preview(self.shot_dir)
+            
+            if not preview_path:
+                #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: No preview found at {self.shot_dir}/renders/precomp/previews/")
+                return
+            
+            current_version = self._extract_version(preview_name)
+            
+            #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: Checking - file={preview_name}, current_version={current_version}, last_version={self._last_preview_version}")
+            
+            # Check if version is higher OR if we have a different file
+            should_update = False
+            if self._last_preview_version is None and current_version is not None:
+                should_update = True
+                #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: First preview found")
+            elif current_version is not None and self._last_preview_version is not None:
+                if current_version > self._last_preview_version:
+                    should_update = True
+                    #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: Higher version found: v{self._last_preview_version} -> v{current_version}")
+            
+            # Also check if the actual file path changed (regardless of version parsing)
+            if not should_update and preview_path and self._preview_video_path:
+                if str(preview_path) != self._preview_video_path:
+                    should_update = True
+                    #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: Different preview file detected")
+            
+            if should_update:
+                # Update tracking
+                self._last_preview_version = current_version
+                
+                # Immediately update local playback path so hover works right away
+                self._preview_video_path = str(preview_path)
+                self._has_preview = True
+                if hasattr(self, '_preview_indicator'):
+                    self._preview_indicator.show()
+                    self._position_preview_indicator()
+                
+                # Update API with preview path
+                relative_preview = f"renders/precomp/previews/{preview_name}"
+                #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: UPDATING API with preview_video={relative_preview}")
+                
+                try:
+                    result = self._api.update_shot(self._shot_id, preview_video=relative_preview)
+                    #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: API update SUCCESS")
+                except Exception as api_error:
+                    #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: API update FAILED - {api_error}")
+                    pass
+            else:
+                #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: No version change, skipping API update")
+                pass
+                    
+        except Exception as e:
+            #print(f"[PREVIEW DEBUG] Shot {self._shot_id}: EXCEPTION in _check_for_new_preview: {e}")
+            pass
+
+    def _update_preview_from_data(self, preview_video: str | None):
+        """Update preview video state from API data."""
+        if not HAS_MULTIMEDIA:
+            return
+            
+        if preview_video:
+            # Build full path from base_path + relative preview path
+            full_path = Path(self.filesIO.convert_path(self.shot_dir)) / preview_video
+            
+            if full_path.exists():
+                self._preview_video_path = str(full_path)
+                self._has_preview = True
+                
+                # Sync version tracking from API data to prevent re-detection
+                preview_name = Path(preview_video).name
+                api_version = self._extract_version(preview_name)
+                if api_version is not None:
+                    # Only update if API has a higher or equal version
+                    if self._last_preview_version is None or api_version >= self._last_preview_version:
+                        self._last_preview_version = api_version
+                
+                # Show indicator
+                if hasattr(self, '_preview_indicator'):
+                    self._preview_indicator.show()
+                    self._position_preview_indicator()
+            else:
+                self._preview_video_path = None
+                self._has_preview = False
+                if hasattr(self, '_preview_indicator'):
+                    self._preview_indicator.hide()
+        else:
+            self._preview_video_path = None
+            self._has_preview = False
+            if hasattr(self, '_preview_indicator'):
+                self._preview_indicator.hide()
+    
+    def _update_preview_stack_size(self):
+        """Update video widget and stack size when thumbnail size changes."""
+        if not HAS_MULTIMEDIA:
+            return
+        if hasattr(self, '_preview_stack') and self._preview_stack:
+            size = self.label_thumbnail.size()
+            self._preview_stack.setFixedSize(size)
+            if hasattr(self, '_thumb_container') and self._thumb_container:
+                self._thumb_container.setFixedSize(size)
+            if hasattr(self, '_video_widget') and self._video_widget:
+                self._video_widget.setFixedSize(size)
+            self._position_preview_indicator()
+
+    # ==================== END VIDEO PREVIEW METHODS ====================
+        
+    def closeEvent(self, event):
+        """Stop polling timers when widget is closed."""
+        if hasattr(self, '_nk_poll_timer'):
+            self._nk_poll_timer.stop()
+        if hasattr(self, '_nk_tooltip_timer'):
+            self._nk_tooltip_timer.stop()
+        if hasattr(self, '_render_poll_timer'):
+            self._render_poll_timer.stop()
+        if hasattr(self, '_render_tooltip_timer'):
+            self._render_tooltip_timer.stop()
+        if hasattr(self, '_preview_poll_timer'):
+            self._preview_poll_timer.stop()
+        # Clean up video player
+        if hasattr(self, '_video_player') and self._video_player:
+            self._video_player.stop()
+        super().closeEvent(event)
+        
+    
+    def on_hide_btn(self):
+        """Toggle hide/unhide status of the shot."""
+        # Use current data stored on the instance, not stale parameter
+        current_hidden = self.data.get("hidden", False)
+        
+        # Toggle the hidden state
+        new_hidden = not current_hidden
+        
+        # Update in database
+        try:
+            updated_data = self._api.update_shot(shot_id=self._shot_id, hidden=new_hidden)
+            # If API returns updated data, use it
+            if updated_data:
+                self.update_from_data(updated_data)
+            else:
+                # Otherwise update local data and UI manually
+                self.data["hidden"] = new_hidden
+                self._set_hide_button_label()
+        except Exception as e:
+            pass  # Silent fail - could log to file if needed  
+
+
+    # NEW: minimal slot to create and append a task
+    def on_colour_btn(self, colour):
+        """Handle color button clicks - applies color immediately and updates database."""
+        # Apply color immediately using centralized color map
+        self._apply_colour_code(colour)
+        
+        # Update database (will be reflected when API data comes back)
+        self._api.update_shot(shot_id=self._shot_id, colour_code=colour)
+    
+    def _on_make_preview_clicked(self):
+        """Generate a preview video from the original clip using Nuke headless (always v01)."""
+        self._make_preview_from_source(source_type="original_clip")
+
+    def _on_make_precomp_exr_clicked(self):
+        """Generate a precomp EXR sequence from the original clip (v01, ACEScg)."""
+        self._make_precomp_exr_from_original()
+    
+    def _on_make_preview_from_render_clicked(self):
+        """Generate a preview video from the latest render using Nuke headless (matches render version)."""
+        self._make_preview_from_source(source_type="render")
+    
+    def _make_preview_from_source(self, source_type: str = "original_clip"):
+        """
+        Generate a preview video from either original clip or render.
+        
+        Args:
+            source_type: "original_clip" for v01, "render" to match render version
+        """
+        from PyQt6.QtWidgets import QMessageBox, QProgressDialog, QApplication
+        from PyQt6.QtCore import Qt
+        
+        # Import the preview generator from nuke_headless_tasks
+        try:
+            from nuke_headless_tasks import PreviewGenerator, extract_version_from_path, build_preview_output_path
+            from settings import get_settings_manager
+        except ImportError:
+            QMessageBox.warning(
+                self, "Make Preview",
+                "nuke_headless_tasks module not found.\n\nEnsure it's in the same directory as widgets.py"
+            )
+            return
+        
+        # Get source path and version based on source type
+        if source_type == "render":
+            # Get render path from button property
+            render_path = self.btn_latest_render.property("file_path")
+            render_type = self.btn_latest_render.property("render_type")
+            render_sequence_path = self.btn_latest_render.property("render_sequence_path")
+            render_version = self.btn_latest_render.property("render_version")
+            if not render_path:
+                QMessageBox.warning(self, "Make Preview", "No render file available.")
+                return
+            sequence_path = render_sequence_path if render_type == "exr" and render_sequence_path else render_path
+            input_path = self.filesIO.convert_path(sequence_path)
+            # Extract version from render filename or use stored version
+            version = render_version if render_version is not None else extract_version_from_path(sequence_path)
+            if version is None:
+                version = 1  # Fallback to v01 if no version found
+        else:
+            # Get original clip path
+            clip_path = self.label_original_clip.property("clip_path")
+            if not clip_path:
+                QMessageBox.warning(self, "Make Preview", "No original clip path available.")
+                return
+            input_path = self.filesIO.convert_path(clip_path)
+            version = 1  # Original clip always creates v01
+        
+        # Get shot metadata
+        shot_dir = self.filesIO.convert_path(self.shot_dir)
+        shot_name = self.data.get("title", "shot")
+        colourspace = self.data.get("colourspace", "sRGB")
+        fps = self.data.get("fps", 25)
+        
+        # Get job name for the project field on slate
+        job_name = self.data.get("job_name", "")
+        if not job_name:
+            job_name = self.data.get("job", {}).get("name", "") if isinstance(self.data.get("job"), dict) else ""
+        if not job_name:
+            job_name = "Project"
+        
+        settings = get_settings_manager()
+        preview_quality = settings.get("preview_quality", "medium")
+        overwrite_enabled = bool(settings.get("preview_overwrite", False))
+        nuke_exe_path = settings.get("nuke_exe_path", "")
+
+        # Create the preview generator
+        generator = PreviewGenerator(nuke_path=nuke_exe_path or None)
+        
+        # Validate Nuke is available
+        if not generator.nuke_available:
+            QMessageBox.warning(
+                self, "Make Preview",
+                "Nuke executable not found.\n\nPlease ensure Nuke is installed and available on this machine."
+            )
+            return
+        
+        # Validate input file
+        valid, error = generator.validate_input(input_path)
+        if not valid:
+            QMessageBox.warning(self, "Make Preview", error)
+            return
+        
+        # Pre-check for existing preview if overwrite is disabled
+        output_path, _, file_exists = build_preview_output_path(
+            shot_dir=shot_dir,
+            shot_name=shot_name,
+            version=version,
+        )
+        if file_exists and not overwrite_enabled:
+            QMessageBox.information(
+                self, "Make Preview",
+                f"Preview already exists:\n{output_path.name}\n\nEnable overwrite in Settings to replace it."
+            )
+            return
+
+        # Common parameters for preview generation
+        preview_params = dict(
+            input_path=input_path,
+            shot_dir=shot_dir,
+            shot_name=shot_name,
+            project=job_name,
+            artist="ShotBox",
+            colourspace=colourspace or "sRGB",
+            fps=fps,
+            quality=preview_quality,
+            version=version,
+        )
+        
+        # Show progress dialog for the actual render
+        progress = QProgressDialog(
+            f"Generating preview for {shot_name} v{version:02d}...\n\nThis may take a few minutes.",
+            "Cancel", 0, 0, self
+        )
+        progress.setWindowTitle("Make Preview")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+        
+        # Output callback for debug logging
+        def on_output(line):
+            print(line)
+            QApplication.processEvents()
+        
+        # Cancellation check callback
+        def check_cancelled():
+            QApplication.processEvents()
+            return progress.wasCanceled()
+        
+        # Generate the preview (with overwrite if needed)
+        result = generator.generate_preview_with_overwrite(
+            **preview_params,
+            on_output=on_output,
+            check_cancelled=check_cancelled,
+        )
+        
+        progress.close()
+        
+        if result.success:
+            # Update the shot's preview_video field in the database
+            try:
+                self._api.update_shot(self._shot_id, preview_video=result.relative_path)
+            except Exception as e:
+                print(f"Warning: Could not update preview_video in database: {e}")
+            
+            QMessageBox.information(
+                self, "Make Preview",
+                f"Preview created successfully!\n\n{result.output_path}"
+            )
+        elif "cancelled" in result.error.lower():
+            QMessageBox.information(self, "Make Preview", "Preview generation cancelled.")
+        else:
+            error_text = "\n".join(result.output_lines[-20:]) if result.output_lines else result.error
+            QMessageBox.warning(
+                self, "Make Preview",
+                f"Preview generation failed.\n\n{error_text}"
+            )
+
+    def _make_precomp_exr_from_original(self):
+        """Generate a precomp EXR sequence from the original clip using Nuke headless."""
+        from PyQt6.QtWidgets import QMessageBox, QProgressDialog, QApplication
+        from PyQt6.QtCore import Qt
+
+        try:
+            from nuke_headless_tasks import PreviewGenerator, build_precomp_exr_output_path
+            from settings import get_settings_manager
+        except ImportError:
+            QMessageBox.warning(
+                self, "Make Precomp EXR",
+                "nuke_headless_tasks module not found.\n\nEnsure it's in the same directory as widgets.py"
+            )
+            return
+
+        clip_path = self.label_original_clip.property("clip_path")
+        if not clip_path:
+            QMessageBox.warning(self, "Make Precomp EXR", "No original clip path available.")
+            return
+
+        input_path = self.filesIO.convert_path(clip_path)
+        shot_dir = self.filesIO.convert_path(self.shot_dir)
+        shot_name = self.data.get("title", "shot")
+        colourspace = self.data.get("colourspace", "sRGB")
+        fps = self.data.get("fps", 25)
+        version = 1
+
+        settings = get_settings_manager()
+        overwrite_enabled = bool(settings.get("preview_overwrite", False))
+        nuke_exe_path = settings.get("nuke_exe_path", "")
+
+        generator = PreviewGenerator(nuke_path=nuke_exe_path or None)
+
+        if not generator.nuke_available:
+            QMessageBox.warning(
+                self, "Make Precomp EXR",
+                "Nuke executable not found.\n\nPlease ensure Nuke is installed and available on this machine."
+            )
+            return
+
+        valid, error = generator.validate_input(input_path)
+        if not valid:
+            QMessageBox.warning(self, "Make Precomp EXR", error)
+            return
+
+        sequence_path, _, file_exists = build_precomp_exr_output_path(
+            shot_dir=shot_dir,
+            shot_name=shot_name,
+            version=version,
+        )
+        if file_exists and not overwrite_enabled:
+            QMessageBox.information(
+                self, "Make Precomp EXR",
+                f"Precomp EXR already exists:\n{sequence_path.parent}\n\nEnable overwrite in Settings to replace it."
+            )
+            return
+
+        progress = QProgressDialog(
+            f"Generating precomp EXR for {shot_name} v{version:02d}...\n\nThis may take a few minutes.",
+            "Cancel", 0, 0, self
+        )
+        progress.setWindowTitle("Make Precomp EXR")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.show()
+
+        def on_output(line):
+            print(line)
+            QApplication.processEvents()
+
+        def check_cancelled():
+            QApplication.processEvents()
+            return progress.wasCanceled()
+
+        result = generator.generate_precomp_exr_with_overwrite(
+            input_path=input_path,
+            shot_dir=shot_dir,
+            shot_name=shot_name,
+            colourspace=colourspace or "sRGB",
+            fps=fps,
+            version=version,
+            on_output=on_output,
+            check_cancelled=check_cancelled,
+        )
+
+        progress.close()
+
+        if result.success:
+            QMessageBox.information(
+                self, "Make Precomp EXR",
+                f"Precomp EXR created successfully!\n\n{result.output_dir}"
+            )
+        elif "cancelled" in result.error.lower():
+            QMessageBox.information(self, "Make Precomp EXR", "Precomp EXR generation cancelled.")
+        else:
+            error_text = "\n".join(result.output_lines[-20:]) if result.output_lines else result.error
+            QMessageBox.warning(
+                self, "Make Precomp EXR",
+                f"Precomp EXR generation failed.\n\n{error_text}"
+            )
+        
+    def _on_add_task_clicked(self):
+        if not self._shot_id:
+            return
+        dlg = TaskCreateDialog(self, api=self._api)
+        if dlg.exec() != QDialog.DialogCode.Accepted:
+            return
+        values = dlg.get_values()
+        try:
+            new_task = self._api.create_task(shot_id=self._shot_id, title=values.get("title", "New Task"))
+            update_payload = {}
+            if values.get("notes"):
+                update_payload["notes"] = values["notes"]
+            if values.get("status") is not None:
+                update_payload["status"] = values["status"]
+            if values.get("priority") is not None:
+                update_payload["priority"] = values["priority"]
+            if values.get("budget_hours") is not None:
+                update_payload["budget_hours"] = values["budget_hours"]
+            if values.get("artist") is not None:
+                update_payload["artist"] = values["artist"]
+            if update_payload:
+                new_task = self._api.update_task(new_task.get("id"), **update_payload)
+            layout = self.frame_tasks.layout()
+            layout.addWidget(TaskWidget(new_task))
+        except Exception as e:
+            print(f"[ShotCard] Add task failed: {e}")
+
+    def _on_add_note_clicked(self):
+        if not self._shot_id:
+            return
+        # start with current notes text
+        current = self.label_notes.text() or ""
+        text, ok = QInputDialog.getMultiLineText(self, "Add note", "Notes:", current)
+        if not ok:
+            return
+        new_note = (text or "").strip()
+        try:
+            updated = self._api.update_shot(self._shot_id, notes=new_note)
+            self.update_from_data(updated)
+        except Exception as e:
+            pass  # Silent fail
+        self.update_from_data(self.data)   
+
+    def _on_push_to_dvr_clicked(self):
+        """Push latest render to DaVinci Resolve and update last_conform field."""
+        # Get the current render path from button property
+        render_path = self.btn_latest_render.property("file_path")
+        render_type = self.btn_latest_render.property("render_type")
+        render_sequence_path = self.btn_latest_render.property("render_sequence_path")
+        render_dir = self.btn_latest_render.property("render_dir")
+        
+        if render_type == "exr":
+            dvr_path = render_dir or render_sequence_path or render_path
+        else:
+            dvr_path = render_path
+
+        if not dvr_path or dvr_path == "none":
+            return
+        
+        render_display = self.btn_latest_render.property("render_display")
+        if not render_display:
+            render_display = self.btn_latest_render.text()
+        if not render_display:
+            render_display = Path(render_path).name if render_path else None
+        
+        # Push to DaVinci Resolve - only update database if successful
+        success = self.filesIO.push2dvr(dvr_path)
+        
+        if success and self._shot_id and render_display:
+            try:
+                updated = self._api.update_shot(self._shot_id, last_conform=render_display)
+                # Update the label immediately
+                if hasattr(self, 'label_last_conform'):
+                    self.label_last_conform.setText(render_display)
+                    # Set green style since we just conformed the latest render
+                    self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
+                # Update local data
+                self.data['last_conform'] = render_display
+                self._apply_compact_tooltips()
+            except Exception as e:
+                pass  # Silent fail - DVR push already happened
+
+
+    def contextMenuEvent(self, event):
+        """Handle right-click context menu events."""
+        widget = self.childAt(event.pos())
+        
+        # Check if right-click was on btn_open_nuke or btn_latest_render
+        if widget is None:
+            return
+            
+        # Check if we clicked on one of our buttons
+        if widget == self.btn_open_nuke or widget == self.btn_latest_render:
+            menu = QMenu(self)
+            
+            if widget == self.btn_open_nuke:
+                # Get the nuke file path from button property
+                nk_path = self.btn_open_nuke.property("file_path")
+                if nk_path and nk_path != "none":
+                    open_location = menu.addAction("Open File Location")
+                    open_location.triggered.connect(lambda: self.filesIO.openFileLocation(str(nk_path)))
+                    
+                    copy_path = menu.addAction("Copy File Path")
+                    copy_path.triggered.connect(lambda: self._copy_to_clipboard(str(nk_path)))
+                    
+                    copy_name = menu.addAction("Copy File Name")
+                    # Extract filename from path
+                    filename = Path(nk_path).name if nk_path else "unknown"
+                    copy_name.triggered.connect(lambda: self._copy_to_clipboard(filename))
+                else:
+                    no_file = menu.addAction("No Nuke file found")
+                    no_file.setEnabled(False)
+            
+            elif widget == self.btn_latest_render:
+                # Get the render file path from button property
+                render_path = self.btn_latest_render.property("file_path")
+                if render_path and render_path != "none":
+                    open_location = menu.addAction("Open File Location")
+                    open_location.triggered.connect(lambda: self.filesIO.openFileLocation(render_path))
+                    
+                    copy_path = menu.addAction("Copy File Path")
+                    copy_path.triggered.connect(lambda: self._copy_to_clipboard(render_path))
+                    
+                    copy_name = menu.addAction("Copy File Name")
+                    # Extract filename from path
+                    filename = Path(render_path).name if render_path else "unknown"
+                    copy_name.triggered.connect(lambda: self._copy_to_clipboard(filename))
+                    
+                    open_file = menu.addAction("Open in Default Player")
+                    open_file.triggered.connect(lambda: self.filesIO.open_file(render_path))
+                    
+                    menu.addSeparator()
+                    
+                    make_preview = menu.addAction("Make Preview")
+                    make_preview.triggered.connect(self._on_make_preview_from_render_clicked)
+                else:
+                    no_file = menu.addAction("No render found")
+                    no_file.setEnabled(False)
+            
+            menu.exec(event.globalPos())
+        
+        # Check if right-click was on label_frame_range
+        elif hasattr(self, 'label_frame_range') and widget == self.label_frame_range:
+            menu = QMenu(self)
+            edit_duration = menu.addAction("Edit Duration")
+            edit_duration.triggered.connect(self._on_edit_duration_clicked)
+            menu.exec(event.globalPos())
+        
+        # Check if right-click was on label_original_clip
+        elif hasattr(self, 'label_original_clip') and widget == self.label_original_clip:
+            clip_path = self.label_original_clip.property("clip_path")
+            menu = QMenu(self)
+            
+            if clip_path:
+                open_location = menu.addAction("Open in Explorer")
+                open_location.triggered.connect(lambda: self.filesIO.openFileLocation(clip_path))
+                
+                copy_path = menu.addAction("Copy Path")
+                copy_path.triggered.connect(lambda: self._copy_to_clipboard(clip_path))
+                
+                copy_name = menu.addAction("Copy Filename")
+                clip_name = Path(clip_path).name
+                copy_name.triggered.connect(lambda: self._copy_to_clipboard(clip_name))
+                
+                menu.addSeparator()
+                
+                make_preview = menu.addAction("Make Preview")
+                make_preview.triggered.connect(self._on_make_preview_clicked)
+
+                make_precomp_exr = menu.addAction("Make Precomp EXR (ACEScg)")
+                make_precomp_exr.triggered.connect(self._on_make_precomp_exr_clicked)
+            else:
+                no_clip = menu.addAction("No clip path available")
+                no_clip.setEnabled(False)
+            
+            menu.exec(event.globalPos())
+    
+    def _copy_to_clipboard(self, text):
+        """Copy text to system clipboard."""
+        from PyQt6.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        clipboard.setText(str(text))
+        # Optional: uncomment for debugging
+        # print(f"Copied to clipboard: {text}")
+
+    def _on_edit_duration_clicked(self):
+        """Handle editing the shot duration via right-click on frame range label."""
+        current_duration = self.data.get("duration", 0)
+        try:
+            current_duration = int(current_duration) if current_duration else 0
+        except (ValueError, TypeError):
+            current_duration = 0
+        
+        new_duration, ok = QInputDialog.getInt(
+            self,
+            "Edit Duration",
+            "Enter shot duration (frames):",
+            value=current_duration,
+            min=1,
+            max=99999
+        )
+        
+        if ok and new_duration != current_duration:
+            try:
+                self._api.update_shot(self._shot_id, duration=new_duration)
+                # Update local data and label immediately
+                self.data['duration'] = new_duration
+                end_frame = 1000 + new_duration
+                self.label_frame_range.setText(f"1001-{end_frame}")
+            except Exception as e:
+                pass  # Silent fail
+
+
+    def _apply_thumb_scale(self):
+        if not self._thumb_orig:
+            return
+        target_width = self._current_thumb_target_width()
+        pixel_map = self._thumb_orig.scaledToWidth(
+            int(target_width),
+            Qt.TransformationMode.SmoothTransformation
+        )
+        self.label_thumbnail.setPixmap(pixel_map)
+        self.label_thumbnail.setFixedSize(pixel_map.size())
+        # Update video preview stack size to match
+        self._update_preview_stack_size()
+
+    def set_thumbnail_width(self, width: int):
+        self._thumb_target_width = max(1, int(width))
+        self._base_thumb_target_width = self._thumb_target_width
+        self._apply_thumb_scale()
+
+    def set_thumbnail(self, url: str | None):
+        if not url:
+            return
+        if url == self._thumb_sig and self._thumb_orig is not None:
+            # same image, just reapply scale in case width changed
+            self._apply_thumb_scale()
+            return
+        self._thumb_pending_url = url
+
+        def _on_loaded(pixmap: QPixmap | None) -> None:
+            try:
+                if self._thumb_pending_url != url:
+                    return
+                if pixmap is None:
+                    return
+                self._thumb_orig = pixmap
+                self._thumb_sig = url
+                self._apply_thumb_scale()
+            except RuntimeError:
+                return
+
+        ImageLoader.instance().load(url, _on_loaded)
+
+class TimelineFrame(QWidget):
+    def __init__(
+        self,
+        timeline=None,
+        show_hidden=False,
+        layout_mode="list",
+        card_spacing=8,
+        compact_mode=False,
+        nuke_open_handler=None,
+    ):
+        super().__init__()
+        timeline = timeline or {}
+        self.show_hidden = show_hidden
+        self._last_timeline = timeline  # keep a copy for refreshes
+        self._layout_mode = _normalize_layout_mode(layout_mode)
+        self._compact_mode = bool(compact_mode)
+        self._nuke_open_handler = nuke_open_handler
+        self.setObjectName(f"timeline-{timeline.get('id')}")
+
+        self.frame = QFrame()
+        self.frame.setFrameShape(QFrame.Shape.StyledPanel)
+
+        frame_layout = QVBoxLayout()
+        self.shots_layout = _create_shots_layout(self._layout_mode, card_spacing)
+        frame_layout.addLayout(self.shots_layout)
+        self.frame.setLayout(frame_layout)
+
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(self.frame)
+        self.setLayout(main_layout)
+        
+        self.update_from_data(timeline)
+    
+    def set_show_hidden(self, flag: bool):
+        """Update show_hidden flag. Visibility is handled by main.py _apply_filters."""
+        self.show_hidden = bool(flag)
+
+    def set_nuke_open_handler(self, handler):
+        self._nuke_open_handler = handler
+        for i in range(self.shots_layout.count()):
+            item = self.shots_layout.itemAt(i)
+            card = item.widget() if item else None
+            if isinstance(card, ShotCard):
+                card.set_nuke_open_handler(handler)
+
+    def update_from_data(self, timeline: dict):
+        """Update shot cards from timeline data. Does NOT manage visibility - that's handled by _apply_filters."""
+        self._last_timeline = timeline or self._last_timeline
+
+        # BUGFIX: Build existing dict and detect/remove duplicates in the same pass
+        existing = {}
+        duplicates_to_remove = []
+        
+        for i in range(self.shots_layout.count()):
+            item = self.shots_layout.itemAt(i)
+            if item is None:
+                continue
+            w = item.widget()
+            if w is not None and w.objectName():
+                name = w.objectName()
+                if name in existing:
+                    # Duplicate found - mark for removal
+                    duplicates_to_remove.append(w)
+                else:
+                    existing[name] = w
+        
+        # Remove any duplicates found
+        for dup_widget in duplicates_to_remove:
+            self.shots_layout.removeWidget(dup_widget)
+            dup_widget.deleteLater()
+        
+        desired_order = []
+
+        for shot in timeline.get("shots", []):
+            sid = shot.get("id")
+            if sid is None:
+                continue
+            name = f"shot-{sid}"
+            desired_order.append(name)
+            
+            if name in existing:
+                # Update existing widget data
+                existing[name].update_from_data(shot)
+                if self._nuke_open_handler is not None:
+                    existing[name].set_nuke_open_handler(self._nuke_open_handler)
+            else:
+                # Create new widget
+                card = ShotCard(shot)
+                card.setObjectName(name)
+                if self._nuke_open_handler is not None:
+                    card.set_nuke_open_handler(self._nuke_open_handler)
+                card.set_compact_mode(self._compact_mode)
+                self.shots_layout.addWidget(card)
+
+        # Remove any existing spacers (list mode adds one at the end)
+        for i in reversed(range(self.shots_layout.count())):
+            item = self.shots_layout.itemAt(i)
+            if isinstance(item, QSpacerItem):
+                self.shots_layout.removeItem(item)
+
+        # Add vertical spacer at the end for list mode only
+        if self._layout_mode == "list":
+            spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+            self.shots_layout.addItem(spacer)
+
+        # Remove stale widgets
+        for name, widget in list(existing.items()):
+            if name not in desired_order:
+                self.shots_layout.removeWidget(widget)
+                widget.deleteLater()
+
+        # Maintain order
+        _ensure_order(self.shots_layout, desired_order)
+        self.set_compact_mode(self._compact_mode)
+
+    def set_layout_mode(self, layout_mode: str, card_spacing: int | None = None):
+        """Switch the shots layout between list and grid, preserving shot cards."""
+        new_mode = _normalize_layout_mode(layout_mode)
+        if new_mode == self._layout_mode:
+            if card_spacing is not None:
+                self.shots_layout.setSpacing(max(0, int(card_spacing)))
+            return
+
+        existing_widgets = []
+        for i in range(self.shots_layout.count()):
+            item = self.shots_layout.itemAt(i)
+            if item and item.widget():
+                existing_widgets.append(item.widget())
+
+        while self.shots_layout.count():
+            item = self.shots_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(self)
+
+        frame_layout = self.frame.layout()
+        if frame_layout:
+            frame_layout.removeItem(self.shots_layout)
+
+        QWidget().setLayout(self.shots_layout)
+        self.shots_layout = _create_shots_layout(new_mode, card_spacing)
+        if frame_layout:
+            frame_layout.addLayout(self.shots_layout)
+
+        for widget in existing_widgets:
+            self.shots_layout.addWidget(widget)
+
+        if new_mode == "list":
+            spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
+            self.shots_layout.addItem(spacer)
+
+        self._layout_mode = new_mode
+
+    def set_compact_mode(self, enabled: bool) -> None:
+        self._compact_mode = bool(enabled)
+        for i in range(self.shots_layout.count()):
+            item = self.shots_layout.itemAt(i)
+            if not item:
+                continue
+            card = item.widget()
+            if isinstance(card, ShotCard):
+                card.set_compact_mode(self._compact_mode)
+
+class JobBtn(QPushButton):
+    def __init__(self, title="Title", data=None, frame_layout=None, on_activate=None):
+        super().__init__(title)
+        self.title = title
+        self.data = data or {}
+        self.frame_layout = frame_layout
+        self.on_activate = on_activate
+        self.clicked.connect(self.on_click)
+
+    def on_click(self):
+        if self.on_activate:
+            self.on_activate(self.data)

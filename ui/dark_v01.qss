@@ -1,0 +1,1408 @@
+/* 
+ShotBox Merged Stylesheet
+Base: Original dark theme with orange accents
+Enhanced: Modern Casio-inspired card hover effects and cleaner typography
+Updated: Shot color indicator strip + Task status color coding
+*/
+
+/* === GLOBAL === */
+QWidget {
+    background-color: #1A1D23;
+    color: #D4D4D4;
+    font-family: "Consolas", "JetBrainsMono", "SF Mono", monospace;
+    font-size: 12px;
+}
+
+/* === TABS === */
+QTabWidget::pane {
+    border: 2px solid #2F3542;
+    background-color: #1A1D23;
+    border-radius: 0px;
+}
+
+QTabBar {
+    background-color: #1A1D23;
+}
+
+QTabBar::tab {
+    background-color: #2F3542;
+    color: #9CA3AF;
+    padding: 8px 16px;
+    border: 2px solid #404754;
+    border-bottom: none;
+    border-radius: 0px;
+    margin-right: 2px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+QTabBar::tab:selected {
+    background-color: #FF6B35;
+    color: #FFFFFF;
+    border-color: #D85A28;
+}
+
+QTabBar::tab:hover:!selected {
+    background-color: #404754;
+    color: #FFFFFF;
+}
+
+QTabBar::tab:!selected {
+    margin-top: 2px;
+}
+
+/* === BUTTONS (Base) === */
+QPushButton {
+    background-color: #2F3542;
+    color: #D4D4D4;
+    border: 2px solid #404754;
+    border-radius: 2px;
+    padding: 6px 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+QPushButton:hover {
+    background-color: #FF6B35;
+    border-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+QPushButton:pressed {
+    background-color: #D85A28;
+    border-color: #D85A28;
+}
+
+QPushButton:disabled {
+    background-color: #252931;
+    border-color: #2F3542;
+    color: #6B7280;
+}
+
+/* Flat Buttons */
+QPushButton[flat="true"] {
+    background-color: transparent;
+    border: none;
+    color: #D4D4D4;
+    padding: 6px 12px;
+    font-size: 12px;
+    text-transform: none;
+}
+
+QPushButton[flat="true"]:hover {
+    color: #FF6B35;
+    background-color: rgba(255, 107, 53, 0.1);
+}
+
+QPushButton[flat="true"]:pressed {
+    color: #D85A28;
+    background-color: rgba(255, 107, 53, 0.15);
+}
+
+QPushButton[flat="true"]:disabled {
+    color: #6B7280;
+    background-color: transparent;
+}
+
+/* === SHOT CARD (Main Container) === */
+/* frame_7 is the outer container for shot cards */
+QFrame#frame_7 {
+    background-color: #1E2228;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+}
+
+QFrame#frame_7:hover {
+    border-color: #FF6B35;
+}
+
+/* Content container inside shot card */
+QFrame#content_container {
+    background-color: transparent;
+    border: none;
+}
+
+/* Inner frames should be transparent */
+QFrame#frame_5,
+QFrame#frame_4,
+QFrame#frame_6,
+QFrame#frame_2,
+QFrame#shot_btns,
+QFrame#frame {
+    background-color: transparent;
+    border: none;
+}
+
+/* ============================================
+   SHOT COLOR INDICATOR STRIP (12px left bar)
+   ============================================ */
+QFrame#color_indicator {
+    border: none;
+    border-top-left-radius: 2px;
+    border-bottom-left-radius: 2px;
+}
+
+/* Default/None color */
+QFrame#color_indicator[shot_color="none"] {
+    background-color: #2F3542;
+}
+
+/* Green */
+QFrame#color_indicator[shot_color="green"] {
+    background-color: #81c784;
+}
+
+/* Amber */
+QFrame#color_indicator[shot_color="amber"] {
+    background-color: #ffb74d;
+}
+
+/* Red */
+QFrame#color_indicator[shot_color="red"] {
+    background-color: #e57373;
+}
+
+/* Thumbnail */
+QLabel#label_thumbnail {
+    background-color: #141619;
+    color: #6B7280;
+    border: 2px solid #2F3542;
+    font-size: 10px;
+}
+
+/* Shot Name */
+QLabel#label_shot {
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: bold;
+    background-color: transparent;
+    letter-spacing: 1px;
+}
+
+/* Shot Notes */
+QLabel#label_notes {
+    color: #9CA3AF;
+    font-size: 11px;
+    background-color: transparent;
+}
+
+/* Tasks Label */
+QLabel#label_4 {
+    color: #6B7280;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    background-color: transparent;
+    text-transform: uppercase;
+}
+
+/* === TASK CARD === */
+/* task_frame is the styled container inside TaskWidget */
+/* ============================================
+   TASK PLANNING BUTTONS (Priority + Budget)
+   ============================================ */
+
+QPushButton#btn_priority,
+QPushButton#btn_budget_hours {
+    background-color: #1E2228;
+    color: #D4D4D4;
+    border: 1px solid #2F3542;
+    border-radius: 2px;
+
+    padding: 2px 6px;
+    font-size: 9px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+QPushButton#btn_priority:hover,
+QPushButton#btn_budget_hours:hover {
+    border-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+/* Priority should feel slightly more “important” */
+QPushButton#btn_priority {
+    font-weight: bold;
+}
+
+/* Budget should feel informational, not action-heavy */
+QPushButton#btn_budget_hours {
+    font-weight: normal;
+    color: #9CA3AF;
+}
+
+QPushButton#btn_budget_hours:hover {
+    color: #D4D4D4;
+}
+
+QFrame#task_frame {
+    background-color: #252931;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+}
+
+QFrame#task_frame:hover {
+    background-color: #2A3038;
+    border-color: #FF6B35;
+}
+
+/* Task title button */
+QPushButton#btn_task_title {
+    background-color: transparent;
+    border: none;
+    color: #FFFFFF;
+    font-size: 10px;
+    font-weight: bold;
+    text-align: left;
+    padding: 1px 2px;
+    letter-spacing: 0.5px;
+}
+
+QPushButton#btn_task_title:hover {
+    color: #FF6B35;
+    background-color: transparent;
+}
+
+/* Task notes button */
+QPushButton#btn_notes {
+    background-color: transparent;
+    border: none;
+    color: #9CA3AF;
+    font-size: 9px;
+    text-align: left;
+    padding: 1px 2px;
+    text-transform: none;
+}
+
+QPushButton#btn_notes:hover {
+    color: #D4D4D4;
+    background-color: transparent;
+}
+
+QFrame#task_drag_handle {
+    background-color: #1E2228;
+    border: 1px dashed #404754;
+    border-radius: 2px;
+}
+
+QLabel#task_drag_label {
+    color: #9CA3AF;
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+/* ============================================
+   TASK STATUS BUTTON - COLOR CODED
+   ============================================ */
+
+/* Base status button style */
+QPushButton#btn_status {
+    border: none;
+    border-radius: 2px;
+    padding: 3px 8px;
+    font-size: 9px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+
+
+/* Unassigned - Grey */
+QPushButton#btn_status[status="unassigned"] {
+    background-color: #4a4a4a;
+    color: #999999;
+}
+
+QPushButton#btn_status[status="unassigned"]:hover {
+    background-color: #5a5a5a;
+}
+
+/* Assigned - Blue */
+QPushButton#btn_status[status="assigned"] {
+    background-color: #3d5a80;
+    color: #a8c5e2;
+}
+
+QPushButton#btn_status[status="assigned"]:hover {
+    background-color: #4a6a90;
+}
+
+/* Not Started - Purple */
+QPushButton#btn_status[status="not_started"] {
+    background-color: #5a4a6a;
+    color: #c4a8d4;
+}
+
+QPushButton#btn_status[status="not_started"]:hover {
+    background-color: #6a5a7a;
+}
+
+/* In Progress - Bright Blue */
+QPushButton#btn_status[status="in_progress"] {
+    background-color: #4a6a8a;
+    color: #8ac4f4;
+}
+
+QPushButton#btn_status[status="in_progress"]:hover {
+    background-color: #5a7a9a;
+}
+
+/* Waiting for Approval - Yellow/Gold */
+QPushButton#btn_status[status="waiting_for_approval"] {
+    background-color: #7a6a3a;
+    color: #e8d48a;
+}
+
+QPushButton#btn_status[status="waiting_for_approval"]:hover {
+    background-color: #8a7a4a;
+}
+
+/* Approved - Green */
+QPushButton#btn_status[status="approved"] {
+    background-color: #3a6a4a;
+    color: #8ad4a8;
+}
+
+QPushButton#btn_status[status="approved"]:hover {
+    background-color: #4a7a5a;
+}
+
+/* Done - Darker Green */
+QPushButton#btn_status[status="done"] {
+    background-color: #2a5a3a;
+    color: #6ac48a;
+}
+
+QPushButton#btn_status[status="done"]:hover {
+    background-color: #3a6a4a;
+}
+
+/* Rejected - Red */
+QPushButton#btn_status[status="rejected"] {
+    background-color: #6a3a3a;
+    color: #e8a8a8;
+}
+
+QPushButton#btn_status[status="rejected"]:hover {
+    background-color: #7a4a4a;
+}
+
+/* Assigned button */
+QPushButton#btn_assigned {
+    background-color: #1E2228;
+    color: #D4D4D4;
+    border: 1px solid #2F3542;
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-size: 9px;
+}
+
+QPushButton#btn_assigned:hover {
+    border-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+/* Hide task button */
+QPushButton#btn_hide_task {
+    background-color: transparent;
+    border: 1px solid #2F3542;
+    color: #6B7280;
+    border-radius: 2px;
+    padding: 0px;
+    font-size: 9px;
+    font-weight: bold;
+}
+
+QPushButton#btn_hide_task:hover {
+    background-color: #2F3542;
+    color: #D4D4D4;
+    border-color: #404754;
+}
+
+/* Delete task button */
+QPushButton#btn_delete_task {
+    background-color: transparent;
+    border: 1px solid #2F3542;
+    color: #6B7280;
+    border-radius: 2px;
+    padding: 0px;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton#btn_delete_task:hover {
+    color: #D14D4D;
+    border-color: #D14D4D;
+}
+
+/* === COLOR BUTTONS === */
+QPushButton#btn_colour_none {
+    background-color: #6B7280;
+    border: 2px solid #4B5563;
+    border-radius: 2px;
+}
+
+QPushButton#btn_colour_none:hover {
+    border-color: #9CA3AF;
+}
+
+QPushButton#btn_green {
+    background-color: #81c784;
+    border: 2px solid #66bb6a;
+    border-radius: 2px;
+}
+
+QPushButton#btn_green:hover {
+    border-color: #a5d6a7;
+}
+
+QPushButton#btn_amber {
+    background-color: #ffb74d;
+    border: 2px solid #ffa726;
+    border-radius: 2px;
+}
+
+QPushButton#btn_amber:hover {
+    border-color: #ffcc80;
+}
+
+QPushButton#btn_red {
+    background-color: #e57373;
+    border: 2px solid #ef5350;
+    border-radius: 2px;
+}
+
+QPushButton#btn_red:hover {
+    border-color: #ef9a9a;
+}
+
+/* Hide Shot Button */
+QPushButton#btn_hide_shot {
+    background-color: transparent;
+    border: 2px solid #2F3542;
+    color: #6B7280;
+    border-radius: 2px;
+    padding: 4px 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+QPushButton#btn_hide_shot:hover {
+    background-color: #2F3542;
+    color: #D4D4D4;
+    border-color: #404754;
+}
+
+/* Add Task Button */
+QPushButton#bnt_addTask {
+    background-color: transparent;
+    border: 2px solid #2F3542;
+    color: #9CA3AF;
+    border-radius: 2px;
+    padding: 4px 12px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+QPushButton#bnt_addTask:hover {
+    border-color: #FF6B35;
+    color: #FF6B35;
+    background-color: #1E2228;
+}
+
+/* Edit Notes Button */
+QPushButton#btn_edit_shot_notes {
+    background-color: transparent;
+    border: none;
+    color: #9CA3AF;
+    font-size: 14px;
+    padding: 0px 4px;
+}
+
+QPushButton#btn_edit_shot_notes:hover {
+    color: #FF6B35;
+}
+
+/* Action Buttons Row */
+QPushButton#btn_open_nuke,
+QPushButton#btn_open_assets,
+QPushButton#btn_open_precomp,
+QPushButton#btn_latest_render {
+    background-color: #2F3542;
+    color: #D4D4D4;
+    border: 2px solid #404754;
+    border-radius: 2px;
+    padding: 5px 10px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+QPushButton#btn_open_nuke:hover,
+QPushButton#btn_open_assets:hover,
+QPushButton#btn_open_precomp:hover,
+QPushButton#btn_latest_render:hover {
+    background-color: #404754;
+    border-color: #FF6B35;
+}
+
+QPushButton#btn_open_nuke[lock_state="foreign_active"] {
+    background-color: #6E2424;
+    border-color: #B13A3A;
+    color: #FFEAEA;
+}
+
+QPushButton#btn_open_nuke[lock_state="mine"] {
+    background-color: #7A6323;
+    border-color: #B8953B;
+    color: #FFF8D6;
+}
+
+QPushButton#btn_open_nuke[lock_state="foreign_active"]:hover,
+QPushButton#btn_open_nuke[lock_state="foreign_active"]:pressed {
+    background-color: #872F2F;
+    border-color: #D24C4C;
+    color: #FFFFFF;
+}
+
+QPushButton#btn_open_nuke[lock_state="mine"]:hover,
+QPushButton#btn_open_nuke[lock_state="mine"]:pressed {
+    background-color: #92772A;
+    border-color: #D9AF44;
+    color: #FFFFFF;
+}
+
+/* === TASKS CONTAINER === */
+QFrame#frame_tasks {
+    background-color: transparent;
+    border: none;
+}
+
+/* === CHECKBOXES === */
+QCheckBox {
+    color: #D4D4D4;
+    font-size: 11px;
+    spacing: 6px;
+}
+
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+    background-color: #1E2228;
+}
+
+QCheckBox::indicator:checked {
+    background-color: #FF6B35;
+    border-color: #D85A28;
+}
+
+QCheckBox::indicator:hover {
+    border-color: #FF6B35;
+}
+
+/* === COMBO BOXES === */
+QComboBox {
+    background-color: #2F3542;
+    color: #D4D4D4;
+    border: 2px solid #404754;
+    border-radius: 2px;
+    padding: 6px 10px;
+    font-size: 11px;
+}
+
+QComboBox:hover {
+    border-color: #FF6B35;
+}
+
+QComboBox::drop-down {
+    border: none;
+    background-color: #404754;
+    width: 20px;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #2F3542;
+    border: 2px solid #FF6B35;
+    selection-background-color: #FF6B35;
+    selection-color: #FFFFFF;
+    color: #D4D4D4;
+}
+
+QComboBox QAbstractItemView::item {
+    padding: 6px;
+}
+
+QComboBox QAbstractItemView::item:hover {
+    background-color: #404754;
+}
+
+/* === INPUT FIELDS === */
+QLineEdit {
+    background-color: #252931;
+    color: #D4D4D4;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+QLineEdit:focus {
+    border-color: #FF6B35;
+    background-color: #2A3038;
+}
+
+QLineEdit::placeholder {
+    color: #6B7280;
+}
+
+/* === SCROLLBARS === */
+QScrollBar:vertical {
+    background-color: #1A1D23;
+    width: 12px;
+    border: 1px solid #2F3542;
+}
+
+QScrollBar::handle:vertical {
+    background-color: #404754;
+    border: 1px solid #4F5665;
+    border-radius: 2px;
+    min-height: 20px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background-color: #FF6B35;
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+QScrollBar:horizontal {
+    background-color: #1A1D23;
+    height: 12px;
+    border: 1px solid #2F3542;
+}
+
+QScrollBar::handle:horizontal {
+    background-color: #404754;
+    border: 1px solid #4F5665;
+    border-radius: 2px;
+    min-width: 20px;
+}
+
+QScrollBar::handle:horizontal:hover {
+    background-color: #FF6B35;
+}
+
+/* === PROGRESS BARS === */
+QProgressBar {
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+    text-align: center;
+    background-color: #1E2228;
+}
+
+QProgressBar::chunk {
+    background-color: #FF6B35;
+}
+
+/* === SLIDERS === */
+QSlider::groove:horizontal {
+    border: 1px solid #2F3542;
+    background: #1E2228;
+    height: 6px;
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal {
+    background: #FF6B35;
+    border: 2px solid #D85A28;
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+}
+
+QSlider::handle:horizontal:hover {
+    background: #FF8357;
+}
+
+/* === TABLE VIEW === */
+QTableWidget {
+    background-color: #1E2228;
+    border: 2px solid #2F3542;
+    gridline-color: #2F3542;
+}
+
+QTableWidget::item {
+    color: #D4D4D4;
+    padding: 6px;
+}
+
+QTableWidget::item:selected {
+    background-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+/* === HEADERS === */
+QHeaderView::section {
+    background-color: #2F3542;
+    border: 1px solid #404754;
+    color: #D4D4D4;
+    padding: 6px;
+    font-weight: bold;
+    text-align: center;
+}
+
+/* === LABELS (Ensure transparency) === */
+QLabel {
+    background-color: transparent;
+}
+
+/* === LOADING DIALOG === */
+QDialog#LoadingDialog {
+    background-color: #1E2228;
+    border: 2px solid #FF6B35;
+    border-radius: 2px;
+}
+
+QDialog#LoadingDialog QLabel {
+    color: #D4D4D4;
+    font-size: 13px;
+    font-weight: bold;
+    background: transparent;
+}
+
+QDialog#LoadingDialog QLabel#detail_label {
+    font-size: 11px;
+    font-weight: normal;
+    color: #6B7280;
+}
+
+QDialog#LoadingDialog QProgressBar {
+    background-color: #252931;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+    height: 12px;
+}
+
+QDialog#LoadingDialog QProgressBar::chunk {
+    background-color: #FF6B35;
+    border-radius: 1px;
+}
+
+/* === MENUS === */
+QMenu {
+    background-color: #2F3542;
+    border: 2px solid #404754;
+    color: #D4D4D4;
+}
+
+QMenu::item {
+    padding: 6px 20px;
+}
+
+QMenu::item:selected {
+    background-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+QMenu::separator {
+    height: 1px;
+    background-color: #404754;
+    margin: 4px 8px;
+}
+
+/* === TOOLTIPS === */
+QToolTip {
+    background-color: #2F3542;
+    color: #D4D4D4;
+    border: 2px solid #FF6B35;
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+/* ===========================================
+   ASSIGNMENT BOARD
+   =========================================== */
+QFrame#header {
+    background-color: #1E2228;
+    border-bottom: 2px solid #2F3542;
+}
+
+QLabel#headerTitle {
+    font-size: 13px;
+    font-weight: bold;
+    color: #FFFFFF;
+    letter-spacing: 0.5px;
+}
+
+QScrollArea#boardScroll,
+QScrollArea#cardList {
+    background-color: transparent;
+    border: none;
+}
+
+QScrollArea#boardScroll > QWidget > QWidget,
+QWidget#cardListContainer {
+    background-color: transparent;
+}
+
+QFrame#column {
+    background-color: #1E2228;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+}
+
+QFrame#unassignedColumn {
+    background-color: #1B1F26;
+    border: 2px dashed #2F3542;
+    border-radius: 2px;
+}
+
+QFrame#columnHeader {
+    background-color: transparent;
+    border-bottom: 2px solid #2F3542;
+}
+
+QLabel#columnTitle {
+    font-size: 12px;
+    font-weight: bold;
+    color: #FFFFFF;
+    letter-spacing: 0.5px;
+}
+
+QLabel#columnSubtitle {
+    font-size: 10px;
+    color: #9CA3AF;
+}
+
+QLabel#taskCount {
+    background-color: #2F3542;
+    border: 1px solid #404754;
+    color: #9CA3AF;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 10px;
+}
+
+QLabel#taskCountUrgent {
+    background-color: #3A2A2A;
+    border: 1px solid #4A3A3A;
+    color: #E8A8A8;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 10px;
+}
+
+QFrame#workloadBar {
+    background-color: #252931;
+    border: 1px solid #2F3542;
+    border-radius: 2px;
+}
+
+QFrame#capacityWarning {
+    background-color: #2A2020;
+    border: 1px solid #4A2A2A;
+    border-radius: 2px;
+}
+
+QLabel#capacityWarningText {
+    color: #E8A8A8;
+    font-size: 10px;
+}
+
+QFrame#shotGroupCard {
+    background-color: #252931;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+}
+
+QFrame#shotGroupCard:hover {
+    border-color: #FF6B35;
+}
+
+QFrame#shotHeader,
+QFrame#shotTasks {
+    background-color: transparent;
+    border: none;
+}
+
+QLabel#shotThumbnail {
+    background-color: #141619;
+    color: #6B7280;
+    border: 2px solid #2F3542;
+    font-size: 9px;
+}
+
+QLabel#shotTitle {
+    color: #FFFFFF;
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+QPushButton#shotAddTaskButton {
+    background-color: #2F3542;
+    border: 1px solid #404754;
+    color: #D4D4D4;
+    padding: 4px 8px;
+    font-size: 9px;
+    border-radius: 2px;
+}
+
+QPushButton#shotAddTaskButton:hover {
+    border-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+QDialog#task_create_dialog {
+    background-color: #1C1F25;
+}
+
+QDialog#task_create_dialog QLabel#task_field_label {
+    color: #C7CCD6;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.4px;
+}
+
+QDialog#task_create_dialog QLineEdit,
+QDialog#task_create_dialog QSpinBox,
+QDialog#task_create_dialog QDoubleSpinBox,
+QDialog#task_create_dialog QComboBox {
+    background-color: #22262D;
+    border: 1px solid #2F3542;
+    border-radius: 6px;
+    color: #E5E7EB;
+    padding: 4px 6px;
+    min-height: 22px;
+}
+
+QDialog#task_create_dialog QLineEdit:focus,
+QDialog#task_create_dialog QSpinBox:focus,
+QDialog#task_create_dialog QDoubleSpinBox:focus,
+QDialog#task_create_dialog QComboBox:focus {
+    border-color: #FF6B35;
+}
+
+QFrame#task_dialog_divider {
+    color: #2F3542;
+    background-color: #2F3542;
+    min-height: 1px;
+}
+
+QPushButton#task_preset_button {
+    border: 1px solid #2F3542;
+    color: #D4D4D4;
+    padding: 3px 8px;
+    font-size: 9px;
+    border-radius: 10px;
+}
+
+QPushButton#task_preset_button:hover {
+    border-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+QPushButton#task_artist_button {
+    border: 1px solid #2F3542;
+    padding: 3px 8px;
+    font-size: 9px;
+    border-radius: 10px;
+}
+
+QPushButton#task_artist_button:hover {
+    border-color: #FF6B35;
+}
+
+QLabel#task_artist_value {
+    color: #FFFFFF;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+QFrame#taskCardMini {
+    background-color: #1E2228;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+}
+
+QFrame#taskCardMini:hover {
+    border-color: #FF6B35;
+}
+
+QLabel#taskTitle {
+    color: #FFFFFF;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 0.3px;
+}
+
+QLabel#taskNotes {
+    color: #9CA3AF;
+    font-size: 9px;
+}
+
+QLabel#priorityLabel {
+    color: #9CA3AF;
+    font-size: 9px;
+    font-weight: bold;
+}
+
+QLabel#hoursLabel {
+    color: #6B7280;
+    font-size: 9px;
+}
+
+QLabel#statusBadge {
+    background-color: #2F3542;
+    color: #9CA3AF;
+    border-radius: 2px;
+    padding: 1px 4px;
+    font-size: 8px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+QLabel#statusBadge[taskstatus="unassigned"] {
+    background-color: #4a4a4a;
+    color: #999999;
+}
+
+QLabel#statusBadge[taskstatus="assigned"] {
+    background-color: #3d5a80;
+    color: #a8c5e2;
+}
+
+QLabel#statusBadge[taskstatus="not_started"] {
+    background-color: #5a4a6a;
+    color: #c4a8d4;
+}
+
+QLabel#statusBadge[taskstatus="in_progress"] {
+    background-color: #4a6a8a;
+    color: #8ac4f4;
+}
+
+QLabel#statusBadge[taskstatus="waiting_for_approval"] {
+    background-color: #7a6a3a;
+    color: #e8d48a;
+}
+
+QLabel#statusBadge[taskstatus="approved"] {
+    background-color: #3a6a4a;
+    color: #8ad4a8;
+}
+
+QLabel#statusBadge[taskstatus="done"] {
+    background-color: #2a5a3a;
+    color: #6ac48a;
+}
+
+QLabel#statusBadge[taskstatus="rejected"] {
+    background-color: #6a3a3a;
+    color: #e8a8a8;
+}
+
+QFrame#columnFooter {
+    background-color: transparent;
+    border-top: 2px solid #2F3542;
+}
+
+QProgressBar#progress_in_progress,
+QProgressBar#progress_done {
+    background-color: #1A1D23;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+    text-align: center;
+    color: #D4D4D4;
+    font-size: 9px;
+    padding: 0px;
+}
+
+QProgressBar#progress_in_progress::chunk {
+    background-color: #D14D4D;
+}
+
+QProgressBar#progress_done::chunk {
+    background-color: #678542;
+}
+
+QFrame#dropIndicator {
+    border: 2px dashed #FF6B35;
+    border-radius: 2px;
+    background-color: rgba(255, 107, 53, 0.08);
+}
+
+QFrame#toast {
+    background-color: #2F3542;
+    border: 2px solid #404754;
+    border-radius: 2px;
+}
+
+QLabel#toastText {
+    color: #D4D4D4;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+/* === NOTIFICATIONS === */
+QFrame#notification_container {
+    background-color: #1E2228;
+    border: 2px solid #2F3542;
+    border-radius: 2px;
+}
+
+QLabel#notification_user {
+    color: #FFFFFF;
+    font-weight: bold;
+    font-size: 10px;
+}
+
+QLabel#notification_action {
+    color: #D4D4D4;
+    font-size: 10px;
+}
+
+QLabel#notification_shot {
+    color: #FF6B35;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QLabel#notification_detail {
+    color: #9CA3AF;
+    font-size: 9px;
+}
+
+QPushButton#notification_close {
+    background-color: transparent;
+    border: none;
+    color: #6B7280;
+    font-size: 14px;
+    font-weight: bold;
+    padding: 0px;
+}
+
+QPushButton#notification_close:hover {
+    color: #FF6B35;
+}
+/* ===========================================
+   ACTIVITY PAGE STYLES
+   Add this to your main QSS file
+   =========================================== */
+
+/* === ACTIVITY PAGE TITLE === */
+QLabel#activity_title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #FFFFFF;
+    letter-spacing: 1px;
+}
+
+/* === FILTER TABS === */
+QPushButton#activity_filter_tab {
+    background-color: #252931;
+    border: 2px solid #2F3542;
+    border-radius: 0px;
+    color: #6B7280;
+    padding: 6px 14px;
+    font-size: 10px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+QPushButton#activity_filter_tab:hover {
+    color: #D4D4D4;
+    background-color: #2F3542;
+    border-color: #404754;
+}
+
+QPushButton#activity_filter_tab:checked {
+    color: #FFFFFF;
+    background-color: #FF6B35;
+    border-color: #FF6B35;
+}
+
+/* === REFRESH BUTTON === */
+QPushButton#activity_refresh_btn {
+    background-color: #2F3542;
+    border: 2px solid #404754;
+    border-radius: 2px;
+    color: #D4D4D4;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+QPushButton#activity_refresh_btn:hover {
+    background-color: #FF6B35;
+    border-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+/* === ACTIVITY SCROLL AREA === */
+QScrollArea#activity_scroll {
+    background-color: transparent;
+    border: none;
+}
+
+QWidget#activity_feed_container {
+    background-color: transparent;
+}
+
+/* === ACTIVITY ENTRY (Row) === */
+QFrame#activity_entry {
+    background-color: #1E2228;
+    border: none;
+    border-left: 3px solid transparent;
+}
+
+QFrame#activity_entry:hover {
+    background-color: #252931;
+    border-left-color: #404754;
+}
+
+QFrame#activity_entry[latest="true"] {
+    border-left-color: #FF6B35;
+    background-color: #242020;
+}
+
+/* === THUMBNAIL === */
+QLabel#activity_thumb {
+    background-color: #141619;
+    border: 1px solid #2F3542;
+    color: #404754;
+    font-size: 16px;
+}
+
+/* === MAIN TEXT === */
+QLabel#activity_main {
+    font-size: 12px;
+    color: #D4D4D4;
+    background-color: transparent;
+}
+
+/* === LOCATION TEXT === */
+QLabel#activity_location {
+    font-size: 11px;
+    color: #9CA3AF;
+    background-color: transparent;
+}
+
+/* === PREVIOUS VALUE === */
+QLabel#activity_previous {
+    font-size: 10px;
+    color: #6B7280;
+    font-style: italic;
+    background-color: transparent;
+}
+
+/* === TIME AGO === */
+QLabel#activity_time_ago {
+    font-size: 10px;
+    color: #9CA3AF;
+    background-color: transparent;
+}
+
+/* === ACTUAL TIME === */
+QLabel#activity_time_actual {
+    font-size: 9px;
+    color: #6B7280;
+    background-color: transparent;
+}
+
+/* === DATE HEADER === */
+QFrame#activity_date_header {
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid #2F3542;
+}
+
+QLabel#activity_date_label {
+    font-size: 10px;
+    font-weight: bold;
+    color: #6B7280;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background-color: transparent;
+}
+
+/* === EMPTY STATE === */
+QLabel#activity_empty {
+    font-size: 12px;
+    color: #6B7280;
+    padding: 40px;
+    background-color: transparent;
+}
+
+/* === STATUS LABEL === */
+QLabel#activity_status {
+    font-size: 10px;
+    color: #6B7280;
+    background-color: transparent;
+}
+
+/* === COMPACT CARD MODE === */
+QFrame#frame_7[compact="true"] {
+    border-width: 1px;
+}
+
+QLabel#label_shot[compact="true"] {
+    font-size: 12px;
+}
+
+QLabel#label_frame_range[compact="true"] {
+    font-size: 10px;
+    color: #9CA3AF;
+}
+
+QPushButton#btn_hide_shot[compact="true"],
+QPushButton#btn_open_nuke[compact="true"],
+QPushButton#btn_latest_render[compact="true"],
+QPushButton#bnt_addTask[compact="true"],
+QPushButton#btn_open_assets[compact="true"],
+QPushButton#btn_open_precomp[compact="true"] {
+    padding: 3px 6px;
+    font-size: 10px;
+    min-height: 20px;
+}
+
+QFrame#frame_tasks[compact="true"] {
+    border: none;
+}
+
+QFrame#task_frame[compact="true"] {
+    border-width: 1px;
+}
+
+QPushButton#btn_task_title[compact="true"] {
+    font-size: 9px;
+    padding: 0 1px;
+}
+
+QPushButton#btn_status[compact="true"],
+QPushButton#btn_assigned[compact="true"],
+QPushButton#btn_priority[compact="true"],
+QPushButton#btn_budget_hours[compact="true"],
+QPushButton#btn_hide_task[compact="true"] {
+    padding: 2px 4px;
+    font-size: 8px;
+    min-height: 16px;
+}

@@ -1,0 +1,41 @@
+activity_auto_refresh: false
+activity_refresh_interval: 30
+always_on_top: false
+auto_refresh_enabled: true
+auto_refresh_interval: 35
+card_spacing: 5
+compact_view_enabled: false
+debug_modes:
+  api_calls: false
+  general: false
+  notifications: true
+  suppress_qt_multimedia_warnings: true
+  ui_updates: false
+django_username: 1
+last_job_id: 83
+last_scroll_position: 0
+last_timeline_index: 0
+notifications: 'off'
+notifications_animations: false
+notifications_do_not_disturb: false
+notifications_lifetime: 16
+notifications_size: large
+notifications_subtle: false
+nuke_exe_path: ''
+polling_interval: 35
+preview_output_subdir: renders/precomp/previews
+preview_overwrite: true
+preview_quality: medium
+preview_thumbnail_size: Large
+remember_last_session: true
+remember_window_size: true
+row_height: 5
+server_url: http://192.168.10.207:8000
+shots_layout_mode: grid
+show_startup_loading_dialog: true
+startup_tab: 0
+theme_file: dark_v01.qss
+window_height: 1419
+window_width: 2560
+window_x: 2560
+window_y: 0
