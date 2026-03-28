@@ -17,6 +17,7 @@ CHANGELOG_FILE = "CHANGELOG.md"
 
 _VERSION_RE = re.compile(r'^APP_VERSION\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
 _CHANGELOG_ENTRY_RE = re.compile(r"^##\s+(.+?)(?:\r?\n)(.*?)(?=^##\s+|\Z)", re.MULTILINE | re.DOTALL)
+_IGNORED_UNTRACKED_RE = re.compile(r"(^|/)[^/]+_settings\.yaml$")
 
 
 @dataclass
@@ -133,10 +134,30 @@ def _get_head_commit() -> Optional[str]:
 
 
 def _is_dirty() -> bool:
+    return bool(_get_blocking_git_status_lines())
+
+
+def _should_ignore_git_status_line(status_line: str) -> bool:
+    line = (status_line or "").rstrip()
+    if not line.startswith("?? "):
+        return False
+
+    path = line[3:].strip().replace("\\", "/")
+    if not path:
+        return False
+
+    return _IGNORED_UNTRACKED_RE.search(path) is not None
+
+
+def _get_blocking_git_status_lines() -> list[str]:
     result = _run_git("status", "--porcelain", check=False)
     if result.returncode != 0:
-        return False
-    return bool(result.stdout.strip())
+        return []
+    return [
+        line
+        for line in result.stdout.splitlines()
+        if line.strip() and not _should_ignore_git_status_line(line)
+    ]
 
 
 def _get_remote_commit(remote_ref: str) -> Optional[str]:
