@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 0.1.4 - 2026-03-28
+
+### Changed
+
+- nothing this is just a test
+
 ## 0.1.3 - 2026-03-28
 
 ### Fixed
