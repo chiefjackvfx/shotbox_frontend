@@ -192,7 +192,7 @@
              <item>
               <widget class="QLabel" name="label_loaded_time">
                <property name="text">
-                <string>Loaded in:</string>
+                <string>Loaded in: 15.5s</string>
                </property>
               </widget>
              </item>
@@ -254,6 +254,13 @@
               </spacer>
              </item>
              <item>
+              <widget class="QCheckBox" name="checkBox_enable_filters">
+               <property name="text">
+                <string>Enable filters</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QCheckBox" name="checkBox_show_to_conform">
                <property name="text">
                 <string>To Conform</string>
@@ -280,7 +287,7 @@
              <item>
               <widget class="QLabel" name="label_sort">
                <property name="text">
-                <string>Sort:</string>
+                <string>s</string>
                </property>
               </widget>
              </item>
@@ -290,7 +297,7 @@
              <item>
               <widget class="QLabel" name="label">
                <property name="text">
-                <string>Artist:</string>
+                <string>a</string>
                </property>
               </widget>
              </item>
@@ -300,7 +307,7 @@
              <item>
               <widget class="QLabel" name="label_2">
                <property name="text">
-                <string>Status:</string>
+                <string>s</string>
                </property>
               </widget>
              </item>

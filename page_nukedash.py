@@ -316,12 +316,18 @@ class page_nukedash(QMainWindow):
         self.show_to_conform = bool(getattr(self, "checkBox_show_to_conform", None) and self.checkBox_show_to_conform.isChecked())
         # print(self.show_hidden_shots, self.show_hidden_tasks)  # Debug only
 
+        enable_filters_checkbox = getattr(self, "checkBox_enable_filters", None)
+        if enable_filters_checkbox is not None:
+            enable_filters_checkbox.setChecked(False)
+
         if hasattr(self, "checkBox_hidden_shot") and self.checkBox_hidden_shot:
             self.checkBox_hidden_shot.stateChanged.connect(self._on_toggle_hidden)
         if hasattr(self, "checkBox_hidden_tasks") and self.checkBox_hidden_tasks:
             self.checkBox_hidden_tasks.stateChanged.connect(self._on_toggle_hidden)
         if hasattr(self, "checkBox_show_to_conform") and self.checkBox_show_to_conform:
             self.checkBox_show_to_conform.stateChanged.connect(self._on_toggle_to_conform)
+        if enable_filters_checkbox is not None:
+            enable_filters_checkbox.stateChanged.connect(self._on_enable_filters_changed)
         
         # --- Filtering Setup ---
         self._search_timer = QTimer(self)
@@ -428,6 +434,7 @@ class page_nukedash(QMainWindow):
         self._lock_heartbeat_timer.timeout.connect(self._on_lock_heartbeat_tick)
 
         self._start_load_timing("startup")
+        self._set_filter_controls_enabled(self._filters_enabled())
         self._worker.fetch()
         self._start_lock_maintenance_timers()
         
@@ -967,6 +974,74 @@ class page_nukedash(QMainWindow):
             del self._last_filter_sig
         self._apply_filters(force=True)
 
+    def _filters_enabled(self) -> bool:
+        checkbox = getattr(self, "checkBox_enable_filters", None)
+        if checkbox is None:
+            return True
+        return bool(checkbox.isChecked())
+
+    def _set_filter_controls_enabled(self, enabled: bool) -> None:
+        for name in (
+            "checkBox_show_to_conform",
+            "checkBox_hidden_shot",
+            "checkBox_hidden_tasks",
+            "comboBox_sort",
+            "comboBox_sort_artist",
+            "comboBox_sort_status",
+            "Search_bar",
+        ):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.setEnabled(enabled)
+
+    def _set_all_task_widgets_visible(self) -> None:
+        tabs = getattr(self, "timelines_tabs", None)
+        if tabs is None:
+            return
+        for i in range(tabs.count()):
+            timeline_widget = tabs.widget(i)
+            if not timeline_widget or not hasattr(timeline_widget, "shots_layout"):
+                continue
+            shots_layout = timeline_widget.shots_layout
+            for j in range(shots_layout.count()):
+                item = shots_layout.itemAt(j)
+                shot_card = item.widget() if item else None
+                if not shot_card or not hasattr(shot_card, "frame_tasks"):
+                    continue
+                layout = shot_card.frame_tasks.layout()
+                if layout is None:
+                    continue
+                for k in range(layout.count()):
+                    task_item = layout.itemAt(k)
+                    task_widget = task_item.widget() if task_item else None
+                    if isinstance(task_widget, widgets.TaskWidget) and not task_widget.isVisible():
+                        task_widget.setVisible(True)
+
+    def _restore_timeline_api_order(self, timeline_widget: QWidget) -> None:
+        if not timeline_widget or not hasattr(timeline_widget, "shots_layout"):
+            return
+        timeline_data = getattr(timeline_widget, "_last_timeline", {}) or {}
+        desired_names = []
+        for shot in timeline_data.get("shots", []) or []:
+            shot_id = shot.get("id")
+            if shot_id is None:
+                continue
+            desired_names.append(f"shot-{shot_id}")
+        if desired_names:
+            widgets._ensure_order(timeline_widget.shots_layout, desired_names)
+
+    def _on_enable_filters_changed(self, state) -> None:
+        enabled = self._filters_enabled()
+        self._set_filter_controls_enabled(enabled)
+        if not enabled:
+            self._search_timer.stop()
+            self._toggle_hidden_timer.stop()
+            self._pending_filter_apply = False
+            self._set_all_task_widgets_visible()
+        if hasattr(self, "_last_filter_sig"):
+            del self._last_filter_sig
+        self._apply_filters(force=True)
+
     def _current_sort_mode(self) -> str:
         sort_combo = getattr(self, "comboBox_sort", None)
         if sort_combo is not None:
@@ -983,6 +1058,8 @@ class page_nukedash(QMainWindow):
 
     def _sort_shot_entries(self, shot_entries: list[dict]) -> list[dict]:
         if len(shot_entries) <= 1:
+            return list(shot_entries)
+        if not self._filters_enabled():
             return list(shot_entries)
 
         sorted_entries = list(shot_entries)
@@ -1064,6 +1141,43 @@ class page_nukedash(QMainWindow):
         if not force and self._is_scrolling:
             self._pending_filter_apply = True
             return
+
+        tabs = self.timelines_tabs
+        current_tab_index = tabs.currentIndex()
+        if not self._filters_enabled():
+            filter_sig = ("filters_disabled", current_tab_index)
+            if hasattr(self, "_last_filter_sig") and self._last_filter_sig == filter_sig:
+                return
+            self._last_filter_sig = filter_sig
+
+            current_timeline_visible_count = 0
+            for i in range(tabs.count()):
+                timeline_widget = tabs.widget(i)
+                if not timeline_widget or not hasattr(timeline_widget, "shots_layout"):
+                    continue
+
+                is_current_timeline = i == current_tab_index
+                shots_layout = timeline_widget.shots_layout
+                timeline_shot_count = 0
+
+                for j in range(shots_layout.count()):
+                    item = shots_layout.itemAt(j)
+                    if not item:
+                        continue
+                    shot_card = item.widget()
+                    if not shot_card or not hasattr(shot_card, "data"):
+                        continue
+                    timeline_shot_count += 1
+                    if not shot_card.isVisible():
+                        shot_card.setVisible(True)
+
+                self._restore_timeline_api_order(timeline_widget)
+                if is_current_timeline:
+                    current_timeline_visible_count = timeline_shot_count
+
+            if hasattr(self, "Label_results"):
+                self.Label_results.setText(f"{current_timeline_visible_count} results")
+            return
         
         search_text = self.Search_bar.text().strip().lower()
         artist_filter = self.comboBox_sort_artist.currentData()
@@ -1072,8 +1186,6 @@ class page_nukedash(QMainWindow):
         
         # Build a signature of current filter state to avoid redundant work
         # Include current tab index so results update when switching timelines
-        tabs = self.timelines_tabs
-        current_tab_index = tabs.currentIndex()
         filter_sig = (
             search_text,
             self._current_sort_mode(),
