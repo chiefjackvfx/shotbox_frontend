@@ -260,13 +260,26 @@ class TaskWidget(QWidget):
         self.update_from_data(task_data)
 
     # ----- helpers -----
+    def _parent_shot_card(self):
+        parent = self.parent()
+        while parent is not None:
+            if isinstance(parent, ShotCard):
+                return parent
+            parent = parent.parent()
+        return None
+
     def _on_delete_clicked(self):
         if not self._task_id:
             return
         try:
             self._api.delete_task(self._task_id)
-            self.setParent(None)
-            self.deleteLater()
+            parent_shot = self._parent_shot_card()
+            if parent_shot is not None:
+                parent_shot.remove_task_by_id(self._task_id)
+            else:
+                self.setParent(None)
+                self.deleteLater()
+            self._notify_filter_state_changed()
         except Exception as e:
             pass
 
@@ -291,18 +304,16 @@ class TaskWidget(QWidget):
             pass
 
     def _sync_parent_task_data(self, updated_task: dict) -> None:
-        parent = self.parent()
-        while parent is not None:
-            if isinstance(parent, ShotCard):
-                parent_data = getattr(parent, "data", None) or {}
-                tasks = parent_data.get("tasks", [])
-                for task in tasks:
-                    if task.get("id") == self._task_id:
-                        if isinstance(updated_task, dict):
-                            task.update(updated_task)
-                        break
+        parent = self._parent_shot_card()
+        if parent is None:
+            return
+        parent_data = getattr(parent, "data", None) or {}
+        tasks = parent_data.get("tasks", [])
+        for task in tasks:
+            if task.get("id") == self._task_id:
+                if isinstance(updated_task, dict):
+                    task.update(updated_task)
                 break
-            parent = parent.parent()
 
     def _notify_filter_state_changed(self) -> None:
         window = self.window()
@@ -677,6 +688,9 @@ class ShotCard(QWidget):
         self._current_thumbnail_url = None
         self._thumbnails_enabled = bool(THUMBNAILS_ENABLED)
         self._compact_mode = False
+        self._task_render_state = {}
+        self._task_widgets_by_id = {}
+        self._visible_task_ids = []
 
         # make sure label will not auto-stretch
         self.label_thumbnail.setScaledContents(False)
@@ -1024,6 +1038,181 @@ class ShotCard(QWidget):
         ):
             _set_dynamic_property(widget, "compact", compact_value)
 
+    def _normalize_task_id(self, task_id):
+        if task_id is None:
+            return None
+        try:
+            return int(task_id)
+        except (TypeError, ValueError):
+            return task_id
+
+    def _ensure_task_cache_state(self) -> None:
+        if not hasattr(self, "_task_render_state"):
+            self._task_render_state = {}
+        if not hasattr(self, "_task_widgets_by_id"):
+            self._task_widgets_by_id = {}
+        if not hasattr(self, "_visible_task_ids"):
+            self._visible_task_ids = []
+        if self._task_widgets_by_id:
+            return
+        frame_tasks = getattr(self, "frame_tasks", None)
+        layout = frame_tasks.layout() if frame_tasks is not None else None
+        if layout is None:
+            return
+        for index in range(layout.count()):
+            item = layout.itemAt(index)
+            task_widget = item.widget() if item else None
+            if not isinstance(task_widget, TaskWidget):
+                continue
+            task_id = self._normalize_task_id(getattr(task_widget, "_data", {}).get("id"))
+            if task_id is None:
+                continue
+            self._task_widgets_by_id[task_id] = task_widget
+
+    def _task_data_map(self) -> dict:
+        self._ensure_task_cache_state()
+        tasks_by_id = {}
+        for task in self.data.get("tasks", []) or []:
+            task_id = self._normalize_task_id(task.get("id"))
+            if task_id is None:
+                continue
+            tasks_by_id[task_id] = task
+        return tasks_by_id
+
+    def set_task_render_state(self, render_state: dict | None) -> None:
+        self._ensure_task_cache_state()
+        self._task_render_state = dict(render_state or {})
+
+    def _notify_filter_state_changed(self) -> None:
+        window = self.window()
+        apply_filters = getattr(window, "_apply_filters", None)
+        if not callable(apply_filters):
+            return
+        if hasattr(window, "_last_filter_sig"):
+            delattr(window, "_last_filter_sig")
+        try:
+            apply_filters(force=True)
+        except TypeError:
+            apply_filters()
+
+    def _remove_task_widget(self, task_id) -> None:
+        self._ensure_task_cache_state()
+        normalized_id = self._normalize_task_id(task_id)
+        widget = self._task_widgets_by_id.pop(normalized_id, None)
+        if widget is None:
+            return
+        layout = self.frame_tasks.layout()
+        if layout is not None:
+            layout.removeWidget(widget)
+        widget.setParent(None)
+        widget.deleteLater()
+
+    def remove_task_by_id(self, task_id) -> None:
+        self._ensure_task_cache_state()
+        normalized_id = self._normalize_task_id(task_id)
+        tasks = [
+            task
+            for task in (self.data.get("tasks", []) or [])
+            if self._normalize_task_id(task.get("id")) != normalized_id
+        ]
+        self.data["tasks"] = tasks
+        self._visible_task_ids = [
+            visible_id
+            for visible_id in self._visible_task_ids
+            if self._normalize_task_id(visible_id) != normalized_id
+        ]
+        self._remove_task_widget(normalized_id)
+        self._reorder_loaded_task_widgets()
+        self._apply_loaded_task_visibility()
+        if hasattr(self, "btn_hide_shot"):
+            self.set_compact_mode(self._compact_mode)
+
+    def _sync_task_widgets_from_data(self) -> None:
+        self._ensure_task_cache_state()
+        tasks_by_id = self._task_data_map()
+        for task_id, widget in list(self._task_widgets_by_id.items()):
+            task_data = tasks_by_id.get(task_id)
+            if task_data is None:
+                self._remove_task_widget(task_id)
+                continue
+            widget.update_from_data(task_data)
+            widget.set_compact_mode(self._compact_mode)
+        self._reorder_loaded_task_widgets()
+        self._apply_loaded_task_visibility()
+
+    def _reorder_loaded_task_widgets(self) -> None:
+        self._ensure_task_cache_state()
+        layout = self.frame_tasks.layout()
+        if layout is None:
+            return
+        desired_order = []
+        for task in self.data.get("tasks", []) or []:
+            task_id = self._normalize_task_id(task.get("id"))
+            if task_id is None or task_id not in self._task_widgets_by_id:
+                continue
+            desired_order.append(f"task-{task_id}")
+        if desired_order:
+            _ensure_order(layout, desired_order)
+
+    def _apply_loaded_task_visibility(self) -> None:
+        self._ensure_task_cache_state()
+        visible_ids = {
+            self._normalize_task_id(task_id)
+            for task_id in (self._visible_task_ids or [])
+            if self._normalize_task_id(task_id) is not None
+        }
+        for task_id, widget in self._task_widgets_by_id.items():
+            should_show = task_id in visible_ids
+            if widget.isVisible() != should_show:
+                widget.setVisible(should_show)
+
+    def set_visible_task_ids(self, task_ids: list | tuple | set) -> list:
+        self._ensure_task_cache_state()
+        normalized_visible = []
+        seen = set()
+        tasks_by_id = self._task_data_map()
+        for task_id in task_ids or []:
+            normalized_id = self._normalize_task_id(task_id)
+            if normalized_id is None or normalized_id in seen or normalized_id not in tasks_by_id:
+                continue
+            seen.add(normalized_id)
+            normalized_visible.append(normalized_id)
+        self._visible_task_ids = normalized_visible
+        self._apply_loaded_task_visibility()
+        self._reorder_loaded_task_widgets()
+        return [
+            task_id
+            for task_id in normalized_visible
+            if task_id not in self._task_widgets_by_id
+        ]
+
+    def materialize_task_ids(self, task_ids: list | tuple, max_count: int | None = None) -> list:
+        self._ensure_task_cache_state()
+        layout = self.frame_tasks.layout()
+        if layout is None:
+            return []
+        tasks_by_id = self._task_data_map()
+        created_ids = []
+        for task_id in task_ids or []:
+            if max_count is not None and len(created_ids) >= int(max_count):
+                break
+            normalized_id = self._normalize_task_id(task_id)
+            if normalized_id is None or normalized_id in self._task_widgets_by_id:
+                continue
+            task_data = tasks_by_id.get(normalized_id)
+            if task_data is None:
+                continue
+            with project_load_profiler.measure_installed_work("task_card_create"):
+                task_widget = TaskWidget(task_data)
+            task_widget.set_compact_mode(self._compact_mode)
+            layout.addWidget(task_widget)
+            self._task_widgets_by_id[normalized_id] = task_widget
+            created_ids.append(normalized_id)
+        if created_ids:
+            self._reorder_loaded_task_widgets()
+            self._apply_loaded_task_visibility()
+        return created_ids
+
     def set_compact_mode(self, enabled: bool) -> None:
         self._compact_mode = bool(enabled)
         self._apply_compact_properties(self._compact_mode)
@@ -1110,126 +1299,89 @@ class ShotCard(QWidget):
         self._apply_thumb_scale()
 
     def update_from_data(self, data: dict):
-            # Store the latest data
-            data = data or {}
-            self.data = data
-            
-            self.label_shot.setText(data.get("title", "") or "")
-            self.label_notes.setText(data.get("notes", "") or "")
-            
-            
-            # Update frame range label from duration (styled same as notes)
-            if hasattr(self, 'label_frame_range'):
-                duration = data.get("duration")
-                if duration and duration not in (None, "", 0):
-                    try:
-                        duration_int = int(duration)
-                        end_frame = 1000 + duration_int
-                        self.label_frame_range.setText(f"1001-{end_frame}")
-                    except (ValueError, TypeError):
-                        self.label_frame_range.setText("")
-                else:
+        # Store the latest data
+        data = data or {}
+        self.data = data
+
+        self.label_shot.setText(data.get("title", "") or "")
+        self.label_notes.setText(data.get("notes", "") or "")
+
+        # Update frame range label from duration (styled same as notes)
+        if hasattr(self, 'label_frame_range'):
+            duration = data.get("duration")
+            if duration and duration not in (None, "", 0):
+                try:
+                    duration_int = int(duration)
+                    end_frame = 1000 + duration_int
+                    self.label_frame_range.setText(f"1001-{end_frame}")
+                except (ValueError, TypeError):
                     self.label_frame_range.setText("")
+            else:
+                self.label_frame_range.setText("")
 
-            # Update edit in/out labels
-            if hasattr(self, 'label_edit_inpoint'):
-                edit_in = data.get("edit_inpoint", "—")
-                self.label_edit_inpoint.setText(f"In: {edit_in if edit_in else '—'}")
-            
-            if hasattr(self, 'label_edit_outpoint'):
-                edit_out = data.get("edit_outpoint", "—")
-                self.label_edit_outpoint.setText(f"Out: {edit_out if edit_out else '—'}")
-            
-            # Update colourspace label
-            if hasattr(self, 'label_colourspace'):
-                colourspace = data.get("colourspace", "—")
-                self.label_colourspace.setText(f"Colourspace.: {colourspace[8:-12] if colourspace else '—'}")
-            
-            # Update original clip label (show just filename, not full path)
-            if hasattr(self, 'label_original_clip'):
-                original_clip = data.get("original_clip", "—")
-                if original_clip and original_clip != "—":
-                    # Extract just the filename from the path
-                    from pathlib import Path
-                    clip_name = Path(original_clip).name
-                    self.label_original_clip.setText(f"Clip: {clip_name[8:-5]}")
-                    # Store full path as property and tooltip for reference
-                    self.label_original_clip.setProperty("clip_path", original_clip)
-                    self.label_original_clip.setToolTip(f"{original_clip}\n(Right-click for options)")
+        # Update edit in/out labels
+        if hasattr(self, 'label_edit_inpoint'):
+            edit_in = data.get("edit_inpoint", "—")
+            self.label_edit_inpoint.setText(f"In: {edit_in if edit_in else '—'}")
+
+        if hasattr(self, 'label_edit_outpoint'):
+            edit_out = data.get("edit_outpoint", "—")
+            self.label_edit_outpoint.setText(f"Out: {edit_out if edit_out else '—'}")
+
+        # Update colourspace label
+        if hasattr(self, 'label_colourspace'):
+            colourspace = data.get("colourspace", "—")
+            self.label_colourspace.setText(f"Colourspace.: {colourspace[8:-12] if colourspace else '—'}")
+
+        # Update original clip label (show just filename, not full path)
+        if hasattr(self, 'label_original_clip'):
+            original_clip = data.get("original_clip", "—")
+            if original_clip and original_clip != "—":
+                clip_name = Path(original_clip).name
+                self.label_original_clip.setText(f"Clip: {clip_name[8:-5]}")
+                self.label_original_clip.setProperty("clip_path", original_clip)
+                self.label_original_clip.setToolTip(f"{original_clip}\n(Right-click for options)")
+            else:
+                self.label_original_clip.setText("Clip: —")
+                self.label_original_clip.setProperty("clip_path", None)
+                self.label_original_clip.setToolTip("")
+
+        self._apply_colour_code(data.get("colour_code"))
+        self._set_hide_button_label()
+
+        if hasattr(self, 'label_last_conform'):
+            last_conform = data.get("last_conform")
+            if last_conform and last_conform not in (None, "None", ""):
+                self.label_last_conform.setText(last_conform)
+                current_render = None
+                if hasattr(self, 'btn_latest_render'):
+                    current_render = (
+                        self.btn_latest_render.property("render_display")
+                        or self.btn_latest_render.text()
+                    )
+                if current_render and self._normalize_render_label(last_conform) == self._normalize_render_label(current_render):
+                    self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
                 else:
-                    self.label_original_clip.setText("Clip: —")
-                    self.label_original_clip.setProperty("clip_path", None)
-                    self.label_original_clip.setToolTip("")
-
-            # Apply color code using centralized mapping
-            self._apply_colour_code(data.get("colour_code"))
-            self._set_hide_button_label()
-
-            # Update last_conform label
-            if hasattr(self, 'label_last_conform'):
-                last_conform = data.get("last_conform")
-                if last_conform and last_conform not in (None, "None", ""):
-                    self.label_last_conform.setText(last_conform)
-                    # Check if last_conform matches the current latest render
-                    current_render = None
-                    if hasattr(self, 'btn_latest_render'):
-                        current_render = (
-                            self.btn_latest_render.property("render_display")
-                            or self.btn_latest_render.text()
-                        )
-                    if current_render and self._normalize_render_label(last_conform) == self._normalize_render_label(current_render):
-                        # Match - make label green
-                        self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
-                    else:
-                        # No match - reset to default style
-                        self.label_last_conform.setStyleSheet("")
-                else:
-                    self.label_last_conform.setText("None")
                     self.label_last_conform.setStyleSheet("")
+            else:
+                self.label_last_conform.setText("None")
+                self.label_last_conform.setStyleSheet("")
 
-            if hasattr(self, 'btn_open_nuke'):
-                self.refresh_lock_state_from_data()
-                self._set_nuke_button_label()
-                self._set_nuke_button_tooltip()
+        if hasattr(self, 'btn_open_nuke'):
+            self.refresh_lock_state_from_data()
+            self._set_nuke_button_label()
+            self._set_nuke_button_tooltip()
 
-            thumb_path = data.get("thumbnail")
-            url = f"{BASE_URL}{thumb_path}" if thumb_path else None
-            self._current_thumbnail_url = url
-            self.set_thumbnail(url)
+        thumb_path = data.get("thumbnail")
+        url = f"{BASE_URL}{thumb_path}" if thumb_path else None
+        self._current_thumbnail_url = url
+        self.set_thumbnail(url)
 
-            # Update preview video from API data
-            preview_video = data.get("preview_video")
-            self._update_preview_from_data(preview_video)
+        preview_video = data.get("preview_video")
+        self._update_preview_from_data(preview_video)
 
-            # reconcile tasks
-            layout = self.frame_tasks.layout()
-            existing = _children_by_object_name(layout)
-            desired_order = []
-
-            for t in data.get("tasks", []):
-                tid = t.get("id")
-                if tid is None:
-                    continue
-                name = f"task-{tid}"
-                
-                desired_order.append(name)
-                if name in existing:
-                    existing[name].update_from_data(t)
-                else:
-                    with project_load_profiler.measure_installed_work("task_card_create"):
-                        task_widget = TaskWidget(t)
-                    task_widget.set_compact_mode(self._compact_mode)
-                    layout.addWidget(task_widget)
-
-            # remove stale
-            for name, widget in list(existing.items()):
-                if name not in desired_order:
-                    layout.removeWidget(widget)
-                    widget.deleteLater()
-
-            # fix order
-            _ensure_order(layout, desired_order)
-            self.set_compact_mode(self._compact_mode)
+        self._sync_task_widgets_from_data()
+        self.set_compact_mode(self._compact_mode)
         
     def _setup_flow_layout(self):
         """Replace the existing layout in frame_tasks with a FlowLayout for responsive grid."""
@@ -2158,8 +2310,11 @@ class ShotCard(QWidget):
                 update_payload["artist"] = values["artist"]
             if update_payload:
                 new_task = self._api.update_task(new_task.get("id"), **update_payload)
-            layout = self.frame_tasks.layout()
-            layout.addWidget(TaskWidget(new_task))
+            tasks = list(self.data.get("tasks", []) or [])
+            tasks.append(new_task)
+            self.data["tasks"] = tasks
+            self._sync_task_widgets_from_data()
+            self._notify_filter_state_changed()
         except Exception as e:
             print(f"[ShotCard] Add task failed: {e}")
 

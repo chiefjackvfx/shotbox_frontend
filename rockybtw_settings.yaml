@@ -1,8 +1,8 @@
-activity_auto_refresh: false
+activity_auto_refresh: true
 activity_refresh_interval: 30
 always_on_top: false
-auto_refresh_enabled: false
-auto_refresh_interval: 35
+auto_refresh_enabled: true
+auto_refresh_interval: 1
 card_spacing: 5
 compact_view_enabled: false
 debug_modes:
@@ -14,11 +14,11 @@ debug_modes:
   ui_updates: false
 django_username: 1
 enable_activity_page: false
-enable_assignment_board: false
+enable_assignment_board: true
 enable_import_page: false
 enable_review_page: false
 enable_xml_import_page: false
-last_job_id: 83
+last_job_id: 41
 last_scroll_position: 0
 last_timeline_index: 0
 notifications: 'off'
@@ -28,7 +28,15 @@ notifications_lifetime: 16
 notifications_size: large
 notifications_subtle: false
 nuke_exe_path: ''
-polling_interval: 35
+nukedash_filter_state:
+  artist_id: null
+  enabled: true
+  show_hidden_shots: false
+  show_hidden_tasks: false
+  show_to_conform: false
+  sort_mode: title_asc
+  status_values: []
+polling_interval: 1
 preview_output_subdir: renders/precomp/previews
 preview_overwrite: true
 preview_quality: medium
@@ -42,6 +50,6 @@ show_startup_loading_dialog: true
 startup_tab: 0
 theme_file: dark_v01.qss
 window_height: 1059
-window_width: 1561
-window_x: 307
-window_y: 125
+window_width: 1069
+window_x: 122
+window_y: 185

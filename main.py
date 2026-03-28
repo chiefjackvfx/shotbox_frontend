@@ -749,6 +749,12 @@ class MainWindow(QMainWindow):
                 widget = self._startup_tab_widget(value)
                 if widget is not None:
                     self.tabs.setCurrentWidget(widget)
+
+        elif key == "remember_last_session":
+            if hasattr(self, "page_nukedash") and hasattr(
+                self.page_nukedash, "_on_remember_last_session_changed"
+            ):
+                self.page_nukedash._on_remember_last_session_changed(bool(value))
         
         elif key == "debug_modes.general":
             # Store in a global or module-level variable for general debugging

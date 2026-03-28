@@ -97,6 +97,15 @@ DEFAULT_SETTINGS = {
     "last_job_id": None,  # Last selected job ID
     "last_timeline_index": 0,  # Last selected timeline tab index
     "last_scroll_position": 0,  # Last scroll position in timeline
+    "nukedash_filter_state": {
+        "enabled": False,
+        "sort_mode": "title_asc",
+        "artist_id": None,
+        "status_values": [],
+        "show_hidden_shots": False,
+        "show_hidden_tasks": False,
+        "show_to_conform": False,
+    },
 
     # Startup behavior
     "startup_tab": 0,  # 0=Tasks, 1=Review, 2=XML Import, 3=Activity, 4=Settings

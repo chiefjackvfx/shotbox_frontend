@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 from pathlib import Path
 import sys
@@ -11,9 +12,11 @@ PYQT_FRONTEND_DIR = Path(__file__).resolve().parents[1]
 if str(PYQT_FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(PYQT_FRONTEND_DIR))
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QFrame,
     QLabel,
@@ -25,7 +28,37 @@ from PyQt6.QtWidgets import (
 )
 
 import page_nukedash
+import settings
 import widgets
+
+
+class FakeSettingsManager:
+    def __init__(self, initial: dict | None = None):
+        self._settings = copy.deepcopy(settings.DEFAULT_SETTINGS)
+        if initial:
+            self._settings.update(initial)
+
+    def get(self, key: str, default=None):
+        keys = key.split(".")
+        value = self._settings
+        try:
+            for part in keys:
+                value = value[part]
+            return value
+        except (KeyError, TypeError):
+            return default
+
+    def set(self, key: str, value, save: bool = True):
+        keys = key.split(".")
+        target = self._settings
+        for part in keys[:-1]:
+            if part not in target:
+                target[part] = {}
+            target = target[part]
+        target[keys[-1]] = value
+
+    def save(self):
+        return True
 
 
 def make_task(
@@ -52,6 +85,8 @@ class FakeShotCard(widgets.ShotCard):
     def __init__(self, data: dict, parent=None):
         QWidget.__init__(self, parent)
         self.data = data
+        self._shot_id = data.get("id")
+        self._compact_mode = False
 
         outer_layout = QVBoxLayout(self)
         self.frame_tasks = QFrame(self)
@@ -63,8 +98,9 @@ class FakeShotCard(widgets.ShotCard):
 
 
 class FakeTimelineWidget(QWidget):
-    def __init__(self, shot_cards: list[FakeShotCard], parent=None):
+    def __init__(self, shots: list[dict], shot_cards: list[FakeShotCard], parent=None):
         super().__init__(parent)
+        self._last_timeline = {"shots": list(shots)}
         outer_layout = QVBoxLayout(self)
         self.shots_layout = QVBoxLayout()
         outer_layout.addLayout(self.shots_layout)
@@ -73,6 +109,22 @@ class FakeTimelineWidget(QWidget):
 
 
 class FilterHarness(QMainWindow):
+    _default_saved_filter_state = page_nukedash.page_nukedash._default_saved_filter_state
+    _normalize_saved_filter_state = page_nukedash.page_nukedash._normalize_saved_filter_state
+    _current_structured_filter_state = page_nukedash.page_nukedash._current_structured_filter_state
+    _persist_filter_state = page_nukedash.page_nukedash._persist_filter_state
+    _filters_enabled = page_nukedash.page_nukedash._filters_enabled
+    _set_filter_controls_enabled = page_nukedash.page_nukedash._set_filter_controls_enabled
+    _set_all_task_widgets_visible = page_nukedash.page_nukedash._set_all_task_widgets_visible
+    _restore_timeline_api_order = page_nukedash.page_nukedash._restore_timeline_api_order
+    _on_enable_filters_changed = page_nukedash.page_nukedash._on_enable_filters_changed
+    _current_task_render_state = page_nukedash.page_nukedash._current_task_render_state
+    _task_matches_filters = page_nukedash.page_nukedash._task_matches_filters
+    _visible_task_ids_for_shot = page_nukedash.page_nukedash._visible_task_ids_for_shot
+    _shot_matches_search = page_nukedash.page_nukedash._shot_matches_search
+    _reset_task_materialize_queue = page_nukedash.page_nukedash._reset_task_materialize_queue
+    _enqueue_task_materialization = page_nukedash.page_nukedash._enqueue_task_materialization
+    _process_task_materialize_queue = page_nukedash.page_nukedash._process_task_materialize_queue
     _apply_filters = page_nukedash.page_nukedash._apply_filters
     _apply_task_visibility = page_nukedash.page_nukedash._apply_task_visibility
     _get_searchable_text = page_nukedash.page_nukedash._get_searchable_text
@@ -90,23 +142,48 @@ class FilterHarness(QMainWindow):
         layout = QVBoxLayout(central)
         self.setCentralWidget(central)
 
+        self.checkBox_enable_filters = QCheckBox("Enable Filters", central)
+        self.checkBox_show_to_conform = QCheckBox("To Conform", central)
+        self.checkBox_hidden_shot = QCheckBox("Hidden Shots", central)
+        self.checkBox_hidden_tasks = QCheckBox("Hidden Tasks", central)
+        self.comboBox_sort = QComboBox(central)
         self.Search_bar = QLineEdit(central)
         self.comboBox_sort_artist = QComboBox(central)
         self.comboBox_sort_status = QComboBox(central)
         self.Label_results = QLabel("", central)
         self.timelines_tabs = QTabWidget(central)
 
+        layout.addWidget(self.checkBox_enable_filters)
+        layout.addWidget(self.checkBox_show_to_conform)
+        layout.addWidget(self.checkBox_hidden_shot)
+        layout.addWidget(self.checkBox_hidden_tasks)
+        layout.addWidget(self.comboBox_sort)
         layout.addWidget(self.Search_bar)
         layout.addWidget(self.comboBox_sort_artist)
         layout.addWidget(self.comboBox_sort_status)
         layout.addWidget(self.Label_results)
         layout.addWidget(self.timelines_tabs)
 
+        self._settings_manager = FakeSettingsManager()
+        self._saved_filter_state = self._default_saved_filter_state()
+        self._restoring_filter_controls = False
         self.show_hidden_shots = False
         self.show_hidden_tasks = False
         self.show_to_conform = False
         self._is_scrolling = False
         self._pending_filter_apply = False
+        self._search_timer = QTimer(self)
+        self._toggle_hidden_timer = QTimer(self)
+        self._task_materialize_batch_size = 20
+        self._task_materialize_queue = []
+        self._task_materialize_timer = QTimer(self)
+        self._task_materialize_timer.setSingleShot(True)
+        self._task_materialize_timer.timeout.connect(self._process_task_materialize_queue)
+
+        self.comboBox_sort.addItem("A-Z", "title_asc")
+        self.comboBox_sort.addItem("Z-A", "title_desc")
+        self.comboBox_sort.addItem("Highest Tasks", "task_count_desc")
+        self.comboBox_sort.addItem("Lowest Tasks", "task_count_asc")
 
         self.comboBox_sort_artist.addItem("All Artists", None)
         artist_ids = sorted(
@@ -122,10 +199,13 @@ class FilterHarness(QMainWindow):
             self.comboBox_sort_artist.addItem(f"Artist {artist_id}", artist_id)
 
         self._setup_status_filter_dropdown()
+        self.checkBox_enable_filters.setChecked(False)
+        self.checkBox_enable_filters.stateChanged.connect(self._on_enable_filters_changed)
+        self._set_filter_controls_enabled(self._filters_enabled())
 
         for index, shots in enumerate(shot_groups):
             shot_cards = [FakeShotCard(shot, self.timelines_tabs) for shot in shots]
-            timeline_widget = FakeTimelineWidget(shot_cards, self.timelines_tabs)
+            timeline_widget = FakeTimelineWidget(shots, shot_cards, self.timelines_tabs)
             self.timelines_tabs.addTab(timeline_widget, f"Timeline {index + 1}")
 
         self.show()
@@ -262,7 +342,74 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.harness._on_status_combo_activated(1)
         self.app.processEvents()
 
+    def _set_filters_enabled(self, enabled: bool) -> None:
+        self.harness.checkBox_enable_filters.setChecked(bool(enabled))
+        self.app.processEvents()
+
+    def test_filters_start_disabled_and_controls_are_greyed_out(self):
+        self.assertFalse(self.harness.checkBox_enable_filters.isChecked())
+        self.assertFalse(self.harness.checkBox_show_to_conform.isEnabled())
+        self.assertFalse(self.harness.checkBox_hidden_shot.isEnabled())
+        self.assertFalse(self.harness.checkBox_hidden_tasks.isEnabled())
+        self.assertFalse(self.harness.comboBox_sort.isEnabled())
+        self.assertFalse(self.harness.comboBox_sort_artist.isEnabled())
+        self.assertFalse(self.harness.comboBox_sort_status.isEnabled())
+        self.assertFalse(self.harness.Search_bar.isEnabled())
+
+    def test_enabling_filters_reenables_filter_controls(self):
+        self._set_filters_enabled(True)
+
+        self.assertTrue(self.harness.checkBox_show_to_conform.isEnabled())
+        self.assertTrue(self.harness.checkBox_hidden_shot.isEnabled())
+        self.assertTrue(self.harness.checkBox_hidden_tasks.isEnabled())
+        self.assertTrue(self.harness.comboBox_sort.isEnabled())
+        self.assertTrue(self.harness.comboBox_sort_artist.isEnabled())
+        self.assertTrue(self.harness.comboBox_sort_status.isEnabled())
+        self.assertTrue(self.harness.Search_bar.isEnabled())
+
+    def test_filters_off_shows_all_shots_and_tasks(self):
+        self.assertEqual(self._visible_task_ids(101), [1, 2, 3, 4])
+        self.assertEqual(self._visible_task_ids(102), [5])
+        self.assertEqual(self._visible_task_ids(103), [6])
+        self.assertTrue(self._shot_card(101).isVisible())
+        self.assertTrue(self._shot_card(102).isVisible())
+        self.assertTrue(self._shot_card(103).isVisible())
+        self.assertEqual(self.harness.Label_results.text(), "3 results")
+
+    def test_filters_off_skips_task_visibility_and_sort_logic(self):
+        def fail_task_visibility(*args, **kwargs):
+            raise AssertionError("_apply_task_visibility should not run when filters are disabled")
+
+        def fail_sort(*args, **kwargs):
+            raise AssertionError("_apply_sort_to_timeline should not run when filters are disabled")
+
+        self.harness._apply_task_visibility = fail_task_visibility
+        self.harness._apply_sort_to_timeline = fail_sort
+
+        if hasattr(self.harness, "_last_filter_sig"):
+            del self.harness._last_filter_sig
+        self.harness._apply_filters(force=True)
+        self.app.processEvents()
+
+        self.assertEqual(self.harness.Label_results.text(), "3 results")
+
+    def test_turning_filters_off_restores_all_task_widgets_visible(self):
+        self._set_filters_enabled(True)
+        self._select_status("done")
+
+        self.assertEqual(self._visible_task_ids(101), [1])
+        self.assertFalse(self._shot_card(102).isVisible())
+
+        self._set_filters_enabled(False)
+
+        self.assertEqual(self._visible_task_ids(101), [1, 2, 3, 4])
+        self.assertEqual(self._visible_task_ids(102), [5])
+        self.assertEqual(self._visible_task_ids(103), [6])
+        self.assertTrue(self._shot_card(102).isVisible())
+        self.assertEqual(self.harness.Label_results.text(), "3 results")
+
     def test_done_filter_hides_non_matching_tasks_and_shots(self):
+        self._set_filters_enabled(True)
         self._select_status("done")
 
         self.assertEqual(self.harness._status_filter_values, {"done"})
@@ -272,6 +419,7 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertEqual(self.harness.Label_results.text(), "2 results")
 
     def test_multiple_statuses_use_or_semantics_per_task(self):
+        self._set_filters_enabled(True)
         self._select_status("done")
         self._select_status("approved")
 
@@ -281,6 +429,7 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertFalse(self._shot_card(102).isVisible())
 
     def test_artist_and_status_filters_intersect_on_same_task(self):
+        self._set_filters_enabled(True)
         self._select_status("done")
         self._set_artist_filter(2)
 
@@ -290,6 +439,7 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertEqual(self.harness.Label_results.text(), "1 results")
 
     def test_clearing_filters_restores_all_non_hidden_tasks(self):
+        self._set_filters_enabled(True)
         self._select_status("done")
         self._set_artist_filter(2)
 
@@ -304,6 +454,7 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertTrue(self._shot_card(103).isVisible())
 
     def test_status_edit_reapplies_filters_immediately(self):
+        self._set_filters_enabled(True)
         self._select_status("done")
 
         task_widget = self._task_widget(6)

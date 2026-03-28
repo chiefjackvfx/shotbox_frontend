@@ -317,8 +317,6 @@ class page_nukedash(QMainWindow):
         # print(self.show_hidden_shots, self.show_hidden_tasks)  # Debug only
 
         enable_filters_checkbox = getattr(self, "checkBox_enable_filters", None)
-        if enable_filters_checkbox is not None:
-            enable_filters_checkbox.setChecked(False)
 
         if hasattr(self, "checkBox_hidden_shot") and self.checkBox_hidden_shot:
             self.checkBox_hidden_shot.stateChanged.connect(self._on_toggle_hidden)
@@ -326,8 +324,6 @@ class page_nukedash(QMainWindow):
             self.checkBox_hidden_tasks.stateChanged.connect(self._on_toggle_hidden)
         if hasattr(self, "checkBox_show_to_conform") and self.checkBox_show_to_conform:
             self.checkBox_show_to_conform.stateChanged.connect(self._on_toggle_to_conform)
-        if enable_filters_checkbox is not None:
-            enable_filters_checkbox.stateChanged.connect(self._on_enable_filters_changed)
         
         # --- Filtering Setup ---
         self._search_timer = QTimer(self)
@@ -406,6 +402,8 @@ class page_nukedash(QMainWindow):
             )
         self._session_restored = False  # Track if session has been restored
         self._pending_scroll_restore = None  # Store scroll position to restore after loading
+        self._restoring_filter_controls = False
+        self._saved_filter_state = self._load_saved_filter_state()
         self._lock_interval_ms = 45_000
         self._lock_release_grace_sec = 90
         self._owned_locks_by_shot_id = {}
@@ -420,6 +418,11 @@ class page_nukedash(QMainWindow):
         self._project_load_report_timer.timeout.connect(self._emit_project_load_report_if_ready)
         self._project_load_report_poll_ms = 50
         self._project_load_report_grace_seconds = 2.0
+        self._task_materialize_batch_size = 20
+        self._task_materialize_queue = []
+        self._task_materialize_timer = QTimer(self)
+        self._task_materialize_timer.setSingleShot(True)
+        self._task_materialize_timer.timeout.connect(self._process_task_materialize_queue)
 
         self._lock_sync_timer = QTimer(self)
         self._lock_sync_timer.setInterval(self._lock_interval_ms)
@@ -433,6 +436,9 @@ class page_nukedash(QMainWindow):
         self._lock_heartbeat_timer.setInterval(self._lock_interval_ms)
         self._lock_heartbeat_timer.timeout.connect(self._on_lock_heartbeat_tick)
 
+        self._apply_saved_filter_state_to_controls()
+        if enable_filters_checkbox is not None:
+            enable_filters_checkbox.stateChanged.connect(self._on_enable_filters_changed)
         self._start_load_timing("startup")
         self._set_filter_controls_enabled(self._filters_enabled())
         self._worker.fetch()
@@ -495,6 +501,315 @@ class page_nukedash(QMainWindow):
             self._finish_load_timing()
         elif self._load_timing_context == "startup" and self.comboBox_jobs.count() == 0:
             self._finish_load_timing()
+
+    def _default_saved_filter_state(self) -> dict:
+        return {
+            "enabled": False,
+            "sort_mode": "title_asc",
+            "artist_id": None,
+            "status_values": [],
+            "show_hidden_shots": False,
+            "show_hidden_tasks": False,
+            "show_to_conform": False,
+        }
+
+    def _normalize_saved_filter_state(self, state: dict | None) -> dict:
+        normalized = self._default_saved_filter_state()
+        if isinstance(state, dict):
+            normalized.update(state)
+        normalized["enabled"] = bool(normalized.get("enabled", False))
+        normalized["sort_mode"] = str(normalized.get("sort_mode", "title_asc") or "title_asc")
+        normalized["artist_id"] = normalized.get("artist_id")
+        normalized["status_values"] = [
+            value
+            for value in normalized.get("status_values", []) or []
+            if value not in (None, "")
+        ]
+        normalized["show_hidden_shots"] = bool(normalized.get("show_hidden_shots", False))
+        normalized["show_hidden_tasks"] = bool(normalized.get("show_hidden_tasks", False))
+        normalized["show_to_conform"] = bool(normalized.get("show_to_conform", False))
+        return normalized
+
+    def _load_saved_filter_state(self) -> dict:
+        if not hasattr(self, "_settings_manager") or self._settings_manager is None:
+            return self._default_saved_filter_state()
+        if not self._settings_manager.get("remember_last_session", True):
+            return self._default_saved_filter_state()
+        saved = self._settings_manager.get("nukedash_filter_state", self._default_saved_filter_state())
+        return self._normalize_saved_filter_state(saved)
+
+    def _current_structured_filter_state(self) -> dict:
+        sort_combo = getattr(self, "comboBox_sort", None)
+        return self._normalize_saved_filter_state(
+            {
+                "enabled": self._filters_enabled(),
+                "sort_mode": (
+                    sort_combo.currentData()
+                    if sort_combo is not None and sort_combo.currentData() is not None
+                    else "title_asc"
+                ),
+                "artist_id": self.comboBox_sort_artist.currentData(),
+                "status_values": sorted(getattr(self, "_status_filter_values", set())),
+                "show_hidden_shots": bool(getattr(self, "show_hidden_shots", False)),
+                "show_hidden_tasks": bool(getattr(self, "show_hidden_tasks", False)),
+                "show_to_conform": bool(getattr(self, "show_to_conform", False)),
+            }
+        )
+
+    def _persist_filter_state(self) -> None:
+        if getattr(self, "_restoring_filter_controls", False):
+            return
+        if not hasattr(self, "_settings_manager") or self._settings_manager is None:
+            return
+        if not self._settings_manager.get("remember_last_session", True):
+            self._saved_filter_state = self._default_saved_filter_state()
+            self._settings_manager.set(
+                "nukedash_filter_state", self._saved_filter_state, save=False
+            )
+            return
+        self._saved_filter_state = self._current_structured_filter_state()
+        self._settings_manager.set(
+            "nukedash_filter_state", self._saved_filter_state, save=False
+        )
+
+    def _on_remember_last_session_changed(self, enabled: bool) -> None:
+        if not hasattr(self, "_settings_manager") or self._settings_manager is None:
+            return
+        if enabled:
+            self._persist_filter_state()
+            return
+        self._saved_filter_state = self._default_saved_filter_state()
+        self._settings_manager.set("nukedash_filter_state", self._saved_filter_state, save=False)
+
+    def _apply_saved_artist_filter(self) -> None:
+        target_artist_id = self._saved_filter_state.get("artist_id")
+        combo = getattr(self, "comboBox_sort_artist", None)
+        if combo is None:
+            return
+        combo.blockSignals(True)
+        try:
+            for index in range(combo.count()):
+                if combo.itemData(index) == target_artist_id:
+                    combo.setCurrentIndex(index)
+                    return
+            all_index = combo.findData(None)
+            combo.setCurrentIndex(all_index if all_index >= 0 else 0)
+        finally:
+            combo.blockSignals(False)
+
+    def _apply_saved_status_filter_values(self) -> None:
+        if not hasattr(self, "_status_filter_items"):
+            return
+        target_values = {
+            value
+            for value in self._saved_filter_state.get("status_values", []) or []
+            if value in self._status_filter_items
+        }
+        self._status_filter_blocked = True
+        try:
+            for value, item in self._status_filter_items.items():
+                item.setCheckState(
+                    Qt.CheckState.Checked
+                    if value in target_values
+                    else Qt.CheckState.Unchecked
+                )
+        finally:
+            self._status_filter_blocked = False
+        self._status_filter_values = set(target_values)
+        self._update_status_filter_label()
+
+    def _apply_saved_filter_state_to_controls(self) -> None:
+        self._restoring_filter_controls = True
+        try:
+            if hasattr(self, "checkBox_enable_filters") and self.checkBox_enable_filters:
+                self.checkBox_enable_filters.blockSignals(True)
+                self.checkBox_enable_filters.setChecked(
+                    bool(self._saved_filter_state.get("enabled", False))
+                )
+                self.checkBox_enable_filters.blockSignals(False)
+            if hasattr(self, "checkBox_hidden_shot") and self.checkBox_hidden_shot:
+                self.checkBox_hidden_shot.blockSignals(True)
+                self.checkBox_hidden_shot.setChecked(
+                    bool(self._saved_filter_state.get("show_hidden_shots", False))
+                )
+                self.checkBox_hidden_shot.blockSignals(False)
+            if hasattr(self, "checkBox_hidden_tasks") and self.checkBox_hidden_tasks:
+                self.checkBox_hidden_tasks.blockSignals(True)
+                self.checkBox_hidden_tasks.setChecked(
+                    bool(self._saved_filter_state.get("show_hidden_tasks", False))
+                )
+                self.checkBox_hidden_tasks.blockSignals(False)
+            if hasattr(self, "checkBox_show_to_conform") and self.checkBox_show_to_conform:
+                self.checkBox_show_to_conform.blockSignals(True)
+                self.checkBox_show_to_conform.setChecked(
+                    bool(self._saved_filter_state.get("show_to_conform", False))
+                )
+                self.checkBox_show_to_conform.blockSignals(False)
+            sort_combo = getattr(self, "comboBox_sort", None)
+            if sort_combo is not None:
+                sort_combo.blockSignals(True)
+                idx = sort_combo.findData(self._saved_filter_state.get("sort_mode", "title_asc"))
+                sort_combo.setCurrentIndex(idx if idx >= 0 else 0)
+                sort_combo.blockSignals(False)
+            if hasattr(self, "Search_bar") and self.Search_bar:
+                self.Search_bar.blockSignals(True)
+                self.Search_bar.clear()
+                self.Search_bar.blockSignals(False)
+            self.show_hidden_shots = bool(
+                getattr(self, "checkBox_hidden_shot", None)
+                and self.checkBox_hidden_shot.isChecked()
+            )
+            self.show_hidden_tasks = bool(
+                getattr(self, "checkBox_hidden_tasks", None)
+                and self.checkBox_hidden_tasks.isChecked()
+            )
+            self.show_to_conform = bool(
+                getattr(self, "checkBox_show_to_conform", None)
+                and self.checkBox_show_to_conform.isChecked()
+            )
+            self._apply_saved_artist_filter()
+            self._apply_saved_status_filter_values()
+        finally:
+            self._restoring_filter_controls = False
+
+    def _current_task_render_state(
+        self,
+        *,
+        filters_enabled: bool | None = None,
+        search_text: str | None = None,
+        artist_filter=None,
+        status_filter_values=None,
+        hide_hidden_tasks: bool | None = None,
+    ) -> dict:
+        return {
+            "filters_enabled": self._filters_enabled() if filters_enabled is None else bool(filters_enabled),
+            "search_text": (
+                self.Search_bar.text().strip().lower()
+                if search_text is None
+                else str(search_text or "").strip().lower()
+            ),
+            "artist_filter": self.comboBox_sort_artist.currentData() if artist_filter is None else artist_filter,
+            "status_filter_values": sorted(
+                set(getattr(self, "_status_filter_values", set()) if status_filter_values is None else status_filter_values)
+            ),
+            "hide_hidden_tasks": (
+                (not self.show_hidden_tasks)
+                if hide_hidden_tasks is None
+                else bool(hide_hidden_tasks)
+            ),
+        }
+
+    def _task_matches_filters(
+        self,
+        task_data: dict,
+        *,
+        search_text: str = "",
+        artist_filter=None,
+        status_filter_values=None,
+        hide_hidden_tasks: bool = True,
+    ) -> bool:
+        if not isinstance(task_data, dict):
+            return False
+        if hide_hidden_tasks and task_data.get("hidden", False):
+            return False
+        if artist_filter is not None and task_data.get("artist") != artist_filter:
+            return False
+        status_values = set(status_filter_values or set())
+        if status_values and task_data.get("status") not in status_values:
+            return False
+        if search_text:
+            searchable = " ".join(
+                str(part or "")
+                for part in (task_data.get("title"), task_data.get("notes"))
+                if part
+            ).lower()
+            if search_text not in searchable:
+                return False
+        return True
+
+    def _visible_task_ids_for_shot(
+        self,
+        shot_data: dict,
+        *,
+        search_text: str = "",
+        artist_filter=None,
+        status_filter_values=None,
+        hide_hidden_tasks: bool = True,
+        filters_enabled: bool = True,
+    ) -> list:
+        visible_ids = []
+        for task in shot_data.get("tasks", []) or []:
+            task_id = task.get("id")
+            if task_id is None:
+                continue
+            if not filters_enabled:
+                visible_ids.append(task_id)
+                continue
+            if self._task_matches_filters(
+                task,
+                search_text=search_text,
+                artist_filter=artist_filter,
+                status_filter_values=status_filter_values,
+                hide_hidden_tasks=hide_hidden_tasks,
+            ):
+                visible_ids.append(task_id)
+        return visible_ids
+
+    def _shot_matches_search(self, shot_data: dict, search_text: str) -> bool:
+        if not search_text:
+            return True
+        searchable = " ".join(
+            str(part or "")
+            for part in (shot_data.get("title"), shot_data.get("notes"))
+            if part
+        ).lower()
+        return search_text in searchable
+
+    def _reset_task_materialize_queue(self) -> None:
+        timer = getattr(self, "_task_materialize_timer", None)
+        if timer is not None:
+            timer.stop()
+        self._task_materialize_queue = []
+
+    def _enqueue_task_materialization(self, shot_card: widgets.ShotCard, task_ids: list) -> None:
+        if not task_ids:
+            return
+        if not hasattr(self, "_task_materialize_queue"):
+            self._task_materialize_queue = []
+        self._task_materialize_queue.append(
+            {"shot_card": shot_card, "task_ids": list(task_ids)}
+        )
+
+    def _process_task_materialize_queue(self, max_widgets: int | None = None) -> None:
+        if not hasattr(self, "_task_materialize_queue"):
+            self._task_materialize_queue = []
+        batch_size = getattr(self, "_task_materialize_batch_size", 20)
+        budget = batch_size if max_widgets is None else max(0, int(max_widgets))
+        while budget > 0 and self._task_materialize_queue:
+            entry = self._task_materialize_queue[0]
+            shot_card = entry.get("shot_card")
+            pending_ids = list(entry.get("task_ids", []))
+            if shot_card is None:
+                self._task_materialize_queue.pop(0)
+                continue
+            try:
+                created_ids = shot_card.materialize_task_ids(pending_ids, max_count=budget)
+            except RuntimeError:
+                self._task_materialize_queue.pop(0)
+                continue
+            if created_ids:
+                created_set = set(created_ids)
+                entry["task_ids"] = [
+                    task_id for task_id in pending_ids if task_id not in created_set
+                ]
+                budget -= len(created_ids)
+            else:
+                entry["task_ids"] = []
+            if not entry["task_ids"]:
+                self._task_materialize_queue.pop(0)
+        timer = getattr(self, "_task_materialize_timer", None)
+        if self._task_materialize_queue and timer is not None:
+            timer.start(0)
 
     def _set_project_load_profiler_enabled(self, enabled: bool) -> None:
         enabled = bool(enabled)
@@ -833,6 +1148,7 @@ class page_nukedash(QMainWindow):
         
         # Populate status dropdown (multi-select with checkboxes)
         self._setup_status_filter_dropdown()
+        self._apply_saved_filter_state_to_controls()
         
         self._dropdowns_populated = True
 
@@ -1141,14 +1457,32 @@ class page_nukedash(QMainWindow):
         if not force and self._is_scrolling:
             self._pending_filter_apply = True
             return
+        if force and hasattr(self, "_last_filter_sig"):
+            delattr(self, "_last_filter_sig")
 
         tabs = self.timelines_tabs
         current_tab_index = tabs.currentIndex()
+        filters_enabled = self._filters_enabled()
+        search_text = self.Search_bar.text().strip().lower()
+        artist_filter = self.comboBox_sort_artist.currentData()
+        status_filter_values = set(getattr(self, "_status_filter_values", set()))
+        show_to_conform = bool(getattr(self, "show_to_conform", False))
+        hide_hidden_tasks = not self.show_hidden_tasks
+        self._persist_filter_state()
+
+        render_state = self._current_task_render_state(
+            filters_enabled=filters_enabled,
+            search_text=search_text,
+            artist_filter=artist_filter,
+            status_filter_values=status_filter_values,
+            hide_hidden_tasks=hide_hidden_tasks,
+        )
         if not self._filters_enabled():
             filter_sig = ("filters_disabled", current_tab_index)
             if hasattr(self, "_last_filter_sig") and self._last_filter_sig == filter_sig:
                 return
             self._last_filter_sig = filter_sig
+            self._reset_task_materialize_queue()
 
             current_timeline_visible_count = 0
             for i in range(tabs.count()):
@@ -1170,6 +1504,15 @@ class page_nukedash(QMainWindow):
                     timeline_shot_count += 1
                     if not shot_card.isVisible():
                         shot_card.setVisible(True)
+                    if hasattr(shot_card, "set_task_render_state"):
+                        shot_card.set_task_render_state(render_state)
+                    visible_task_ids = self._visible_task_ids_for_shot(
+                        shot_card.data or {},
+                        filters_enabled=False,
+                    )
+                    pending_task_ids = shot_card.set_visible_task_ids(visible_task_ids)
+                    if is_current_timeline:
+                        self._enqueue_task_materialization(shot_card, pending_task_ids)
 
                 self._restore_timeline_api_order(timeline_widget)
                 if is_current_timeline:
@@ -1177,13 +1520,9 @@ class page_nukedash(QMainWindow):
 
             if hasattr(self, "Label_results"):
                 self.Label_results.setText(f"{current_timeline_visible_count} results")
+            self._process_task_materialize_queue(self._task_materialize_batch_size)
             return
-        
-        search_text = self.Search_bar.text().strip().lower()
-        artist_filter = self.comboBox_sort_artist.currentData()
-        status_filter_values = set(getattr(self, "_status_filter_values", set()))
-        show_to_conform = bool(getattr(self, "show_to_conform", False))
-        
+
         # Build a signature of current filter state to avoid redundant work
         # Include current tab index so results update when switching timelines
         filter_sig = (
@@ -1200,8 +1539,8 @@ class page_nukedash(QMainWindow):
             # Filters haven't changed, skip the expensive iteration
             return
         self._last_filter_sig = filter_sig
+        self._reset_task_materialize_queue()
         
-        visible_count = 0
         current_timeline_visible_count = 0
         
         # Pre-compute whether we have any active filters for early exit optimization
@@ -1210,7 +1549,6 @@ class page_nukedash(QMainWindow):
         has_status = bool(status_filter_values)
         has_task_filters = has_artist or has_status
         hide_hidden_shots = (not self.show_hidden_shots) and (not show_to_conform)
-        hide_hidden_tasks = not self.show_hidden_tasks
         
         for i in range(tabs.count()):
             timeline_widget = tabs.widget(i)
@@ -1230,26 +1568,32 @@ class page_nukedash(QMainWindow):
                 
                 # Start assuming visible, then check each filter
                 visible = True
-                data = shot_card.data
+                data = shot_card.data or {}
+                if hasattr(shot_card, "set_task_render_state"):
+                    shot_card.set_task_render_state(render_state)
                 is_shot_hidden = bool(data.get("hidden", False))
+                visible_task_ids = []
 
                 if hide_hidden_shots and is_shot_hidden:
+                    shot_card.set_visible_task_ids([])
+                    setattr(shot_card, "_pending_task_materialize_ids", [])
                     if shot_card.isVisible():
                         shot_card.setVisible(False)
                     continue
-                tasks = data.get("tasks", [])
-                searchable_tasks = tasks
-                if hide_hidden_tasks:
-                    searchable_tasks = [t for t in tasks if not t.get("hidden", False)]
 
                 if show_to_conform:
-                    self._apply_task_visibility(shot_card, hide_hidden_tasks)
+                    visible_task_ids = self._visible_task_ids_for_shot(
+                        data,
+                        hide_hidden_tasks=hide_hidden_tasks,
+                        filters_enabled=True,
+                    )
+                    pending_task_ids = shot_card.set_visible_task_ids(visible_task_ids)
+                    setattr(shot_card, "_pending_task_materialize_ids", pending_task_ids)
                     visible = self._shot_needs_conform(shot_card, data)
                 else:
                     # Filter 1: Search text
                     if has_search:
-                        searchable = self._get_searchable_text(data, tasks=searchable_tasks)
-                        if search_text not in searchable.lower():
+                        if not self._shot_matches_search(data, search_text):
                             visible = False
 
                     visible_task_count = 0
@@ -1257,61 +1601,63 @@ class page_nukedash(QMainWindow):
                         visible_task_count = self._apply_task_visibility(
                             shot_card,
                             hide_hidden_tasks,
+                            search_text=search_text,
                             artist_filter=artist_filter,
                             status_filter_values=status_filter_values,
                         )
+                        visible_task_ids = getattr(shot_card, "_visible_task_ids", [])
+                        if has_search and not visible_task_count and not self._shot_matches_search(data, search_text):
+                            visible = False
                         if has_task_filters and visible_task_count == 0:
                             visible = False
+                    else:
+                        shot_card.set_visible_task_ids([])
+                        setattr(shot_card, "_pending_task_materialize_ids", [])
                 
                 # Only call setVisible if state actually changed
                 if shot_card.isVisible() != visible:
                     shot_card.setVisible(visible)
                 
                 if visible:
-                    visible_count += 1
                     # Only count for current timeline
                     if is_current_timeline:
                         current_timeline_visible_count += 1
+                    pending_task_ids = getattr(shot_card, "_pending_task_materialize_ids", [])
+                    if is_current_timeline:
+                        self._enqueue_task_materialization(shot_card, pending_task_ids)
+                else:
+                    shot_card.set_visible_task_ids([])
+                    setattr(shot_card, "_pending_task_materialize_ids", [])
 
             self._apply_sort_to_timeline(timeline_widget, hide_hidden_tasks)
         
         # Update results label - show current timeline count
         if hasattr(self, 'Label_results'):
             self.Label_results.setText(f"{current_timeline_visible_count} results")
+        self._process_task_materialize_queue(self._task_materialize_batch_size)
 
     def _apply_task_visibility(
         self,
         shot_card: QWidget,
         hide_hidden: bool,
+        search_text: str = "",
         artist_filter=None,
         status_filter_values=None,
     ) -> int:
-        if not hasattr(shot_card, "frame_tasks"):
+        if not hasattr(shot_card, "data"):
             return 0
-        layout = shot_card.frame_tasks.layout()
-        if not layout:
-            return 0
-        status_filter_values = set(status_filter_values or set())
-        visible_count = 0
-        for i in range(layout.count()):
-            item = layout.itemAt(i)
-            if not item:
-                continue
-            task_widget = item.widget()
-            if not isinstance(task_widget, widgets.TaskWidget):
-                continue
-            task_data = getattr(task_widget, "_data", {}) or {}
-            task_hidden = bool(task_data.get("hidden", False))
-            visible = (not task_hidden) or (not hide_hidden)
-            if visible and artist_filter is not None:
-                visible = task_data.get("artist") == artist_filter
-            if visible and status_filter_values:
-                visible = task_data.get("status") in status_filter_values
-            if task_widget.isVisible() != visible:
-                task_widget.setVisible(visible)
-            if visible:
-                visible_count += 1
-        return visible_count
+        visible_task_ids = self._visible_task_ids_for_shot(
+            shot_card.data or {},
+            search_text=search_text,
+            artist_filter=artist_filter,
+            status_filter_values=status_filter_values,
+            hide_hidden_tasks=hide_hidden,
+            filters_enabled=True,
+        )
+        if hasattr(shot_card, "set_visible_task_ids"):
+            pending_ids = shot_card.set_visible_task_ids(visible_task_ids)
+            setattr(shot_card, "_pending_task_materialize_ids", pending_ids)
+        return len(visible_task_ids)
 
     def _shot_needs_conform(self, shot_card: QWidget, shot_data: dict) -> bool:
         latest_render = None
@@ -1796,6 +2142,9 @@ class page_nukedash(QMainWindow):
     @pyqtSlot(str)
     def _on_error(self, msg):
         self._loading_dialog.hide_loading()  # Hide loading dialog on error
+        reset_queue = getattr(self, "_reset_task_materialize_queue", None)
+        if callable(reset_queue):
+            reset_queue()
         self._fail_load_timing()
         self._fail_project_switch_profile(str(msg))
         pass  # Could log to file if needed
@@ -1944,8 +2293,12 @@ class page_nukedash(QMainWindow):
     def _start_job_loading(self, job_data: dict):
         """Start loading a job using chunked loader with per-shot-card progress."""
         self._is_chunked_loading = True  # BUGFIX: Prevent background updates during loading
+        self._reset_task_materialize_queue()
+        if hasattr(self, "_last_filter_sig"):
+            delattr(self, "_last_filter_sig")
         self._active_job_id = job_data.get("id")
         effective_layout_mode = self._effective_shots_layout_mode()
+        render_state = self._current_task_render_state()
 
         with self._project_load_profiler.measure_wall("timeline_build"):
             # Build list of tasks to execute - each task is (callable, description)
@@ -2075,6 +2428,8 @@ class page_nukedash(QMainWindow):
                                 if item and item.widget() and item.widget().objectName() == shot_name:
                                     # Already exists, update it instead of creating duplicate
                                     item.widget().update_from_data(shot_data)
+                                    if hasattr(item.widget(), "set_task_render_state"):
+                                        item.widget().set_task_render_state(render_state)
                                     if hasattr(item.widget(), "set_nuke_open_handler"):
                                         item.widget().set_nuke_open_handler(self._handle_nuke_open_request)
                                     return
@@ -2082,6 +2437,8 @@ class page_nukedash(QMainWindow):
                             with self._project_load_profiler.measure_work("shot_card_create"):
                                 card = widgets.ShotCard(shot_data)
                             card.setObjectName(shot_name)
+                            if hasattr(card, "set_task_render_state"):
+                                card.set_task_render_state(render_state)
                             card.set_nuke_open_handler(self._handle_nuke_open_request)
                             card.set_compact_mode(self._compact_view_enabled)
                             if (
@@ -2154,8 +2511,8 @@ class page_nukedash(QMainWindow):
             QTimer.singleShot(150, self._save_session_state)
 
         self._apply_compact_view_state()
-        # Reapply filters
-        QTimer.singleShot(50, self._apply_filters)
+        # Reapply filters and task materialization after the new shot cards exist.
+        QTimer.singleShot(50, lambda: self._apply_filters(force=True))
         
         # BUGFIX: Process any refresh data that arrived during loading
         if self._pending_refresh_jobs is not None:
@@ -2230,6 +2587,7 @@ class page_nukedash(QMainWindow):
             # Data hasn't changed, skip the update entirely
             return
         self._last_job_sig = new_sig
+        self._reset_task_materialize_queue()
         
         tabs = self.timelines_tabs
         
