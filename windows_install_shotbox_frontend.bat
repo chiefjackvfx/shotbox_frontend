@@ -53,21 +53,30 @@ echo.
 set "MODE="
 set "REPO_DIR="
 
-if exist "%SCRIPT_DIR%\main.py" if exist "%SCRIPT_DIR%\.git" (
-    set "MODE=existing checkout"
-    set "REPO_DIR=%SCRIPT_DIR%"
-) else (
+if exist "%SCRIPT_DIR%\main.py" (
+    if exist "%SCRIPT_DIR%\.git" (
+        set "MODE=existing checkout"
+        set "REPO_DIR=%SCRIPT_DIR%"
+    )
+)
+
+if not defined REPO_DIR (
     if not "%~1"=="" (
         set "REPO_DIR=%~1"
     ) else (
         set "REPO_DIR=%LAUNCH_DIR%\shotbox_frontend"
     )
 
+    set "MODE=standalone bootstrap"
     if exist "!REPO_DIR!\.git" (
         set "MODE=existing checkout"
-    ) else (
-        set "MODE=standalone bootstrap"
     )
+)
+
+if not defined REPO_DIR (
+    set "STEP=Resolving install target"
+    set "FAIL_MSG=Could not determine the frontend repo target folder."
+    goto :fail
 )
 
 echo [Info] Installer mode: !MODE!
