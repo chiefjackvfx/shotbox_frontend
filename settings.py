@@ -11,14 +11,16 @@ Handles application settings with:
 import os
 import sys
 import getpass
+import re
 import yaml
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QLabel, QLineEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, 
     QPushButton, QScrollArea, QFrame, QSizePolicy, QMessageBox,
-    QButtonGroup, QRadioButton, QApplication
+    QButtonGroup, QRadioButton, QApplication, QTextBrowser
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QIcon, QWheelEvent
@@ -30,6 +32,10 @@ from app_version import UPDATE_BRANCH
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(SCRIPT_DIR, "ui")
+CHANGELOG_PATH = Path(SCRIPT_DIR) / "CHANGELOG.md"
+CHANGELOG_ENTRY_RE = re.compile(
+    r"^##\s+(.+?)(?:\r?\n)(.*?)(?=^##\s+|\Z)", re.MULTILINE | re.DOTALL
+)
 
 
 def get_settings_file_path() -> str:
@@ -642,6 +648,19 @@ class SettingsPage(QWidget):
         )
         updates_layout.addRow("Latest Changelog:", self.update_changelog_label)
 
+        self.change_log_combo = NoScrollComboBox()
+        updates_layout.addRow("Change Log:", self.change_log_combo)
+
+        self.change_log_view = QTextBrowser()
+        self.change_log_view.setReadOnly(True)
+        self.change_log_view.setMinimumHeight(220)
+        self.change_log_view.setPlaceholderText("No changelog loaded.")
+        self.change_log_view.setOpenExternalLinks(False)
+        updates_layout.addRow("", self.change_log_view)
+
+        self._changelog_entries = []
+        self._load_change_log_entries()
+
         update_buttons_layout = QHBoxLayout()
         self.check_updates_btn = QPushButton("Check for Updates")
         update_buttons_layout.addWidget(self.check_updates_btn)
@@ -678,6 +697,45 @@ class SettingsPage(QWidget):
         """Create a group box that inherits styling from the active QSS theme."""
         group = QGroupBox(title)
         return group
+
+    def _read_change_log_text(self) -> str:
+        try:
+            return CHANGELOG_PATH.read_text(encoding="utf-8")
+        except OSError:
+            return "Could not load changelog."
+
+    def _load_change_log_entries(self) -> None:
+        changelog_text = self._read_change_log_text()
+        entries = [("All Changes", changelog_text)]
+
+        for match in CHANGELOG_ENTRY_RE.finditer(changelog_text or ""):
+            heading = match.group(1).strip()
+            body = match.group(2).strip()
+            if not heading:
+                continue
+            entry_text = f"## {heading}"
+            if body:
+                entry_text = f"{entry_text}\n\n{body}"
+            entries.append((heading, entry_text))
+
+        self._changelog_entries = entries
+        self.change_log_combo.blockSignals(True)
+        self.change_log_combo.clear()
+        for heading, entry_text in self._changelog_entries:
+            self.change_log_combo.addItem(heading, entry_text)
+        self.change_log_combo.blockSignals(False)
+        self.change_log_combo.setCurrentIndex(0)
+        self._update_change_log_view()
+
+    def _update_change_log_view(self) -> None:
+        if not self._changelog_entries:
+            self.change_log_view.setMarkdown("Could not load changelog.")
+            return
+        entry_text = self.change_log_combo.currentData()
+        if entry_text is None:
+            entry_text = self._changelog_entries[0][1]
+        self.change_log_view.setMarkdown(str(entry_text))
+        self.change_log_view.verticalScrollBar().setValue(0)
     
     def _load_django_users(self):
         """Load Django users from API for the dropdown."""
@@ -858,6 +916,7 @@ class SettingsPage(QWidget):
         # Update controls
         self.check_updates_btn.clicked.connect(self._on_check_for_updates)
         self.apply_update_btn.clicked.connect(self._on_update_and_restart)
+        self.change_log_combo.currentIndexChanged.connect(self._update_change_log_view)
     
     def _save_all_settings(self):
         """Save all settings from UI to file."""

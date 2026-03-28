@@ -158,6 +158,31 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             page.deleteLater()
             self.app.processEvents()
 
+    def test_change_log_dropdown_populates_and_updates_scroll_view(self):
+        manager = InMemorySettingsManager()
+
+        with mock.patch.object(settings.SettingsPage, "_load_django_users", lambda self: None), \
+            mock.patch.object(settings.SettingsPage, "_refresh_update_panel", lambda self: None), \
+            mock.patch.object(settings.QMessageBox, "information", lambda *args, **kwargs: None):
+            page = settings.SettingsPage(settings_manager=manager)
+
+        try:
+            self.assertGreaterEqual(page.change_log_combo.count(), 2)
+            self.assertEqual(page.change_log_combo.itemText(0), "All Changes")
+            self.assertIn("Changelog", page.change_log_view.toPlainText())
+            self.assertIn("<h1", page.change_log_view.toHtml())
+
+            page.change_log_combo.setCurrentIndex(1)
+            entry_heading = page.change_log_combo.currentText()
+            entry_text = page.change_log_view.toPlainText()
+
+            self.assertIn(entry_heading, entry_text)
+            self.assertIn("<h2", page.change_log_view.toHtml())
+        finally:
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
 
 if __name__ == "__main__":
     unittest.main()
