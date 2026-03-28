@@ -23,6 +23,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QIcon, QWheelEvent
 
+import app_update
+from app_version import UPDATE_BRANCH
+
 
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -267,6 +270,7 @@ class SettingsPage(QWidget):
         self._load_django_users()
         self._load_current_values()
         self._connect_signals()
+        self._refresh_update_panel()
     
     def _setup_ui(self):
         """Build the settings UI."""
@@ -568,6 +572,43 @@ class SettingsPage(QWidget):
         notif_layout.addLayout(notif_form)
 
         container_layout.addWidget(notif_group)
+
+        # === App Updates Section ===
+        updates_group = self._create_group_box("App Updates")
+        updates_layout = QFormLayout(updates_group)
+
+        self.current_version_label = QLabel("Unknown")
+        self.current_version_label.setWordWrap(True)
+        updates_layout.addRow("Current Version:", self.current_version_label)
+
+        self.update_branch_label = QLabel(UPDATE_BRANCH)
+        updates_layout.addRow("Tracked Branch:", self.update_branch_label)
+
+        self.latest_publish_label = QLabel("Not checked yet.")
+        self.latest_publish_label.setWordWrap(True)
+        updates_layout.addRow("Latest Publish:", self.latest_publish_label)
+
+        self.update_status_label = QLabel("Checking local install status...")
+        self.update_status_label.setWordWrap(True)
+        updates_layout.addRow("Update Status:", self.update_status_label)
+
+        self.update_changelog_label = QLabel("No changelog preview loaded yet.")
+        self.update_changelog_label.setWordWrap(True)
+        self.update_changelog_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        updates_layout.addRow("Latest Changelog:", self.update_changelog_label)
+
+        update_buttons_layout = QHBoxLayout()
+        self.check_updates_btn = QPushButton("Check for Updates")
+        update_buttons_layout.addWidget(self.check_updates_btn)
+        self.apply_update_btn = QPushButton("Update && Restart")
+        self.apply_update_btn.setEnabled(False)
+        update_buttons_layout.addWidget(self.apply_update_btn)
+        update_buttons_layout.addStretch()
+        updates_layout.addRow("", update_buttons_layout)
+
+        container_layout.addWidget(updates_group)
         
         # === Action Buttons ===
         buttons_layout = QHBoxLayout()
@@ -752,6 +793,10 @@ class SettingsPage(QWidget):
 
         # Browse Nuke executable
         self.nuke_exe_browse_btn.clicked.connect(self._on_browse_nuke_exe)
+
+        # Update controls
+        self.check_updates_btn.clicked.connect(self._on_check_for_updates)
+        self.apply_update_btn.clicked.connect(self._on_update_and_restart)
     
     def _save_all_settings(self):
         """Save all settings from UI to file."""
@@ -1007,6 +1052,73 @@ class SettingsPage(QWidget):
                 "Connection Error",
                 f"Error testing connection:\n{str(e)}"
             )
+
+    def _set_update_buttons_enabled(self, can_check: bool, can_update: bool) -> None:
+        self.check_updates_btn.setEnabled(can_check)
+        self.apply_update_btn.setEnabled(can_update)
+
+    def _apply_update_status(self, status: app_update.UpdateStatus) -> None:
+        self.current_version_label.setText(status.current_display)
+
+        if status.current_branch:
+            self.update_branch_label.setText(f"{status.branch} (current: {status.current_branch})")
+        else:
+            self.update_branch_label.setText(status.branch)
+
+        self.latest_publish_label.setText(status.remote_display or "Not checked yet.")
+        self.update_status_label.setText(status.status_message)
+        self.update_changelog_label.setText(status.changelog_preview)
+        self._set_update_buttons_enabled(status.can_check, status.can_update)
+
+    def _refresh_update_panel(self) -> None:
+        status = app_update.inspect_install()
+        self._apply_update_status(status)
+
+    def _on_check_for_updates(self) -> None:
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            status = app_update.check_for_updates()
+        finally:
+            QApplication.restoreOverrideCursor()
+        self._apply_update_status(status)
+
+    def _on_update_and_restart(self) -> None:
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            status = app_update.check_for_updates()
+        finally:
+            QApplication.restoreOverrideCursor()
+
+        self._apply_update_status(status)
+
+        if not status.can_update:
+            QMessageBox.warning(self, "Update Blocked", status.status_message)
+            return
+
+        remote_display = status.remote_display or "the latest published version"
+        reply = QMessageBox.question(
+            self,
+            "Update ShotBox",
+            f"Update to {remote_display} and restart ShotBox now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        ok, error_message = app_update.launch_update_script(os.getpid())
+        if not ok:
+            QMessageBox.critical(
+                self,
+                "Update Failed",
+                f"Could not launch the updater script.\n\n{error_message}",
+            )
+            return
+
+        self.update_status_label.setText("Updater launched. ShotBox will now close.")
+        app = QApplication.instance()
+        if app:
+            app.quit()
     
     def get_settings_manager(self) -> SettingsManager:
         """Get the settings manager instance."""
