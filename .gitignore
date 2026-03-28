@@ -16,6 +16,7 @@ ENV/
 
 # Local runtime/output files
 media/
+*.log
 
 # Editors and OS files
 .vscode/
