@@ -64,7 +64,7 @@ if not defined REPO_DIR (
     if not "%~1"=="" (
         set "REPO_DIR=%~1"
     ) else (
-        set "REPO_DIR=%LAUNCH_DIR%\shotbox_frontend"
+        set "REPO_DIR=%SCRIPT_DIR%\shotbox_frontend"
     )
 
     set "MODE=standalone bootstrap"
@@ -230,7 +230,7 @@ echo it repairs and updates that checkout in place.
 echo.
 echo If this script is run from a normal folder without a checkout:
 echo   - with no argument, it clones into:
-echo     "%CD%\shotbox_frontend"
+echo     next to this batch file as "shotbox_frontend"
 echo   - with a target argument, it clones into that path instead
 echo.
 echo Examples:

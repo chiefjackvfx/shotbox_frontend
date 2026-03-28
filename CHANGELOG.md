@@ -1,6 +1,12 @@
 # Changelog
 
 All notable frontend publish changes should be documented in this file.
+## 0.1.1 - 2026-03-28
+
+
+### Fixed
+
+- windows installer.
 
 ## 0.1.0 - 2026-03-28
 
