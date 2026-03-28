@@ -92,6 +92,9 @@ class FlowLayout(QLayout):
         size = QSize()
         
         for item in self._item_list:
+            widget = item.widget()
+            if widget is not None and widget.isHidden():
+                continue
             size = size.expandedTo(item.minimumSize())
         
         left, top, right, bottom = self.getContentsMargins()
@@ -121,6 +124,8 @@ class FlowLayout(QLayout):
 
         for item in self._item_list:
             widget = item.widget()
+            if widget is not None and widget.isHidden():
+                continue
             
             space_x = h_space
             space_y = v_space

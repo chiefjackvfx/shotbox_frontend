@@ -1161,10 +1161,18 @@ class ShotCard(QWidget):
             for task_id in (self._visible_task_ids or [])
             if self._normalize_task_id(task_id) is not None
         }
+        changed = False
         for task_id, widget in self._task_widgets_by_id.items():
             should_show = task_id in visible_ids
             if widget.isVisible() != should_show:
                 widget.setVisible(should_show)
+                changed = True
+        if changed:
+            layout = self.frame_tasks.layout()
+            if layout is not None:
+                layout.invalidate()
+            self.frame_tasks.updateGeometry()
+            self.frame_tasks.update()
 
     def set_visible_task_ids(self, task_ids: list | tuple | set) -> list:
         self._ensure_task_cache_state()
