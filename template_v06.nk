@@ -609,7 +609,7 @@ PostageStamp {
 Read {
  inputs 0
  file_type exr
- file ../renders/precomp/find&replace shotname_DN_v01/find&replace shotname_DN_v01_####.exr
+ file ../renders/precomp/find&replace shotname_DN_v001/find&replace shotname_DN_v001_####.exr
  first 1001
  last find&replace last_frame
  origfirst 1001
@@ -2645,7 +2645,7 @@ Denoise2 {
  ypos 920
 }
 Write {
- file ../renders/precomp/find&replace shotname_DN_v01/find&replace shotname_DN_v01_####.exr
+ file ../renders/precomp/find&replace shotname_DN_v001/find&replace shotname_DN_v001_####.exr
  file_type exr
  first_part rgba
  create_directories true

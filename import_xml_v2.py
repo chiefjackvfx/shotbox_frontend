@@ -68,6 +68,10 @@ COLOURSPACE_LIST = [
 ]
 
 DEFAULT_TASKS = ["Comp", "Roto", "Paint", "Track"]
+SHOT_TITLE_MAX_LENGTH = 50
+IMPORT_VERSION_PADDING = 3
+INITIAL_IMPORT_VERSION = 1
+INITIAL_IMPORT_VERSION_TAG = f"v{INITIAL_IMPORT_VERSION:0{IMPORT_VERSION_PADDING}d}"
 
 
 # =============================================================================
@@ -85,6 +89,7 @@ class ParsedClip:
     start_frame: int
     end_frame: int
     track: int  # V1=1, V2=2, etc.
+    copied_filepath: Optional[str] = None
 
 
 @dataclass
@@ -111,12 +116,22 @@ class ParsedShot:
     
     @property
     def original_clip_name(self) -> str:
-        """Get the original clip filename."""
+        """Get the primary copied plate path, falling back to the source path."""
         clip = self.primary_clip
-        if clip and clip.filepath != "offline":
-            #return os.path.basename(clip.filepath)
-            return clip.filepath
+        if clip:
+            if clip.copied_filepath:
+                return clip.copied_filepath
+            if clip.filepath != "offline":
+                return clip.filepath
         return "offline"
+
+    @property
+    def original_clip_paths(self) -> List[str]:
+        """Get all copied plate paths, falling back to the source paths."""
+        copied_paths = [clip.copied_filepath for clip in self.clips if clip.copied_filepath]
+        if copied_paths:
+            return copied_paths
+        return [clip.filepath for clip in self.clips if clip.filepath != "offline"]
 
 
 @dataclass 
@@ -375,47 +390,62 @@ class NukeScriptGenerator:
         Returns:
             Path to the created shot folder
         """
-        nuke_root = os.path.join(project_root, "Nuke")
-        work_folder = os.path.join(nuke_root, edit_name)
+        nuke_root = os.path.join(project_root, "VFX")
+        work_folder = os.path.join(nuke_root, edit_name) if edit_name else nuke_root
         shot_folder = os.path.join(work_folder, shot.name)
         
-        # Create directories
-        if not os.path.isdir(nuke_root):
-            os.makedirs(nuke_root)
-            os.makedirs(os.path.join(nuke_root, "assets"), exist_ok=True)
-        
-        if not os.path.isdir(work_folder):
-            os.makedirs(work_folder)
-        
-        if os.path.isdir(shot_folder):
+        os.makedirs(os.path.join(nuke_root, "assets"), exist_ok=True)
+        os.makedirs(work_folder, exist_ok=True)
+
+        shot_preexists = os.path.isdir(shot_folder)
+        self._ensure_shot_subfolders(shot_folder)
+        self._copy_clips_to_plates(shot, shot_folder)
+
+        if shot_preexists:
             print(f"[NukeGen] Shot folder already exists: {shot_folder}")
-            return shot_folder
-        
-        # Create shot folder structure
-        os.makedirs(shot_folder)
-        os.makedirs(os.path.join(shot_folder, "renders", "comp"))
-        os.makedirs(os.path.join(shot_folder, "renders", "precomp"))
-        os.makedirs(os.path.join(shot_folder, "scripts"))
-        os.makedirs(os.path.join(shot_folder, "assets"))
-        
-        # Write notes file
-        self._write_notes_file(shot, shot_folder)
-        
         return shot_folder
-    
-    def _write_notes_file(self, shot: ParsedShot, shot_folder: str):
-        """Write the shot notes file."""
-        notes_path = os.path.join(shot_folder, f"{shot.name}.txt")
-        
-        clip_names = " ".join([os.path.basename(c.filepath) for c in shot.clips if c.filepath != "offline"])
-        
-        with open(notes_path, "w", encoding="utf-8") as f:
-            f.write(f"{shot.name}\n")
-            f.write("Latest conform: None\n")
-            f.write("Notes: type any notes or shot brief here\n")
-            f.write(f"OG clip names: {clip_names}\n")
-            f.write(f"duration: {shot.duration}\n")
-            f.write(f"edit start frame: {shot.edit_inpoint}\n")
+
+    def _ensure_shot_subfolders(self, shot_folder: str):
+        """Ensure the current shot folder contains the expected structure."""
+        os.makedirs(os.path.join(shot_folder, "plates"), exist_ok=True)
+        os.makedirs(os.path.join(shot_folder, "renders", "comp"), exist_ok=True)
+        os.makedirs(os.path.join(shot_folder, "renders", "precomp"), exist_ok=True)
+        os.makedirs(os.path.join(shot_folder, "scripts"), exist_ok=True)
+        os.makedirs(os.path.join(shot_folder, "assets"), exist_ok=True)
+
+    def _copy_clips_to_plates(self, shot: ParsedShot, shot_folder: str):
+        """Copy each online clip into the local plates folder."""
+        plates_folder = os.path.join(shot_folder, "plates")
+        os.makedirs(plates_folder, exist_ok=True)
+
+        used_names = set()
+        for clip in shot.clips:
+            clip.copied_filepath = None
+
+        for clip in shot.clips:
+            if clip.filepath == "offline":
+                continue
+            if not os.path.isfile(clip.filepath):
+                raise FileNotFoundError(f"Clip not found for copy: {clip.filepath}")
+
+            dest_path = self._resolve_plate_destination(plates_folder, clip.filepath, used_names)
+            if os.path.abspath(clip.filepath) != os.path.abspath(dest_path):
+                shutil.copy2(clip.filepath, dest_path)
+            clip.copied_filepath = dest_path
+
+    def _resolve_plate_destination(self, plates_folder: str, source_path: str, used_names: set[str]) -> str:
+        """Return a deterministic plate destination, avoiding basename collisions."""
+        source_name = os.path.basename(source_path)
+        stem, ext = os.path.splitext(source_name)
+        candidate = source_name
+        suffix = 2
+
+        while candidate.lower() in used_names:
+            candidate = f"{stem}_{suffix}{ext}"
+            suffix += 1
+
+        used_names.add(candidate.lower())
+        return os.path.join(plates_folder, candidate)
     
     def create_nuke_script(self, shot: ParsedShot, shot_folder: str, 
                            project_root: str, template_path: Optional[str] = None) -> str:
@@ -426,23 +456,30 @@ class NukeScriptGenerator:
             Path to the created Nuke script
         """
         scripts_folder = os.path.join(shot_folder, "scripts")
-        script_path = os.path.join(scripts_folder, f"{shot.name}_v01.nk")
+        script_path = os.path.join(scripts_folder, f"{shot.name}_{INITIAL_IMPORT_VERSION_TAG}.nk")
         
         if os.path.isfile(script_path):
             print(f"[NukeGen] Script already exists: {script_path}")
             return script_path
+
+        if any(clip.filepath != "offline" and not clip.copied_filepath for clip in shot.clips):
+            self._copy_clips_to_plates(shot, shot_folder)
         
         # Build relative paths for clips
         trimmed_paths = self._build_relative_paths(shot, shot_folder, project_root)
         
         # Get format from primary clip
         primary_clip = shot.primary_clip
-        format_str = self._get_video_format(primary_clip.filepath if primary_clip else "")
+        primary_clip_path = ""
+        if primary_clip:
+            primary_clip_path = primary_clip.copied_filepath or primary_clip.filepath
+        format_str = self._get_video_format(primary_clip_path)
         
         # Build timestamp
         now = datetime.datetime.now()
         timestamp = f"script was auto generated by {self.user} on: {now.strftime('%d/%m/%Y %H:%M:%S')}\n"
-        timestamp += f"OG clip names: {[c.filepath for c in shot.clips]}\n"
+        timestamp += f"Source clip paths: {[c.filepath for c in shot.clips if c.filepath != 'offline']}\n"
+        timestamp += f"Copied plate paths: {shot.original_clip_paths}\n"
         timestamp += f"duration: {shot.duration}\n"
         timestamp += f"edit start frame: {shot.edit_inpoint}"
         
@@ -463,26 +500,18 @@ class NukeScriptGenerator:
                                project_root: str) -> List[str]:
         """Build relative paths for clip references in Nuke."""
         trimmed_paths = []
+        scripts_folder = os.path.join(shot_folder, "scripts")
         
         for clip in shot.clips:
             if clip.filepath == "offline":
                 trimmed_paths.append("offline")
                 continue
-            
-            if self.local_work:
-                # Copy to scans folder
-                scans_folder = os.path.join(shot_folder, "scans")
-                os.makedirs(scans_folder, exist_ok=True)
-                dest = shutil.copy2(clip.filepath, scans_folder)
-                trimmed_paths.append("../scans/" + os.path.basename(dest))
-            else:
-                # Build relative path
-                parts = self._split_path(clip.filepath)
-                if platform.system() == "Linux":
-                    pathstrip = "/".join(parts[5:])
-                else:
-                    pathstrip = "/".join(parts[3:])
-                trimmed_paths.append("../../../../" + pathstrip)
+
+            if not clip.copied_filepath:
+                raise FileNotFoundError(f"Copied plate missing for clip: {clip.filepath}")
+
+            relative_path = os.path.relpath(clip.copied_filepath, scripts_folder).replace("\\", "/")
+            trimmed_paths.append(relative_path)
         
         return trimmed_paths
     
@@ -717,7 +746,8 @@ class DjangoImporter:
             "edit_outpoint": str(shot.edit_outpoint),
             "colourspace": colourspace,
             "handles": str(handles),
-            "original_clip": shot.original_clip_name
+            "original_clip": shot.original_clip_name,
+            "original_clips": shot.original_clip_paths,
         }
         
         try:
@@ -837,7 +867,7 @@ class ImportWorker(QObject):
                     # Step 2: Generate thumbnail
                     primary_clip = shot.primary_clip
                     if primary_clip and primary_clip.filepath != "offline":
-                        thumb_path = os.path.join(shot_folder, f"{shot.name}_thumb_v01.jpeg")
+                        thumb_path = os.path.join(shot_folder, f"{shot.name}_thumb_{INITIAL_IMPORT_VERSION_TAG}.jpeg")
                         if not os.path.isfile(thumb_path):
                             result = self.thumb_gen.generate(primary_clip.filepath, thumb_path)
                             if result:
@@ -846,7 +876,7 @@ class ImportWorker(QObject):
                             shot.thumbnail_path = thumb_path
                     
                     # Step 3: Create Nuke script
-                    script_path = os.path.join(shot_folder, "scripts", f"{shot.name}_v01.nk")
+                    script_path = os.path.join(shot_folder, "scripts", f"{shot.name}_{INITIAL_IMPORT_VERSION_TAG}.nk")
                     if not os.path.isfile(script_path):
                         shot.nuke_script_path = self.nuke_gen.create_nuke_script(
                             shot, shot_folder, self.project_root, self.template_path
@@ -925,7 +955,7 @@ class ThumbnailWorker(QThread):
                     print(f"[Thumbnail] Could not create dir {thumb_dir}: {e}")
                     continue
                 
-                thumb_path = os.path.join(thumb_dir, f"{shot.name}_thumb_v01.jpeg")
+                thumb_path = os.path.join(thumb_dir, f"{shot.name}_thumb_{INITIAL_IMPORT_VERSION_TAG}.jpeg")
                 
                 if not os.path.isfile(thumb_path):
                     result = ThumbnailGenerator.generate(primary_clip.filepath, thumb_path)
@@ -1123,28 +1153,48 @@ class XMLImportPage(QWidget):
         
         # Rename shots if already parsed
         if self.shots:
-            for shot in self.shots:
-                shot.name = self._shot_name(shot.index + 1)
+            try:
+                self._apply_generated_shot_names()
+            except ValueError as exc:
+                QMessageBox.warning(self, "Invalid Shot Name", str(exc))
+                return
             self._on_show_table()
         
         print(f"[Settings] prefix={self.shot_prefix}, padding={self.shot_padding}, "
               f"colourspace={self.colourspace}, handles={self.handles}, db={self.add_to_db}")
     
+    def _apply_generated_shot_names(self):
+        """Apply generated shot names to the currently parsed shots."""
+        for shot in self.shots:
+            shot.name = self._shot_name(shot.index + 1)
+
     def _shot_name(self, number: int) -> str:
         """Generate shot name from number."""
         if self.shot_padding == 3:
             if number < 10:
-                return f"{self.shot_prefix}0{number}0"
+                candidate = f"{self.shot_prefix}0{number}0"
             else:
-                return f"{self.shot_prefix}{number}0"
+                candidate = f"{self.shot_prefix}{number}0"
         elif self.shot_padding == 4:
             if number < 10:
-                return f"{self.shot_prefix}00{number}0"
+                candidate = f"{self.shot_prefix}00{number}0"
             elif number < 100:
-                return f"{self.shot_prefix}0{number}0"
+                candidate = f"{self.shot_prefix}0{number}0"
             else:
-                return f"{self.shot_prefix}{number}0"
-        return f"{self.shot_prefix}{number}"
+                candidate = f"{self.shot_prefix}{number}0"
+        else:
+            candidate = f"{self.shot_prefix}{number}"
+        return self._validated_shot_name(candidate)
+
+    def _validated_shot_name(self, shot_name: str) -> str:
+        """Validate a shot name against backend limits."""
+        if not shot_name:
+            raise ValueError("Shot name cannot be empty.")
+        if len(shot_name) > SHOT_TITLE_MAX_LENGTH:
+            raise ValueError(
+                f"Shot name '{shot_name}' exceeds the {SHOT_TITLE_MAX_LENGTH}-character limit."
+            )
+        return shot_name
     
     def _on_select_root(self):
         """Select project root directory."""
@@ -1170,8 +1220,7 @@ class XMLImportPage(QWidget):
             self.shots = self.parser.parse(path, self.handles)
             
             # Apply shot names
-            for shot in self.shots:
-                shot.name = self._shot_name(shot.index + 1)
+            self._apply_generated_shot_names()
             
             # Derive project root from clip paths
             derived_root = self.parser._derive_project_root_from_clips()
@@ -1308,7 +1357,7 @@ class XMLImportPage(QWidget):
             # Generate thumbnail if needed
             primary = shot.primary_clip
             if primary and primary.filepath != "offline":
-                thumb_path = os.path.join(shot_folder, f"{shot.name}_thumb_v01.jpeg")
+                thumb_path = os.path.join(shot_folder, f"{shot.name}_thumb_{INITIAL_IMPORT_VERSION_TAG}.jpeg")
                 if not os.path.isfile(thumb_path):
                     ThumbnailGenerator.generate(primary.filepath, thumb_path)
                     shot.thumbnail_path = thumb_path
@@ -1436,36 +1485,24 @@ class XMLImportPage(QWidget):
         shot_name: str,
         parsed_shot_object,
     ) -> str:
-        """Create the folder structure and a basic notes file for one shot."""
+        """Create the folder structure for one shot."""
 
         shot_folder_path = os.path.join(output_directory_path, shot_name)
 
         if os.path.isdir(shot_folder_path):
             raise FileExistsError(f"Shot folder already exists:\n{shot_folder_path}")
 
+        plates_directory = os.path.join(shot_folder_path, "plates")
         renders_comp_directory = os.path.join(shot_folder_path, "renders", "comp")
         renders_precomp_directory = os.path.join(shot_folder_path, "renders", "precomp")
         scripts_directory = os.path.join(shot_folder_path, "scripts")
         assets_directory = os.path.join(shot_folder_path, "assets")
 
+        os.makedirs(plates_directory, exist_ok=True)
         os.makedirs(renders_comp_directory, exist_ok=True)
         os.makedirs(renders_precomp_directory, exist_ok=True)
         os.makedirs(scripts_directory, exist_ok=True)
         os.makedirs(assets_directory, exist_ok=True)
-
-        notes_file_path = os.path.join(shot_folder_path, f"{shot_name}.txt")
-
-        primary_clip = parsed_shot_object.primary_clip
-        original_clip_file_name = os.path.basename(primary_clip.filepath) if primary_clip else "offline"
-
-        with open(notes_file_path, "w", encoding="utf-8") as notes_file:
-            notes_file.write(f"{shot_name}\n")
-            notes_file.write("Latest conform: None\n")
-            notes_file.write("Notes: type any notes or shot brief here\n")
-            notes_file.write(f"Original clip file: {original_clip_file_name}\n")
-            notes_file.write(f"Duration: {parsed_shot_object.duration}\n")
-            notes_file.write(f"Edit start frame: {parsed_shot_object.edit_inpoint}\n")
-            notes_file.write(f"Edit end frame: {parsed_shot_object.edit_outpoint}\n")
 
         return shot_folder_path
 
@@ -1495,7 +1532,7 @@ class XMLImportPage(QWidget):
 
         parsed_shot = ParsedShot(
             index=0,
-            name=shot_name,
+            name=self._validated_shot_name(shot_name),
             clips=[parsed_clip],
             duration=video_duration_frames,
             edit_inpoint=timeline_start_frame,
@@ -1546,7 +1583,9 @@ class XMLImportPage(QWidget):
             parsed_shot.folder_path = shot_folder_path
 
             # Generate thumbnail
-            thumbnail_file_path = os.path.join(shot_folder_path, f"{parsed_shot.name}_thumb_v01.jpeg")
+            thumbnail_file_path = os.path.join(
+                shot_folder_path, f"{parsed_shot.name}_thumb_{INITIAL_IMPORT_VERSION_TAG}.jpeg"
+            )
             if not os.path.isfile(thumbnail_file_path):
                 ThumbnailGenerator.generate(
                     video_path=selected_video_file_path,
@@ -1712,7 +1751,7 @@ class SingleShotCreationDialog(QDialog):
         shot_name_row_layout.addWidget(QLabel("Shot name:"))
 
         self.shot_name_line_edit = QLineEdit(default_shot_name)
-        self.shot_name_line_edit.setMaxLength(20)
+        self.shot_name_line_edit.setMaxLength(SHOT_TITLE_MAX_LENGTH)
         shot_name_row_layout.addWidget(self.shot_name_line_edit)
 
         main_layout.addLayout(shot_name_row_layout)
@@ -1927,6 +1966,14 @@ class SingleShotCreationDialog(QDialog):
             return
 
         if not shot_name:
+            self.shot_name_line_edit.setFocus()
+            return
+        if len(shot_name) > SHOT_TITLE_MAX_LENGTH:
+            QMessageBox.warning(
+                self,
+                "Invalid Shot Name",
+                f"Shot names must be {SHOT_TITLE_MAX_LENGTH} characters or fewer.",
+            )
             self.shot_name_line_edit.setFocus()
             return
         
