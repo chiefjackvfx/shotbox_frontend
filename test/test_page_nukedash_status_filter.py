@@ -109,6 +109,12 @@ class FakeTimelineWidget(QWidget):
 
 
 class FilterHarness(QMainWindow):
+    _set_task_loading_text = page_nukedash.page_nukedash._set_task_loading_text
+    _prepare_task_loading_progress = page_nukedash.page_nukedash._prepare_task_loading_progress
+    _timeline_task_loading_key = page_nukedash.page_nukedash._timeline_task_loading_key
+    _start_task_loading_timing = page_nukedash.page_nukedash._start_task_loading_timing
+    _finish_task_loading_timing = page_nukedash.page_nukedash._finish_task_loading_timing
+    _sync_task_loading_status = page_nukedash.page_nukedash._sync_task_loading_status
     _default_saved_filter_state = page_nukedash.page_nukedash._default_saved_filter_state
     _normalize_saved_filter_state = page_nukedash.page_nukedash._normalize_saved_filter_state
     _current_structured_filter_state = page_nukedash.page_nukedash._current_structured_filter_state
@@ -151,6 +157,7 @@ class FilterHarness(QMainWindow):
         self.comboBox_sort_artist = QComboBox(central)
         self.comboBox_sort_status = QComboBox(central)
         self.Label_results = QLabel("", central)
+        self.label_task_loading = QLabel("", central)
         self.timelines_tabs = QTabWidget(central)
 
         layout.addWidget(self.checkBox_enable_filters)
@@ -162,6 +169,7 @@ class FilterHarness(QMainWindow):
         layout.addWidget(self.comboBox_sort_artist)
         layout.addWidget(self.comboBox_sort_status)
         layout.addWidget(self.Label_results)
+        layout.addWidget(self.label_task_loading)
         layout.addWidget(self.timelines_tabs)
 
         self._settings_manager = FakeSettingsManager()
@@ -179,6 +187,7 @@ class FilterHarness(QMainWindow):
         self._task_materialize_timer = QTimer(self)
         self._task_materialize_timer.setSingleShot(True)
         self._task_materialize_timer.timeout.connect(self._process_task_materialize_queue)
+        self._set_task_loading_text("Tasks loaded")
 
         self.comboBox_sort.addItem("A-Z", "title_asc")
         self.comboBox_sort.addItem("Z-A", "title_desc")

@@ -190,9 +190,16 @@
               </widget>
              </item>
              <item>
-              <widget class="QLabel" name="label_loaded_time">
+             <widget class="QLabel" name="label_loaded_time">
                <property name="text">
                 <string>Loaded in: 15.5s</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+             <widget class="QLabel" name="label_task_loading">
+               <property name="text">
+                <string>Tasks loaded</string>
                </property>
               </widget>
              </item>

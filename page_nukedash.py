@@ -418,11 +418,12 @@ class page_nukedash(QMainWindow):
         self._project_load_report_timer.timeout.connect(self._emit_project_load_report_if_ready)
         self._project_load_report_poll_ms = 50
         self._project_load_report_grace_seconds = 2.0
-        self._task_materialize_batch_size = 20
+        self._task_materialize_batch_size = 1
         self._task_materialize_queue = []
         self._task_materialize_timer = QTimer(self)
         self._task_materialize_timer.setSingleShot(True)
         self._task_materialize_timer.timeout.connect(self._process_task_materialize_queue)
+        self._set_task_loading_text("Tasks loaded")
 
         self._lock_sync_timer = QTimer(self)
         self._lock_sync_timer.setInterval(self._lock_interval_ms)
@@ -474,6 +475,56 @@ class page_nukedash(QMainWindow):
         label = getattr(self, "label_loaded_time", None)
         if label is not None:
             label.setText(f"Loaded in: {value}")
+
+    def _set_task_loading_text(self, value: str) -> None:
+        label = getattr(self, "label_task_loading", None)
+        if label is not None:
+            label.setText(value)
+            label.show()
+
+    def _prepare_task_loading_progress(self, timeline_index: int | None = None) -> None:
+        total = 0
+        for entry in getattr(self, "_task_materialize_queue", []):
+            total += len(entry.get("task_ids", []) or [])
+        if total > 0:
+            self._start_task_loading_timing(timeline_index)
+        else:
+            self._finish_task_loading_timing(timeline_index)
+
+    def _active_task_loading_key(self, timeline_index: int | None = None):
+        if timeline_index is None and self._task_loading_timeline_key is not None:
+            return self._task_loading_timeline_key
+        return self._timeline_task_loading_key(timeline_index)
+
+    def _timeline_task_loading_key(self, index: int | None = None):
+        tabs = getattr(self, "timelines_tabs", None)
+        if tabs is None:
+            return f"tab-{0 if index is None else index}"
+        if index is None:
+            index = tabs.currentIndex()
+        if index is None:
+            index = 0
+        widget = tabs.widget(index) if 0 <= index < tabs.count() else None
+        if widget is not None:
+            name = widget.objectName()
+            if name:
+                return name
+            timeline = getattr(widget, "_last_timeline", None)
+            if isinstance(timeline, dict) and timeline.get("id") is not None:
+                return f"timeline-{timeline.get('id')}"
+        return f"tab-{index}"
+
+    def _start_task_loading_timing(self, timeline_index: int | None = None) -> None:
+        self._set_task_loading_text("Loading tasks...")
+
+    def _finish_task_loading_timing(self, timeline_index: int | None = None) -> None:
+        self._set_task_loading_text("Tasks loaded")
+
+    def _sync_task_loading_status(self, timeline_index: int | None = None) -> None:
+        if getattr(self, "_task_materialize_queue", []):
+            self._start_task_loading_timing(timeline_index)
+            return
+        self._finish_task_loading_timing(timeline_index)
 
     def _start_load_timing(self, context: str) -> None:
         self._load_timing_context = context
@@ -783,6 +834,8 @@ class page_nukedash(QMainWindow):
     def _process_task_materialize_queue(self, max_widgets: int | None = None) -> None:
         if not hasattr(self, "_task_materialize_queue"):
             self._task_materialize_queue = []
+        if self._task_materialize_queue:
+            self._start_task_loading_timing()
         batch_size = getattr(self, "_task_materialize_batch_size", 20)
         budget = batch_size if max_widgets is None else max(0, int(max_widgets))
         while budget > 0 and self._task_materialize_queue:
@@ -810,6 +863,7 @@ class page_nukedash(QMainWindow):
         timer = getattr(self, "_task_materialize_timer", None)
         if self._task_materialize_queue and timer is not None:
             timer.start(0)
+        self._sync_task_loading_status()
 
     def _set_project_load_profiler_enabled(self, enabled: bool) -> None:
         enabled = bool(enabled)
@@ -1520,6 +1574,7 @@ class page_nukedash(QMainWindow):
 
             if hasattr(self, "Label_results"):
                 self.Label_results.setText(f"{current_timeline_visible_count} results")
+            self._prepare_task_loading_progress(current_tab_index)
             self._process_task_materialize_queue(self._task_materialize_batch_size)
             return
 
@@ -1634,6 +1689,7 @@ class page_nukedash(QMainWindow):
         # Update results label - show current timeline count
         if hasattr(self, 'Label_results'):
             self.Label_results.setText(f"{current_timeline_visible_count} results")
+        self._prepare_task_loading_progress(current_tab_index)
         self._process_task_materialize_queue(self._task_materialize_batch_size)
 
     def _apply_task_visibility(
@@ -2504,8 +2560,15 @@ class page_nukedash(QMainWindow):
         if self._pending_scroll_restore:
             restore_data = self._pending_scroll_restore
             self._pending_scroll_restore = None
-            # Use a timer to ensure UI is fully ready
-            QTimer.singleShot(100, lambda: self._restore_session_state(restore_data))
+            timeline_index = restore_data.get("timeline_index", 0)
+            tabs = self.timelines_tabs
+            if tabs.count() > 0 and 0 <= timeline_index < tabs.count():
+                tabs.blockSignals(True)
+                tabs.setCurrentIndex(timeline_index)
+                tabs.blockSignals(False)
+            scroll_position = restore_data.get("scroll_position", 0)
+            if scroll_position > 0:
+                QTimer.singleShot(50, lambda: self._restore_scroll_position(scroll_position))
         else:
             # No session to restore, save current state (user selected a new job)
             QTimer.singleShot(150, self._save_session_state)
