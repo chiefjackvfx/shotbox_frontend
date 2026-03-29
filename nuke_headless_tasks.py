@@ -34,6 +34,7 @@ Usage:
 import sys
 import os
 import argparse
+import importlib
 import subprocess
 import shutil
 import glob
@@ -53,21 +54,25 @@ class PreviewConfig:
     # Default Nuke search paths by platform
     NUKE_SEARCH_PATHS = {
         'Linux': [
+            "/opt/Nuke16.0v8/Nuke16.0",
             "/opt/Nuke15.2v2/Nuke15.2",
             "/opt/Nuke15.1v1/Nuke15.1",
             "/opt/Nuke15.0v2/Nuke15.0",
+            "/usr/local/Nuke16.0v8/Nuke16.0",
             "/usr/local/Nuke15.2v2/Nuke15.2",
             "/usr/local/Nuke15.1v1/Nuke15.1",
             "/usr/local/Nuke15.0v2/Nuke15.0",
             "/usr/local/Nuke14.0v5/Nuke14.0",
         ],
         'Windows': [
+            "C:/Program Files/Nuke16.0v8/Nuke16.0.exe",
             "C:/Program Files/Nuke15.2v2/Nuke15.2.exe",
             "C:/Program Files/Nuke15.1v1/Nuke15.1.exe",
             "C:/Program Files/Nuke15.0v2/Nuke15.0.exe",
             "C:/Program Files/Nuke14.0v5/Nuke14.0.exe",
         ],
         'Darwin': [  # macOS
+            "/Applications/Nuke16.0v8/Nuke16.0.app/Contents/MacOS/Nuke16.0",
             "/Applications/Nuke15.2v2/Nuke15.2.app/Contents/MacOS/Nuke15.2",
             "/Applications/Nuke15.1v1/Nuke15.1.app/Contents/MacOS/Nuke15.1",
             "/Applications/Nuke15.0v2/Nuke15.0.app/Contents/MacOS/Nuke15.0",
@@ -120,6 +125,8 @@ def find_nuke_executable(custom_paths: Optional[List[str]] = None) -> Optional[s
     """
     search_paths = []
     extra_dirs = []
+    preferred_files = []
+    preferred_dirs = []
 
     # Environment overrides
     for key in ("NUKE_EXE", "NUKE_PATH", "NUKE_HOME"):
@@ -127,14 +134,28 @@ def find_nuke_executable(custom_paths: Optional[List[str]] = None) -> Optional[s
         if not env_value:
             continue
         if os.path.isfile(env_value):
-            search_paths.append(env_value)
-        else:
-            extra_dirs.append(env_value)
+            preferred_files.append(env_value)
+        elif os.path.isdir(env_value):
+            preferred_dirs.append(env_value)
     
     # Add custom paths first
     if custom_paths:
-        search_paths.extend(custom_paths)
-        extra_dirs.extend([p for p in custom_paths if os.path.isdir(p)])
+        for path in custom_paths:
+            if os.path.isfile(path):
+                preferred_files.append(path)
+            elif os.path.isdir(path):
+                preferred_dirs.append(path)
+            else:
+                search_paths.append(path)
+
+    for path in preferred_files:
+        if os.path.isfile(path):
+            return path
+
+    for directory in dict.fromkeys(preferred_dirs):
+        found = _extract_nuke_from_dir(directory)
+        if found:
+            return found
     
     # Add platform-specific paths
     system = platform.system()
@@ -142,11 +163,13 @@ def find_nuke_executable(custom_paths: Optional[List[str]] = None) -> Optional[s
         search_paths.extend(PreviewConfig.NUKE_SEARCH_PATHS[system])
 
     for path in search_paths:
-        if os.path.exists(path):
+        if os.path.isfile(path):
             return path
+        if os.path.isdir(path):
+            extra_dirs.append(path)
 
     # Look inside directories for a Nuke executable
-    for directory in extra_dirs:
+    for directory in dict.fromkeys(extra_dirs):
         found = _extract_nuke_from_dir(directory)
         if found:
             return found
@@ -165,7 +188,7 @@ def find_nuke_executable(custom_paths: Optional[List[str]] = None) -> Optional[s
                     return found
 
     # Fall back to PATH lookup
-    for exe_name in ("Nuke", "Nuke15.2", "Nuke15.1", "Nuke15.0", "Nuke14.0"):
+    for exe_name in ("Nuke", "Nuke16.0", "Nuke15.2", "Nuke15.1", "Nuke15.0", "Nuke14.0"):
         found = shutil.which(exe_name)
         if found:
             return found
@@ -865,9 +888,8 @@ class MakePreviewTask:
         if self.nuke is not None:
             return self.nuke
         try:
-            import nuke
-            self.nuke = nuke
-            return nuke
+            self.nuke = importlib.import_module("nuke")
+            return self.nuke
         except ImportError:
             raise RuntimeError("Must be run via: Nuke -t nuke_headless_tasks.py ...")
     
@@ -1122,9 +1144,8 @@ class MakePrecompExrTask:
         if self.nuke is not None:
             return self.nuke
         try:
-            import nuke
-            self.nuke = nuke
-            return nuke
+            self.nuke = importlib.import_module("nuke")
+            return self.nuke
         except ImportError:
             raise RuntimeError("Must be run via: Nuke -t nuke_headless_tasks.py ...")
 
