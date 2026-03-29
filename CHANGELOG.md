@@ -2,6 +2,16 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.5.0 - 2026-03-29
+
+### Added
+
+- timeline bnased 3de
+
+### Changed
+
+- better previews inc fromeexrs
+
 ## 1.4.3 - 2026-03-29
 
 ### Fixed
