@@ -2,6 +2,20 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.3.0 - 2026-03-29
+
+### Added
+
+- Import payloads now keep original_clip as the primary copied plate and support original_clips for the full copied-plate list.
+
+### Changed
+
+- XML import now builds shots under VFX instead of nuke, using VFX/<timeline>/<shot>/....
+- Imported source clips are copied into each shot’s local plates/ folder, with duplicate filenames resolved safely, so generated .nk files reference local media instead of external paths.
+- New import-created scripts and thumbnails now start at v001 with 3-digit version padding.
+- Legacy shot .txt / note-file creation was removed from the import flow.
+- XML shot naming was relaxed so prefixes are no longer treated as 3 characters only; 3-digit shot numbering remains (010, 020, etc.) and final names are validated against the shot title limit.
+
 ## 1.2.0 - 2026-03-28
 
 ### Changed
