@@ -992,15 +992,27 @@ class ShotCard(QWidget):
     def _shot_title(self) -> str:
         return (self.data or {}).get("title") or Path(self.shot_dir).name
 
+    def _normalized_shot_dir(self) -> str:
+        if not self.shot_dir:
+            return ""
+        try:
+            return self.filesIO.convert_path(self.shot_dir)
+        except Exception:
+            return str(self.shot_dir)
+
     def _shot_assets_dir(self) -> Path:
-        return Path(build_shot_assets_directory(self.shot_dir))
+        return Path(build_shot_assets_directory(self._normalized_shot_dir()))
 
     def _default_matchmove_dir(self) -> str:
-        return build_shot_matchmove_directory(self.shot_dir)
+        return build_shot_matchmove_directory(self._normalized_shot_dir())
 
     def _resolved_matchmove_dir(self) -> str:
         configured_path = str((self.data or {}).get("matchmove_path") or "").strip()
         if configured_path:
+            try:
+                configured_path = self.filesIO.convert_path(configured_path)
+            except Exception:
+                pass
             try:
                 if Path(configured_path).exists():
                     return configured_path
@@ -1027,6 +1039,7 @@ class ShotCard(QWidget):
             shot_name = self._shot_title()
             matchmove_dir = self._resolved_matchmove_dir()
             latest_project = find_latest_matchmove_project(matchmove_dir, shot_name)
+            shot_root = self._normalized_shot_dir()
 
             menu = QMenu(self)
             if latest_project is not None:
@@ -1035,17 +1048,22 @@ class ShotCard(QWidget):
                     lambda checked=False, path=str(latest_project): self._open_matchmove_project(path)
                 )
             else:
-                sequence_infos = list_valid_precomp_sequences(self.shot_dir)
-                if not sequence_infos:
-                    return False
-
-                create_menu = menu.addMenu("Create Matchmove")
-                for sequence_info in sequence_infos:
-                    label = Path(sequence_info.folder_path).name
-                    action = create_menu.addAction(label)
-                    action.triggered.connect(
-                        lambda checked=False, info=sequence_info: self._create_matchmove_project(info)
-                    )
+                sequence_infos = list_valid_precomp_sequences(shot_root)
+                if sequence_infos:
+                    create_menu = menu.addMenu("Create Matchmove")
+                    for sequence_info in sequence_infos:
+                        label = Path(sequence_info.folder_path).name
+                        action = create_menu.addAction(label)
+                        action.triggered.connect(
+                            lambda checked=False, info=sequence_info: self._create_matchmove_project(info)
+                        )
+                else:
+                    precomp_dir = Path(shot_root) / "renders" / "precomp"
+                    if precomp_dir.is_dir():
+                        empty_action = menu.addAction("No valid EXR precomp folders found")
+                    else:
+                        empty_action = menu.addAction("No renders/precomp folder found")
+                    empty_action.setEnabled(False)
 
             menu.exec(global_pos)
             return True

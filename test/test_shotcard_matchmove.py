@@ -38,6 +38,9 @@ class FakeFolders:
     def open_file(self, path):
         return None
 
+    def convert_path(self, path):
+        return path
+
 
 class FakeSignal:
     def __init__(self):
@@ -55,6 +58,10 @@ class FakeAction:
     def __init__(self, text: str):
         self.text = text
         self.triggered = FakeSignal()
+        self.enabled = True
+
+    def setEnabled(self, enabled: bool):
+        self.enabled = bool(enabled)
 
 
 class FakeMenu:
@@ -178,6 +185,41 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             self.assertEqual(FakeMenu.instances[0].submenus[0][0], "Create Matchmove")
             submenu = FakeMenu.instances[0].submenus[0][1]
             self.assertEqual([action.text for action in submenu.actions], ["plateA", "plateB"])
+
+    def test_assets_menu_shows_disabled_message_when_no_valid_sequences_exist(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
+            (shot_root / "renders" / "precomp").mkdir(parents=True)
+            card, _fake_folders = self._make_card(str(shot_root))
+
+            FakeMenu.instances = []
+            with mock.patch.object(widgets, "QMenu", FakeMenu), \
+                mock.patch.object(widgets, "find_latest_matchmove_project", return_value=None), \
+                mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[]):
+                shown = card._show_assets_matchmove_menu(QPoint(3, 4))
+
+            self.assertTrue(shown)
+            self.assertEqual(FakeMenu.instances[0].actions[0].text, "No valid EXR precomp folders found")
+
+    def test_assets_menu_scans_converted_windows_project_path(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            windows_like_root = r"/Volumes/projects/PROJECTS/show/VFX/timeline_A/sho010"
+            resolved_root = Path(tmpdir) / "PROJECTS" / "show" / "VFX" / "timeline_A" / "sho010"
+            (resolved_root / "renders" / "precomp" / "plateA").mkdir(parents=True)
+            card, fake_folders = self._make_card(windows_like_root)
+            fake_folders.convert_path = mock.Mock(return_value=str(resolved_root))
+
+            sequence_infos = [SimpleNamespace(folder_path=str(resolved_root / "renders" / "precomp" / "plateA"))]
+
+            FakeMenu.instances = []
+            with mock.patch.object(widgets, "QMenu", FakeMenu), \
+                mock.patch.object(widgets, "find_latest_matchmove_project", return_value=None), \
+                mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=sequence_infos) as list_sequences:
+                shown = card._show_assets_matchmove_menu(QPoint(6, 7))
+
+            self.assertTrue(shown)
+            fake_folders.convert_path.assert_any_call(windows_like_root)
+            list_sequences.assert_called_once_with(str(resolved_root))
 
     def test_assets_context_menu_handler_catches_errors(self):
         with tempfile.TemporaryDirectory() as tmpdir:
