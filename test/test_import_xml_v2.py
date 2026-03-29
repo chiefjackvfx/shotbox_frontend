@@ -283,6 +283,36 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
                 dialog.deleteLater()
                 self.app.processEvents()
 
+    def test_xml_import_page_skip_activity_checkbox_tracks_add_to_db(self):
+        page = module.XMLImportPage()
+        try:
+            self.assertFalse(page.checkBoxSkipActivityLogging.isChecked())
+            self.assertTrue(page.checkBoxSkipActivityLogging.isEnabled())
+
+            page.checkBoxAddToDB.setChecked(False)
+            self.assertFalse(page.checkBoxSkipActivityLogging.isEnabled())
+            self.assertFalse(page.checkBoxSkipActivityLogging.isChecked())
+        finally:
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
+    def test_single_shot_dialog_skip_activity_option_tracks_db_checkbox(self):
+        dialog = module.SingleShotCreationDialog(add_to_db=True, skip_activity_logging=False)
+        try:
+            self.assertTrue(dialog.skip_activity_logging_checkbox.isEnabled())
+            self.assertFalse(dialog.skip_activity_logging_checkbox.isChecked())
+
+            dialog.skip_activity_logging_checkbox.setChecked(True)
+            dialog.add_to_db_checkbox.setChecked(False)
+
+            self.assertFalse(dialog.skip_activity_logging_checkbox.isEnabled())
+            self.assertFalse(dialog.skip_activity_logging_checkbox.isChecked())
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+            self.app.processEvents()
+
     def test_single_shot_dialog_clip_slots_expand_compact_and_cap_at_five(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

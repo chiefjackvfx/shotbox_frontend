@@ -1,4 +1,6 @@
 # import_xml_v2.py
+from __future__ import annotations
+
 """
 XML Import V2 for ShotBox - Combined XML parsing, Nuke setup, and Django import.
 Single-step process: Parse XML → Create Nuke folders/scripts → Add to Django DB.
@@ -75,6 +77,9 @@ IMPORT_VERSION_PADDING = 3
 INITIAL_IMPORT_VERSION = 1
 INITIAL_IMPORT_VERSION_TAG = f"v{INITIAL_IMPORT_VERSION:0{IMPORT_VERSION_PADDING}d}"
 MAX_SINGLE_SHOT_CLIPS = 5
+IMPORT_API_TIMEOUT_SECONDS = 30.0
+IMPORT_API_RETRY_COUNT = 3
+IMPORT_API_RETRY_BACKOFF_SECONDS = 1.0
 SINGLE_SHOT_VIDEO_EXTENSIONS = {
     ".mov", ".mp4", ".mxf", ".avi", ".mkv", ".r3d", ".braw", ".arx"
 }
@@ -703,15 +708,29 @@ class ThumbnailGenerator:
 # DJANGO IMPORTER
 # =============================================================================
 
+def build_import_api(skip_activity_logging: bool = False):
+    return http_help.DjangoAPI(
+        timeout=IMPORT_API_TIMEOUT_SECONDS,
+        retry_count=IMPORT_API_RETRY_COUNT,
+        retry_backoff=IMPORT_API_RETRY_BACKOFF_SECONDS,
+        skip_activity_logging=skip_activity_logging,
+    )
+
+
 class DjangoImporter:
     """Imports shots into Django database via API."""
     
-    def __init__(self):
+    def __init__(self, api=None, log_callback=None):
         if not HAS_API:
             raise RuntimeError("http_help module not available")
-        self.api = http_help.DjangoAPI()
+        self.api = api or build_import_api()
+        self._log_callback = log_callback or print
         self._job_cache: Dict[str, int] = {}  # title -> id
         self._timeline_cache: Dict[str, int] = {}  # "job_id:title" -> id
+
+    def _log(self, message: str):
+        if callable(self._log_callback):
+            self._log_callback(message)
     
     def import_shot(self, shot: ParsedShot, job_title: str, timeline_title: str,
                     colourspace: str, handles: int) -> tuple[int, bool]:
@@ -721,18 +740,21 @@ class DjangoImporter:
         Returns:
             Tuple of (shot_id, was_created)
         """
-        # Get or create job
-        job_id = self._get_or_create_job(job_title)
-        
-        # Get or create timeline
-        timeline_id = self._get_or_create_timeline(job_id, timeline_title)
-        
-        # Get or create shot with all metadata
-        shot_data, created = self.api.get_or_create_shot(
-            timeline_id, 
-            shot.name, 
-            shot.folder_path or ""
-        )
+        try:
+            # Get or create job
+            job_id = self._get_or_create_job(job_title)
+            
+            # Get or create timeline
+            timeline_id = self._get_or_create_timeline(job_id, timeline_title)
+            
+            # Get or create shot with all metadata
+            shot_data, created = self.api.get_or_create_shot(
+                timeline_id, 
+                shot.name, 
+                shot.folder_path or ""
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Shot {shot.name} | {exc}") from exc
         shot_id = shot_data["id"]
         
         # Update shot with additional fields
@@ -749,11 +771,11 @@ class DjangoImporter:
         try:
             self.api.update_shot(shot_id, **update_fields)
         except Exception as e:
-            print(f"[DjangoImport] Warning: Could not update shot fields: {e}")
+            self._log(f"Shot {shot.name} | update_shot metadata | {e}")
         
         return shot_id, created
     
-    def upload_thumbnail(self, shot_id: int, thumbnail_path: str) -> bool:
+    def upload_thumbnail(self, shot_id: int, thumbnail_path: str, shot_name: str = "") -> bool:
         """Upload a thumbnail for a shot."""
         if not thumbnail_path or not os.path.isfile(thumbnail_path):
             return False
@@ -761,10 +783,11 @@ class DjangoImporter:
             self.api.upload_shot_thumbnail(shot_id, thumbnail_path)
             return True
         except Exception as e:
-            print(f"[DjangoImport] Thumbnail upload failed: {e}")
+            label = shot_name or f"shot_id={shot_id}"
+            self._log(f"Shot {label} | upload_shot_thumbnail | {e}")
             return False
     
-    def create_default_tasks(self, shot_id: int, task_names: List[str] = None):
+    def create_default_tasks(self, shot_id: int, task_names: List[str] = None, shot_name: str = ""):
         """Create default tasks for a shot."""
         if task_names is None:
             task_names = DEFAULT_TASKS
@@ -773,7 +796,8 @@ class DjangoImporter:
             try:
                 self.api.create_task(shot_id=shot_id, title=name)
             except Exception as e:
-                print(f"[DjangoImport] Could not create task '{name}': {e}")
+                label = shot_name or f"shot_id={shot_id}"
+                self._log(f"Shot {label} | create_task '{name}' | {e}")
     
     def _get_or_create_job(self, title: str) -> int:
         """Get or create a job, using cache."""
@@ -810,7 +834,9 @@ class ImportWorker(QObject):
     
     def __init__(self, shots: List[ParsedShot], project_root: str, edit_name: str,
                  colourspace: str, handles: int, local_work: bool,
-                 add_to_db: bool, create_tasks: bool, nuke_path: Optional[str] = None):
+                 add_to_db: bool, create_tasks: bool,
+                 skip_activity_logging: bool = False,
+                 nuke_path: Optional[str] = None):
         super().__init__()
         self.shots = shots
         self.project_root = project_root
@@ -820,6 +846,7 @@ class ImportWorker(QObject):
         self.local_work = local_work
         self.add_to_db = add_to_db
         self.create_tasks = create_tasks
+        self.skip_activity_logging = skip_activity_logging
         self.nuke_path = nuke_path
         
         self.nuke_gen = NukeScriptGenerator(colourspace, local_work, nuke_path=nuke_path)
@@ -828,7 +855,10 @@ class ImportWorker(QObject):
         
         if add_to_db and HAS_API:
             try:
-                self.django_importer = DjangoImporter()
+                self.django_importer = DjangoImporter(
+                    api=build_import_api(skip_activity_logging),
+                    log_callback=lambda message: print(f"[DjangoImport] {message}"),
+                )
             except Exception as e:
                 print(f"[ImportWorker] Django importer not available: {e}")
     
@@ -896,12 +926,12 @@ class ImportWorker(QObject):
                             
                             # Upload thumbnail
                             if shot.thumbnail_path:
-                                if self.django_importer.upload_thumbnail(shot_id, shot.thumbnail_path):
+                                if self.django_importer.upload_thumbnail(shot_id, shot.thumbnail_path, shot.name):
                                     stats.thumbnails_uploaded += 1
                             
                             # Create default tasks
                             if self.create_tasks:
-                                self.django_importer.create_default_tasks(shot_id)
+                                self.django_importer.create_default_tasks(shot_id, shot_name=shot.name)
                         else:
                             stats.db_shots_existing += 1
                     
@@ -1018,6 +1048,7 @@ class XMLImportPage(QWidget):
         self.local_work = False
         self.add_to_db = True
         self.create_tasks = True
+        self.skip_activity_logging = False
         
         # Workers
         self._import_thread: Optional[QThread] = None
@@ -1096,6 +1127,10 @@ class XMLImportPage(QWidget):
         self.checkBoxCreateTasks = QCheckBox("Create Tasks")
         self.checkBoxCreateTasks.setChecked(True)
         row4.addWidget(self.checkBoxCreateTasks)
+        self.checkBoxSkipActivityLogging = QCheckBox("Skip activity logging")
+        self.checkBoxSkipActivityLogging.setChecked(False)
+        self.checkBoxSkipActivityLogging.setToolTip("Suppress activity-log entries for this import run")
+        row4.addWidget(self.checkBoxSkipActivityLogging)
         row4.addStretch()
         self.btnMakeShot = QPushButton("Make Single Shot")
         row4.addWidget(self.btnMakeShot)
@@ -1118,6 +1153,7 @@ class XMLImportPage(QWidget):
         self.btnMakeThumbs.clicked.connect(self._on_make_thumbs)
         self.btnNukeAll.clicked.connect(self._on_import_all)
         self.updateBtn.clicked.connect(self._on_update_settings)
+        self.checkBoxAddToDB.stateChanged.connect(self._sync_database_option_states)
         
         if hasattr(self, 'btnMakeShot'):
             self.btnMakeShot.clicked.connect(self._on_make_single_shot)
@@ -1136,6 +1172,7 @@ class XMLImportPage(QWidget):
         if hasattr(self, 'colourspaceComboBox'):
             self.colourspaceComboBox.clear()
             self.colourspaceComboBox.addItems(COLOURSPACE_LIST)
+        self._sync_database_option_states()
     
     def _on_update_settings(self):
         """Update settings from UI."""
@@ -1146,6 +1183,7 @@ class XMLImportPage(QWidget):
         self.local_work = self.checkBoxlocalwork.isChecked()
         self.add_to_db = self.checkBoxAddToDB.isChecked()
         self.create_tasks = self.checkBoxCreateTasks.isChecked()
+        self.skip_activity_logging = self.checkBoxSkipActivityLogging.isChecked()
         
         # Rename shots if already parsed
         if self.shots:
@@ -1157,7 +1195,14 @@ class XMLImportPage(QWidget):
             self._on_show_table()
         
         print(f"[Settings] prefix={self.shot_prefix}, padding={self.shot_padding}, "
-              f"colourspace={self.colourspace}, handles={self.handles}, db={self.add_to_db}")
+              f"colourspace={self.colourspace}, handles={self.handles}, db={self.add_to_db}, "
+              f"skip_activity={self.skip_activity_logging}")
+
+    def _sync_database_option_states(self):
+        db_enabled = self.checkBoxAddToDB.isChecked()
+        self.checkBoxSkipActivityLogging.setEnabled(db_enabled)
+        if not db_enabled:
+            self.checkBoxSkipActivityLogging.setChecked(False)
     
     def _apply_generated_shot_names(self):
         """Apply generated shot names to the currently parsed shots."""
@@ -1203,6 +1248,14 @@ class XMLImportPage(QWidget):
         except Exception as exc:
             print(f"[XMLImport] Could not read Nuke path from settings: {exc}")
             return None
+
+    def _build_django_importer(self, skip_activity_logging: bool | None = None) -> DjangoImporter:
+        if skip_activity_logging is None:
+            skip_activity_logging = self.skip_activity_logging
+        return DjangoImporter(
+            api=build_import_api(skip_activity_logging),
+            log_callback=lambda message: print(f"[DjangoImport] {message}"),
+        )
     
     def _on_select_root(self):
         """Select project root directory."""
@@ -1380,7 +1433,7 @@ class XMLImportPage(QWidget):
             # Add to DB if enabled
             if self.add_to_db and HAS_API:
                 try:
-                    importer = DjangoImporter()
+                    importer = self._build_django_importer()
                     job_title = os.path.basename(self.parser.project_root)
                     shot_id, created = importer.import_shot(
                         shot, job_title, self.parser.edit_name,
@@ -1388,10 +1441,10 @@ class XMLImportPage(QWidget):
                     )
                     
                     if created and shot.thumbnail_path:
-                        importer.upload_thumbnail(shot_id, shot.thumbnail_path)
+                        importer.upload_thumbnail(shot_id, shot.thumbnail_path, shot.name)
                     
                     if created and self.create_tasks:
-                        importer.create_default_tasks(shot_id)
+                        importer.create_default_tasks(shot_id, shot_name=shot.name)
                         
                 except Exception as e:
                     print(f"[Setup] DB import failed: {e}")
@@ -1428,6 +1481,7 @@ class XMLImportPage(QWidget):
             local_work=self.local_work,
             add_to_db=self.add_to_db,
             create_tasks=self.create_tasks,
+            skip_activity_logging=self.skip_activity_logging,
             nuke_path=self._current_nuke_path(),
         )
         
@@ -1594,7 +1648,8 @@ class XMLImportPage(QWidget):
             colourspace=self.colourspace,
             handles=self.handles,
             add_to_db=self.add_to_db,
-            create_tasks=self.create_tasks
+            create_tasks=self.create_tasks,
+            skip_activity_logging=self.skip_activity_logging,
         )
         dialog_result = creation_dialog.exec()
 
@@ -1606,6 +1661,7 @@ class XMLImportPage(QWidget):
         entered_shot_name = creation_dialog.entered_shot_name
         add_to_db = creation_dialog.add_to_db
         create_tasks = creation_dialog.create_tasks
+        skip_activity_logging = creation_dialog.skip_activity_logging
         job_name = getattr(creation_dialog, 'job_name', '')
         timeline_name = getattr(creation_dialog, 'timeline_name', '')
         selected_colourspace = creation_dialog.colourspace
@@ -1655,7 +1711,7 @@ class XMLImportPage(QWidget):
             # Django import if enabled
             if add_to_db and HAS_API and job_name and timeline_name:
                 try:
-                    importer = DjangoImporter()
+                    importer = self._build_django_importer(skip_activity_logging)
                     
                     # Import the shot
                     shot_id, created = importer.import_shot(
@@ -1669,11 +1725,11 @@ class XMLImportPage(QWidget):
                     
                     # Upload thumbnail
                     if created and parsed_shot.thumbnail_path:
-                        importer.upload_thumbnail(shot_id, parsed_shot.thumbnail_path)
+                        importer.upload_thumbnail(shot_id, parsed_shot.thumbnail_path, parsed_shot.name)
                     
                     # Create default tasks
                     if created and create_tasks:
-                        importer.create_default_tasks(shot_id)
+                        importer.create_default_tasks(shot_id, shot_name=parsed_shot.name)
                         
                 except Exception as db_error:
                     print(f"[SingleShot] DB Error: {db_error}")
@@ -1731,7 +1787,8 @@ class SingleShotCreationDialog(QDialog):
 
     def __init__(self, parent=None, default_shot_name: str = "sho010", 
                  colourspace: str = "", handles: int = 25,
-                 add_to_db: bool = True, create_tasks: bool = True):
+                 add_to_db: bool = True, create_tasks: bool = True,
+                 skip_activity_logging: bool = False):
         super().__init__(parent)
 
         self.setWindowTitle("Create Single Shot")
@@ -1751,6 +1808,7 @@ class SingleShotCreationDialog(QDialog):
         self.handles = handles
         self.add_to_db = add_to_db
         self.create_tasks = create_tasks
+        self.skip_activity_logging = skip_activity_logging
 
         main_layout = QVBoxLayout(self)
         main_layout.setSpacing(12)
@@ -1858,6 +1916,11 @@ class SingleShotCreationDialog(QDialog):
         self.create_tasks_checkbox.setChecked(create_tasks)
         self.create_tasks_checkbox.setToolTip("Create Comp, Roto, Paint, Track tasks")
         options_row_layout.addWidget(self.create_tasks_checkbox)
+
+        self.skip_activity_logging_checkbox = QCheckBox("Skip activity logging")
+        self.skip_activity_logging_checkbox.setChecked(skip_activity_logging)
+        self.skip_activity_logging_checkbox.setToolTip("Suppress activity-log entries for this import run")
+        options_row_layout.addWidget(self.skip_activity_logging_checkbox)
         
         options_row_layout.addStretch(1)
         main_layout.addLayout(options_row_layout)
@@ -1900,7 +1963,11 @@ class SingleShotCreationDialog(QDialog):
     
     def _toggle_db_options(self):
         """Show/hide database options based on checkbox."""
-        self.db_options_frame.setVisible(self.add_to_db_checkbox.isChecked())
+        db_enabled = self.add_to_db_checkbox.isChecked()
+        self.db_options_frame.setVisible(db_enabled)
+        self.skip_activity_logging_checkbox.setEnabled(db_enabled)
+        if not db_enabled:
+            self.skip_activity_logging_checkbox.setChecked(False)
 
     def _slot_role_label(self, index: int) -> str:
         return "Primary" if index == 0 else f"V{index + 1}"
@@ -2245,6 +2312,7 @@ class SingleShotCreationDialog(QDialog):
         self.colourspace = self.colourspace_combo_box.currentText()
         self.add_to_db = self.add_to_db_checkbox.isChecked()
         self.create_tasks = self.create_tasks_checkbox.isChecked()
+        self.skip_activity_logging = self.skip_activity_logging_checkbox.isChecked()
         self.job_name = self.job_name_line_edit.text().strip()
         self.timeline_name = self.timeline_name_line_edit.text().strip()
 
