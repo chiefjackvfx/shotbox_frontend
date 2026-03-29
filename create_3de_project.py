@@ -17,11 +17,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-try:
-    import OpenEXR
-except ImportError:
-    OpenEXR = None
-
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
@@ -461,18 +456,6 @@ def detect_exr_sequence(folder_path: str) -> SequenceInfo:
 
 
 def read_exr_resolution(file_path: str) -> tuple[int, int, float]:
-    if OpenEXR is not None:
-        handle = OpenEXR.InputFile(file_path)
-        try:
-            header = handle.header()
-            data_window = header["dataWindow"]
-            width = data_window.max.x - data_window.min.x + 1
-            height = data_window.max.y - data_window.min.y + 1
-            pixel_aspect = float(header.get("pixelAspectRatio", 1.0))
-            return width, height, pixel_aspect
-        finally:
-            handle.close()
-
     return read_exr_resolution_from_header(file_path)
 
 

@@ -14,11 +14,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 
-try:
-    import OpenEXR
-except ImportError:
-    OpenEXR = None
-
 
 CAMERA_PRESETS = {
     "Alexa 35": {
@@ -457,18 +452,6 @@ def list_valid_precomp_sequences(shot_root: str) -> list[SequenceInfo]:
 
 
 def read_exr_resolution(file_path: str) -> tuple[int, int, float]:
-    if OpenEXR is not None:
-        handle = OpenEXR.InputFile(file_path)
-        try:
-            header = handle.header()
-            data_window = header["dataWindow"]
-            width = data_window.max.x - data_window.min.x + 1
-            height = data_window.max.y - data_window.min.y + 1
-            pixel_aspect = float(header.get("pixelAspectRatio", 1.0))
-            return width, height, pixel_aspect
-        finally:
-            handle.close()
-
     return read_exr_resolution_from_header(file_path)
 
 
