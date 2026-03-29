@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import random
+import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -112,7 +113,8 @@ def _load_matchmove_helpers():
 
 
 def build_shot_assets_directory(shot_root: str) -> str:
-    return str(Path(shot_root).resolve() / SHOT_ASSETS_DIRNAME)
+    base_path = os.path.abspath(os.path.expanduser(str(shot_root)))
+    return os.path.join(base_path, SHOT_ASSETS_DIRNAME)
 
 
 def build_shot_matchmove_directory(shot_root: str) -> str:
@@ -903,6 +905,8 @@ class ShotCard(QWidget):
         _set_dynamic_property(self.btn_open_nuke, "lock_state", "none")
         
         self.btn_open_assets.clicked.connect(self._open_shot_assets)
+        self.btn_open_assets.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.btn_open_assets.customContextMenuRequested.connect(self._on_assets_context_menu)
         self.btn_open_precomp.clicked.connect(lambda: self.filesIO.openFileLocation(Path(self.shot_dir) / "renders" / "precomp" ))
 
         with project_load_profiler.measure_installed_work("disk_latest_render_info"):
@@ -996,8 +1000,12 @@ class ShotCard(QWidget):
 
     def _resolved_matchmove_dir(self) -> str:
         configured_path = str((self.data or {}).get("matchmove_path") or "").strip()
-        if configured_path and Path(configured_path).exists():
-            return configured_path
+        if configured_path:
+            try:
+                if Path(configured_path).exists():
+                    return configured_path
+            except OSError:
+                pass
         return self._default_matchmove_dir()
 
     def _open_shot_assets(self) -> None:
@@ -1010,36 +1018,59 @@ class ShotCard(QWidget):
             return False
 
         try:
-            _load_matchmove_helpers()
+            try:
+                _load_matchmove_helpers()
+            except Exception as exc:
+                _show_matchmove_unavailable(self, exc)
+                return True
+
+            shot_name = self._shot_title()
+            matchmove_dir = self._resolved_matchmove_dir()
+            latest_project = find_latest_matchmove_project(matchmove_dir, shot_name)
+
+            menu = QMenu(self)
+            if latest_project is not None:
+                action = menu.addAction(f"Open {latest_project.name}")
+                action.triggered.connect(
+                    lambda checked=False, path=str(latest_project): self._open_matchmove_project(path)
+                )
+            else:
+                sequence_infos = list_valid_precomp_sequences(self.shot_dir)
+                if not sequence_infos:
+                    return False
+
+                create_menu = menu.addMenu("Create Matchmove")
+                for sequence_info in sequence_infos:
+                    label = Path(sequence_info.folder_path).name
+                    action = create_menu.addAction(label)
+                    action.triggered.connect(
+                        lambda checked=False, info=sequence_info: self._create_matchmove_project(info)
+                    )
+
+            menu.exec(global_pos)
+            return True
         except Exception as exc:
-            _show_matchmove_unavailable(self, exc)
+            traceback_text = traceback.format_exc(limit=10)
+            QMessageBox.critical(
+                self,
+                "Assets Menu Error",
+                "Opening the Assets matchmove menu failed.\n\n"
+                f"{exc}\n\n{traceback_text}",
+            )
             return True
 
-        shot_name = self._shot_title()
-        matchmove_dir = self._resolved_matchmove_dir()
-        latest_project = find_latest_matchmove_project(matchmove_dir, shot_name)
-
-        menu = QMenu(self)
-        if latest_project is not None:
-            action = menu.addAction(f"Open {latest_project.name}")
-            action.triggered.connect(
-                lambda checked=False, path=str(latest_project): self._open_matchmove_project(path)
+    def _on_assets_context_menu(self, pos) -> None:
+        try:
+            global_pos = self.btn_open_assets.mapToGlobal(pos)
+            self._show_assets_matchmove_menu(global_pos)
+        except Exception as exc:
+            traceback_text = traceback.format_exc(limit=10)
+            QMessageBox.critical(
+                self,
+                "Assets Menu Error",
+                "Opening the Assets matchmove menu failed.\n\n"
+                f"{exc}\n\n{traceback_text}",
             )
-        else:
-            sequence_infos = list_valid_precomp_sequences(self.shot_dir)
-            if not sequence_infos:
-                return False
-
-            create_menu = menu.addMenu("Create Matchmove")
-            for sequence_info in sequence_infos:
-                label = Path(sequence_info.folder_path).name
-                action = create_menu.addAction(label)
-                action.triggered.connect(
-                    lambda checked=False, info=sequence_info: self._create_matchmove_project(info)
-                )
-
-        menu.exec(global_pos)
-        return True
 
     def _open_matchmove_project(self, project_path: str) -> None:
         try:
@@ -2696,10 +2727,9 @@ class ShotCard(QWidget):
         if widget is None:
             return
             
-        # Check if we clicked on one of our buttons
+        # Assets button handles its own context menu directly.
         if widget == self.btn_open_assets:
-            if self._show_assets_matchmove_menu(event.globalPos()):
-                return
+            return
 
         if widget == self.btn_open_nuke or widget == self.btn_latest_render:
             menu = QMenu(self)

@@ -179,6 +179,18 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             submenu = FakeMenu.instances[0].submenus[0][1]
             self.assertEqual([action.text for action in submenu.actions], ["plateA", "plateB"])
 
+    def test_assets_context_menu_handler_catches_errors(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
+            shot_root.mkdir(parents=True)
+            card, _fake_folders = self._make_card(str(shot_root))
+
+            with mock.patch.object(card, "_show_assets_matchmove_menu", side_effect=RuntimeError("boom")), \
+                mock.patch.object(widgets.QMessageBox, "critical") as critical:
+                card._on_assets_context_menu(QPoint(4, 5))
+
+            critical.assert_called_once()
+
     def test_create_matchmove_project_creates_work_and_export_and_patches_shot(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"

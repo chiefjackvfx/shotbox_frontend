@@ -18,7 +18,7 @@ enable_assignment_board: true
 enable_import_page: true
 enable_review_page: true
 enable_xml_import_page: true
-last_job_id: 81
+last_job_id: 85
 last_scroll_position: 0
 last_timeline_index: 0
 notifications: 'off'
@@ -49,7 +49,7 @@ shots_layout_mode: grid
 show_startup_loading_dialog: true
 startup_tab: 0
 theme_file: dark_v01.qss
-threede_exe_path: ''
+threede_exe_path: /home/rockybtw/Documents/3DE4_linux64_r8.1/bin/3DE4
 window_height: 1059
 window_width: 1503
 window_x: 175
