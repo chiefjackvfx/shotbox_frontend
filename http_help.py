@@ -194,6 +194,18 @@ class DjangoAPI:
         r.raise_for_status()
         return r.json()
 
+    def update_timeline(self, timeline_id: int, **fields):
+        url = f"{self.base_url}timelines/{timeline_id}"
+        r = self._request('PATCH', url, json=fields)
+        r.raise_for_status()
+        return r.json()
+
+    def get_timeline(self, timeline_id: int):
+        url = f"{self.base_url}timelines/{timeline_id}"
+        r = self._request('GET', url)
+        r.raise_for_status()
+        return r.json()
+
     def update_shot_lock(self, shot_id: int, release: bool = False, force: bool = False):
         url = f"{self.base_url}shots/{shot_id}"
         payload = {"nuke_in_use": "None" if release else "heartbeat"}

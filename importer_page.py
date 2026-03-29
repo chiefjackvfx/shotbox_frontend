@@ -23,6 +23,8 @@ import http_help
 
 # Valid image extensions for thumbnail support
 VALID_EXTS = {".png", ".jpg", ".jpeg"}
+TIMELINE_SKIP_DIRS = {"assets", "job_assets"}
+SHOT_SKIP_DIRS = {"assets", "timeline_assets"}
 
 
 def newest_image_in_dir(dir_path: Path) -> Optional[Path]:
@@ -33,6 +35,14 @@ def newest_image_in_dir(dir_path: Path) -> Optional[Path]:
     if not candidates:
         return None
     return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+def find_project_work_root(job_dir: Path) -> Optional[Path]:
+    for folder_name in ("VFX", "Nuke", "nuke"):
+        candidate = job_dir / folder_name
+        if candidate.is_dir():
+            return candidate
+    return None
 
 
 @dataclass
@@ -124,12 +134,9 @@ class ScanWorker(QObject):
             for job_dir in sorted(p for p in self.root_path.iterdir() if p.is_dir()):
                 self.progress.emit(f"Scanning job: {job_dir.name}")
                 
-                # Look for nuke/Nuke directory
-                nuke_dir = job_dir / "nuke"
-                if not nuke_dir.is_dir():
-                    nuke_dir = job_dir / "Nuke"
-                    if not nuke_dir.is_dir():
-                        continue  # Skip jobs without nuke folder
+                project_root_dir = find_project_work_root(job_dir)
+                if project_root_dir is None:
+                    continue  # Skip jobs without a supported work root
                 
                 job = ScannedJob(
                     name=job_dir.name,
@@ -140,9 +147,8 @@ class ScanWorker(QObject):
                 existing_job_data = existing_jobs.get(job_dir.name, {"timelines": {}})
                 
                 # Scan timelines
-                for timeline_dir in sorted(p for p in nuke_dir.iterdir() if p.is_dir()):
-                    # Skip assets folder
-                    if timeline_dir.name.lower() == "assets":
+                for timeline_dir in sorted(p for p in project_root_dir.iterdir() if p.is_dir()):
+                    if timeline_dir.name.lower() in TIMELINE_SKIP_DIRS:
                         continue
                     
                     timeline = ScannedTimeline(
@@ -155,6 +161,8 @@ class ScanWorker(QObject):
                     
                     # Scan shots
                     for shot_dir in sorted(p for p in timeline_dir.iterdir() if p.is_dir()):
+                        if shot_dir.name.lower() in SHOT_SKIP_DIRS:
+                            continue
                         # Find the newest image for thumbnail
                         thumb_path = newest_image_in_dir(shot_dir)
                         

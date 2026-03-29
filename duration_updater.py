@@ -28,6 +28,18 @@ from PyQt6.QtGui import QFont, QColor
 import http_help
 
 
+TIMELINE_SKIP_DIRS = {"assets", "job_assets"}
+SHOT_SKIP_DIRS = {"assets", "timeline_assets"}
+
+
+def find_project_work_root(job_dir: Path) -> Optional[Path]:
+    for folder_name in ("VFX", "Nuke", "nuke"):
+        candidate = job_dir / folder_name
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
 @dataclass
 class ShotDurationInfo:
     """Represents a shot with duration info from txt file."""
@@ -161,12 +173,9 @@ class ScanWorker(QObject):
                 
                 job_db_data = existing_jobs[job_dir.name]
                 
-                # Look for nuke/Nuke directory
-                nuke_dir = job_dir / "Nuke"
-                if not nuke_dir.is_dir():
-                    nuke_dir = job_dir / "nuke"
-                    if not nuke_dir.is_dir():
-                        continue
+                project_root_dir = find_project_work_root(job_dir)
+                if project_root_dir is None:
+                    continue
                 
                 job = JobDurationInfo(
                     name=job_dir.name,
@@ -175,9 +184,8 @@ class ScanWorker(QObject):
                 )
                 
                 # Scan timelines
-                for timeline_dir in sorted(p for p in nuke_dir.iterdir() if p.is_dir()):
-                    # Skip assets folder
-                    if timeline_dir.name.lower() == "assets":
+                for timeline_dir in sorted(p for p in project_root_dir.iterdir() if p.is_dir()):
+                    if timeline_dir.name.lower() in TIMELINE_SKIP_DIRS:
                         continue
                     
                     # Check if timeline exists in DB
@@ -193,6 +201,8 @@ class ScanWorker(QObject):
                     
                     # Scan shots
                     for shot_dir in sorted(p for p in timeline_dir.iterdir() if p.is_dir()):
+                        if shot_dir.name.lower() in SHOT_SKIP_DIRS:
+                            continue
                         # Check if shot exists in DB
                         if shot_dir.name not in tl_db_data["shots"]:
                             continue

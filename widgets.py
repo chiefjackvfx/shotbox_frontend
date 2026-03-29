@@ -27,6 +27,8 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QStackedWidget,
     QMessageBox,
+    QLineEdit,
+    QDoubleSpinBox,
 )
 try:
     from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -43,6 +45,23 @@ from nuke_lock_utils import parse_lock_info
 from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
 from flow_layout import FlowLayout
+from matchmove_helpers import (
+    CAMERA_PRESETS,
+    DEFAULT_FOCAL_LENGTH_MM,
+    DEFAULT_FPS,
+    MatchmoveClipRequest,
+    MatchmoveProjectRequest,
+    build_shot_assets_directory,
+    build_shot_matchmove_directory,
+    build_unique_camera_name,
+    cleanup_headless_artifacts,
+    find_latest_matchmove_project,
+    format_focal_length_label,
+    list_valid_precomp_sequences,
+    open_3de_project,
+    resolve_project_path,
+    run_headless_3de,
+)
 
 # Get the directory where this script is located (for cross-platform path handling)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -190,6 +209,67 @@ class PlainTextEditDialog(QDialog):
 
     def value(self) -> str:
         return self.edit.toPlainText()
+
+
+class SingleCameraMatchmoveDialog(QDialog):
+    def __init__(self, sequence_folder: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Create Matchmove")
+
+        layout = QVBoxLayout(self)
+
+        sequence_label = QLabel("EXR folder")
+        layout.addWidget(sequence_label)
+
+        self.sequence_line_edit = QLineEdit(sequence_folder)
+        self.sequence_line_edit.setReadOnly(True)
+        layout.addWidget(self.sequence_line_edit)
+
+        camera_label = QLabel("Camera preset")
+        layout.addWidget(camera_label)
+
+        self.camera_combo_box = QComboBox()
+        self.camera_combo_box.addItems(CAMERA_PRESETS.keys())
+        self.camera_combo_box.setCurrentText("Alexa 35")
+        layout.addWidget(self.camera_combo_box)
+
+        focal_label = QLabel("Focal length (mm)")
+        layout.addWidget(focal_label)
+
+        self.focal_spin_box = QDoubleSpinBox()
+        self.focal_spin_box.setRange(1.0, 999.0)
+        self.focal_spin_box.setDecimals(2)
+        self.focal_spin_box.setValue(DEFAULT_FOCAL_LENGTH_MM)
+        layout.addWidget(self.focal_spin_box)
+
+        fps_label = QLabel("FPS")
+        layout.addWidget(fps_label)
+
+        self.fps_spin_box = QDoubleSpinBox()
+        self.fps_spin_box.setRange(1.0, 120.0)
+        self.fps_spin_box.setDecimals(3)
+        self.fps_spin_box.setValue(DEFAULT_FPS)
+        layout.addWidget(self.fps_spin_box)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    @property
+    def camera_preset_name(self) -> str:
+        return self.camera_combo_box.currentText().strip()
+
+    @property
+    def focal_length_mm(self) -> float:
+        return float(self.focal_spin_box.value())
+
+    @property
+    def fps(self) -> float:
+        return float(self.fps_spin_box.value())
 
 class TaskWidget(QWidget):
     def __init__(self, task_data=None):
@@ -756,8 +836,7 @@ class ShotCard(QWidget):
             self.btn_open_nuke.setProperty("file_path", None)
         _set_dynamic_property(self.btn_open_nuke, "lock_state", "none")
         
-        assets_dir = Path(self.shot_dir) / "assets"
-        self.btn_open_assets.clicked.connect(lambda: self.filesIO.openFileLocation(assets_dir))
+        self.btn_open_assets.clicked.connect(self._open_shot_assets)
         self.btn_open_precomp.clicked.connect(lambda: self.filesIO.openFileLocation(Path(self.shot_dir) / "renders" / "precomp" ))
 
         with project_load_profiler.measure_installed_work("disk_latest_render_info"):
@@ -839,6 +918,155 @@ class ShotCard(QWidget):
                     self.label_colourspace.setText(f"Colourspace: ...{colourspace[-8:-5]}...")
         except Exception:
             pass
+
+    def _shot_title(self) -> str:
+        return (self.data or {}).get("title") or Path(self.shot_dir).name
+
+    def _shot_assets_dir(self) -> Path:
+        return Path(build_shot_assets_directory(self.shot_dir))
+
+    def _default_matchmove_dir(self) -> str:
+        return build_shot_matchmove_directory(self.shot_dir)
+
+    def _resolved_matchmove_dir(self) -> str:
+        configured_path = str((self.data or {}).get("matchmove_path") or "").strip()
+        if configured_path and Path(configured_path).exists():
+            return configured_path
+        return self._default_matchmove_dir()
+
+    def _open_shot_assets(self) -> None:
+        assets_dir = self._shot_assets_dir()
+        assets_dir.mkdir(parents=True, exist_ok=True)
+        self.filesIO.openFileLocation(assets_dir)
+
+    def _show_assets_matchmove_menu(self, global_pos) -> bool:
+        if not self.shot_dir:
+            return False
+
+        shot_name = self._shot_title()
+        matchmove_dir = self._resolved_matchmove_dir()
+        latest_project = find_latest_matchmove_project(matchmove_dir, shot_name)
+
+        menu = QMenu(self)
+        if latest_project is not None:
+            action = menu.addAction(f"Open {latest_project.name}")
+            action.triggered.connect(
+                lambda checked=False, path=str(latest_project): self._open_matchmove_project(path)
+            )
+        else:
+            sequence_infos = list_valid_precomp_sequences(self.shot_dir)
+            if not sequence_infos:
+                return False
+
+            create_menu = menu.addMenu("Create Matchmove")
+            for sequence_info in sequence_infos:
+                label = Path(sequence_info.folder_path).name
+                action = create_menu.addAction(label)
+                action.triggered.connect(
+                    lambda checked=False, info=sequence_info: self._create_matchmove_project(info)
+                )
+
+        menu.exec(global_pos)
+        return True
+
+    def _open_matchmove_project(self, project_path: str) -> None:
+        try:
+            open_3de_project(project_path)
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Open Matchmove",
+                f"Could not open the 3DE project.\n\n{project_path}\n\n{exc}",
+            )
+
+    def _create_matchmove_project(self, sequence_info) -> None:
+        dialog = SingleCameraMatchmoveDialog(sequence_info.folder_path, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        shot_name = self._shot_title()
+        matchmove_dir = self._default_matchmove_dir()
+        project_dir, export_dir, project_path, version = resolve_project_path(matchmove_dir, shot_name)
+
+        os.makedirs(matchmove_dir, exist_ok=True)
+        os.makedirs(project_dir, exist_ok=True)
+        os.makedirs(export_dir, exist_ok=True)
+
+        used_camera_names: set[str] = set()
+        camera_name = build_unique_camera_name(
+            shot_name=shot_name,
+            folder_path=sequence_info.folder_path,
+            slot_index=0,
+            used_names=used_camera_names,
+        )
+        focal_length_mm = dialog.focal_length_mm
+
+        clip_request = MatchmoveClipRequest(
+            slot_index=0,
+            clip_name=Path(sequence_info.folder_path).name,
+            camera_name=camera_name,
+            lens_name=format_focal_length_label(focal_length_mm),
+            sequence_info=sequence_info,
+            focal_length_mm=focal_length_mm,
+            sequence_start_frame=sequence_info.first_frame,
+            sequence_end_frame=sequence_info.last_frame,
+        )
+        request = MatchmoveProjectRequest(
+            project_name=shot_name,
+            shot_name=shot_name,
+            clips=(clip_request,),
+            camera_preset_name=dialog.camera_preset_name,
+            matchmove_dir=matchmove_dir,
+            export_dir=export_dir,
+            fps=dialog.fps,
+            project_dir=project_dir,
+            project_path=project_path,
+            version=version,
+        )
+
+        log_lines: list[str] = []
+        result = None
+        try:
+            result = run_headless_3de(request, log_lines.append)
+        except Exception as exc:
+            detail = str(exc)
+            if log_lines:
+                detail = f"{detail}\n\n" + "\n".join(log_lines[-20:])
+            QMessageBox.critical(self, "Create Matchmove", detail)
+            return
+        finally:
+            if result is not None:
+                cleanup_headless_artifacts(result)
+
+        open_warning = None
+        try:
+            open_3de_project(project_path)
+        except Exception as exc:
+            open_warning = str(exc)
+
+        patch_warning = None
+        if self._shot_id is not None:
+            try:
+                updated = self._api.update_shot(self._shot_id, matchmove_path=matchmove_dir)
+                if updated:
+                    self.update_from_data(updated)
+                else:
+                    self.data["matchmove_path"] = matchmove_dir
+            except Exception as exc:
+                patch_warning = str(exc)
+                self.data["matchmove_path"] = matchmove_dir
+        else:
+            self.data["matchmove_path"] = matchmove_dir
+
+        message_lines = [
+            f"Created {Path(project_path).name}",
+            project_path,
+        ]
+        if open_warning:
+            message_lines.append(f"Created project, but opening 3DE failed: {open_warning}")
+        if patch_warning:
+            message_lines.append(f"Created project, but saving matchmove_path to ShotBox failed: {patch_warning}")
+        QMessageBox.information(self, "Create Matchmove", "\n\n".join(message_lines))
 
     def _normalize_render_label(self, value: str) -> str:
         """Strip render type suffix for comparisons."""
@@ -2386,11 +2614,15 @@ class ShotCard(QWidget):
         """Handle right-click context menu events."""
         widget = self.childAt(event.pos())
         
-        # Check if right-click was on btn_open_nuke or btn_latest_render
+        # Check if right-click was on btn_open_nuke, btn_latest_render, or btn_open_assets
         if widget is None:
             return
             
         # Check if we clicked on one of our buttons
+        if widget == self.btn_open_assets:
+            if self._show_assets_matchmove_menu(event.globalPos()):
+                return
+
         if widget == self.btn_open_nuke or widget == self.btn_latest_render:
             menu = QMenu(self)
             

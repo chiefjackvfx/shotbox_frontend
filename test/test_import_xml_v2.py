@@ -81,6 +81,10 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
             shot_folder = Path(generator.create_shot_folder(shot, str(root), "timeline_A"))
 
             self.assertEqual(shot_folder, root / "VFX" / "timeline_A" / "seq010")
+            self.assertTrue((root / "VFX" / "Job_Assets").is_dir())
+            self.assertTrue((root / "VFX" / "timeline_A" / "Timeline_Assets").is_dir())
+            self.assertTrue((shot_folder / "Shot_Assets").is_dir())
+            self.assertFalse((shot_folder / "assets").exists())
             self.assertTrue((shot_folder / "plates").is_dir())
             self.assertFalse((shot_folder / "seq010.txt").exists())
 
@@ -120,6 +124,28 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
             self.assertEqual(request.comp_mov_file, "../renders/comp/seq010_v001.mov")
             self.assertEqual(request.comp_exr_file, "../renders/comp/seq010_v001/seq010_v001_####.exr")
             self.assertEqual(request.preview_mp4_file, "../renders/precomp/previews/seq010_v001.mp4")
+
+    def test_single_shot_folder_structure_uses_new_assets_scaffold(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            timeline_dir = root / "VFX" / "timeline_A"
+            timeline_dir.mkdir(parents=True)
+            page = module.XMLImportPage.__new__(module.XMLImportPage)
+
+            shot_folder = Path(
+                module.XMLImportPage._create_single_shot_folder_structure(
+                    page,
+                    str(timeline_dir),
+                    "sho010",
+                    None,
+                )
+            )
+
+            self.assertEqual(shot_folder, timeline_dir / "sho010")
+            self.assertTrue((root / "VFX" / "Job_Assets").is_dir())
+            self.assertTrue((timeline_dir / "Timeline_Assets").is_dir())
+            self.assertTrue((shot_folder / "Shot_Assets").is_dir())
+            self.assertFalse((shot_folder / "assets").exists())
 
     def test_create_nuke_script_surfaces_create_nk_errors(self):
         with tempfile.TemporaryDirectory() as tmpdir:

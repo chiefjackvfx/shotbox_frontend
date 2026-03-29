@@ -406,9 +406,11 @@ class NukeScriptGenerator:
         nuke_root = os.path.join(project_root, "VFX")
         work_folder = os.path.join(nuke_root, edit_name) if edit_name else nuke_root
         shot_folder = os.path.join(work_folder, shot.name)
-        
-        os.makedirs(os.path.join(nuke_root, "assets"), exist_ok=True)
+
+        os.makedirs(os.path.join(nuke_root, "Job_Assets"), exist_ok=True)
         os.makedirs(work_folder, exist_ok=True)
+        if edit_name:
+            os.makedirs(os.path.join(work_folder, "Timeline_Assets"), exist_ok=True)
 
         shot_preexists = os.path.isdir(shot_folder)
         self._ensure_shot_subfolders(shot_folder)
@@ -424,7 +426,7 @@ class NukeScriptGenerator:
         os.makedirs(os.path.join(shot_folder, "renders", "comp"), exist_ok=True)
         os.makedirs(os.path.join(shot_folder, "renders", "precomp"), exist_ok=True)
         os.makedirs(os.path.join(shot_folder, "scripts"), exist_ok=True)
-        os.makedirs(os.path.join(shot_folder, "assets"), exist_ok=True)
+        os.makedirs(os.path.join(shot_folder, "Shot_Assets"), exist_ok=True)
 
     def _copy_clips_to_plates(self, shot: ParsedShot, shot_folder: str):
         """Copy each online clip into the local plates folder."""
@@ -1496,12 +1498,25 @@ class XMLImportPage(QWidget):
         if os.path.isdir(shot_folder_path):
             raise FileExistsError(f"Shot folder already exists:\n{shot_folder_path}")
 
+        output_directory = Path(output_directory_path)
+        output_directory_name = output_directory.name.lower()
+        if output_directory_name in {"vfx", "nuke"}:
+            vfx_root_directory = output_directory
+            timeline_assets_directory = None
+        else:
+            vfx_root_directory = output_directory.parent
+            timeline_assets_directory = output_directory / "Timeline_Assets"
+
+        job_assets_directory = vfx_root_directory / "Job_Assets"
         plates_directory = os.path.join(shot_folder_path, "plates")
         renders_comp_directory = os.path.join(shot_folder_path, "renders", "comp")
         renders_precomp_directory = os.path.join(shot_folder_path, "renders", "precomp")
         scripts_directory = os.path.join(shot_folder_path, "scripts")
-        assets_directory = os.path.join(shot_folder_path, "assets")
+        assets_directory = os.path.join(shot_folder_path, "Shot_Assets")
 
+        os.makedirs(job_assets_directory, exist_ok=True)
+        if timeline_assets_directory is not None:
+            os.makedirs(timeline_assets_directory, exist_ok=True)
         os.makedirs(plates_directory, exist_ok=True)
         os.makedirs(renders_comp_directory, exist_ok=True)
         os.makedirs(renders_precomp_directory, exist_ok=True)

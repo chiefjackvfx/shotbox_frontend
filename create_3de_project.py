@@ -42,6 +42,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import matchmove_helpers as shared_matchmove
+
 
 # =============================================================================
 # CONFIG / PRESETS
@@ -1379,7 +1381,7 @@ class Create3DEProjectWindow(QWidget):
         slot.set_path_text(normalized)
 
         try:
-            detected = detect_exr_sequence(normalized)
+            detected = shared_matchmove.detect_exr_sequence(normalized)
         except Exception as error:
             slot.show_invalid(Path(normalized).name or normalized, str(error))
             if log_errors:
@@ -1468,13 +1470,13 @@ class Create3DEProjectWindow(QWidget):
                 ClipBuildRequest(
                     slot_index=index,
                     clip_name=Path(sequence_info.folder_path).name,
-                    camera_name=build_unique_camera_name(
+                    camera_name=shared_matchmove.build_unique_camera_name(
                         shot_name,
                         sequence_info.folder_path,
                         index,
                         used_camera_names,
                     ),
-                    lens_name=format_focal_length_label(focal_length_mm),
+                    lens_name=shared_matchmove.format_focal_length_label(focal_length_mm),
                     sequence_info=sequence_info,
                     focal_length_mm=focal_length_mm,
                     sequence_start_frame=sequence_start_frame,
@@ -1540,11 +1542,11 @@ class Create3DEProjectWindow(QWidget):
 
             Path(request.project_dir).mkdir(parents=True, exist_ok=True)
             Path(request.export_dir).mkdir(parents=True, exist_ok=True)
-            headless_result = run_headless_3de(request, self.log_message)
+            headless_result = shared_matchmove.run_headless_3de(request, self.log_message)
             self.log_message(f"Saved 3DE project: {request.project_path}")
 
             try:
-                gui_command = open_3de_project(request.project_path)
+                gui_command = shared_matchmove.open_3de_project(request.project_path)
             except Exception as error:
                 launch_text = shlex.join([normalize_user_path(THREEDE_CMD), "-open", request.project_path])
                 self.log_message(
@@ -1568,7 +1570,7 @@ class Create3DEProjectWindow(QWidget):
                 )
 
             if headless_result is not None:
-                cleanup_headless_artifacts(headless_result)
+                shared_matchmove.cleanup_headless_artifacts(headless_result)
         except Exception as error:
             self.log_message(str(error))
             QMessageBox.critical(self, "3DE Creation Failed", str(error))
