@@ -19,7 +19,7 @@ from typing import Any, Dict, Optional
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QLabel, QLineEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, 
-    QPushButton, QScrollArea, QFrame, QSizePolicy, QMessageBox,
+    QPushButton, QScrollArea, QFrame, QSizePolicy, QMessageBox, QFileDialog,
     QButtonGroup, QRadioButton, QApplication, QTextBrowser
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
@@ -63,6 +63,7 @@ DEFAULT_SETTINGS = {
     "preview_output_subdir": "renders/precomp/previews",
     "preview_overwrite": False,
     "nuke_exe_path": "",
+    "threede_exe_path": "",
     
     # UI density settings
     "shots_layout_mode": "list",  # list/grid
@@ -421,6 +422,18 @@ class SettingsPage(QWidget):
         nuke_path_layout.addWidget(self.nuke_exe_browse_btn)
         nuke_path_layout.addStretch()
         preview_layout.addRow("Nuke Executable:", nuke_path_layout)
+
+        self.threede_exe_path_edit = QLineEdit()
+        self.threede_exe_path_edit.setPlaceholderText(
+            "C:/Users/Giger/Documents/3DE4_win64_r8.0v2/bin/3DE4.exe"
+        )
+        three_de_path_layout = QHBoxLayout()
+        three_de_path_layout.addWidget(self.threede_exe_path_edit)
+        self.threede_exe_browse_btn = QPushButton("Browse")
+        self.threede_exe_browse_btn.setFixedWidth(80)
+        three_de_path_layout.addWidget(self.threede_exe_browse_btn)
+        three_de_path_layout.addStretch()
+        preview_layout.addRow("3DE Executable:", three_de_path_layout)
 
         container_layout.addWidget(preview_group)
         
@@ -804,6 +817,7 @@ class SettingsPage(QWidget):
         )
         self.preview_overwrite_check.setChecked(self._settings.get("preview_overwrite", False))
         self.nuke_exe_path_edit.setText(self._settings.get("nuke_exe_path", ""))
+        self.threede_exe_path_edit.setText(self._settings.get("threede_exe_path", ""))
         
         # Debug modes
         self.debug_general_check.setChecked(self._settings.get("debug_modes.general", False))
@@ -912,6 +926,7 @@ class SettingsPage(QWidget):
 
         # Browse Nuke executable
         self.nuke_exe_browse_btn.clicked.connect(self._on_browse_nuke_exe)
+        self.threede_exe_browse_btn.clicked.connect(self._on_browse_threede_exe)
 
         # Update controls
         self.check_updates_btn.clicked.connect(self._on_check_for_updates)
@@ -944,6 +959,7 @@ class SettingsPage(QWidget):
         self._settings.set("preview_output_subdir", self.preview_output_subdir_edit.text().strip(), save=False)
         self._settings.set("preview_overwrite", self.preview_overwrite_check.isChecked(), save=False)
         self._settings.set("nuke_exe_path", self.nuke_exe_path_edit.text().strip(), save=False)
+        self._settings.set("threede_exe_path", self.threede_exe_path_edit.text().strip(), save=False)
         
         # Debug modes
         self._settings.set("debug_modes.general", self.debug_general_check.isChecked(), save=False)
@@ -1052,6 +1068,7 @@ class SettingsPage(QWidget):
             self.settings_changed.emit("preview_output_subdir", self.preview_output_subdir_edit.text().strip())
             self.settings_changed.emit("preview_overwrite", self.preview_overwrite_check.isChecked())
             self.settings_changed.emit("nuke_exe_path", self.nuke_exe_path_edit.text().strip())
+            self.settings_changed.emit("threede_exe_path", self.threede_exe_path_edit.text().strip())
 
             # UI density settings
             self.settings_changed.emit(
@@ -1151,6 +1168,17 @@ class SettingsPage(QWidget):
         )
         if path:
             self.nuke_exe_path_edit.setText(path)
+
+    def _on_browse_threede_exe(self):
+        """Browse for 3DE executable path."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select 3DE Executable",
+            "",
+            "All Files (*)"
+        )
+        if path:
+            self.threede_exe_path_edit.setText(path)
     
     def _on_test_connection(self):
         """Test connection to server."""

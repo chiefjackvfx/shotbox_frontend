@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import random
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PyQt6 import uic
 from PyQt6.QtCore import Qt, QSignalBlocker, QTimer, QUrl, QEvent
@@ -45,23 +46,9 @@ from nuke_lock_utils import parse_lock_info
 from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
 from flow_layout import FlowLayout
-from matchmove_helpers import (
-    CAMERA_PRESETS,
-    DEFAULT_FOCAL_LENGTH_MM,
-    DEFAULT_FPS,
-    MatchmoveClipRequest,
-    MatchmoveProjectRequest,
-    build_shot_assets_directory,
-    build_shot_matchmove_directory,
-    build_unique_camera_name,
-    cleanup_headless_artifacts,
-    find_latest_matchmove_project,
-    format_focal_length_label,
-    list_valid_precomp_sequences,
-    open_3de_project,
-    resolve_project_path,
-    run_headless_3de,
-)
+
+if TYPE_CHECKING:
+    import matchmove_helpers
 
 # Get the directory where this script is located (for cross-platform path handling)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +71,76 @@ from task_card import setup_task_widget_ui
 BASE_URL = "http://192.168.10.207:8000"
 THUMBNAILS_ENABLED = True
 THUMBNAIL_TARGET_WIDTH = 240
+SHOT_ASSETS_DIRNAME = "Shot_Assets"
+MATCHMOVE_DIRNAME = "matchmove"
+CAMERA_PRESETS = {
+    "Alexa 35": {
+        "sensor_width_mm": 27.99,
+        "sensor_height_mm": 19.22,
+    },
+    "Alexa LF": {
+        "sensor_width_mm": 36.70,
+        "sensor_height_mm": 25.54,
+    },
+}
+DEFAULT_FPS = 25.0
+DEFAULT_FOCAL_LENGTH_MM = 35.0
+_MATCHMOVE_HELPERS = None
+_MATCHMOVE_HELPERS_IMPORT_ERROR = None
+
+
+def _load_matchmove_helpers():
+    global _MATCHMOVE_HELPERS, _MATCHMOVE_HELPERS_IMPORT_ERROR
+    global CAMERA_PRESETS, DEFAULT_FOCAL_LENGTH_MM, DEFAULT_FPS
+
+    if _MATCHMOVE_HELPERS is not None:
+        return _MATCHMOVE_HELPERS
+    if _MATCHMOVE_HELPERS_IMPORT_ERROR is not None:
+        raise _MATCHMOVE_HELPERS_IMPORT_ERROR
+
+    try:
+        import matchmove_helpers as helpers
+    except Exception as exc:
+        _MATCHMOVE_HELPERS_IMPORT_ERROR = exc
+        raise
+
+    _MATCHMOVE_HELPERS = helpers
+    CAMERA_PRESETS = dict(getattr(helpers, "CAMERA_PRESETS", CAMERA_PRESETS))
+    DEFAULT_FOCAL_LENGTH_MM = float(getattr(helpers, "DEFAULT_FOCAL_LENGTH_MM", DEFAULT_FOCAL_LENGTH_MM))
+    DEFAULT_FPS = float(getattr(helpers, "DEFAULT_FPS", DEFAULT_FPS))
+    return helpers
+
+
+def build_shot_assets_directory(shot_root: str) -> str:
+    return str(Path(shot_root).resolve() / SHOT_ASSETS_DIRNAME)
+
+
+def build_shot_matchmove_directory(shot_root: str) -> str:
+    return str(Path(build_shot_assets_directory(shot_root)) / MATCHMOVE_DIRNAME)
+
+
+def find_latest_matchmove_project(matchmove_dir: str, shot_name: str):
+    return _load_matchmove_helpers().find_latest_matchmove_project(matchmove_dir, shot_name)
+
+
+def list_valid_precomp_sequences(shot_root: str):
+    return _load_matchmove_helpers().list_valid_precomp_sequences(shot_root)
+
+
+def run_headless_3de(request, log_callback):
+    return _load_matchmove_helpers().run_headless_3de(request, log_callback)
+
+
+def cleanup_headless_artifacts(result) -> None:
+    _load_matchmove_helpers().cleanup_headless_artifacts(result)
+
+
+def open_3de_project(project_path: str):
+    return _load_matchmove_helpers().open_3de_project(project_path)
+
+
+def resolve_project_path(matchmove_dir: str, shot_name: str):
+    return _load_matchmove_helpers().resolve_project_path(matchmove_dir, shot_name)
 
 
 def set_global_thumbnail_mode(enabled: bool, width: int | None = None) -> None:
@@ -187,6 +244,15 @@ def _compact_text(value, limit: int) -> str:
     if limit <= 3 or len(text) <= limit:
         return text
     return f"{text[:limit - 3].rstrip()}..."
+
+
+def _show_matchmove_unavailable(parent: QWidget | None, exc: Exception) -> None:
+    QMessageBox.warning(
+        parent,
+        "Matchmove Unavailable",
+        "The matchmove / 3DE helper could not be loaded.\n\n"
+        f"{exc}",
+    )
 
 
 class PlainTextEditDialog(QDialog):
@@ -943,6 +1009,12 @@ class ShotCard(QWidget):
         if not self.shot_dir:
             return False
 
+        try:
+            _load_matchmove_helpers()
+        except Exception as exc:
+            _show_matchmove_unavailable(self, exc)
+            return True
+
         shot_name = self._shot_title()
         matchmove_dir = self._resolved_matchmove_dir()
         latest_project = find_latest_matchmove_project(matchmove_dir, shot_name)
@@ -980,6 +1052,12 @@ class ShotCard(QWidget):
             )
 
     def _create_matchmove_project(self, sequence_info) -> None:
+        try:
+            helpers = _load_matchmove_helpers()
+        except Exception as exc:
+            _show_matchmove_unavailable(self, exc)
+            return
+
         dialog = SingleCameraMatchmoveDialog(sequence_info.folder_path, parent=self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
@@ -993,7 +1071,7 @@ class ShotCard(QWidget):
         os.makedirs(export_dir, exist_ok=True)
 
         used_camera_names: set[str] = set()
-        camera_name = build_unique_camera_name(
+        camera_name = helpers.build_unique_camera_name(
             shot_name=shot_name,
             folder_path=sequence_info.folder_path,
             slot_index=0,
@@ -1001,17 +1079,17 @@ class ShotCard(QWidget):
         )
         focal_length_mm = dialog.focal_length_mm
 
-        clip_request = MatchmoveClipRequest(
+        clip_request = helpers.MatchmoveClipRequest(
             slot_index=0,
             clip_name=Path(sequence_info.folder_path).name,
             camera_name=camera_name,
-            lens_name=format_focal_length_label(focal_length_mm),
+            lens_name=helpers.format_focal_length_label(focal_length_mm),
             sequence_info=sequence_info,
             focal_length_mm=focal_length_mm,
             sequence_start_frame=sequence_info.first_frame,
             sequence_end_frame=sequence_info.last_frame,
         )
-        request = MatchmoveProjectRequest(
+        request = helpers.MatchmoveProjectRequest(
             project_name=shot_name,
             shot_name=shot_name,
             clips=(clip_request,),

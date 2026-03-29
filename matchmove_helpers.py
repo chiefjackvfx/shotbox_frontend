@@ -4,8 +4,10 @@ import json
 import os
 import re
 import shlex
+import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 from collections import Counter
 from dataclasses import dataclass
@@ -29,7 +31,28 @@ CAMERA_PRESETS = {
     },
 }
 
-THREEDE_CMD = "/home/rockybtw/Documents/3DE4_linux64_r8.1/bin/run_3DE4"
+THREEDE_CMD_ENV_VAR = "SHOTBOX_3DE_CMD"
+THREEDE_CMD = os.environ.get(THREEDE_CMD_ENV_VAR, "").strip()
+
+WINDOWS_THREEDE_CANDIDATES = (
+    r"C:\Users\Giger\Documents\3DE4_win64_r8.0v2\bin\3DE4.exe",
+    r"C:\Users\Giger\Documents\3DE4_win64_r8.0v2\3DE4.exe",
+    r"%ProgramFiles%\3DE4\bin\3DE4.exe",
+    r"%ProgramFiles%\3DEqualizer4\bin\3DE4.exe",
+    r"%ProgramFiles(x86)%\3DE4\bin\3DE4.exe",
+    r"%ProgramFiles(x86)%\3DEqualizer4\bin\3DE4.exe",
+    "3DE4.exe",
+)
+
+POSIX_THREEDE_CANDIDATES = (
+    "/home/rockybtw/Documents/3DE4_linux64_r8.1/bin/run_3DE4",
+    "/opt/3DE4/bin/run_3DE4",
+    "/usr/local/bin/run_3DE4",
+    "/Applications/3DE4.app/Contents/MacOS/3DE4",
+    "/Applications/3DEqualizer4.app/Contents/MacOS/3DE4",
+    "run_3DE4",
+    "3DE4",
+)
 
 SHOT_ASSETS_DIRNAME = "Shot_Assets"
 MATCHMOVE_DIRNAME = "matchmove"
@@ -109,6 +132,112 @@ class HeadlessRunResult:
 
 def normalize_user_path(path: str) -> str:
     return os.path.abspath(os.path.expandvars(os.path.expanduser(path.strip())))
+
+
+def _is_path_like(command: str) -> bool:
+    if not command:
+        return False
+    return (
+        "/" in command
+        or "\\" in command
+        or command.startswith(".")
+        or (len(command) > 1 and command[1] == ":")
+    )
+
+
+def _read_configured_3de_path() -> str:
+    try:
+        from settings import get_settings_manager
+
+        settings = get_settings_manager()
+        return str(settings.get("threede_exe_path", "") or "").strip()
+    except Exception:
+        return ""
+
+
+def _iter_3de_candidates() -> list[str]:
+    candidates: list[str] = []
+    if THREEDE_CMD:
+        candidates.append(THREEDE_CMD)
+    configured_3de_path = _read_configured_3de_path()
+    if configured_3de_path:
+        candidates.append(configured_3de_path)
+
+    if os.name == "nt":
+        candidates.extend(WINDOWS_THREEDE_CANDIDATES)
+        for env_name in ("ProgramFiles", "ProgramFiles(x86)"):
+            root = os.environ.get(env_name, "").strip()
+            if not root:
+                continue
+            try:
+                for child in sorted(Path(root).glob("3DE*")):
+                    candidates.append(str(child / "bin" / "3DE4.exe"))
+            except OSError:
+                continue
+    else:
+        candidates.extend(POSIX_THREEDE_CANDIDATES)
+
+    unique_candidates: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        cleaned = str(candidate or "").strip()
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_candidates.append(cleaned)
+    return unique_candidates
+
+
+def resolve_3de_executable(must_exist: bool = True) -> str:
+    tried_paths: list[str] = []
+    fallback_candidate = ""
+
+    for candidate in _iter_3de_candidates():
+        if _is_path_like(candidate):
+            resolved = normalize_user_path(candidate)
+            tried_paths.append(resolved)
+            if os.path.isfile(resolved):
+                return resolved
+            if not fallback_candidate:
+                fallback_candidate = resolved
+            continue
+
+        resolved = shutil.which(candidate)
+        tried_paths.append(resolved or candidate)
+        if resolved:
+            return resolved
+        if not fallback_candidate:
+            fallback_candidate = candidate
+
+    if not must_exist:
+        return fallback_candidate
+
+    searched_text = "\n- ".join(tried_paths or ["3DE4.exe", "run_3DE4"])
+    raise FileNotFoundError(
+        "Could not locate the 3DE executable.\n"
+        f"Set {THREEDE_CMD_ENV_VAR} or add 3DE to PATH.\n"
+        f"Searched:\n- {searched_text}"
+    )
+
+
+def _background_launch_kwargs() -> dict[str, object]:
+    kwargs: dict[str, object] = {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if os.name == "nt":
+        creationflags = (
+            getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            | getattr(subprocess, "DETACHED_PROCESS", 0)
+        )
+        if creationflags:
+            kwargs["creationflags"] = creationflags
+    else:
+        kwargs["start_new_session"] = True
+    return kwargs
 
 
 def sanitize_auto_shot_name(name: str, max_length: int = 50) -> str:
@@ -605,16 +734,13 @@ def run_headless_3de(
     request: MatchmoveProjectRequest,
     log_callback: Callable[[str], None],
 ) -> HeadlessRunResult:
-    three_de_path = normalize_user_path(THREEDE_CMD)
-    if not os.path.isfile(three_de_path):
-        raise FileNotFoundError(f"3DE executable not found:\n{three_de_path}")
-    if not os.access(three_de_path, os.X_OK):
-        raise PermissionError(f"3DE executable is not runnable:\n{three_de_path}")
+    three_de_path = resolve_3de_executable()
+    temp_dir = tempfile.gettempdir()
 
     runtime_script_fd, runtime_script_path = tempfile.mkstemp(
         prefix="shotbox_3de_",
         suffix=".py",
-        dir="/tmp",
+        dir=temp_dir,
         text=True,
     )
     os.close(runtime_script_fd)
@@ -622,7 +748,7 @@ def run_headless_3de(
     status_fd, status_path = tempfile.mkstemp(
         prefix="shotbox_3de_",
         suffix=".json",
-        dir="/tmp",
+        dir=temp_dir,
         text=True,
     )
     os.close(status_fd)
@@ -704,12 +830,7 @@ def cleanup_headless_artifacts(result: HeadlessRunResult) -> None:
 
 
 def open_3de_project(project_path: str) -> list[str]:
-    three_de_path = normalize_user_path(THREEDE_CMD)
+    three_de_path = resolve_3de_executable()
     command = [three_de_path, "-open", project_path]
-    subprocess.Popen(
-        command,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    subprocess.Popen(command, **_background_launch_kwargs())
     return command

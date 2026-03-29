@@ -62,7 +62,7 @@ CAMERA_PRESETS = {
     },
 }
 
-THREEDE_CMD = "/home/rockybtw/Documents/3DE4_linux64_r8.1/bin/run_3DE4"
+THREEDE_CMD = ""
 
 # Keep path layouts data-only so future pipeline changes stay localized.
 OUTPUT_LAYOUTS = {
@@ -805,16 +805,13 @@ def run_headless_3de(
     request: ProjectBuildRequest,
     log_callback,
 ) -> HeadlessRunResult:
-    three_de_path = normalize_user_path(THREEDE_CMD)
-    if not os.path.isfile(three_de_path):
-        raise FileNotFoundError(f"3DE executable not found:\n{three_de_path}")
-    if not os.access(three_de_path, os.X_OK):
-        raise PermissionError(f"3DE executable is not runnable:\n{three_de_path}")
+    three_de_path = shared_matchmove.resolve_3de_executable()
+    temp_dir = tempfile.gettempdir()
 
     runtime_script_fd, runtime_script_path = tempfile.mkstemp(
         prefix="shotbox_3de_",
         suffix=".py",
-        dir="/tmp",
+        dir=temp_dir,
         text=True,
     )
     os.close(runtime_script_fd)
@@ -822,7 +819,7 @@ def run_headless_3de(
     status_fd, status_path = tempfile.mkstemp(
         prefix="shotbox_3de_",
         suffix=".json",
-        dir="/tmp",
+        dir=temp_dir,
         text=True,
     )
     os.close(status_fd)
@@ -904,14 +901,9 @@ def cleanup_headless_artifacts(result: HeadlessRunResult) -> None:
 
 
 def open_3de_project(project_path: str) -> list[str]:
-    three_de_path = normalize_user_path(THREEDE_CMD)
+    three_de_path = shared_matchmove.resolve_3de_executable()
     command = [three_de_path, "-open", project_path]
-    subprocess.Popen(
-        command,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    subprocess.Popen(command, **shared_matchmove._background_launch_kwargs())
     return command
 
 
@@ -1548,7 +1540,9 @@ class Create3DEProjectWindow(QWidget):
             try:
                 gui_command = shared_matchmove.open_3de_project(request.project_path)
             except Exception as error:
-                launch_text = shlex.join([normalize_user_path(THREEDE_CMD), "-open", request.project_path])
+                launch_text = shlex.join(
+                    [shared_matchmove.resolve_3de_executable(must_exist=False), "-open", request.project_path]
+                )
                 self.log_message(
                     "3DE project was created, but opening the GUI failed.\n"
                     f"Project: {request.project_path}\n"
