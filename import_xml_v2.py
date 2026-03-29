@@ -74,6 +74,11 @@ SHOT_TITLE_MAX_LENGTH = 50
 IMPORT_VERSION_PADDING = 3
 INITIAL_IMPORT_VERSION = 1
 INITIAL_IMPORT_VERSION_TAG = f"v{INITIAL_IMPORT_VERSION:0{IMPORT_VERSION_PADDING}d}"
+MAX_SINGLE_SHOT_CLIPS = 5
+SINGLE_SHOT_VIDEO_EXTENSIONS = {
+    ".mov", ".mp4", ".mxf", ".avi", ".mkv", ".r3d", ".braw", ".arx"
+}
+SINGLE_SHOT_VIDEO_FILTER = "Video Files (*.mov *.mp4 *.mxf *.avi *.mkv *.r3d *.braw *.arx);;All Files (*)"
 
 
 # =============================================================================
@@ -1506,43 +1511,64 @@ class XMLImportPage(QWidget):
         return shot_folder_path
 
 
-    def _build_parsed_shot_from_video_file(
+    def _build_parsed_shot_from_clip_files(
         self,
         shot_name: str,
-        video_file_path: str,
+        clip_file_paths: List[str],
     ):
-        """Create a ParsedShot from a single video file, using a 1001-based timeline convention."""
+        """Create a ParsedShot from ordered clip paths, using a 1001-based timeline convention."""
 
-        video_duration_frames = ThumbnailGenerator.get_video_duration(video_file_path)
+        if not clip_file_paths:
+            raise ValueError("At least one clip is required to build a single shot.")
+
+        ordered_clip_paths = [path for path in clip_file_paths[:MAX_SINGLE_SHOT_CLIPS] if path]
+        if not ordered_clip_paths:
+            raise ValueError("At least one valid clip path is required to build a single shot.")
+
+        primary_duration_frames = ThumbnailGenerator.get_video_duration(ordered_clip_paths[0])
 
         timeline_start_frame = 1001
-        timeline_end_frame = timeline_start_frame + max(0, video_duration_frames - 1)
+        timeline_end_frame = timeline_start_frame + max(0, primary_duration_frames - 1)
 
-        parsed_clip = ParsedClip(
-            name=os.path.basename(video_file_path),
-            filepath=video_file_path,
-            in_point=0,
-            out_point=video_duration_frames,
-            duration=video_duration_frames,
-            start_frame=timeline_start_frame,
-            end_frame=timeline_end_frame,
-            track=1,
-        )
+        parsed_clips: List[ParsedClip] = []
+        for track_index, clip_file_path in enumerate(ordered_clip_paths, start=1):
+            clip_duration_frames = ThumbnailGenerator.get_video_duration(clip_file_path)
+            clip_end_frame = timeline_start_frame + max(0, clip_duration_frames - 1)
+            parsed_clips.append(
+                ParsedClip(
+                    name=os.path.basename(clip_file_path),
+                    filepath=clip_file_path,
+                    in_point=0,
+                    out_point=clip_duration_frames,
+                    duration=clip_duration_frames,
+                    start_frame=timeline_start_frame,
+                    end_frame=clip_end_frame,
+                    track=track_index,
+                )
+            )
 
         parsed_shot = ParsedShot(
             index=0,
             name=self._validated_shot_name(shot_name),
-            clips=[parsed_clip],
-            duration=video_duration_frames,
+            clips=parsed_clips,
+            duration=primary_duration_frames,
             edit_inpoint=timeline_start_frame,
             edit_outpoint=timeline_end_frame,
         )
 
         return parsed_shot
 
+    def _build_parsed_shot_from_video_file(
+        self,
+        shot_name: str,
+        video_file_path: str,
+    ):
+        """Backward-compatible wrapper for building a single-clip shot."""
+        return self._build_parsed_shot_from_clip_files(shot_name, [video_file_path])
+
 
     def _on_make_single_shot(self) -> None:
-        """UI action: create a single-shot folder, thumbnail, and Nuke script from a video file."""
+        """UI action: create a single-shot folder, thumbnail, and Nuke script from ordered clip files."""
 
         # Pull settings from UI into self.local_work, self.colourspace, etc.
         self._on_update_settings()
@@ -1560,18 +1586,19 @@ class XMLImportPage(QWidget):
         if dialog_result != QDialog.DialogCode.Accepted:
             return
 
-        selected_video_file_path = creation_dialog.selected_video_file_path
+        selected_clip_file_paths = creation_dialog.selected_clip_file_paths
         selected_output_directory_path = creation_dialog.selected_output_directory_path
         entered_shot_name = creation_dialog.entered_shot_name
         add_to_db = creation_dialog.add_to_db
         create_tasks = creation_dialog.create_tasks
         job_name = getattr(creation_dialog, 'job_name', '')
         timeline_name = getattr(creation_dialog, 'timeline_name', '')
+        selected_colourspace = creation_dialog.colourspace
 
         try:
-            parsed_shot = self._build_parsed_shot_from_video_file(
+            parsed_shot = self._build_parsed_shot_from_clip_files(
                 shot_name=entered_shot_name,
-                video_file_path=selected_video_file_path,
+                clip_file_paths=selected_clip_file_paths,
             )
 
             shot_folder_path = self._create_single_shot_folder_structure(
@@ -1587,7 +1614,7 @@ class XMLImportPage(QWidget):
             )
             if not os.path.isfile(thumbnail_file_path):
                 ThumbnailGenerator.generate(
-                    video_path=selected_video_file_path,
+                    video_path=selected_clip_file_paths[0],
                     output_path=thumbnail_file_path,
                 )
 
@@ -1596,7 +1623,7 @@ class XMLImportPage(QWidget):
 
             # Create Nuke script
             nuke_script_generator = NukeScriptGenerator(
-                colourspace=self.colourspace,
+                colourspace=selected_colourspace,
                 local_work=self.local_work,
                 nuke_path=self._current_nuke_path(),
             )
@@ -1620,7 +1647,7 @@ class XMLImportPage(QWidget):
                         shot=parsed_shot,
                         job_title=job_name,
                         timeline_title=timeline_name,
-                        colourspace=self.colourspace,
+                        colourspace=selected_colourspace,
                         handles=self.handles
                     )
                     parsed_shot.db_shot_id = shot_id
@@ -1641,9 +1668,51 @@ class XMLImportPage(QWidget):
         except Exception as error:
             print(f"[SingleShot] Error: {error}")
 
-# This dialog collects: video file, output folder, shot name with DRAG AND DROP support
+class SingleShotClipSlot(QWidget):
+    """One ordered clip input slot used by the single-shot dialog."""
+
+    def __init__(self, index: int, browse_callback, clear_callback, parent=None):
+        super().__init__(parent)
+        self.index = index
+        self._browse_callback = browse_callback
+        self._clear_callback = clear_callback
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(6)
+        layout.setContentsMargins(0, 0, 0, 0)
+
+        self.role_label = QLabel()
+        self.role_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.role_label.setStyleSheet("font-weight: bold; color: #ddd;")
+        layout.addWidget(self.role_label)
+
+        self.drop_label = QLabel()
+        self.drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.drop_label.setMinimumHeight(85)
+        self.drop_label.setWordWrap(True)
+        layout.addWidget(self.drop_label)
+
+        self.path_line_edit = QLineEdit()
+        self.path_line_edit.setPlaceholderText("Clip path...")
+        layout.addWidget(self.path_line_edit)
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setContentsMargins(0, 0, 0, 0)
+
+        self.browse_button = QPushButton("Browse")
+        self.browse_button.clicked.connect(lambda: self._browse_callback(self.index))
+        buttons_layout.addWidget(self.browse_button)
+
+        self.clear_button = QPushButton("Clear")
+        self.clear_button.clicked.connect(lambda: self._clear_callback(self.index))
+        buttons_layout.addWidget(self.clear_button)
+
+        layout.addLayout(buttons_layout)
+
+
+# This dialog collects: video file(s), output folder, shot name with DRAG AND DROP support
 class SingleShotCreationDialog(QDialog):
-    """Dialog to create one shot from a video file without an XML. Supports drag and drop."""
+    """Dialog to create one shot from one or more video files without an XML."""
 
     def __init__(self, parent=None, default_shot_name: str = "sho010", 
                  colourspace: str = "", handles: int = 25,
@@ -1651,13 +1720,16 @@ class SingleShotCreationDialog(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Create Single Shot")
-        self.setMinimumWidth(120)
+        self.setMinimumWidth(1050)
         self.setMinimumHeight(400)
         self.setAcceptDrops(True)
 
+        self.selected_clip_file_paths: List[str] = []
         self.selected_video_file_path: str = ""
         self.selected_output_directory_path: str = ""
         self.entered_shot_name: str = default_shot_name
+        self._last_auto_job_name = ""
+        self._last_auto_timeline_name = ""
         
         # Settings passed from parent
         self.colourspace = colourspace
@@ -1670,45 +1742,33 @@ class SingleShotCreationDialog(QDialog):
         main_layout.setContentsMargins(20, 20, 20, 20)
 
         # Instructions
-        instructions = QLabel("Drag and drop files onto the areas below, or use Browse buttons")
+        instructions = QLabel("Drag clips left to right. The first clip is Primary/V1, then V2-V5.")
         instructions.setStyleSheet("color: #888; font-style: italic;")
         main_layout.addWidget(instructions)
 
-        # Video file drop zone
-        self.video_drop_label = QLabel("🎬 Drag and drop a video file here\n(.mov, .mp4, .mxf, etc.)")
-        self.video_drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.video_drop_label.setMinimumHeight(100)
-        self.video_drop_label.setStyleSheet("""
-            QLabel {
-                background-color: #2a2a2a;
-                border: 2px dashed #555;
-                border-radius: 8px;
-                color: #aaa;
-                font-size: 14px;
-                padding: 20px;
-            }
-            QLabel:hover {
-                border-color: #888;
-                background-color: #333;
-            }
-        """)
-        self.video_drop_label.setProperty("drop_target", "video")
-        main_layout.addWidget(self.video_drop_label)
-
-        # Video file browse row
-        video_file_row_layout = QHBoxLayout()
-        video_file_row_layout.addWidget(QLabel("Video file:"))
-
-        self.video_file_path_line_edit = QLineEdit()
-        self.video_file_path_line_edit.setPlaceholderText("Or enter path manually...")
-        self.video_file_path_line_edit.textChanged.connect(self._on_video_path_changed)
-        video_file_row_layout.addWidget(self.video_file_path_line_edit)
-
-        self.select_video_file_button = QPushButton("Browse")
-        self.select_video_file_button.clicked.connect(self._select_video_file)
-        video_file_row_layout.addWidget(self.select_video_file_button)
-
-        main_layout.addLayout(video_file_row_layout)
+        # Ordered clip slots
+        self.clip_slots_container = QWidget()
+        self.clip_slots_layout = QHBoxLayout(self.clip_slots_container)
+        self.clip_slots_layout.setSpacing(10)
+        self.clip_slots_layout.setContentsMargins(0, 0, 0, 0)
+        self.clip_slots: List[SingleShotClipSlot] = []
+        for slot_index in range(MAX_SINGLE_SHOT_CLIPS):
+            slot_widget = SingleShotClipSlot(
+                index=slot_index,
+                browse_callback=self._select_clip_file_for_slot,
+                clear_callback=self._clear_clip_slot,
+                parent=self,
+            )
+            slot_widget.path_line_edit.textChanged.connect(
+                lambda _text, idx=slot_index: self._on_clip_path_text_changed(idx)
+            )
+            slot_widget.path_line_edit.editingFinished.connect(
+                lambda idx=slot_index: self._on_clip_path_editing_finished(idx)
+            )
+            self.clip_slots.append(slot_widget)
+            self.clip_slots_layout.addWidget(slot_widget, 1)
+        main_layout.addWidget(self.clip_slots_container)
+        self._refresh_clip_slots()
 
         # Output directory drop zone
         self.folder_drop_label = QLabel("📁 Drag and drop output folder here\n(where shot folder will be created)")
@@ -1755,6 +1815,21 @@ class SingleShotCreationDialog(QDialog):
         shot_name_row_layout.addWidget(self.shot_name_line_edit)
 
         main_layout.addLayout(shot_name_row_layout)
+
+        # Input transform / colourspace row
+        colourspace_row_layout = QHBoxLayout()
+        colourspace_row_layout.addWidget(QLabel("Input transform:"))
+
+        self.colourspace_combo_box = QComboBox()
+        self.colourspace_combo_box.setEditable(True)
+        self.colourspace_combo_box.addItems(COLOURSPACE_LIST)
+        if colourspace and self.colourspace_combo_box.findText(colourspace) == -1:
+            self.colourspace_combo_box.addItem(colourspace)
+        if colourspace:
+            self.colourspace_combo_box.setCurrentText(colourspace)
+        colourspace_row_layout.addWidget(self.colourspace_combo_box)
+
+        main_layout.addLayout(colourspace_row_layout)
 
         # Options row
         options_row_layout = QHBoxLayout()
@@ -1811,37 +1886,202 @@ class SingleShotCreationDialog(QDialog):
     def _toggle_db_options(self):
         """Show/hide database options based on checkbox."""
         self.db_options_frame.setVisible(self.add_to_db_checkbox.isChecked())
-    
-    def _on_video_path_changed(self, text):
-        """Update drop label when video path changes."""
-        if text and os.path.isfile(text):
-            filename = os.path.basename(text)
-            self.video_drop_label.setText(f"✅ {filename}")
-            self.video_drop_label.setStyleSheet("""
+
+    def _slot_role_label(self, index: int) -> str:
+        return "Primary" if index == 0 else f"V{index + 1}"
+
+    def _supported_video_file(self, file_path: str) -> bool:
+        if not file_path or not os.path.isfile(file_path):
+            return False
+        return os.path.splitext(file_path)[1].lower() in SINGLE_SHOT_VIDEO_EXTENSIONS
+
+    def _default_clip_drop_text(self, index: int) -> str:
+        role = self._slot_role_label(index)
+        if index == 0:
+            return f"🎬 {role} clip\nDrag and drop video here"
+        return f"🎞️ {role} clip\nDrag and drop video here"
+
+    def _apply_clip_slot_style(self, slot: SingleShotClipSlot, *, valid: bool, invalid: bool = False):
+        if valid:
+            slot.drop_label.setStyleSheet("""
                 QLabel {
                     background-color: #1a3a1a;
                     border: 2px solid #4a4;
                     border-radius: 8px;
                     color: #8f8;
-                    font-size: 14px;
-                    padding: 20px;
+                    font-size: 13px;
+                    padding: 12px;
                 }
             """)
-        else:
-            self.video_drop_label.setText("🎬 Drag and drop a video file here\n(.mov, .mp4, .mxf, etc.)")
-            self.video_drop_label.setStyleSheet("""
+            return
+        if invalid:
+            slot.drop_label.setStyleSheet("""
                 QLabel {
-                    background-color: #2a2a2a;
-                    border: 2px dashed #555;
+                    background-color: #3a1a1a;
+                    border: 2px solid #a44;
                     border-radius: 8px;
-                    color: #aaa;
-                    font-size: 14px;
-                    padding: 20px;
+                    color: #f99;
+                    font-size: 13px;
+                    padding: 12px;
                 }
             """)
+            return
+        slot.drop_label.setStyleSheet("""
+            QLabel {
+                background-color: #2a2a2a;
+                border: 2px dashed #555;
+                border-radius: 8px;
+                color: #aaa;
+                font-size: 13px;
+                padding: 12px;
+            }
+            QLabel:hover {
+                border-color: #888;
+                background-color: #333;
+            }
+        """)
+
+    def _update_clip_slot_visual(self, index: int):
+        slot = self.clip_slots[index]
+        role = self._slot_role_label(index)
+        slot.role_label.setText(role)
+        text = slot.path_line_edit.text().strip()
+        slot.clear_button.setEnabled(bool(text))
+        if text and self._supported_video_file(text):
+            slot.drop_label.setText(f"✅ {Path(text).name}")
+            self._apply_clip_slot_style(slot, valid=True)
+        elif text:
+            slot.drop_label.setText(f"⚠ {Path(text).name}\nInvalid or unsupported file")
+            self._apply_clip_slot_style(slot, valid=False, invalid=True)
+        else:
+            slot.drop_label.setText(self._default_clip_drop_text(index))
+            self._apply_clip_slot_style(slot, valid=False)
+
+    def _set_clip_line_edit_text(self, index: int, value: str):
+        slot = self.clip_slots[index]
+        slot.path_line_edit.blockSignals(True)
+        slot.path_line_edit.setText(value)
+        slot.path_line_edit.blockSignals(False)
+
+    def _set_selected_clip_paths(self, clip_paths: List[str]):
+        self.selected_clip_file_paths = clip_paths[:MAX_SINGLE_SHOT_CLIPS]
+        self.selected_video_file_path = self.selected_clip_file_paths[0] if self.selected_clip_file_paths else ""
+
+        visible_slots = min(
+            MAX_SINGLE_SHOT_CLIPS,
+            max(1, len(self.selected_clip_file_paths) + (0 if len(self.selected_clip_file_paths) >= MAX_SINGLE_SHOT_CLIPS else 1)),
+        )
+
+        for index, slot in enumerate(self.clip_slots):
+            slot.setVisible(index < visible_slots)
+            slot_text = self.selected_clip_file_paths[index] if index < len(self.selected_clip_file_paths) else ""
+            self._set_clip_line_edit_text(index, slot_text)
+            self._update_clip_slot_visual(index)
+
+    def _refresh_clip_slots(self):
+        self._set_selected_clip_paths(list(self.selected_clip_file_paths))
+
+    def _replace_or_append_clip_path(self, index: int, clip_path: str):
+        updated_paths = list(self.selected_clip_file_paths)
+        insert_index = min(index, len(updated_paths))
+        if insert_index < len(updated_paths):
+            updated_paths[insert_index] = clip_path
+        else:
+            updated_paths.append(clip_path)
+        self._set_selected_clip_paths(updated_paths)
+
+    def _add_clip_paths(self, clip_paths: List[str], start_index: Optional[int] = None):
+        valid_paths = [path for path in clip_paths if self._supported_video_file(path)]
+        if not valid_paths:
+            return
+
+        updated_paths = list(self.selected_clip_file_paths)
+        insert_index = len(updated_paths) if start_index is None else min(start_index, len(updated_paths))
+
+        for clip_path in valid_paths:
+            if insert_index >= MAX_SINGLE_SHOT_CLIPS:
+                break
+            if insert_index < len(updated_paths):
+                updated_paths[insert_index] = clip_path
+            else:
+                updated_paths.append(clip_path)
+            insert_index += 1
+
+        self._set_selected_clip_paths(updated_paths)
+
+    def _clear_clip_slot(self, index: int):
+        updated_paths = list(self.selected_clip_file_paths)
+        if index < len(updated_paths):
+            del updated_paths[index]
+        self._set_selected_clip_paths(updated_paths)
+
+    def _on_clip_path_text_changed(self, index: int):
+        self._update_clip_slot_visual(index)
+
+    def _on_clip_path_editing_finished(self, index: int):
+        slot = self.clip_slots[index]
+        clip_path = slot.path_line_edit.text().strip()
+
+        if not clip_path:
+            if index < len(self.selected_clip_file_paths):
+                self._clear_clip_slot(index)
+            else:
+                self._update_clip_slot_visual(index)
+            return
+
+        if not self._supported_video_file(clip_path):
+            self._update_clip_slot_visual(index)
+            return
+
+        self._replace_or_append_clip_path(index, clip_path)
+
+    def _point_in_widget(self, widget: QWidget, dialog_point) -> bool:
+        global_point = self.mapToGlobal(dialog_point)
+        return widget.rect().contains(widget.mapFromGlobal(global_point))
+
+    def _clip_slot_index_at(self, dialog_point) -> Optional[int]:
+        for index, slot in enumerate(self.clip_slots):
+            if not slot.isVisible():
+                continue
+            if self._point_in_widget(slot.drop_label, dialog_point):
+                return index
+        return None
+
+    def _infer_job_and_timeline_from_output_dir(self, directory_path: str) -> tuple[str, Optional[str]]:
+        normalized_path = os.path.normpath(directory_path)
+        path = Path(normalized_path)
+        if not normalized_path or not path.name:
+            return "", None
+
+        current_name = path.name
+        current_name_lower = current_name.lower()
+        if current_name_lower in {"vfx", "nuke"}:
+            job_name = path.parent.name if path.parent != path else ""
+            return job_name, None
+
+        parent_name_lower = path.parent.name.lower() if path.parent and path.parent.name else ""
+        if parent_name_lower in {"vfx", "nuke"}:
+            job_name = path.parent.parent.name if path.parent.parent != path.parent else ""
+            return job_name, current_name
+
+        return (path.parent.name if path.parent != path else "", current_name)
+
+    def _apply_auto_fill_text(self, line_edit: QLineEdit, value: str, auto_attr_name: str):
+        if not value:
+            return
+        current_value = line_edit.text().strip()
+        previous_auto_value = getattr(self, auto_attr_name)
+        if not current_value or current_value == previous_auto_value:
+            line_edit.setText(value)
+            setattr(self, auto_attr_name, value)
     
     def _on_folder_path_changed(self, text):
         """Update drop label when folder path changes."""
+        inferred_job_name = ""
+        inferred_timeline_name: Optional[str] = None
+        if text.strip():
+            inferred_job_name, inferred_timeline_name = self._infer_job_and_timeline_from_output_dir(text.strip())
+
         if text and os.path.isdir(text):
             foldername = os.path.basename(text)
             self.folder_drop_label.setText(f"✅ {foldername}")
@@ -1855,17 +2095,6 @@ class SingleShotCreationDialog(QDialog):
                     padding: 20px;
                 }
             """)
-            
-            # Auto-fill job name from folder structure if empty
-            if not self.job_name_line_edit.text():
-                # Try to extract job name from path (parent folder)
-                parent = os.path.dirname(text)
-                if parent:
-                    self.job_name_line_edit.setText(os.path.basename(parent))
-            
-            # Auto-fill timeline name if empty
-            if not self.timeline_name_line_edit.text():
-                self.timeline_name_line_edit.setText(foldername)
         else:
             self.folder_drop_label.setText("📁 Drag and drop output folder here\n(where shot folder will be created)")
             self.folder_drop_label.setStyleSheet("""
@@ -1878,6 +2107,14 @@ class SingleShotCreationDialog(QDialog):
                     padding: 20px;
                 }
             """)
+
+        self._apply_auto_fill_text(self.job_name_line_edit, inferred_job_name, "_last_auto_job_name")
+        if inferred_timeline_name:
+            self._apply_auto_fill_text(
+                self.timeline_name_line_edit,
+                inferred_timeline_name,
+                "_last_auto_timeline_name",
+            )
 
     def dragEnterEvent(self, event):
         """Accept drag events with URLs."""
@@ -1896,20 +2133,17 @@ class SingleShotCreationDialog(QDialog):
         if not urls:
             return
 
-        file_path = urls[0].toLocalFile()
+        dropped_paths = [url.toLocalFile() for url in urls if url.toLocalFile()]
+        if not dropped_paths:
+            return
+
+        file_path = dropped_paths[0]
         drop_pos = event.position().toPoint()
 
-        # Check which drop zone was targeted
-        video_geo = self.video_drop_label.geometry()
-        folder_geo = self.folder_drop_label.geometry()
-
-        # Adjust for potential parent widget offsets
-        if video_geo.contains(drop_pos) or self.video_drop_label.geometry().contains(self.video_drop_label.mapFromGlobal(self.mapToGlobal(drop_pos))):
-            # Dropped on video zone
-            if os.path.isfile(file_path):
-                self.video_file_path_line_edit.setText(file_path)
-                self.selected_video_file_path = file_path
-        elif folder_geo.contains(drop_pos) or self.folder_drop_label.geometry().contains(self.folder_drop_label.mapFromGlobal(self.mapToGlobal(drop_pos))):
+        clip_slot_index = self._clip_slot_index_at(drop_pos)
+        if clip_slot_index is not None:
+            self._add_clip_paths(dropped_paths, start_index=clip_slot_index)
+        elif self._point_in_widget(self.folder_drop_label, drop_pos):
             # Dropped on folder zone
             if os.path.isdir(file_path):
                 self.output_directory_path_line_edit.setText(file_path)
@@ -1921,12 +2155,8 @@ class SingleShotCreationDialog(QDialog):
                 self.selected_output_directory_path = parent_dir
         else:
             # Dropped somewhere else - try to guess based on file type
-            if os.path.isfile(file_path):
-                # It's a file - assume it's the video
-                ext = os.path.splitext(file_path)[1].lower()
-                if ext in ['.mov', '.mp4', '.mxf', '.avi', '.mkv', '.r3d', '.braw', '.arx']:
-                    self.video_file_path_line_edit.setText(file_path)
-                    self.selected_video_file_path = file_path
+            if any(self._supported_video_file(path) for path in dropped_paths):
+                self._add_clip_paths(dropped_paths)
             elif os.path.isdir(file_path):
                 # It's a folder - assume it's the output directory
                 self.output_directory_path_line_edit.setText(file_path)
@@ -1934,16 +2164,15 @@ class SingleShotCreationDialog(QDialog):
 
         event.acceptProposedAction()
 
-    def _select_video_file(self) -> None:
+    def _select_clip_file_for_slot(self, index: int) -> None:
         selected_path, _ = QFileDialog.getOpenFileName(
             self,
-            "Select Video File",
+            f"Select {self._slot_role_label(index)} Clip",
             "",
-            "Video Files (*.mov *.mp4 *.mxf *.avi *.mkv *.r3d *.braw);;All Files (*)",
+            SINGLE_SHOT_VIDEO_FILTER,
         )
         if selected_path:
-            self.video_file_path_line_edit.setText(selected_path)
-            self.selected_video_file_path = selected_path
+            self._replace_or_append_clip_path(index, selected_path)
 
     def _select_output_directory(self) -> None:
         selected_directory = QFileDialog.getExistingDirectory(self, "Select Output Folder")
@@ -1952,13 +2181,21 @@ class SingleShotCreationDialog(QDialog):
             self.selected_output_directory_path = selected_directory
 
     def _validate_and_accept(self) -> None:
-        video_file_path = self.video_file_path_line_edit.text().strip()
         output_directory_path = self.output_directory_path_line_edit.text().strip()
         shot_name = self.shot_name_line_edit.text().strip()
+        ordered_clip_paths: List[str] = []
 
-        # Simple validation - just check fields are filled
-        if not video_file_path or not os.path.isfile(video_file_path):
-            self.video_file_path_line_edit.setFocus()
+        for slot in self.clip_slots:
+            clip_path = slot.path_line_edit.text().strip()
+            if not clip_path:
+                continue
+            if not self._supported_video_file(clip_path):
+                slot.path_line_edit.setFocus()
+                return
+            ordered_clip_paths.append(clip_path)
+
+        if not ordered_clip_paths:
+            self.clip_slots[0].path_line_edit.setFocus()
             return
 
         if not output_directory_path or not os.path.isdir(output_directory_path):
@@ -1986,9 +2223,11 @@ class SingleShotCreationDialog(QDialog):
                 self.timeline_name_line_edit.setFocus()
                 return
 
-        self.selected_video_file_path = video_file_path
+        self.selected_clip_file_paths = ordered_clip_paths[:MAX_SINGLE_SHOT_CLIPS]
+        self.selected_video_file_path = self.selected_clip_file_paths[0]
         self.selected_output_directory_path = output_directory_path
         self.entered_shot_name = shot_name
+        self.colourspace = self.colourspace_combo_box.currentText()
         self.add_to_db = self.add_to_db_checkbox.isChecked()
         self.create_tasks = self.create_tasks_checkbox.isChecked()
         self.job_name = self.job_name_line_edit.text().strip()
