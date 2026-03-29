@@ -2,6 +2,16 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.4.0 - 2026-03-29
+
+### Added
+
+- 3de matchmove project maker and opening throiugh right clicking assets when a exr is detexted in precomp
+
+### Changed
+
+- made xml logic more robust and can now handle time outs with tries
+
 ## 1.3.1 - 2026-03-29
 
 ### Added
