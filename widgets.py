@@ -125,6 +125,10 @@ def find_latest_matchmove_project(matchmove_dir: str, shot_name: str):
     return _load_matchmove_helpers().find_latest_matchmove_project(matchmove_dir, shot_name)
 
 
+def list_matchmove_projects(matchmove_dir: str):
+    return _load_matchmove_helpers().list_matchmove_projects(matchmove_dir)
+
+
 def list_valid_precomp_sequences(shot_root: str):
     return _load_matchmove_helpers().list_valid_precomp_sequences(shot_root)
 
@@ -2215,11 +2219,11 @@ class ShotCard(QWidget):
         QTimer.singleShot(initial_delay, safe_start_preview_timer)
     
     def _extract_version(self, filename):
-        """Extract version number from filename like sho010_v01.mp4 -> 1"""
+        """Extract version from either sho010_v001.mp4 or sho010_v01_preview.mp4."""
         if not filename:
             return None
         import re
-        match = re.search(r'_v(\d+)\.mp4$', filename, re.IGNORECASE)
+        match = re.search(r'_v(\d+)(?:_preview)?\.mp4$', filename, re.IGNORECASE)
         if match:
             return int(match.group(1))
         return None
@@ -2383,7 +2387,7 @@ class ShotCard(QWidget):
         self._api.update_shot(shot_id=self._shot_id, colour_code=colour)
     
     def _on_make_preview_clicked(self):
-        """Generate a preview video from the original clip using Nuke headless (always v01)."""
+        """Generate a preview video from the original clip using Nuke headless (always v001)."""
         self._make_preview_from_source(source_type="original_clip")
 
     def _on_make_precomp_exr_clicked(self):
@@ -2393,20 +2397,51 @@ class ShotCard(QWidget):
     def _on_make_preview_from_render_clicked(self):
         """Generate a preview video from the latest render using Nuke headless (matches render version)."""
         self._make_preview_from_source(source_type="render")
+
+    def _resolve_preview_project_name(self) -> str:
+        job_name = str((self.data or {}).get("job_name", "") or "").strip()
+        if job_name:
+            return job_name
+
+        job_data = (self.data or {}).get("job")
+        if isinstance(job_data, dict):
+            for key in ("title", "name"):
+                value = str(job_data.get(key, "") or "").strip()
+                if value:
+                    return value
+
+        shot_dir = str(getattr(self, "shot_dir", "") or (self.data or {}).get("base_path", "") or "").strip()
+        if shot_dir:
+            resolved = Path(self.filesIO.convert_path(shot_dir))
+            parts = list(resolved.parts)
+            for marker in ("VFX", "Nuke"):
+                marker_lower = marker.lower()
+                for index, part in enumerate(parts):
+                    if part.lower() == marker_lower and index > 0:
+                        candidate = str(parts[index - 1]).strip()
+                        if candidate:
+                            return candidate
+
+        return "Project"
     
     def _make_preview_from_source(self, source_type: str = "original_clip"):
         """
         Generate a preview video from either original clip or render.
         
         Args:
-            source_type: "original_clip" for v01, "render" to match render version
+            source_type: "original_clip" for v001, "render" to match render version
         """
         from PyQt6.QtWidgets import QMessageBox, QProgressDialog, QApplication
         from PyQt6.QtCore import Qt
         
         # Import the preview generator from nuke_headless_tasks
         try:
-            from nuke_headless_tasks import PreviewGenerator, extract_version_from_path, build_preview_output_path
+            from nuke_headless_tasks import (
+                PreviewGenerator,
+                build_preview_output_path,
+                extract_version_from_path,
+                resolve_preview_input_colourspace,
+            )
             from settings import get_settings_manager
         except ImportError:
             QMessageBox.warning(
@@ -2430,7 +2465,7 @@ class ShotCard(QWidget):
             # Extract version from render filename or use stored version
             version = render_version if render_version is not None else extract_version_from_path(sequence_path)
             if version is None:
-                version = 1  # Fallback to v01 if no version found
+                version = 1  # Fallback to v001 if no version found
         else:
             # Get original clip path
             clip_path = self.label_original_clip.property("clip_path")
@@ -2438,20 +2473,22 @@ class ShotCard(QWidget):
                 QMessageBox.warning(self, "Make Preview", "No original clip path available.")
                 return
             input_path = self.filesIO.convert_path(clip_path)
-            version = 1  # Original clip always creates v01
+            version = 1  # Original clip always creates v001
         
         # Get shot metadata
         shot_dir = self.filesIO.convert_path(self.shot_dir)
         shot_name = self.data.get("title", "shot")
-        colourspace = self.data.get("colourspace", "sRGB")
+        shot_colourspace = self.data.get("colourspace", "sRGB")
         fps = self.data.get("fps", 25)
+        preview_colourspace = resolve_preview_input_colourspace(
+            source_type=source_type,
+            media_type=render_type if source_type == "render" else None,
+            input_path=input_path,
+            requested_colourspace=shot_colourspace,
+        )
         
         # Get job name for the project field on slate
-        job_name = self.data.get("job_name", "")
-        if not job_name:
-            job_name = self.data.get("job", {}).get("name", "") if isinstance(self.data.get("job"), dict) else ""
-        if not job_name:
-            job_name = "Project"
+        job_name = self._resolve_preview_project_name()
         
         settings = get_settings_manager()
         preview_quality = settings.get("preview_quality", "medium")
@@ -2495,7 +2532,7 @@ class ShotCard(QWidget):
             shot_name=shot_name,
             project=job_name,
             artist="ShotBox",
-            colourspace=colourspace or "sRGB",
+            colourspace=preview_colourspace,
             fps=fps,
             quality=preview_quality,
             version=version,
@@ -2503,7 +2540,7 @@ class ShotCard(QWidget):
         
         # Show progress dialog for the actual render
         progress = QProgressDialog(
-            f"Generating preview for {shot_name} v{version:02d}...\n\nThis may take a few minutes.",
+            f"Generating preview for {shot_name} v{version:03d}...\n\nThis may take a few minutes.",
             "Cancel", 0, 0, self
         )
         progress.setWindowTitle("Make Preview")

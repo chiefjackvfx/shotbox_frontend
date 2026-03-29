@@ -9,6 +9,7 @@ import json
 import hashlib
 import random
 import time
+from pathlib import Path
 
 from PyQt6 import QtWidgets, uic
 from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal, pyqtSlot, Qt
@@ -17,6 +18,7 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QProgressBar,
     QDialog,
+    QMenu,
     QVBoxLayout,
     QLabel,
     QFrame,
@@ -33,10 +35,12 @@ import nuke_detector
 import project_load_profiler
 from nuke_lock_utils import display_owner_name, parse_lock_info
 from settings import get_settings_manager
+from timeline_matchmove_dialog import TimelineMatchmoveCandidate, TimelineMatchmoveDialog
 
 
 # Get the directory where this script is located (for cross-platform path handling)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSET_ROOT_DIRECTORY_NAMES = {"vfx", "nuke"}
 
 
 class LoadingDialog(QDialog):
@@ -283,6 +287,16 @@ class page_nukedash(QMainWindow):
             sort_combo.setCurrentIndex(default_sort_index if default_sort_index >= 0 else 0)
 
         self.comboBox_jobs.currentIndexChanged.connect(self._on_job_selected)
+        self.filesIO = filesIO.Folders()
+
+        if hasattr(self, "btn_open_timeline_assets") and self.btn_open_timeline_assets:
+            self.btn_open_timeline_assets.clicked.connect(self._on_open_timeline_assets_clicked)
+            self.btn_open_timeline_assets.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            self.btn_open_timeline_assets.customContextMenuRequested.connect(
+                self._on_timeline_assets_context_menu
+            )
+        if hasattr(self, "btn_open_job_assets") and self.btn_open_job_assets:
+            self.btn_open_job_assets.clicked.connect(self._on_open_job_assets_clicked)
 
         # --- Loading Dialog Setup ---
         self._loading_dialog = LoadingDialog(self, "Loading ShotBox...")
@@ -440,6 +454,9 @@ class page_nukedash(QMainWindow):
         self._apply_saved_filter_state_to_controls()
         if enable_filters_checkbox is not None:
             enable_filters_checkbox.stateChanged.connect(self._on_enable_filters_changed)
+        updater = getattr(self, "_update_assets_action_buttons", None)
+        if callable(updater):
+            updater()
         self._start_load_timing("startup")
         self._set_filter_controls_enabled(self._filters_enabled())
         self._worker.fetch()
@@ -933,6 +950,480 @@ class page_nukedash(QMainWindow):
         if not value:
             return ""
         return os.path.normcase(os.path.normpath(str(value)))
+
+    def _active_job_data(self) -> dict | None:
+        jobs_by_id = getattr(self, "_jobs_by_id", None)
+        active_job_id = getattr(self, "_active_job_id", None)
+        if isinstance(jobs_by_id, dict) and active_job_id in jobs_by_id:
+            job_data = jobs_by_id.get(active_job_id)
+            if isinstance(job_data, dict):
+                return job_data
+
+        pending_job_data = getattr(self, "_pending_job_data", None)
+        if isinstance(pending_job_data, dict):
+            return pending_job_data
+
+        combo = getattr(self, "comboBox_jobs", None)
+        combo_job_id = combo.currentData() if combo is not None else None
+        if isinstance(jobs_by_id, dict) and combo_job_id in jobs_by_id:
+            job_data = jobs_by_id.get(combo_job_id)
+            if isinstance(job_data, dict):
+                return job_data
+        return None
+
+    def _active_timeline_data(self) -> dict | None:
+        tabs = getattr(self, "timelines_tabs", None)
+        if tabs is None:
+            return None
+
+        current_widget = tabs.currentWidget()
+        current_timeline = getattr(current_widget, "_last_timeline", None)
+        if isinstance(current_timeline, dict):
+            return current_timeline
+
+        job_data = self._active_job_data()
+        timelines = job_data.get("timelines", []) if isinstance(job_data, dict) else []
+
+        if current_widget is not None:
+            name = str(current_widget.objectName() or "")
+            if name.startswith("timeline-"):
+                try:
+                    timeline_id = int(name.split("timeline-", 1)[1])
+                except ValueError:
+                    timeline_id = None
+                if timeline_id is not None:
+                    for timeline in timelines:
+                        if timeline.get("id") == timeline_id:
+                            return timeline
+
+        index = tabs.currentIndex()
+        if isinstance(index, int) and 0 <= index < len(timelines):
+            timeline = timelines[index]
+            if isinstance(timeline, dict):
+                return timeline
+        return None
+
+    def _path_from_base_path(self, value: str | None) -> Path | None:
+        normalized = str(value or "").strip()
+        if not normalized:
+            return None
+        try:
+            normalized = self.filesIO.convert_path(normalized)
+        except Exception:
+            pass
+        normalized = str(normalized or "").strip()
+        return Path(normalized) if normalized else None
+
+    def _first_shot_dir_for_timeline(self, timeline_data: dict | None) -> Path | None:
+        shots = timeline_data.get("shots", []) if isinstance(timeline_data, dict) else []
+        for shot in shots:
+            shot_dir = self._path_from_base_path((shot or {}).get("base_path"))
+            if shot_dir is not None:
+                return shot_dir
+        return None
+
+    def _first_shot_dir_for_job(self, job_data: dict | None) -> Path | None:
+        timelines = job_data.get("timelines", []) if isinstance(job_data, dict) else []
+        for timeline in timelines:
+            shot_dir = self._first_shot_dir_for_timeline(timeline)
+            if shot_dir is not None:
+                return shot_dir
+        return None
+
+    def _infer_vfx_root_from_shot_dir(self, shot_dir: Path | None) -> Path | None:
+        if shot_dir is None:
+            return None
+        timeline_root = shot_dir.parent
+        if not timeline_root or timeline_root == shot_dir:
+            return None
+        if timeline_root.name.lower() in ASSET_ROOT_DIRECTORY_NAMES:
+            return timeline_root
+        vfx_root = timeline_root.parent
+        if not vfx_root or vfx_root == timeline_root:
+            return None
+        return vfx_root
+
+    def _job_uses_timeline_directories(self, shot_dir: Path | None) -> bool:
+        if shot_dir is None:
+            return False
+        timeline_root = shot_dir.parent
+        return bool(
+            timeline_root and timeline_root.name.lower() not in ASSET_ROOT_DIRECTORY_NAMES
+        )
+
+    def _resolve_job_assets_dir(self) -> Path | None:
+        shot_dir = self._first_shot_dir_for_job(self._active_job_data())
+        vfx_root = self._infer_vfx_root_from_shot_dir(shot_dir)
+        if vfx_root is None:
+            return None
+        return vfx_root / "Job_Assets"
+
+    def _resolve_timeline_assets_dir(self) -> Path | None:
+        timeline_data = self._active_timeline_data()
+        shot_dir = self._first_shot_dir_for_timeline(timeline_data)
+        if shot_dir is not None:
+            timeline_root = shot_dir.parent
+            if timeline_root and timeline_root.name.lower() not in ASSET_ROOT_DIRECTORY_NAMES:
+                return timeline_root / "Timeline_Assets"
+
+        job_data = self._active_job_data()
+        reference_shot_dir = self._first_shot_dir_for_job(job_data)
+        if not self._job_uses_timeline_directories(reference_shot_dir):
+            return None
+
+        vfx_root = self._infer_vfx_root_from_shot_dir(reference_shot_dir)
+        timeline_title = str((timeline_data or {}).get("title") or "").strip()
+        if vfx_root is None or not timeline_title:
+            return None
+        return vfx_root / timeline_title / "Timeline_Assets"
+
+    def _resolved_timeline_matchmove_dir(self) -> Path | None:
+        timeline_data = self._active_timeline_data()
+        configured_path = str((timeline_data or {}).get("matchmove_path") or "").strip()
+        if configured_path:
+            try:
+                configured_path = self.filesIO.convert_path(configured_path)
+            except Exception:
+                pass
+            try:
+                configured_dir = Path(str(configured_path))
+                if configured_dir.exists():
+                    return configured_dir
+            except OSError:
+                pass
+
+        timeline_assets_dir = self._resolve_timeline_assets_dir()
+        if timeline_assets_dir is None:
+            return None
+        return timeline_assets_dir / "matchmove"
+
+    def _discover_timeline_matchmove_candidates(
+        self,
+        timeline_data: dict | None = None,
+    ) -> list[TimelineMatchmoveCandidate]:
+        timeline_payload = timeline_data if isinstance(timeline_data, dict) else self._active_timeline_data()
+        if not isinstance(timeline_payload, dict):
+            return []
+
+        candidates: list[TimelineMatchmoveCandidate] = []
+        seen_folders: set[str] = set()
+        for shot in timeline_payload.get("shots", []) or []:
+            shot_root = self._path_from_base_path((shot or {}).get("base_path"))
+            if shot_root is None:
+                continue
+            shot_title = str((shot or {}).get("title") or shot_root.name or "Shot")
+            shot_id = (shot or {}).get("id")
+            for sequence_info in widgets.list_valid_precomp_sequences(str(shot_root)):
+                folder_key = os.path.normcase(os.path.normpath(sequence_info.folder_path))
+                if folder_key in seen_folders:
+                    continue
+                seen_folders.add(folder_key)
+                candidates.append(
+                    TimelineMatchmoveCandidate(
+                        shot_id=shot_id,
+                        shot_title=shot_title,
+                        shot_root=str(shot_root),
+                        sequence_info=sequence_info,
+                    )
+                )
+
+        return sorted(
+            candidates,
+            key=lambda candidate: (
+                candidate.shot_title.lower(),
+                Path(candidate.sequence_info.folder_path).name.lower(),
+            ),
+        )
+
+    def _apply_timeline_payload(self, timeline_payload: dict | None) -> None:
+        if not isinstance(timeline_payload, dict):
+            return
+
+        timeline_id = timeline_payload.get("id")
+        try:
+            timeline_id_int = int(timeline_id)
+        except (TypeError, ValueError):
+            return
+
+        for job_data in getattr(self, "_jobs_by_id", {}).values():
+            timelines = job_data.get("timelines", []) if isinstance(job_data, dict) else []
+            for index, timeline in enumerate(timelines):
+                if timeline.get("id") != timeline_id_int:
+                    continue
+                merged = dict(timeline)
+                merged.update(timeline_payload)
+                timelines[index] = merged
+                break
+
+        tabs = getattr(self, "timelines_tabs", None)
+        if tabs is None:
+            return
+        for index in range(tabs.count()):
+            widget = tabs.widget(index)
+            current_payload = getattr(widget, "_last_timeline", None)
+            if isinstance(current_payload, dict) and current_payload.get("id") == timeline_id_int:
+                merged = dict(current_payload)
+                merged.update(timeline_payload)
+                widget._last_timeline = merged
+
+    def _open_timeline_matchmove_project(self, project_path: str) -> None:
+        try:
+            widgets.open_3de_project(project_path)
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                "Open Matchmove",
+                f"Could not open the 3DE project.\n\n{project_path}\n\n{exc}",
+            )
+
+    def _show_timeline_assets_matchmove_menu(self, global_pos) -> bool:
+        timeline_data = self._active_timeline_data()
+        if not isinstance(timeline_data, dict):
+            return False
+
+        try:
+            try:
+                widgets._load_matchmove_helpers()
+            except Exception as exc:
+                widgets._show_matchmove_unavailable(self, exc)
+                return True
+
+            matchmove_dir = self._resolved_timeline_matchmove_dir()
+            if matchmove_dir is None:
+                return False
+
+            existing_projects = widgets.list_matchmove_projects(str(matchmove_dir))
+            candidates = self._discover_timeline_matchmove_candidates(timeline_data)
+
+            menu = QMenu(self)
+            matchmove_menu = menu.addMenu("Matchmove")
+            for project_path in existing_projects:
+                action = matchmove_menu.addAction(f"Open {project_path.name}")
+                action.triggered.connect(
+                    lambda checked=False, path=str(project_path): self._open_timeline_matchmove_project(path)
+                )
+
+            if existing_projects:
+                matchmove_menu.addSeparator()
+
+            if candidates:
+                create_action = matchmove_menu.addAction("Create New 3DE Project")
+                create_action.triggered.connect(
+                    lambda checked=False, items=list(candidates): self._create_timeline_matchmove_project(items)
+                )
+            else:
+                empty_action = matchmove_menu.addAction("No valid EXR precomp folders found")
+                empty_action.setEnabled(False)
+
+            menu.exec(global_pos)
+            return True
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Timeline Assets Menu Error",
+                f"Opening the Timeline Assets matchmove menu failed.\n\n{exc}",
+            )
+            return True
+
+    def _on_timeline_assets_context_menu(self, pos) -> None:
+        try:
+            global_pos = self.btn_open_timeline_assets.mapToGlobal(pos)
+            self._show_timeline_assets_matchmove_menu(global_pos)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Timeline Assets Menu Error",
+                f"Opening the Timeline Assets matchmove menu failed.\n\n{exc}",
+            )
+
+    def _create_timeline_matchmove_project(
+        self,
+        candidates: list[TimelineMatchmoveCandidate] | None = None,
+    ) -> None:
+        timeline_data = self._active_timeline_data()
+        if not isinstance(timeline_data, dict):
+            return
+
+        timeline_id = timeline_data.get("id")
+        try:
+            timeline_id_int = int(timeline_id)
+        except (TypeError, ValueError):
+            return
+
+        matchmove_dir = self._resolved_timeline_matchmove_dir()
+        if matchmove_dir is None:
+            QMessageBox.warning(
+                self,
+                "Create Matchmove",
+                "No timeline matchmove folder could be resolved from the current selection.",
+            )
+            return
+
+        if candidates is None:
+            try:
+                candidates = self._discover_timeline_matchmove_candidates(timeline_data)
+            except Exception as exc:
+                widgets._show_matchmove_unavailable(self, exc)
+                return
+
+        if not candidates:
+            QMessageBox.information(
+                self,
+                "Create Matchmove",
+                "No valid EXR precomp folders were found for the active timeline.",
+            )
+            return
+
+        dialog = TimelineMatchmoveDialog(
+            timeline_title=str(timeline_data.get("title") or "Timeline"),
+            candidates=list(candidates),
+            matchmove_dir=str(matchmove_dir),
+            parent=self,
+        )
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        request = dialog.built_request
+        if request is None:
+            return
+
+        Path(request.matchmove_dir).mkdir(parents=True, exist_ok=True)
+        Path(request.project_dir).mkdir(parents=True, exist_ok=True)
+        Path(request.export_dir).mkdir(parents=True, exist_ok=True)
+
+        log_lines: list[str] = []
+        result = None
+        try:
+            result = widgets.run_headless_3de(request, log_lines.append)
+        except Exception as exc:
+            detail = str(exc)
+            if log_lines:
+                detail = f"{detail}\n\n" + "\n".join(log_lines[-20:])
+            QMessageBox.critical(self, "Create Matchmove", detail)
+            return
+        finally:
+            if result is not None:
+                widgets.cleanup_headless_artifacts(result)
+
+        open_warning = None
+        try:
+            widgets.open_3de_project(request.project_path)
+        except Exception as exc:
+            open_warning = str(exc)
+
+        patch_warning = None
+        timeline_payload = None
+        api = getattr(getattr(self, "_worker", None), "api", None)
+        if api is None:
+            api = http_help.DjangoAPI()
+        try:
+            timeline_payload = api.update_timeline(
+                timeline_id_int,
+                matchmove_path=request.matchmove_dir,
+            )
+        except Exception as exc:
+            patch_warning = str(exc)
+            timeline_payload = {"id": timeline_id_int, "matchmove_path": request.matchmove_dir}
+
+        if not timeline_payload:
+            timeline_payload = {"id": timeline_id_int, "matchmove_path": request.matchmove_dir}
+
+        self._apply_timeline_payload(timeline_payload)
+        updater = getattr(self, "_update_assets_action_buttons", None)
+        if callable(updater):
+            updater()
+
+        message_lines = [
+            f"Created 3DE project: {Path(request.project_path).name}",
+            f"Matchmove folder: {request.matchmove_dir}",
+        ]
+        if open_warning:
+            message_lines.append(f"Created project, but opening it in 3DE failed: {open_warning}")
+        if patch_warning:
+            message_lines.append(
+                f"Created project, but saving matchmove_path to ShotBox failed: {patch_warning}"
+            )
+        QMessageBox.information(self, "Create Matchmove", "\n\n".join(message_lines))
+
+    def _set_assets_button_state(
+        self,
+        button_name: str,
+        folder_label: str,
+        folder_path: Path | None,
+        *,
+        loading: bool = False,
+    ) -> None:
+        button = getattr(self, button_name, None)
+        if button is None:
+            return
+        if loading:
+            button.setEnabled(False)
+            button.setProperty("folder_path", "")
+            button.setToolTip(f"Loading {folder_label.lower()}...")
+            return
+        if folder_path is None:
+            button.setEnabled(False)
+            button.setProperty("folder_path", "")
+            button.setToolTip(
+                f"No {folder_label.lower()} folder could be resolved from the current selection."
+            )
+            return
+        button.setEnabled(True)
+        button.setProperty("folder_path", str(folder_path))
+        button.setToolTip(f"Open {folder_label.lower()}\n{folder_path}")
+
+    def _update_assets_action_buttons(self, *, loading: bool = False) -> None:
+        if loading:
+            self._set_assets_button_state(
+                "btn_open_timeline_assets", "Timeline Assets", None, loading=True
+            )
+            self._set_assets_button_state(
+                "btn_open_job_assets", "Job Assets", None, loading=True
+            )
+            return
+
+        self._set_assets_button_state(
+            "btn_open_timeline_assets",
+            "Timeline Assets",
+            self._resolve_timeline_assets_dir(),
+        )
+        self._set_assets_button_state(
+            "btn_open_job_assets",
+            "Job Assets",
+            self._resolve_job_assets_dir(),
+        )
+
+    def _open_assets_directory(self, folder_path: Path | None, folder_label: str) -> None:
+        if folder_path is None:
+            QMessageBox.information(
+                self,
+                folder_label,
+                f"No {folder_label.lower()} folder could be resolved from the current selection.",
+            )
+            return
+        try:
+            folder_path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            QMessageBox.warning(
+                self,
+                folder_label,
+                f"Could not prepare the folder.\n\n{folder_path}\n\n{exc}",
+            )
+            return
+        try:
+            self.filesIO.openFileLocation(str(folder_path))
+        except Exception as exc:
+            QMessageBox.warning(
+                self,
+                folder_label,
+                f"Could not open the folder.\n\n{folder_path}\n\n{exc}",
+            )
+
+    def _on_open_timeline_assets_clicked(self) -> None:
+        self._open_assets_directory(self._resolve_timeline_assets_dir(), "Timeline Assets")
+
+    def _on_open_job_assets_clicked(self) -> None:
+        self._open_assets_directory(self._resolve_job_assets_dir(), "Job Assets")
 
     def _iter_shot_cards(self):
         tabs = self.timelines_tabs
@@ -1495,6 +1986,9 @@ class page_nukedash(QMainWindow):
             del self._last_filter_sig
         # Reapply filters to update the count for current timeline
         self._apply_filters()
+        updater = getattr(self, "_update_assets_action_buttons", None)
+        if callable(updater):
+            updater()
         self.active_timeline_changed.emit(index)
         
         # Save session state when timeline tab changes (but not during initial load)
@@ -1859,6 +2353,56 @@ class page_nukedash(QMainWindow):
             return
         self._on_preview_size_changed(preview_combo.currentText())
 
+    def _collect_preview_tasks(self, active_job, files_io):
+        from nuke_headless_tasks import preview_version_exists
+
+        preview_tasks = []
+        job_name = active_job.get("title", "Project")
+
+        for timeline in active_job.get("timelines", []):
+            for shot in timeline.get("shots", []):
+                shot_id = shot.get("id")
+                shot_name = shot.get("title", f"shot_{shot_id}")
+                shot_dir = shot.get("base_path", "")
+                original_clip = str(shot.get("original_clip") or "").strip()
+
+                if not shot_dir:
+                    continue
+
+                local_shot_dir = files_io.convert_path(shot_dir)
+
+                if original_clip and original_clip not in {"None", "—"}:
+                    if not preview_version_exists(local_shot_dir, shot_name, 1):
+                        preview_tasks.append({
+                            "shot": shot,
+                            "source_type": "original_clip",
+                            "source_path": original_clip,
+                            "version": 1,
+                            "job_name": job_name,
+                        })
+
+                render_info = files_io.latest_render_info(shot_dir)
+                if not render_info:
+                    continue
+
+                render_path = render_info.get("sequence_path") or render_info.get("render_path")
+                render_version = render_info.get("version")
+                if not render_path or render_version is None:
+                    continue
+                if preview_version_exists(local_shot_dir, shot_name, int(render_version)):
+                    continue
+
+                preview_tasks.append({
+                    "shot": shot,
+                    "source_type": "render",
+                    "source_path": render_path,
+                    "version": int(render_version),
+                    "media_type": render_info.get("type"),
+                    "job_name": job_name,
+                })
+
+        return preview_tasks
+
     def _persist_compact_view_setting(self) -> None:
         if not hasattr(self, "_settings_manager") or not self._settings_manager:
             return
@@ -1945,7 +2489,11 @@ class page_nukedash(QMainWindow):
         
         # Import the preview generator
         try:
-            from nuke_headless_tasks import PreviewGenerator, extract_version_from_path
+            from nuke_headless_tasks import (
+                PreviewGenerator,
+                preview_input_exists,
+                resolve_preview_input_colourspace,
+            )
         except ImportError:
             QMessageBox.warning(
                 self, "Make All Previews",
@@ -1979,62 +2527,8 @@ class page_nukedash(QMainWindow):
             return
         
         # Collect all shots that need previews
-        preview_tasks = []  # List of (shot_data, source_type, source_path, version)
         files_io = filesIO.Folders()
-        
-        job_name = active_job.get("title", "Project")
-        
-        for timeline in active_job.get("timelines", []):
-            for shot in timeline.get("shots", []):
-                shot_id = shot.get("id")
-                shot_name = shot.get("title", f"shot_{shot_id}")
-                shot_dir = shot.get("base_path", "")
-                original_clip = shot.get("original_clip")
-                render_info = None
-                preview_video = shot.get("preview_video")
-                
-                if not shot_dir:
-                    continue
-                
-                # Check if original clip exists and needs v01 preview
-                if original_clip:
-                    # Check if v01 preview already exists
-                    needs_v01 = True
-                    if preview_video:
-                        # If preview_video contains v01, it exists
-                        if "_v01_preview" in preview_video:
-                            needs_v01 = False
-                    
-                    if needs_v01:
-                        preview_tasks.append({
-                            "shot": shot,
-                            "source_type": "original_clip",
-                            "source_path": original_clip,
-                            "version": 1,
-                            "job_name": job_name,
-                        })
-                
-                # Check if latest render exists and needs preview
-                render_info = files_io.latest_render_info(shot_dir)
-                if render_info:
-                    render_path = render_info.get("sequence_path") or render_info.get("render_path")
-                    render_version = render_info.get("version")
-                    if render_path and render_version is not None:
-                        # Check if this version's preview already exists
-                        needs_render_preview = True
-                        if preview_video:
-                            preview_version = extract_version_from_path(preview_video)
-                            if preview_version and preview_version >= render_version:
-                                needs_render_preview = False
-
-                        if needs_render_preview:
-                            preview_tasks.append({
-                                "shot": shot,
-                                "source_type": "render",
-                                "source_path": render_path,
-                                "version": render_version,
-                                "job_name": job_name,
-                            })
+        preview_tasks = self._collect_preview_tasks(active_job, files_io)
         
         if not preview_tasks:
             QMessageBox.information(
@@ -2051,7 +2545,7 @@ class page_nukedash(QMainWindow):
         render_count = sum(1 for t in preview_tasks if t["source_type"] == "render")
         
         if v01_count:
-            msg += f"• {v01_count} from original clips (v01)\n"
+            msg += f"• {v01_count} from original clips (v001)\n"
         if render_count:
             msg += f"• {render_count} from renders\n"
         
@@ -2093,6 +2587,7 @@ class page_nukedash(QMainWindow):
             version = task["version"]
             job_name = task["job_name"]
             source_type = task["source_type"]
+            media_type = task.get("media_type")
             
             # Update progress
             progress.setValue(i)
@@ -2109,13 +2604,18 @@ class page_nukedash(QMainWindow):
             local_source = files_io.convert_path(source_path)
             
             # Validate source exists
-            if not os.path.exists(local_source):
+            if not preview_input_exists(local_source):
                 skipped += 1
                 print(f"[SKIP] {shot_name}: Source not found - {local_source}")
                 continue
             
             # Get shot metadata
-            colourspace = shot.get("colourspace", "sRGB")
+            colourspace = resolve_preview_input_colourspace(
+                source_type=source_type,
+                media_type=media_type,
+                input_path=local_source,
+                requested_colourspace=shot.get("colourspace", "sRGB"),
+            )
             fps = shot.get("fps", 25)
             
             # Check for cancelled
@@ -2131,7 +2631,7 @@ class page_nukedash(QMainWindow):
                 shot_name=shot_name,
                 project=job_name,
                 artist="ShotBox",
-                colourspace=colourspace or "sRGB",
+                colourspace=colourspace,
                 fps=fps,
                 quality=preview_quality,
                 version=version,
@@ -2313,6 +2813,9 @@ class page_nukedash(QMainWindow):
         # Use force=True to apply even if user happens to be scrolling
         QTimer.singleShot(50, lambda: self._apply_filters(force=True))
         self.jobs_data_updated.emit(jobs)
+        updater = getattr(self, "_update_assets_action_buttons", None)
+        if callable(updater):
+            updater()
         self._finish_timed_load_after_data()
         
     def _on_job_selected(self, index):
@@ -2353,6 +2856,9 @@ class page_nukedash(QMainWindow):
         if hasattr(self, "_last_filter_sig"):
             delattr(self, "_last_filter_sig")
         self._active_job_id = job_data.get("id")
+        updater = getattr(self, "_update_assets_action_buttons", None)
+        if callable(updater):
+            updater(loading=True)
         effective_layout_mode = self._effective_shots_layout_mode()
         render_state = self._current_task_render_state()
 
@@ -2574,6 +3080,9 @@ class page_nukedash(QMainWindow):
             QTimer.singleShot(150, self._save_session_state)
 
         self._apply_compact_view_state()
+        updater = getattr(self, "_update_assets_action_buttons", None)
+        if callable(updater):
+            updater()
         # Reapply filters and task materialization after the new shot cards exist.
         QTimer.singleShot(50, lambda: self._apply_filters(force=True))
         
@@ -2700,6 +3209,9 @@ class page_nukedash(QMainWindow):
                 w.deleteLater()
 
         self._apply_compact_view_state()
+        updater = getattr(self, "_update_assets_action_buttons", None)
+        if callable(updater):
+            updater()
     
     def _do_activate_pending_job(self):
         """Actually activate the job after dialog has shown."""

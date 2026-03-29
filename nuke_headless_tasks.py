@@ -89,6 +89,9 @@ class PreviewConfig:
     # Default artist name
     DEFAULT_ARTIST = "ShotBox"
 
+    # Preview runtime template
+    PREVIEW_TEMPLATE_NAME = "preview_template_v001.nk"
+
 
 def _extract_nuke_from_dir(candidate_dir: str) -> Optional[str]:
     """Find a Nuke executable inside a directory."""
@@ -206,6 +209,197 @@ def get_headless_script_path() -> Path:
     return Path(__file__).resolve()
 
 
+def get_preview_template_path() -> Path:
+    """Get the path to the runtime preview template."""
+    return Path(__file__).resolve().parent / PreviewConfig.PREVIEW_TEMPLATE_NAME
+
+
+def _normalize_nuke_path(path) -> str:
+    return str(path).replace("\\", "/")
+
+
+def _expand_sequence_pattern(input_path: str) -> List[Path]:
+    """Resolve a sequence pattern like #### or %04d to matching files."""
+    normalized = str(input_path)
+    if os.path.exists(normalized):
+        return [Path(normalized)]
+
+    glob_pattern = normalized
+    if "#" in glob_pattern:
+        glob_pattern = glob_pattern.replace("#", "?")
+    glob_pattern = glob_pattern.replace("%04d", "????")
+    glob_pattern = glob_pattern.replace("%03d", "???")
+    glob_pattern = glob_pattern.replace("%02d", "??")
+    glob_pattern = glob_pattern.replace("%d", "*")
+    if glob_pattern == normalized:
+        return []
+    return sorted(Path(path) for path in glob.glob(glob_pattern))
+
+
+def _match_exr_frame_token(file_name: str):
+    import re
+
+    return re.match(r"^(.*?)(\d+)([^0-9]*\.exr)$", file_name, re.IGNORECASE)
+
+
+def _contains_sequence_token(path_text: str) -> bool:
+    import re
+
+    return "#" in path_text or bool(re.search(r"%0?\d*d", path_text))
+
+
+def _sequence_pattern_from_file(file_path: Path) -> Optional[str]:
+    match = _match_exr_frame_token(file_path.name)
+    if not match:
+        return None
+    prefix, frame_str, suffix = match.groups()
+    return str(file_path.with_name(f"{prefix}{'#' * len(frame_str)}{suffix}"))
+
+
+def _collect_matching_exr_files(reference_path: Path) -> List[Path]:
+    match = _match_exr_frame_token(reference_path.name)
+    if not match:
+        return []
+
+    prefix, _frame_str, suffix = match.groups()
+    parent = reference_path.parent
+    if not parent.exists():
+        return []
+
+    matches: List[Path] = []
+    for candidate in sorted(parent.iterdir()):
+        if not candidate.is_file():
+            continue
+        candidate_match = _match_exr_frame_token(candidate.name)
+        if not candidate_match:
+            continue
+        candidate_prefix, _candidate_frame, candidate_suffix = candidate_match.groups()
+        if candidate_prefix == prefix and candidate_suffix == suffix:
+            matches.append(candidate)
+    return matches
+
+
+def resolve_preview_sequence_input(input_path: str) -> Tuple[str, Optional[int], Optional[int]]:
+    """
+    Resolve preview input to a Nuke-friendly path and optional detected frame range.
+
+    For EXR sequences, prefer an existing frame file for `fromUserText(...)` and
+    provide the discovered first/last frame explicitly so Nuke does not fall back
+    to frame 1 when the sequence starts at 1001.
+    """
+    normalized = str(input_path)
+    if not normalized.lower().endswith(".exr"):
+        return normalized, None, None
+
+    existing_files: List[Path] = []
+    sequence_path = normalized
+
+    if _contains_sequence_token(normalized):
+        matches = _expand_sequence_pattern(normalized)
+        if not matches:
+            return normalized, None, None
+        first_match = matches[0]
+        existing_files = _collect_matching_exr_files(first_match)
+        sequence_path = _sequence_pattern_from_file(first_match) or normalized
+    else:
+        current_path = Path(normalized)
+        existing_files = _collect_matching_exr_files(current_path)
+        if existing_files:
+            sequence_path = _sequence_pattern_from_file(existing_files[0]) or normalized
+        elif os.path.exists(normalized):
+            return normalized, None, None
+
+    if not existing_files:
+        return normalized, None, None
+
+    frames = []
+    for candidate in existing_files:
+        match = _match_exr_frame_token(candidate.name)
+        if not match:
+            continue
+        try:
+            frames.append(int(match.group(2)))
+        except ValueError:
+            continue
+
+    if not frames:
+        return sequence_path, None, None
+
+    frames.sort()
+    return sequence_path, frames[0], frames[-1]
+
+
+def preview_input_exists(input_path: str) -> bool:
+    """Return True when the input file or sequence pattern resolves to media."""
+    if not input_path:
+        return False
+    if os.path.exists(input_path):
+        return True
+    if _expand_sequence_pattern(input_path):
+        return True
+    _resolved_path, detected_first, detected_last = resolve_preview_sequence_input(input_path)
+    return detected_first is not None and detected_last is not None
+
+
+def resolve_preview_input_colourspace(
+    *,
+    source_type: Optional[str] = None,
+    media_type: Optional[str] = None,
+    input_path: str = "",
+    requested_colourspace: str = "sRGB",
+) -> str:
+    """Resolve the read-node input transform for preview generation."""
+    normalized_path = str(input_path or "").lower()
+    normalized_media_type = str(media_type or "").lower()
+    normalized_source_type = str(source_type or "").lower()
+
+    if normalized_media_type == "exr" or normalized_path.endswith(".exr"):
+        return "ACES - ACEScg"
+    if normalized_source_type == "render" and (normalized_media_type == "mov" or normalized_path.endswith(".mov")):
+        return "sRGB"
+    return requested_colourspace or "sRGB"
+
+
+def _preview_file_candidates(
+    shot_dir: str,
+    shot_name: str,
+    preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
+) -> List[Path]:
+    previews_dir = Path(shot_dir) / preview_subdir
+    if not previews_dir.exists():
+        return []
+    return sorted(previews_dir.glob(f"{shot_name}_v*.mp4"))
+
+
+def _is_legacy_preview_name(file_name: str) -> bool:
+    return file_name.lower().endswith("_preview.mp4")
+
+
+def list_existing_preview_paths(
+    shot_dir: str,
+    shot_name: str,
+    version: int,
+    preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
+) -> List[Path]:
+    """Find preview files for a shot/version in either new or legacy naming."""
+    matches: List[Path] = []
+    for preview_path in _preview_file_candidates(shot_dir, shot_name, preview_subdir=preview_subdir):
+        path_version = extract_version_from_path(preview_path.name)
+        if path_version == version:
+            matches.append(preview_path)
+    matches.sort(key=lambda path: (path.name.lower().endswith("_preview.mp4"), path.name.lower()))
+    return matches
+
+
+def preview_version_exists(
+    shot_dir: str,
+    shot_name: str,
+    version: int,
+    preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
+) -> bool:
+    return bool(list_existing_preview_paths(shot_dir, shot_name, version, preview_subdir=preview_subdir))
+
+
 def build_preview_output_path(
     shot_dir: str,
     shot_name: str,
@@ -216,7 +410,7 @@ def build_preview_output_path(
     Build the output path for a preview video.
     
     Creates the output directory if it doesn't exist.
-    Output format: {shot_name}_v{version}_preview.mp4
+    Output format: {shot_name}_v{version:03d}.mp4
     
     Args:
         shot_dir: Base shot directory
@@ -232,30 +426,24 @@ def build_preview_output_path(
     
     if version is not None:
         # Use explicit version
-        output_path = previews_dir / f"{shot_name}_v{version:02d}_preview.mp4"
-        file_exists = output_path.exists()
+        output_path = previews_dir / f"{shot_name}_v{version:03d}.mp4"
+        file_exists = preview_version_exists(shot_dir, shot_name, version, preview_subdir=preview_subdir)
         return output_path, version, file_exists
     
     # Auto-increment: find next version number
-    existing_previews = list(previews_dir.glob(f"{shot_name}_v*_preview.mp4"))
+    existing_previews = _preview_file_candidates(shot_dir, shot_name, preview_subdir=preview_subdir)
     
     if existing_previews:
         versions = []
         for p in existing_previews:
-            try:
-                # Extract version from {shot}_v{nn}_preview.mp4
-                stem = p.stem  # e.g. "sho010_v03_preview"
-                # Remove _preview suffix, then get version
-                without_suffix = stem.replace('_preview', '')
-                v = int(without_suffix.split('_v')[-1])
-                versions.append(v)
-            except (ValueError, IndexError):
-                pass
+            version_value = extract_version_from_path(p.name)
+            if version_value is not None:
+                versions.append(version_value)
         next_version = max(versions) + 1 if versions else 1
     else:
         next_version = 1
     
-    output_path = previews_dir / f"{shot_name}_v{next_version:02d}_preview.mp4"
+    output_path = previews_dir / f"{shot_name}_v{next_version:03d}.mp4"
     return output_path, next_version, False  # Auto-increment never conflicts
 
 
@@ -273,10 +461,199 @@ def extract_version_from_path(file_path: str) -> Optional[int]:
     """
     import re
     target = Path(file_path).name
-    match = re.search(r'_v(\d+)(?:[_.-]|$)', target)
+    match = re.search(r'_v(\d+)(?:(?:_preview)?\.[^.]+|[_.-]|$)', target, re.IGNORECASE)
     if match:
         return int(match.group(1))
     return None
+
+
+def _preview_slate_name(shot_name: str, output_path: str) -> str:
+    version = extract_version_from_path(output_path)
+    if version is None:
+        return shot_name
+    return f"{shot_name}_v{version:03d}"
+
+
+def _duration_timecode(frame_count: int, fps: float) -> str:
+    frame_rate = max(int(round(fps)), 1)
+    total = max(int(frame_count) - 1, 0)
+    hours = total // (frame_rate * 3600)
+    minutes = (total % (frame_rate * 3600)) // (frame_rate * 60)
+    seconds = (total % (frame_rate * 60)) // frame_rate
+    frames = total % frame_rate
+    return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
+
+
+class _PreviewTemplateEditor:
+    REQUIRED_NODES = (
+        "Read1",
+        "Retime1",
+        "WriteCompMP4",
+        "MS_slate_overlay",
+    )
+    REQUIRED_SLATE_KNOBS = (
+        "projecttext",
+        "artisttext",
+        "commenttext",
+        "startfr",
+    )
+
+    def __init__(self, nuke_module):
+        self.nuke = nuke_module
+
+    def render(
+        self,
+        *,
+        template_path: str,
+        input_path: str,
+        output_path: str,
+        shot_name: str,
+        project: str,
+        artist: str,
+        colourspace: str,
+        fps: float,
+        quality: str,
+    ) -> Tuple[int, int]:
+        self.nuke.scriptOpen(_normalize_nuke_path(template_path))
+        self._validate_template()
+
+        read = self._required_node("Read1")
+        retime = self._required_node("Retime1")
+        resolved_input_path, detected_first, detected_last = resolve_preview_sequence_input(input_path)
+        if detected_first is not None and detected_last is not None:
+            self._set_file_knob(read["file"], resolved_input_path, frame_range=(detected_first, detected_last))
+            self._set_optional_knob(read, "first", detected_first)
+            self._set_optional_knob(read, "last", detected_last)
+            self._set_optional_knob(read, "origfirst", detected_first)
+            self._set_optional_knob(read, "origlast", detected_last)
+            self._set_optional_knob(read, "origset", True)
+        else:
+            self._set_file_knob(read["file"], resolved_input_path)
+        resolved_colourspace = resolve_preview_input_colourspace(
+            media_type=Path(resolved_input_path).suffix.lstrip("."),
+            input_path=resolved_input_path,
+            requested_colourspace=colourspace,
+        )
+        self._set_optional_knob(read, "colorspace", map_input_colorspace(resolved_colourspace))
+
+        source_first = int(read["first"].value())
+        source_last = int(read["last"].value())
+        duration = max(source_last - source_first + 1, 1)
+        vfx_first = 1001
+        vfx_last = vfx_first + duration - 1
+
+        self._set_optional_knob(retime, "input.first", source_first)
+        self._set_optional_knob(retime, "input.first_lock", True)
+        self._set_optional_knob(retime, "input.last", source_last)
+        self._set_optional_knob(retime, "input.last_lock", True)
+        self._set_optional_knob(retime, "output.first", vfx_first)
+        self._set_optional_knob(retime, "output.first_lock", True)
+        self._set_optional_knob(retime, "output.last", vfx_last)
+        self._set_optional_knob(retime, "output.last_lock", True)
+
+        root = self.nuke.root()
+        self._set_optional_knob(root, "frame", vfx_first)
+        self._set_optional_knob(root, "first_frame", vfx_first)
+        self._set_optional_knob(root, "last_frame", vfx_last)
+        self._set_optional_knob(root, "fps", fps)
+        self._set_optional_knob(root, "colorManagement", "OCIO")
+        self._set_optional_knob(root, "OCIO_config", "aces_1.2")
+        self._set_optional_knob(root, "workingSpaceLUT", "ACES - ACEScg")
+        if "name" in root.knobs():
+            try:
+                self._set_knob(root["name"], f"{_preview_slate_name(shot_name, output_path)}.nk")
+            except Exception:
+                pass
+
+        write = self._required_node("WriteCompMP4")
+        self._set_file_knob(write["file"], output_path)
+        self._set_optional_knob(write, "file_type", "mov")
+        self._set_optional_knob(write, "create_directories", True)
+        self._set_optional_knob(write, "checkHashOnRead", False)
+        self._set_optional_knob(write, "colorspace", "color_picking")
+        self._set_optional_knob(write, "ocioColorspace", "scene_linear")
+        self._set_optional_knob(write, "display", "ACES")
+        self._set_optional_knob(write, "view", "sRGB")
+        self._set_optional_knob(write, "mov64_quality", {"low": "Low", "medium": "Medium", "high": "High"}.get(quality, "Medium"))
+
+        slate_group = self._required_node("MS_slate_overlay")
+        self._set_optional_knob(slate_group, "projecttext", project)
+        self._set_optional_knob(slate_group, "artisttext", artist)
+        self._set_optional_knob(slate_group, "commenttext", "")
+        self._set_optional_knob(slate_group, "startfr", vfx_first)
+
+        slate_group.begin()
+        try:
+            readtime = self._required_node("readtime")
+            self._set_optional_knob(readtime, "tc1", _duration_timecode(duration, fps))
+        finally:
+            slate_group.end()
+
+        # The template ships with a separate white Text11 overlay. Blank it so
+        # only the slate's built-in orange text renders in previews.
+        text11 = self.nuke.toNode("Text11")
+        if text11 is not None:
+            self._set_optional_knob(text11, "message", "")
+
+        self.nuke.execute(write, vfx_first, vfx_last)
+        return vfx_first, vfx_last
+
+    def _required_node(self, name: str):
+        node = self.nuke.toNode(name)
+        if node is None:
+            raise RuntimeError(f"Template node not found: {name}")
+        return node
+
+    def _validate_template(self):
+        missing = [name for name in self.REQUIRED_NODES if self.nuke.toNode(name) is None]
+        if missing:
+            raise RuntimeError("Preview template is missing required nodes: " + ", ".join(missing))
+        slate_group = self._required_node("MS_slate_overlay")
+        missing_knobs = [name for name in self.REQUIRED_SLATE_KNOBS if name not in slate_group.knobs()]
+        if missing_knobs:
+            raise RuntimeError(
+                "Preview template MS_slate_overlay is missing required knobs: " + ", ".join(missing_knobs)
+            )
+        slate_group.begin()
+        try:
+            if self.nuke.toNode("readtime") is None:
+                raise RuntimeError("Preview template MS_slate_overlay is missing required node: readtime")
+        finally:
+            slate_group.end()
+
+    def _set_optional_knob(self, node, knob_name: str, value):
+        if node is None or knob_name not in node.knobs():
+            return
+        self._set_knob(node[knob_name], value)
+
+    def _set_file_knob(self, knob, file_path: str, frame_range: Optional[Tuple[int, int]] = None):
+        normalized = _normalize_nuke_path(file_path)
+        from_user_text = getattr(knob, "fromUserText", None)
+        if callable(from_user_text):
+            user_text = normalized
+            if frame_range is not None:
+                user_text = f"{normalized} {int(frame_range[0])}-{int(frame_range[1])}"
+            from_user_text(user_text)
+            return
+        self._set_knob(knob, normalized)
+
+    def _set_knob(self, knob, value):
+        try:
+            knob.setValue(value)
+            return
+        except TypeError as exc:
+            original_error = exc
+        if isinstance(value, str):
+            values = getattr(knob, "values", None)
+            if callable(values):
+                try:
+                    options = list(values())
+                except Exception:
+                    options = []
+                if value in options:
+                    knob.setValue(value)
+                    return
+        raise original_error
 
 
 def map_input_colorspace(colourspace: str) -> str:
@@ -513,7 +890,7 @@ class PreviewGenerator:
         """
         if not input_path:
             return False, "No input path provided"
-        if not os.path.exists(input_path):
+        if not preview_input_exists(input_path):
             return False, f"Input file not found: {input_path}"
         return True, ""
     
@@ -568,6 +945,12 @@ class PreviewGenerator:
                 success=False,
                 error=f"Headless script not found: {self.headless_script}"
             )
+        preview_template = get_preview_template_path()
+        if not preview_template.exists():
+            return PreviewResult(
+                success=False,
+                error=f"Preview template not found: {preview_template}"
+            )
         
         # Build output path
         output_path, actual_version, file_exists = build_preview_output_path(
@@ -603,6 +986,7 @@ class PreviewGenerator:
         output_lines = [
             f"NUKE_EXE: {self.nuke_exe}",
             f"HEADLESS_SCRIPT: {self.headless_script}",
+            f"PREVIEW_TEMPLATE: {preview_template}",
             f"CMD: {cmd_display}",
         ]
         if on_output:
@@ -688,13 +1072,16 @@ class PreviewGenerator:
         )
         
         # Delete existing file if it exists
-        if file_exists and output_path.exists():
+        if file_exists:
+            existing_paths = list_existing_preview_paths(shot_dir, shot_name, actual_version)
             try:
-                output_path.unlink()
+                for existing_path in existing_paths:
+                    if existing_path.exists():
+                        existing_path.unlink()
             except Exception as e:
                 return PreviewResult(
                     success=False,
-                    error=f"Failed to delete existing file: {e}"
+                    error=f"Failed to delete existing preview file: {e}"
                 )
         
         # Now generate (will not hit FILE_EXISTS since we deleted it)
@@ -878,7 +1265,7 @@ class PreviewGenerator:
 # =============================================================================
 
 class MakePreviewTask:
-    """Transcode video with slate overlay. Runs inside Nuke."""
+    """Render a preview by patching preview_template_v001.nk inside Nuke."""
     
     def __init__(self):
         self.nuke = None
@@ -895,242 +1282,48 @@ class MakePreviewTask:
     
     def run(self, input_path, output_path, shot_name="", project="", artist="", 
             colourspace="sRGB", fps=25, quality="medium"):
-        """
-        Transcode video with slate overlay.
-        
-        Simply reads the input video, adds text overlays, and writes to MP4.
-        Frame range comes entirely from the source file.
-        
-        Note: The shot_name displayed on slate will include version extracted from output_path.
-        e.g., output "sho010_v03_preview.mp4" -> slate shows "sho010_v03"
-        """
+        """Open the preview template, patch runtime knobs, and render the write node."""
         self.setup_nuke()
         nuke = self.nuke
 
-        # Normalize paths for Nuke on Windows (prefer forward slashes)
-        if platform.system() == "Windows":
-            input_path = str(input_path).replace("\\", "/")
-            output_path = str(output_path).replace("\\", "/")
+        input_path = _normalize_nuke_path(input_path)
+        output_path = _normalize_nuke_path(output_path)
+        template_path = get_preview_template_path()
 
-        # Ensure output directory exists (and print diagnostics)
         output_dir = os.path.dirname(output_path)
         print(f"Input path: {input_path}")
         print(f"Output path: {output_path}")
-        print(f"Input exists: {os.path.exists(input_path)}")
+        print(f"Input exists: {preview_input_exists(input_path)}")
         print(f"Output dir: {output_dir}")
         print(f"Output dir exists: {os.path.isdir(output_dir)}")
+        print(f"Preview template: {template_path}")
         try:
             os.makedirs(output_dir, exist_ok=True)
         except Exception as e:
             print(f"ERROR: Could not create output dir: {e}")
-        
-        # Clear any existing script
-        nuke.scriptClear()
-        
-        print(f"Input: {input_path}")
-        print(f"Output: {output_path}")
-        
-        # Extract version from output path for slate display
-        # Output format: {shot_name}_v{version}_preview.mp4
-        output_stem = Path(output_path).stem  # e.g. "sho010_v03_preview"
-        if '_preview' in output_stem:
-            # Remove _preview suffix to get "sho010_v03"
-            slate_shot_name = output_stem.replace('_preview', '')
-        else:
-            # Fallback to just shot_name if format doesn't match
-            slate_shot_name = shot_name
-        
-        print(f"Slate shot name: {slate_shot_name}")
-        
-        # Setup OCIO/ACES color management
-        root = nuke.root()
-        root['colorManagement'].setValue('OCIO')
-        root['OCIO_config'].setValue('aces_1.2')
-        root['workingSpaceLUT'].setValue('ACES - ACEScg')
-        print("Color management: OCIO with ACES 1.2")
-        
-        # Create Read node with file path
-        read = nuke.createNode('Read', inpanel=False)
-        read['file'].fromUserText(input_path)
-        
-        # Get frame range FROM THE FILE - this is the only source of truth for rendering
-        first = int(read['first'].value())
-        last = int(read['last'].value())
-        duration = last - first + 1
-        
-        # VFX display frame range (for slate only) - starts at 1001
-        vfx_first = 1001
-        vfx_last = 1001 + duration - 1
-        
-        print(f"File frames: {first}-{last} ({duration} frames)")
-        print(f"VFX frames (display): {vfx_first}-{vfx_last}")
-        
-        # Set input colorspace
-        colorspace_map = {
-            'sRGB': 'Utility - sRGB - Texture',
-            'Rec.709': 'Utility - Rec.709 - Camera',
-            'Rec709': 'Utility - Rec.709 - Camera',
-            'rec709': 'Utility - Rec.709 - Camera',
-            'Linear': 'Utility - Linear - sRGB',
-            'ACEScg': 'ACES - ACEScg',
-            'ACES - ACEScg': 'ACES - ACEScg',
-            'AlexaV3LogC': 'Input - ARRI - V3 LogC (EI800) - Wide Gamut',
-            'ARRI LogC': 'Input - ARRI - V3 LogC (EI800) - Wide Gamut',
-            'Arri LogC': 'Input - ARRI - V3 LogC (EI800) - Wide Gamut',
-            'Input - ARRI - V3 LogC (EI800) - Wide Gamut': 'Input - ARRI - V3 LogC (EI800) - Wide Gamut',
-            'Sony S-Log3': 'Input - Sony - S-Log3 - S-Gamut3.Cine',
-            'S-Log3': 'Input - Sony - S-Log3 - S-Gamut3.Cine',
-        }
-        ocio_colorspace = colorspace_map.get(colourspace, 'Utility - sRGB - Texture')
-        try:
-            read['colorspace'].setValue(ocio_colorspace)
-            print(f"Input colorspace: {ocio_colorspace}")
-        except:
-            print("Using default input colorspace")
-        
-        # Set project frame range and fps
-        root['first_frame'].setValue(first)
-        root['last_frame'].setValue(last)
-        root['fps'].setValue(fps)
-        
-        # Get input dimensions
-        input_format = read.format()
-        width = input_format.width()
-        height = input_format.height()
-        
-        # Reformat to max 1920 wide (fit within, maintain aspect)
-        reformat = nuke.createNode('Reformat', inpanel=False)
-        reformat.setInput(0, read)
-        reformat['type'].setValue('to box')
-        reformat['box_width'].setValue(1920)
-        reformat['box_height'].setValue(1080)
-        reformat['resize'].setValue('fit')
-        reformat['black_outside'].setValue(True)
-        
-        # Get reformatted dimensions for slate positioning
-        slate_height = 50
-        
-        # Add black bars for slate (top and bottom)
-        reformatted_format = reformat.format()
-        rw = reformatted_format.width()
-        rh = reformatted_format.height()
-        new_height = rh + (slate_height * 2)
-        
-        format_name = f"preview_{rw}x{new_height}"
-        nuke.addFormat(f"{rw} {new_height} {format_name}")
-        
-        add_bars = nuke.createNode('Reformat', inpanel=False)
-        add_bars.setInput(0, reformat)
-        add_bars['type'].setValue('to box')
-        add_bars['box_width'].setValue(rw)
-        add_bars['box_height'].setValue(new_height)
-        add_bars['box_fixed'].setValue(True)
-        add_bars['resize'].setValue('none')
-        add_bars['black_outside'].setValue(True)
-        
-        last_node = add_bars
-        
-        # --- TEXT OVERLAYS ---
-        date_str = datetime.now().strftime("%d/%m/%y %H:%M")
-        
-        # Top left: Project
-        if project:
-            txt = nuke.createNode('Text2', inpanel=False)
-            txt.setInput(0, last_node)
-            txt['message'].setValue(project)
-            txt['box'].setValue([20, rh + slate_height, rw/3, new_height - 10])
-            txt['yjustify'].setValue('center')
-            txt['global_font_scale'].setValue(0.35)
-            last_node = txt
-        
-        # Top center: Shot name (with version)
-        if slate_shot_name:
-            txt = nuke.createNode('Text2', inpanel=False)
-            txt.setInput(0, last_node)
-            txt['message'].setValue(slate_shot_name)
-            txt['box'].setValue([rw/3, rh + slate_height, rw*2/3, new_height - 10])
-            txt['xjustify'].setValue('center')
-            txt['yjustify'].setValue('center')
-            txt['global_font_scale'].setValue(0.4)
-            last_node = txt
-        
-        # Top right: Date/time
-        txt = nuke.createNode('Text2', inpanel=False)
-        txt.setInput(0, last_node)
-        txt['message'].setValue(date_str)
-        txt['box'].setValue([rw*2/3, rh + slate_height, rw - 20, new_height - 10])
-        txt['xjustify'].setValue('right')
-        txt['yjustify'].setValue('center')
-        txt['global_font_scale'].setValue(0.3)
-        last_node = txt
-        
-        # Bottom left: Current frame (VFX frame = 1001 + file_frame - file_first)
-        txt = nuke.createNode('Text2', inpanel=False)
-        txt.setInput(0, last_node)
-        txt['message'].setValue(f"[expr {vfx_first} + [frame] - {first}]")
-        txt['box'].setValue([20, 10, 120, slate_height])
-        txt['yjustify'].setValue('center')
-        txt['global_font_scale'].setValue(0.35)
-        last_node = txt
-        
-        # Bottom left-center: Frame range (VFX range)
-        txt = nuke.createNode('Text2', inpanel=False)
-        txt.setInput(0, last_node)
-        txt['message'].setValue(f"{vfx_first}-{vfx_last}")
-        txt['box'].setValue([120, 10, 280, slate_height])
-        txt['yjustify'].setValue('center')
-        txt['global_font_scale'].setValue(0.3)
-        last_node = txt
-        
-        # Bottom center: FPS
-        txt = nuke.createNode('Text2', inpanel=False)
-        txt.setInput(0, last_node)
-        txt['message'].setValue(f"{int(fps)}fps")
-        txt['box'].setValue([280, 10, 380, slate_height])
-        txt['yjustify'].setValue('center')
-        txt['global_font_scale'].setValue(0.3)
-        last_node = txt
-        
-        # Bottom right: Artist
-        if artist:
-            txt = nuke.createNode('Text2', inpanel=False)
-            txt.setInput(0, last_node)
-            txt['message'].setValue(artist)
-            txt['box'].setValue([rw - 250, 10, rw - 20, slate_height])
-            txt['xjustify'].setValue('right')
-            txt['yjustify'].setValue('center')
-            txt['global_font_scale'].setValue(0.3)
-            last_node = txt
-        
-        # --- WRITE NODE ---
-        write = nuke.createNode('Write', inpanel=False)
-        write.setInput(0, last_node)
-        write['file'].setValue(output_path)
-        write['file_type'].setValue('mov')
-        write['mov64_codec'].setValue('h264')
-        
-        # Output colorspace: Rec.709 for preview
-        try:
-            write['colorspace'].setValue('Output - Rec.709')
-            print("Output colorspace: Rec.709")
-        except:
-            pass
-        
-        # Quality
-        quality_map = {'low': 'Low', 'medium': 'Medium', 'high': 'High'}
-        write['mov64_quality'].setValue(quality_map.get(quality, 'Medium'))
-        
-        # Render
-        print(f"Rendering {duration} frames...")
+        if not template_path.exists():
+            raise RuntimeError(f"Preview template not found: {template_path}")
+        if not preview_input_exists(input_path):
+            raise RuntimeError(f"Input file not found: {input_path}")
+
         import time
         start_time = time.time()
-        
-        nuke.execute(write, first, last)
-        
+        editor = _PreviewTemplateEditor(nuke)
+        first, last = editor.render(
+            template_path=str(template_path),
+            input_path=input_path,
+            output_path=output_path,
+            shot_name=shot_name,
+            project=project,
+            artist=artist or PreviewConfig.DEFAULT_ARTIST,
+            colourspace=colourspace,
+            fps=fps,
+            quality=quality,
+        )
         elapsed = time.time() - start_time
+        print(f"Rendered frames: {first}-{last}")
         print(f"Render complete: {elapsed:.1f}s")
         print(f"Output: {output_path}")
-        
         return True
 
 
@@ -1407,7 +1600,7 @@ class PreviewDebugUI:
                 if path:
                     ui_self.input_path.setText(path)
                     p = Path(path)
-                    ui_self.output_path.setText(str(p.parent / f"{p.stem}_preview.mp4"))
+                    ui_self.output_path.setText(str(p.parent / f"{p.stem}_v001.mp4"))
                     ui_self.shot_name.setText(p.stem)
                     ui_self.update_command()
             
@@ -1491,7 +1684,7 @@ def main():
     
     # make_preview command
     preview = subparsers.add_parser('make_preview', help='Create preview with slate')
-    preview.add_argument('--input', '-i', required=True, help='Input video file')
+    preview.add_argument('--input', '-i', required=True, help='Input clip, EXR frame, or image sequence pattern')
     preview.add_argument('--output', '-o', required=True, help='Output MP4 path')
     preview.add_argument('--shot_name', '-s', default='', help='Shot name for slate')
     preview.add_argument('--project', '-p', default='', help='Project name for slate')

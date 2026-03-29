@@ -399,7 +399,6 @@ class _TemplateEditor:
         self._set_optional_knob(retime1, "output.first", self.request.frame_first)
         self._set_optional_knob(retime1, "output.first_lock", True)
         self._set_optional_knob(retime1, "output.last", self.request.frame_last)
-        self._set_optional_knob(retime1, "time", "")
 
     def _update_extra_plates(self):
         if not self.request.extra_plate_paths:
@@ -478,7 +477,6 @@ class _TemplateEditor:
         self._set_optional_knob(retime_preview, "output.first", self.request.frame_first)
         self._set_optional_knob(retime_preview, "output.first_lock", True)
         self._set_optional_knob(retime_preview, "output.last", self.request.frame_last)
-        self._set_optional_knob(retime_preview, "time", "")
 
         read_comp_exr = self._required_node("ReadCompEXR")
         self._set_knob(read_comp_exr["file"], self.request.comp_exr_file)

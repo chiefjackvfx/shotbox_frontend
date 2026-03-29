@@ -51,7 +51,7 @@ class Folders:
         if mov_info and exr_info:
             mov_version = mov_info.get("version", -1)
             exr_version = exr_info.get("version", -1)
-            return mov_info if mov_version >= exr_version else exr_info
+            return exr_info if exr_version >= mov_version else mov_info
 
         return mov_info or exr_info
 
@@ -202,28 +202,32 @@ class Folders:
         if not previews_dir.exists():
             return None, None
 
-        # Look for .mp4 files (can add more extensions if needed)
         files = list(previews_dir.glob("*.mp4"))
-        
-        version_pattern = re.compile(r"_v(\d+)\.mp4$", re.IGNORECASE)
-
-        best_file = None
-        highest_version = -1
 
         try:
+            candidates = []
             for file in files:
-                match = version_pattern.search(file.name)
-                if match:
-                    version = int(match.group(1))
-                    if version > highest_version:
-                        highest_version = version
-                        best_file = file
+                version = self._preview_version_from_name(file.name)
+                if version is None:
+                    continue
+                candidates.append((version, self._is_legacy_preview_name(file.name), file))
 
-            if best_file:
+            if candidates:
+                candidates.sort(key=lambda item: (-item[0], item[1], item[2].name.lower()))
+                best_file = candidates[0][2]
                 return str(best_file), str(best_file.name)
             return None, None
         except:
             return None, None
+
+    def _preview_version_from_name(self, file_name: str):
+        match = re.search(r"_v(\d+)(?:_preview)?\.mp4$", file_name, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+        return None
+
+    def _is_legacy_preview_name(self, file_name: str) -> bool:
+        return file_name.lower().endswith("_preview.mp4")
     def conform(self, clip):
         print(clip)
         

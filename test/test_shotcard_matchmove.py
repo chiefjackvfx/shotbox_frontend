@@ -233,6 +233,23 @@ class ShotCardMatchmoveTests(unittest.TestCase):
 
             critical.assert_called_once()
 
+    def test_resolve_preview_project_name_prefers_job_title(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
+            shot_root.mkdir(parents=True)
+            card, _fake_folders = self._make_card(str(shot_root))
+            card.data["job"] = {"title": "ProjectA"}
+
+            self.assertEqual(card._resolve_preview_project_name(), "ProjectA")
+
+    def test_resolve_preview_project_name_falls_back_to_project_folder(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "ProjectB" / "VFX" / "timeline_A" / "sho010"
+            shot_root.mkdir(parents=True)
+            card, _fake_folders = self._make_card(str(shot_root))
+
+            self.assertEqual(card._resolve_preview_project_name(), "ProjectB")
+
     def test_create_matchmove_project_creates_work_and_export_and_patches_shot(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"

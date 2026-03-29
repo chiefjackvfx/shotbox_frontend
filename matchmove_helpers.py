@@ -54,6 +54,10 @@ MATCHMOVE_DIRNAME = "matchmove"
 MATCHMOVE_WORK_DIRNAME = "work"
 MATCHMOVE_EXPORT_DIRNAME = "export"
 PROJECT_FILENAME_RE = r"^{shot}_matchmove_v(\d{{3}})\.3de$"
+GENERIC_PROJECT_FILENAME_RE = re.compile(
+    r"^(?P<base>.+)_matchmove_v(?P<version>\d{3})\.3de$",
+    re.IGNORECASE,
+)
 
 DEFAULT_FPS = 25.0
 DEFAULT_FOCAL_LENGTH_MM = 35.0
@@ -348,6 +352,31 @@ def find_latest_matchmove_project(matchmove_dir: str, shot_name: str) -> Optiona
             best_version = version
             best_path = path
     return best_path
+
+
+def list_matchmove_projects(matchmove_dir: str) -> list[Path]:
+    work_dir = Path(build_work_directory(matchmove_dir))
+    if not work_dir.is_dir():
+        return []
+
+    projects = [
+        path
+        for path in work_dir.iterdir()
+        if path.is_file() and path.suffix.lower() == ".3de"
+    ]
+
+    def _sort_key(path: Path):
+        match = GENERIC_PROJECT_FILENAME_RE.match(path.name)
+        if match:
+            return (
+                0,
+                match.group("base").lower(),
+                -int(match.group("version")),
+                path.name.lower(),
+            )
+        return (1, path.name.lower())
+
+    return sorted(projects, key=_sort_key)
 
 
 def detect_exr_sequence(folder_path: str) -> SequenceInfo:
