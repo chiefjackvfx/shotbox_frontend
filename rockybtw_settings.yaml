@@ -49,6 +49,7 @@ shots_layout_mode: grid
 show_startup_loading_dialog: true
 startup_tab: 0
 theme_file: dark_v01.qss
+threede_exe_path: ''
 window_height: 1059
 window_width: 1503
 window_x: 175
