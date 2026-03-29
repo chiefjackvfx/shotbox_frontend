@@ -2,6 +2,14 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.3.1 - 2026-03-29
+
+### Added
+
+- Added an explicit Input transform / colourspace selector to the single-shot creation dialog in import_xml_v2.py.
+- The single-shot flow now uses the dialog-selected colourspace for .nk creation instead of always using the page default.
+- Single-shot creation now supports up to 5 clips in one shot, with the first clip used as the primary/V1 plate and additional clips mapped to V2-V5.
+
 ## 1.3.0 - 2026-03-29
 
 ### Added
