@@ -223,6 +223,12 @@ def _normalize_layout_mode(mode: str) -> str:
     return "list"
 
 
+def _normalize_task_style(style: str) -> str:
+    if str(style).lower() == "checklist":
+        return "checklist"
+    return "card"
+
+
 def _create_shots_layout(mode: str, spacing: int | None = None) -> QLayout:
     layout_mode = _normalize_layout_mode(mode)
     if layout_mode == "grid":
@@ -344,27 +350,31 @@ class SingleCameraMatchmoveDialog(QDialog):
         return float(self.fps_spin_box.value())
 
 class TaskWidget(QWidget):
-    def __init__(self, task_data=None):
+    def __init__(self, task_data=None, presentation="card"):
         super().__init__()
         task_data = task_data or {}
 
-        # Use Python UI setup instead of uic.loadUi
-        setup_task_widget_ui(self)
+        self._presentation = _normalize_task_style(presentation)
+        setup_task_widget_ui(self, presentation=self._presentation)
 
         self.setObjectName(f"task-{task_data.get('id','unknown')}")
         self._api = http_help.DjangoAPI()
         self._task_id = task_data.get("id")
         self._data = {}
         self._compact_mode = False
+        self._last_non_done_status = None
 
-        if hasattr(self, "drag_handle"):
+        self._apply_presentation_properties()
+
+        if getattr(self, "drag_handle", None):
             self.drag_handle.setVisible(False)
 
-        # ----- Status button and menu -----
         self.btn_status = getattr(self, "btn_status", None)
+        self.btn_assigned = getattr(self, "btn_assigned", None)
+        self.btn_priority = getattr(self, "btn_priority", None)
+        self.btn_budget_hours = getattr(self, "btn_budget_hours", None)
 
-        # connect delete button
-        if hasattr(self, "btn_delete_task"):
+        if hasattr(self, "btn_delete_task") and self.btn_delete_task:
             self.btn_delete_task.clicked.connect(self._on_delete_clicked)
 
         self._status_menu = QMenu(self)
@@ -372,44 +382,65 @@ class TaskWidget(QWidget):
             act = QAction(label, self._status_menu)
             act.setData(value)
             self._status_menu.addAction(act)
-
-        # OPEN ON LEFT CLICK
-        self.btn_status.clicked.connect(lambda: self._open_menu_below(self.btn_status, self._status_menu))
+        if self.btn_status:
+            self.btn_status.clicked.connect(
+                lambda: self._open_menu_below(self.btn_status, self._status_menu)
+            )
         self._status_menu.triggered.connect(self._on_status_action)
 
-        self.btn_task_title.clicked.connect(self._on_title_clicked)
-        self.btn_notes.clicked.connect(self._on_notes_clicked)
+        if hasattr(self, "btn_task_title") and self.btn_task_title:
+            self.btn_task_title.clicked.connect(self._on_title_clicked)
+        if hasattr(self, "btn_notes") and self.btn_notes:
+            self.btn_notes.clicked.connect(self._on_notes_clicked)
+        if hasattr(self, "edit_notes_inline") and self.edit_notes_inline:
+            self.edit_notes_inline.editingFinished.connect(self._on_inline_notes_edit_finished)
 
-        # ----- Assign button and menu -----
-        self.btn_assigned = getattr(self, "btn_assigned", None)
         self._artist_menu = QMenu(self)
-
-        # OPEN ON LEFT CLICK (rebuild the menu each time to fetch latest users)
-        self.btn_assigned.clicked.connect(self._on_assign_clicked)
+        if self.btn_assigned:
+            self.btn_assigned.clicked.connect(self._on_assign_clicked)
         self._artist_menu.triggered.connect(self._on_artist_action)
 
-        # ----- Priority button and menu (NEW) -----
-        self.btn_priority = getattr(self, "btn_priority", None)
         self._priority_menu = QMenu(self)
-
-        for prio in range(10, 0, -1):  # 10 highest first
+        for prio in range(10, 0, -1):
             act = QAction(f"Priority {prio}", self._priority_menu)
             act.setData(prio)
             self._priority_menu.addAction(act)
-
         if self.btn_priority:
-            self.btn_priority.clicked.connect(lambda: self._open_menu_below(self.btn_priority, self._priority_menu))
+            self.btn_priority.clicked.connect(
+                lambda: self._open_menu_below(self.btn_priority, self._priority_menu)
+            )
             self._priority_menu.triggered.connect(self._on_priority_action)
 
-        # ----- Budget hours button (NEW) -----
-        self.btn_budget_hours = getattr(self, "btn_budget_hours", None)
         if self.btn_budget_hours:
             self.btn_budget_hours.clicked.connect(self._on_budget_hours_clicked)
 
         if hasattr(self, "btn_hide_task") and self.btn_hide_task:
             self.btn_hide_task.clicked.connect(self._on_hide_clicked)
 
+        if hasattr(self, "check_done_task") and self.check_done_task:
+            self.check_done_task.toggled.connect(self._on_done_toggled)
+
         self.update_from_data(task_data)
+
+    def _is_checklist_presentation(self) -> bool:
+        return self._presentation == "checklist"
+
+    def _apply_presentation_properties(self) -> None:
+        for widget in (
+            getattr(self, "task_frame", None),
+            getattr(self, "btn_task_title", None),
+            getattr(self, "btn_status", None),
+            getattr(self, "btn_assigned", None),
+            getattr(self, "btn_priority", None),
+            getattr(self, "btn_budget_hours", None),
+            getattr(self, "btn_notes", None),
+            getattr(self, "edit_notes_inline", None),
+            getattr(self, "btn_hide_task", None),
+            getattr(self, "btn_delete_task", None),
+            getattr(self, "check_done_task", None),
+        ):
+            _set_dynamic_property(widget, "presentation", self._presentation)
+        _set_dynamic_property(getattr(self, "task_frame", None), "flash", "false")
 
     # ----- helpers -----
     def _parent_shot_card(self):
@@ -420,45 +451,16 @@ class TaskWidget(QWidget):
             parent = parent.parent()
         return None
 
-    def _on_delete_clicked(self):
-        if not self._task_id:
-            return
-        try:
-            self._api.delete_task(self._task_id)
-            parent_shot = self._parent_shot_card()
-            if parent_shot is not None:
-                parent_shot.remove_task_by_id(self._task_id)
-            else:
-                self.setParent(None)
-                self.deleteLater()
-            self._notify_filter_state_changed()
-        except Exception as e:
-            pass
+    def _refresh_parent_widget_state(self) -> ShotCard | None:
+        parent = self._parent_shot_card()
+        if parent is not None and hasattr(parent, "_sync_task_widgets_from_data"):
+            parent._sync_task_widgets_from_data()
+        return parent
 
-    def _on_hide_clicked(self):
-        if self._task_id is None:
-            return
-        current_hidden = (self._data or {}).get("hidden", False)
-        new_hidden = not current_hidden
-        try:
-            updated = self._api.update_task(self._task_id, hidden=new_hidden)
-            if updated:
-                self.update_from_data(updated)
-                self._sync_parent_task_data(updated)
-                self._notify_filter_state_changed()
-            else:
-                self._data["hidden"] = new_hidden
-                if self.btn_hide_task:
-                    self.set_compact_mode(self._compact_mode)
-                self._sync_parent_task_data({"hidden": new_hidden})
-                self._notify_filter_state_changed()
-        except Exception as e:
-            pass
-
-    def _sync_parent_task_data(self, updated_task: dict) -> None:
+    def _sync_parent_task_data(self, updated_task: dict) -> ShotCard | None:
         parent = self._parent_shot_card()
         if parent is None:
-            return
+            return None
         parent_data = getattr(parent, "data", None) or {}
         tasks = parent_data.get("tasks", [])
         for task in tasks:
@@ -466,6 +468,15 @@ class TaskWidget(QWidget):
                 if isinstance(updated_task, dict):
                     task.update(updated_task)
                 break
+        return parent
+
+    def _apply_updated_task(self, updated: dict, *, flash_done: bool = False) -> None:
+        self.update_from_data(updated)
+        self._sync_parent_task_data(updated)
+        self._refresh_parent_widget_state()
+        if flash_done and self._is_checklist_presentation():
+            self._flash_completion_success()
+        self._notify_filter_state_changed()
 
     def _notify_filter_state_changed(self) -> None:
         window = self.window()
@@ -479,7 +490,9 @@ class TaskWidget(QWidget):
         except TypeError:
             apply_filters()
 
-    def _open_menu_below(self, widget: QPushButton, menu: QMenu):
+    def _open_menu_below(self, widget: QPushButton | None, menu: QMenu):
+        if widget is None:
+            return
         pos = widget.mapToGlobal(widget.rect().bottomLeft())
         menu.exec(pos)
 
@@ -496,7 +509,6 @@ class TaskWidget(QWidget):
         except Exception:
             return "Unassigned"
 
-    # NEW
     def _priority_label(self, value) -> str:
         try:
             v = int(value)
@@ -505,13 +517,58 @@ class TaskWidget(QWidget):
         v = max(1, min(10, v))
         return f"P{v}"
 
-    # NEW
     def _format_hours(self, value) -> str:
         try:
             hours = float(value or 0)
         except Exception:
             hours = 0.0
         return f"{hours:.1f}h"
+
+    def _inline_notes_display_text(self, value) -> str:
+        text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+        if "\n" not in text:
+            return text
+        parts = [part.strip() for part in text.split("\n") if part.strip()]
+        return " / ".join(parts)
+
+    def _set_inline_notes_text(self, value) -> None:
+        if not (hasattr(self, "edit_notes_inline") and self.edit_notes_inline):
+            return
+        blocker = QSignalBlocker(self.edit_notes_inline)
+        self.edit_notes_inline.setText(self._inline_notes_display_text(value))
+        del blocker
+
+    def _fallback_undo_status(self) -> str:
+        if self._last_non_done_status and self._last_non_done_status != "done":
+            return self._last_non_done_status
+        artist_id = (self._data or {}).get("artist")
+        if artist_id not in (None, "", 0):
+            return "in_progress"
+        return "unassigned"
+
+    def _set_done_state_properties(self, done: bool) -> None:
+        done_value = "true" if done else "false"
+        for widget in (
+            getattr(self, "task_frame", None),
+            getattr(self, "btn_task_title", None),
+            getattr(self, "btn_assigned", None),
+            getattr(self, "btn_priority", None),
+            getattr(self, "btn_budget_hours", None),
+            getattr(self, "btn_notes", None),
+            getattr(self, "edit_notes_inline", None),
+        ):
+            _set_dynamic_property(widget, "done", done_value)
+        if hasattr(self, "btn_task_title") and self.btn_task_title:
+            font = self.btn_task_title.font()
+            font.setStrikeOut(False)
+            self.btn_task_title.setFont(font)
+
+    def _flash_completion_success(self) -> None:
+        frame = getattr(self, "task_frame", None)
+        if frame is None:
+            return
+        _set_dynamic_property(frame, "flash", "true")
+        QTimer.singleShot(180, lambda: _set_dynamic_property(frame, "flash", "false"))
 
     def _apply_compact_properties(self, enabled: bool) -> None:
         compact_value = "true" if enabled else "false"
@@ -522,7 +579,11 @@ class TaskWidget(QWidget):
             getattr(self, "btn_assigned", None),
             getattr(self, "btn_priority", None),
             getattr(self, "btn_budget_hours", None),
+            getattr(self, "btn_notes", None),
+            getattr(self, "edit_notes_inline", None),
             getattr(self, "btn_hide_task", None),
+            getattr(self, "btn_delete_task", None),
+            getattr(self, "check_done_task", None),
         ):
             _set_dynamic_property(widget, "compact", compact_value)
 
@@ -530,97 +591,211 @@ class TaskWidget(QWidget):
         self._compact_mode = bool(enabled)
         self._apply_compact_properties(self._compact_mode)
 
-        task_layout = getattr(self, "task_layout", None)
-        top_row = getattr(self, "top_row", None)
-        middle_row = getattr(self, "middle_row", None)
-        planning_row = getattr(self, "planning_row", None)
-        notes_row = getattr(self, "notes_row", None)
-
-        if task_layout is not None:
-            if self._compact_mode:
-                task_layout.setContentsMargins(4, 4, 4, 4)
-                task_layout.setSpacing(2)
-            else:
-                task_layout.setContentsMargins(6, 6, 6, 6)
-                task_layout.setSpacing(4)
-
-        for row in (top_row, middle_row, planning_row, notes_row):
-            if row is None:
-                continue
-            row.setSpacing(2 if self._compact_mode else 4)
-
-        self.setMinimumWidth(120 if self._compact_mode else 160)
-        self.setMaximumWidth(160 if self._compact_mode else 240)
-
-        if hasattr(self, "btn_delete_task") and self.btn_delete_task:
-            self.btn_delete_task.setVisible(not self._compact_mode)
-        if hasattr(self, "btn_notes") and self.btn_notes:
-            self.btn_notes.setVisible(not self._compact_mode)
-        if hasattr(self, "drag_handle") and self.drag_handle and self._compact_mode:
-            self.drag_handle.setVisible(False)
-
-        if hasattr(self, "btn_status") and self.btn_status:
-            self.btn_status.setMinimumWidth(56 if self._compact_mode else 70)
-            self.btn_status.setMaximumWidth(78 if self._compact_mode else 16777215)
-        if hasattr(self, "btn_assigned") and self.btn_assigned:
-            self.btn_assigned.setMinimumWidth(56 if self._compact_mode else 70)
-            self.btn_assigned.setMaximumWidth(84 if self._compact_mode else 16777215)
-        if hasattr(self, "btn_priority") and self.btn_priority:
-            self.btn_priority.setMaximumWidth(36 if self._compact_mode else 16777215)
-        if hasattr(self, "btn_budget_hours") and self.btn_budget_hours:
-            self.btn_budget_hours.setMaximumWidth(48 if self._compact_mode else 16777215)
-        if hasattr(self, "btn_hide_task") and self.btn_hide_task:
-            self.btn_hide_task.setFixedSize(24 if self._compact_mode else 30, 18 if self._compact_mode else 20)
-
         title = (self._data or {}).get("title") or "Task"
-        notes = (self._data or {}).get("notes") or ""
+        notes = str((self._data or {}).get("notes") or "")
         status_text = self._status_label((self._data or {}).get("status"))
         artist_text = self._artist_label((self._data or {}).get("artist"))
         priority_text = self._priority_label((self._data or {}).get("priority", 5))
         hours_text = self._format_hours((self._data or {}).get("budget_hours", 0))
         is_hidden = bool((self._data or {}).get("hidden", False))
+        is_done = ((self._data or {}).get("status") == "done")
 
-        if self._compact_mode:
-            self.btn_task_title.setText(_compact_text(title, 14))
-            self.btn_status.setText(_compact_text(status_text, 10))
-            self.btn_assigned.setText(_compact_text(artist_text, 9))
-            if hasattr(self, "btn_priority") and self.btn_priority:
+        task_layout = getattr(self, "task_layout", None)
+        if task_layout is not None:
+            if self._is_checklist_presentation():
+                task_layout.setContentsMargins(
+                    6 if self._compact_mode else 8,
+                    4 if self._compact_mode else 5,
+                    6 if self._compact_mode else 8,
+                    4 if self._compact_mode else 5,
+                )
+                task_layout.setSpacing(4 if self._compact_mode else 6)
+            else:
+                task_layout.setContentsMargins(
+                    4 if self._compact_mode else 6,
+                    4 if self._compact_mode else 6,
+                    4 if self._compact_mode else 6,
+                    4 if self._compact_mode else 6,
+                )
+                task_layout.setSpacing(2 if self._compact_mode else 4)
+
+        if self._is_checklist_presentation():
+            self.setMinimumWidth(0)
+            self.setMaximumWidth(16777215)
+
+            if hasattr(self, "btn_task_title") and self.btn_task_title:
+                self.btn_task_title.setText(_compact_text(title, 26 if self._compact_mode else 42))
+                tooltip_parts = [part for part in (title, notes) if part]
+                tooltip_text = "\n".join(tooltip_parts)
+                self.btn_task_title.setToolTip(tooltip_text or title)
+            if hasattr(self, "edit_notes_inline") and self.edit_notes_inline:
+                self.edit_notes_inline.setPlaceholderText("Add note...")
+                self.edit_notes_inline.setMinimumWidth(90 if self._compact_mode else 120)
+                self.edit_notes_inline.setToolTip(notes or "Add note")
+                self.edit_notes_inline.setVisible(True)
+            if self.btn_status:
+                self.btn_status.setText(_compact_text(status_text, 12 if self._compact_mode else 18))
+                self.btn_status.setToolTip(status_text)
+                self.btn_status.setMinimumWidth(54 if self._compact_mode else 64)
+            if self.btn_assigned:
+                self.btn_assigned.setText(_compact_text(artist_text, 10 if self._compact_mode else 14))
+                self.btn_assigned.setToolTip(artist_text)
+                self.btn_assigned.setMinimumWidth(60 if self._compact_mode else 70)
+            if self.btn_priority:
                 self.btn_priority.setText(priority_text)
-            if hasattr(self, "btn_budget_hours") and self.btn_budget_hours:
+                self.btn_priority.setVisible(True)
+            if self.btn_budget_hours:
                 self.btn_budget_hours.setText(hours_text)
+                self.btn_budget_hours.setVisible(True)
+            if hasattr(self, "btn_notes") and self.btn_notes:
+                self.btn_notes.setText("Note")
+                self.btn_notes.setVisible(bool(notes))
+                self.btn_notes.setToolTip(notes or "Edit notes")
             if hasattr(self, "btn_hide_task") and self.btn_hide_task:
                 self.btn_hide_task.setText("U" if is_hidden else "H")
                 self.btn_hide_task.setToolTip("Unhide task" if is_hidden else "Hide task")
-
-            tooltip_parts = [title]
-            if notes:
-                tooltip_parts.append(notes)
-            tooltip_text = "\n".join(tooltip_parts)
-            self.btn_task_title.setToolTip(tooltip_text)
+            if hasattr(self, "btn_delete_task") and self.btn_delete_task:
+                self.btn_delete_task.setVisible(True)
+            if hasattr(self, "check_done_task") and self.check_done_task:
+                self.check_done_task.setToolTip("Mark task done" if not is_done else "Restore task status")
             if hasattr(self, "task_frame") and self.task_frame:
-                self.task_frame.setToolTip(tooltip_text)
-            self.btn_status.setToolTip(status_text)
-            self.btn_assigned.setToolTip(artist_text)
+                self.task_frame.setToolTip("\n".join(part for part in (title, notes) if part))
         else:
-            self.btn_task_title.setText(title)
-            self.btn_task_title.setToolTip(title)
-            if hasattr(self, "btn_notes") and self.btn_notes:
-                self.btn_notes.setToolTip(notes)
-            self.btn_status.setText(status_text)
-            self.btn_status.setToolTip(status_text)
-            self.btn_assigned.setText(artist_text)
-            self.btn_assigned.setToolTip(artist_text)
-            if hasattr(self, "btn_priority") and self.btn_priority:
-                self.btn_priority.setText(priority_text)
-            if hasattr(self, "btn_budget_hours") and self.btn_budget_hours:
-                self.btn_budget_hours.setText(hours_text)
-            if hasattr(self, "btn_hide_task") and self.btn_hide_task:
-                self.btn_hide_task.setText("Unhide" if is_hidden else "Hide")
-                self.btn_hide_task.setToolTip("Hide/Unhide task")
-            if hasattr(self, "task_frame") and self.task_frame:
-                self.task_frame.setToolTip(notes)
+            top_row = getattr(self, "top_row", None)
+            middle_row = getattr(self, "middle_row", None)
+            planning_row = getattr(self, "planning_row", None)
+            notes_row = getattr(self, "notes_row", None)
+            for row in (top_row, middle_row, planning_row, notes_row):
+                if row is None:
+                    continue
+                row.setSpacing(2 if self._compact_mode else 4)
 
-    # ----- status flow -----
+            self.setMinimumWidth(120 if self._compact_mode else 160)
+            self.setMaximumWidth(160 if self._compact_mode else 240)
+
+            if hasattr(self, "btn_delete_task") and self.btn_delete_task:
+                self.btn_delete_task.setVisible(not self._compact_mode)
+            if hasattr(self, "btn_notes") and self.btn_notes:
+                self.btn_notes.setVisible(not self._compact_mode)
+            if getattr(self, "drag_handle", None) and self._compact_mode:
+                self.drag_handle.setVisible(False)
+
+            if self.btn_status:
+                self.btn_status.setMinimumWidth(56 if self._compact_mode else 70)
+                self.btn_status.setMaximumWidth(78 if self._compact_mode else 16777215)
+            if self.btn_assigned:
+                self.btn_assigned.setMinimumWidth(56 if self._compact_mode else 70)
+                self.btn_assigned.setMaximumWidth(84 if self._compact_mode else 16777215)
+            if self.btn_priority:
+                self.btn_priority.setMaximumWidth(36 if self._compact_mode else 16777215)
+            if self.btn_budget_hours:
+                self.btn_budget_hours.setMaximumWidth(48 if self._compact_mode else 16777215)
+            if hasattr(self, "btn_hide_task") and self.btn_hide_task:
+                self.btn_hide_task.setFixedSize(
+                    24 if self._compact_mode else 30,
+                    18 if self._compact_mode else 20,
+                )
+
+            if self._compact_mode:
+                self.btn_task_title.setText(_compact_text(title, 14))
+                if self.btn_status:
+                    self.btn_status.setText(_compact_text(status_text, 10))
+                    self.btn_status.setToolTip(status_text)
+                if self.btn_assigned:
+                    self.btn_assigned.setText(_compact_text(artist_text, 9))
+                    self.btn_assigned.setToolTip(artist_text)
+                if self.btn_priority:
+                    self.btn_priority.setText(priority_text)
+                if self.btn_budget_hours:
+                    self.btn_budget_hours.setText(hours_text)
+                if hasattr(self, "btn_hide_task") and self.btn_hide_task:
+                    self.btn_hide_task.setText("U" if is_hidden else "H")
+                    self.btn_hide_task.setToolTip("Unhide task" if is_hidden else "Hide task")
+
+                tooltip_parts = [title]
+                if notes:
+                    tooltip_parts.append(notes)
+                tooltip_text = "\n".join(tooltip_parts)
+                self.btn_task_title.setToolTip(tooltip_text)
+                if hasattr(self, "task_frame") and self.task_frame:
+                    self.task_frame.setToolTip(tooltip_text)
+            else:
+                self.btn_task_title.setText(title)
+                self.btn_task_title.setToolTip(title)
+                if hasattr(self, "btn_notes") and self.btn_notes:
+                    self.btn_notes.setText(notes or "No notes")
+                    self.btn_notes.setToolTip(notes)
+                if self.btn_status:
+                    self.btn_status.setText(status_text)
+                    self.btn_status.setToolTip(status_text)
+                if self.btn_assigned:
+                    self.btn_assigned.setText(artist_text)
+                    self.btn_assigned.setToolTip(artist_text)
+                if self.btn_priority:
+                    self.btn_priority.setText(priority_text)
+                if self.btn_budget_hours:
+                    self.btn_budget_hours.setText(hours_text)
+                if hasattr(self, "btn_hide_task") and self.btn_hide_task:
+                    self.btn_hide_task.setText("Unhide" if is_hidden else "Hide")
+                    self.btn_hide_task.setToolTip("Hide/Unhide task")
+                if hasattr(self, "task_frame") and self.task_frame:
+                    self.task_frame.setToolTip(notes)
+
+        self._set_done_state_properties(is_done)
+
+    def _on_delete_clicked(self):
+        if not self._task_id:
+            return
+        try:
+            self._api.delete_task(self._task_id)
+            parent_shot = self._parent_shot_card()
+            if parent_shot is not None:
+                parent_shot.remove_task_by_id(self._task_id)
+            else:
+                self.setParent(None)
+                self.deleteLater()
+            self._notify_filter_state_changed()
+        except Exception:
+            pass
+
+    def _on_hide_clicked(self):
+        if self._task_id is None:
+            return
+        current_hidden = bool((self._data or {}).get("hidden", False))
+        new_hidden = not current_hidden
+        try:
+            updated = self._api.update_task(self._task_id, hidden=new_hidden)
+            if updated:
+                self._apply_updated_task(updated)
+            else:
+                self._data["hidden"] = new_hidden
+                self.set_compact_mode(self._compact_mode)
+                self._sync_parent_task_data({"hidden": new_hidden})
+                self._refresh_parent_widget_state()
+                self._notify_filter_state_changed()
+        except Exception:
+            pass
+
+    def _on_done_toggled(self, checked: bool) -> None:
+        if self._task_id is None:
+            return
+        current_status = (self._data or {}).get("status")
+        if checked and current_status == "done":
+            return
+        if (not checked) and current_status != "done":
+            return
+        if checked and current_status not in (None, "", "done"):
+            self._last_non_done_status = current_status
+        new_status = "done" if checked else self._fallback_undo_status()
+        try:
+            updated = self._api.update_task(self._task_id, status=new_status)
+            self._apply_updated_task(updated, flash_done=checked)
+        except Exception:
+            if hasattr(self, "check_done_task") and self.check_done_task:
+                blocker = QSignalBlocker(self.check_done_task)
+                self.check_done_task.setChecked(current_status == "done")
+                del blocker
+
     def _on_status_action(self, action: QAction):
         if self._task_id is None:
             return
@@ -631,14 +806,11 @@ class TaskWidget(QWidget):
         prev_value = (self._data or {}).get("status", None)
         try:
             updated = self._api.update_task(self._task_id, status=new_value)
-            self.update_from_data(updated)
-            self._sync_parent_task_data(updated)
-            self._notify_filter_state_changed()
-        except Exception as e:
-            if prev_value is not None:
+            self._apply_updated_task(updated)
+        except Exception:
+            if prev_value is not None and self.btn_status:
                 self.btn_status.setText(self._status_label(prev_value))
 
-    # NEW: priority flow (menu, same pattern as status)
     def _on_priority_action(self, action: QAction):
         if self._task_id is None:
             return
@@ -649,14 +821,11 @@ class TaskWidget(QWidget):
         prev_priority = (self._data or {}).get("priority", None)
         try:
             updated = self._api.update_task(self._task_id, priority=int(new_priority))
-            self.update_from_data(updated)
-            self._sync_parent_task_data(updated)
-            self._notify_filter_state_changed()
-        except Exception as e:
+            self._apply_updated_task(updated)
+        except Exception:
             if prev_priority is not None and self.btn_priority:
                 self.btn_priority.setText(self._priority_label(prev_priority))
 
-    # NEW: budget flow (dialog, same pattern as title/notes)
     def _on_budget_hours_clicked(self):
         if self._task_id is None:
             return
@@ -680,14 +849,11 @@ class TaskWidget(QWidget):
             prev_hours = (self._data or {}).get("budget_hours", None)
             try:
                 updated = self._api.update_task(self._task_id, budget_hours=new_hours)
-                self.update_from_data(updated)
-                self._sync_parent_task_data(updated)
-                self._notify_filter_state_changed()
-            except Exception as e:
+                self._apply_updated_task(updated)
+            except Exception:
                 if self.btn_budget_hours:
                     self.btn_budget_hours.setText(self._format_hours(prev_hours))
 
-    # ----- assign flow -----
     def _on_assign_clicked(self):
         self._artist_menu.clear()
 
@@ -704,7 +870,7 @@ class TaskWidget(QWidget):
                 act = QAction(label, self._artist_menu)
                 act.setData(u.get("id"))
                 self._artist_menu.addAction(act)
-        except Exception as e:
+        except Exception:
             err = QAction("Failed to load users", self._artist_menu)
             err.setEnabled(False)
             self._artist_menu.addAction(err)
@@ -718,53 +884,61 @@ class TaskWidget(QWidget):
         prev_artist_id = (self._data or {}).get("artist", None)
         try:
             updated = self._api.update_task(self._task_id, artist=new_artist_id)
-            self.update_from_data(updated)
-            self._sync_parent_task_data(updated)
-            self._notify_filter_state_changed()
-        except Exception as e:
-            self.btn_assigned.setText(self._artist_label(prev_artist_id))
+            self._apply_updated_task(updated)
+        except Exception:
+            if self.btn_assigned:
+                self.btn_assigned.setText(self._artist_label(prev_artist_id))
 
-    # ----- render -----
     def update_from_data(self, task_data: dict):
-        # NEW: keep latest task data for title/notes fallback and rollbacks
         task_data = task_data or {}
         self._data = task_data
 
         title = task_data.get("title") or ""
-        notes = task_data.get("notes") or "No notes"
+        notes = str(task_data.get("notes") or "")
         status_value = task_data.get("status")
         artist_id = task_data.get("artist")
-
-        # NEW: fetch new fields
         priority_value = task_data.get("priority", 5)
         budget_hours_value = task_data.get("budget_hours", 0)
 
-        self.btn_task_title.setText(title)
-        self.btn_notes.setText(notes)
+        if status_value and status_value != "done":
+            self._last_non_done_status = status_value
 
-        if task_data.get("hidden") == True:
-            self.btn_hide_task.setText("Unhide")
-        else:
-            self.btn_hide_task.setText("Hide")
+        if hasattr(self, "btn_task_title") and self.btn_task_title:
+            self.btn_task_title.setText(title)
+        if hasattr(self, "btn_notes") and self.btn_notes:
+            if self._is_checklist_presentation():
+                self.btn_notes.setText("Note")
+            else:
+                self.btn_notes.setText(notes or "No notes")
+        if hasattr(self, "edit_notes_inline") and self.edit_notes_inline:
+            self._set_inline_notes_text(notes)
+            self.edit_notes_inline.setToolTip(notes or "Add note")
 
-        self.btn_status.setText(self._status_label(status_value))
+        if hasattr(self, "btn_hide_task") and self.btn_hide_task:
+            self.btn_hide_task.setText("Unhide" if task_data.get("hidden") else "Hide")
 
-        status_prop = status_value if status_value else "unassigned"
-        self.btn_status.setProperty("status", status_prop)
-        self.btn_status.style().unpolish(self.btn_status)
-        self.btn_status.style().polish(self.btn_status)
+        if self.btn_status:
+            self.btn_status.setText(self._status_label(status_value))
+            status_prop = status_value if status_value else "unassigned"
+            self.btn_status.setProperty("status", status_prop)
+            self.btn_status.style().unpolish(self.btn_status)
+            self.btn_status.style().polish(self.btn_status)
 
-        if hasattr(self, "btn_assigned") and self.btn_assigned:
+        if self.btn_assigned:
             self.btn_assigned.setText(self._artist_label(artist_id))
         elif hasattr(self, "label_assigned") and self.label_assigned:
             self.label_assigned.setText(self._artist_label(artist_id))
 
-        # NEW: update button text
-        if hasattr(self, "btn_priority") and self.btn_priority:
+        if self.btn_priority:
             self.btn_priority.setText(self._priority_label(priority_value))
 
-        if hasattr(self, "btn_budget_hours") and self.btn_budget_hours:
+        if self.btn_budget_hours:
             self.btn_budget_hours.setText(self._format_hours(budget_hours_value))
+
+        if hasattr(self, "check_done_task") and self.check_done_task:
+            blocker = QSignalBlocker(self.check_done_task)
+            self.check_done_task.setChecked(status_value == "done")
+            del blocker
 
         self.set_compact_mode(self._compact_mode)
 
@@ -783,32 +957,46 @@ class TaskWidget(QWidget):
             prev_title = current_title
             try:
                 updated = self._api.update_task(self._task_id, title=new_title)
-                self.update_from_data(updated)
-                self._sync_parent_task_data(updated)
-                self._notify_filter_state_changed()
-            except Exception as e:
+                self._apply_updated_task(updated)
+            except Exception:
                 self.btn_task_title.setText(prev_title)
 
     def _on_notes_clicked(self):
         if self._task_id is None:
             return
 
-        current_note = (self._data or {}).get("notes") or self.btn_notes.text() or ""
+        current_note = (self._data or {}).get("notes") or ""
 
         dlg = PlainTextEditDialog(self, title="Edit notes", text=current_note)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             new_note = dlg.value().strip()
-            if not new_note or new_note == current_note:
+            if new_note == current_note:
                 return
 
             prev_note = current_note
             try:
                 updated = self._api.update_task(self._task_id, notes=new_note)
-                self.update_from_data(updated)
-                self._sync_parent_task_data(updated)
-                self._notify_filter_state_changed()
-            except Exception as e:
-                self.btn_notes.setText(prev_note)
+                self._apply_updated_task(updated)
+            except Exception:
+                if hasattr(self, "btn_notes") and self.btn_notes and not self._is_checklist_presentation():
+                    self.btn_notes.setText(prev_note or "No notes")
+
+    def _on_inline_notes_edit_finished(self) -> None:
+        if self._task_id is None:
+            return
+        if not (hasattr(self, "edit_notes_inline") and self.edit_notes_inline):
+            return
+
+        current_note = self._inline_notes_display_text((self._data or {}).get("notes") or "")
+        new_note = self.edit_notes_inline.text().strip()
+        if new_note == current_note:
+            return
+
+        try:
+            updated = self._api.update_task(self._task_id, notes=new_note)
+            self._apply_updated_task(updated)
+        except Exception:
+            self._set_inline_notes_text(current_note)
 
 class ShotCard(QWidget):
     # Color code mapping - centralized for easy maintenance
@@ -821,7 +1009,7 @@ class ShotCard(QWidget):
         "None": "#333333"       # Default/no color
     }
     
-    def __init__(self, data=None, parent=None):
+    def __init__(self, data=None, parent=None, task_style="card"):
         super().__init__(parent)
         data = data or {}
         self.data = data
@@ -840,6 +1028,7 @@ class ShotCard(QWidget):
         self._current_thumbnail_url = None
         self._thumbnails_enabled = bool(THUMBNAILS_ENABLED)
         self._compact_mode = False
+        self._task_style = _normalize_task_style(task_style)
         self._task_render_state = {}
         self._task_widgets_by_id = {}
         self._visible_task_ids = []
@@ -940,8 +1129,7 @@ class ShotCard(QWidget):
         self._set_render_button_text()
         self.btn_latest_render.clicked.connect(self._on_push_to_dvr_clicked)  # Use new handler 
 
-        # Replace the frame_tasks layout with FlowLayout for responsive grid
-        self._setup_flow_layout()
+        self._set_task_layout_mode(self._task_style)
 
         # Set up automatic file polling
         self._setup_nk_polling()
@@ -1405,6 +1593,30 @@ class ShotCard(QWidget):
         except (TypeError, ValueError):
             return task_id
 
+    def _task_widget_presentation(self) -> str:
+        return "checklist" if getattr(self, "_task_style", "card") == "checklist" else "card"
+
+    def _display_task_ids(self) -> list:
+        ordered_ids = []
+        if getattr(self, "_task_style", "card") != "checklist":
+            for task in self.data.get("tasks", []) or []:
+                task_id = self._normalize_task_id(task.get("id"))
+                if task_id is not None:
+                    ordered_ids.append(task_id)
+            return ordered_ids
+
+        active_ids = []
+        done_ids = []
+        for task in self.data.get("tasks", []) or []:
+            task_id = self._normalize_task_id(task.get("id"))
+            if task_id is None:
+                continue
+            if task.get("status") == "done":
+                done_ids.append(task_id)
+            else:
+                active_ids.append(task_id)
+        return active_ids + done_ids
+
     def _ensure_task_cache_state(self) -> None:
         if not hasattr(self, "_task_render_state"):
             self._task_render_state = {}
@@ -1494,6 +1706,9 @@ class ShotCard(QWidget):
             if task_data is None:
                 self._remove_task_widget(task_id)
                 continue
+            if getattr(widget, "_presentation", "card") != self._task_widget_presentation():
+                self._rebuild_loaded_task_widgets()
+                return
             widget.update_from_data(task_data)
             widget.set_compact_mode(self._compact_mode)
         self._reorder_loaded_task_widgets()
@@ -1505,8 +1720,7 @@ class ShotCard(QWidget):
         if layout is None:
             return
         desired_order = []
-        for task in self.data.get("tasks", []) or []:
-            task_id = self._normalize_task_id(task.get("id"))
+        for task_id in self._display_task_ids():
             if task_id is None or task_id not in self._task_widgets_by_id:
                 continue
             desired_order.append(f"task-{task_id}")
@@ -1570,7 +1784,7 @@ class ShotCard(QWidget):
             if task_data is None:
                 continue
             with project_load_profiler.measure_installed_work("task_card_create"):
-                task_widget = TaskWidget(task_data)
+                task_widget = TaskWidget(task_data, presentation=self._task_widget_presentation())
             task_widget.set_compact_mode(self._compact_mode)
             layout.addWidget(task_widget)
             self._task_widgets_by_id[normalized_id] = task_widget
@@ -1579,6 +1793,66 @@ class ShotCard(QWidget):
             self._reorder_loaded_task_widgets()
             self._apply_loaded_task_visibility()
         return created_ids
+
+    def _set_task_layout_mode(self, task_style: str) -> None:
+        normalized_style = _normalize_task_style(task_style)
+        existing_widgets = []
+        old_layout = self.frame_tasks.layout()
+        if old_layout is not None:
+            while old_layout.count():
+                item = old_layout.takeAt(0)
+                widget = item.widget()
+                if widget is not None:
+                    widget.setParent(None)
+                    existing_widgets.append(widget)
+            QWidget().setLayout(old_layout)
+
+        if normalized_style == "checklist":
+            layout = QVBoxLayout()
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.setSpacing(4 if self._compact_mode else 6)
+        else:
+            layout = FlowLayout(self.frame_tasks, margin=0, h_spacing=10, v_spacing=10)
+
+        self.frame_tasks.setLayout(layout)
+        for widget in existing_widgets:
+            layout.addWidget(widget)
+
+    def _rebuild_loaded_task_widgets(self) -> None:
+        self._ensure_task_cache_state()
+        layout = self.frame_tasks.layout()
+        if layout is None:
+            return
+        tasks_by_id = self._task_data_map()
+        current_widgets = list(self._task_widgets_by_id.items())
+        self._task_widgets_by_id = {}
+        for task_id, widget in current_widgets:
+            task_data = tasks_by_id.get(task_id)
+            if task_data is None:
+                layout.removeWidget(widget)
+                widget.setParent(None)
+                widget.deleteLater()
+                continue
+            is_visible = widget.isVisible()
+            layout.removeWidget(widget)
+            widget.setParent(None)
+            widget.deleteLater()
+            replacement = TaskWidget(task_data, presentation=self._task_widget_presentation())
+            replacement.setVisible(is_visible)
+            replacement.set_compact_mode(self._compact_mode)
+            layout.addWidget(replacement)
+            self._task_widgets_by_id[task_id] = replacement
+        self._reorder_loaded_task_widgets()
+        self._apply_loaded_task_visibility()
+
+    def set_task_style(self, task_style: str) -> None:
+        normalized_style = _normalize_task_style(task_style)
+        if normalized_style == getattr(self, "_task_style", "card"):
+            return
+        self._task_style = normalized_style
+        self._set_task_layout_mode(self._task_style)
+        self._rebuild_loaded_task_widgets()
+        self.set_compact_mode(self._compact_mode)
 
     def set_compact_mode(self, enabled: bool) -> None:
         self._compact_mode = bool(enabled)
@@ -1604,7 +1878,10 @@ class ShotCard(QWidget):
             )
             tasks_layout = self.frame_tasks.layout()
             if tasks_layout is not None:
-                tasks_layout.setSpacing(6 if self._compact_mode else 10)
+                if getattr(self, "_task_style", "card") == "checklist":
+                    tasks_layout.setSpacing(4 if self._compact_mode else 6)
+                else:
+                    tasks_layout.setSpacing(6 if self._compact_mode else 10)
                 for i in range(tasks_layout.count()):
                     item = tasks_layout.itemAt(i)
                     child = item.widget() if item else None
@@ -1751,25 +2028,8 @@ class ShotCard(QWidget):
         self.set_compact_mode(self._compact_mode)
         
     def _setup_flow_layout(self):
-        """Replace the existing layout in frame_tasks with a FlowLayout for responsive grid."""
-        # Get the old layout
-        old_layout = self.frame_tasks.layout()
-        
-        # If there's an existing layout, remove it
-        if old_layout is not None:
-            # Remove all widgets from old layout first
-            while old_layout.count():
-                item = old_layout.takeAt(0)
-                if item.widget():
-                    item.widget().setParent(None)  # Don't delete, just unparent
-            
-            # Delete the old layout
-            QWidget().setLayout(old_layout)
-        
-        # Create and set new FlowLayout
-        # h_spacing=10, v_spacing=10 gives a nice grid gap
-        flow_layout = FlowLayout(self.frame_tasks, margin=0, h_spacing=10, v_spacing=10)
-        self.frame_tasks.setLayout(flow_layout)
+        """Backwards-compatible alias for the classic task-card layout."""
+        self._set_task_layout_mode("card")
     
     def _setup_nk_polling(self):
         """Poll for new .nk files every 10 seconds (with staggered start)."""
@@ -2963,6 +3223,7 @@ class TimelineFrame(QWidget):
         layout_mode="list",
         card_spacing=8,
         compact_mode=False,
+        task_style="card",
         nuke_open_handler=None,
     ):
         super().__init__()
@@ -2971,6 +3232,7 @@ class TimelineFrame(QWidget):
         self._last_timeline = timeline  # keep a copy for refreshes
         self._layout_mode = _normalize_layout_mode(layout_mode)
         self._compact_mode = bool(compact_mode)
+        self._task_style = _normalize_task_style(task_style)
         self._nuke_open_handler = nuke_open_handler
         self.setObjectName(f"timeline-{timeline.get('id')}")
 
@@ -3038,11 +3300,12 @@ class TimelineFrame(QWidget):
             if name in existing:
                 # Update existing widget data
                 existing[name].update_from_data(shot)
+                existing[name].set_task_style(self._task_style)
                 if self._nuke_open_handler is not None:
                     existing[name].set_nuke_open_handler(self._nuke_open_handler)
             else:
                 # Create new widget
-                card = ShotCard(shot)
+                card = ShotCard(shot, task_style=self._task_style)
                 card.setObjectName(name)
                 if self._nuke_open_handler is not None:
                     card.set_nuke_open_handler(self._nuke_open_handler)
@@ -3106,6 +3369,16 @@ class TimelineFrame(QWidget):
             self.shots_layout.addItem(spacer)
 
         self._layout_mode = new_mode
+
+    def set_task_style(self, task_style: str) -> None:
+        self._task_style = _normalize_task_style(task_style)
+        for i in range(self.shots_layout.count()):
+            item = self.shots_layout.itemAt(i)
+            if not item:
+                continue
+            card = item.widget()
+            if isinstance(card, ShotCard):
+                card.set_task_style(self._task_style)
 
     def set_compact_mode(self, enabled: bool) -> None:
         self._compact_mode = bool(enabled)

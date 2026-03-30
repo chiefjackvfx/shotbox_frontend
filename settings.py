@@ -68,6 +68,7 @@ DEFAULT_SETTINGS = {
     # UI density settings
     "shots_layout_mode": "list",  # list/grid
     "compact_view_enabled": False,
+    "nukedash_task_style": "card",  # card/checklist
     "preview_thumbnail_size": "Medium",  # NoThumb/Tiny/Small/Medium/Large
     "card_spacing": 8,  # px between shot cards
     "row_height": 0,  # px, 0 = auto
@@ -500,6 +501,11 @@ class SettingsPage(QWidget):
         self.preview_size_combo.addItems(["NoThumb", "Tiny", "Small", "Medium", "Large"])
         density_layout.addRow("Preview Size:", self.preview_size_combo)
 
+        self.nukedash_task_style_combo = NoScrollComboBox()
+        self.nukedash_task_style_combo.addItem("Classic Cards", "card")
+        self.nukedash_task_style_combo.addItem("Checklist Rows", "checklist")
+        density_layout.addRow("Task Style:", self.nukedash_task_style_combo)
+
         self.card_spacing_spin = NoScrollSpinBox()
         self.card_spacing_spin.setRange(0, 40)
         self.card_spacing_spin.setSuffix(" px")
@@ -847,6 +853,10 @@ class SettingsPage(QWidget):
         idx = self.preview_size_combo.findText(preview_size)
         if idx >= 0:
             self.preview_size_combo.setCurrentIndex(idx)
+        task_style = self._settings.get("nukedash_task_style", "card")
+        idx = self.nukedash_task_style_combo.findData(task_style)
+        if idx >= 0:
+            self.nukedash_task_style_combo.setCurrentIndex(idx)
         self.card_spacing_spin.setValue(self._settings.get("card_spacing", 8))
         self.row_height_spin.setValue(self._settings.get("row_height", 0))
         
@@ -991,6 +1001,11 @@ class SettingsPage(QWidget):
 
         # UI Density
         self._settings.set("preview_thumbnail_size", self.preview_size_combo.currentText(), save=False)
+        self._settings.set(
+            "nukedash_task_style",
+            self.nukedash_task_style_combo.currentData() or "card",
+            save=False,
+        )
         self._settings.set("card_spacing", self.card_spacing_spin.value(), save=False)
         self._settings.set("row_height", self.row_height_spin.value(), save=False)
         
@@ -1076,6 +1091,10 @@ class SettingsPage(QWidget):
                 self.shots_layout_combo.currentData() or "list"
             )
             self.settings_changed.emit("preview_thumbnail_size", self.preview_size_combo.currentText())
+            self.settings_changed.emit(
+                "nukedash_task_style",
+                self.nukedash_task_style_combo.currentData() or "card",
+            )
             self.settings_changed.emit("card_spacing", self.card_spacing_spin.value())
             self.settings_changed.emit("row_height", self.row_height_spin.value())
 

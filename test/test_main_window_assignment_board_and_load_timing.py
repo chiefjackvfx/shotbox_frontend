@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import importlib
 import os
 from pathlib import Path
@@ -281,6 +282,98 @@ class TimingHarness(QMainWindow):
         return
 
 
+class ImmediateChunkLoader:
+    def __init__(self):
+        self.tasks = []
+
+    def stop(self):
+        return
+
+    def start_loading(self, tasks, callback=None, batch_size=1):
+        self.tasks = list(tasks)
+        for task_item in self.tasks:
+            task = task_item[0] if isinstance(task_item, tuple) else task_item
+            task()
+
+
+class NullProfiler:
+    def measure_wall(self, *args, **kwargs):
+        return contextlib.nullcontext()
+
+    def measure_work(self, *args, **kwargs):
+        return contextlib.nullcontext()
+
+
+class MinimalLoadingShotCard(QWidget):
+    def __init__(self, data=None, parent=None, task_style="card"):
+        super().__init__(parent)
+        self.data = dict(data or {})
+        self.task_style = task_style
+        self.render_state = None
+        self.nuke_open_handler = None
+        self.compact_mode = False
+
+    def update_from_data(self, shot_data):
+        self.data = dict(shot_data or {})
+
+    def set_task_render_state(self, render_state):
+        self.render_state = dict(render_state or {})
+
+    def set_nuke_open_handler(self, handler):
+        self.nuke_open_handler = handler
+
+    def set_task_style(self, task_style):
+        self.task_style = task_style
+
+    def set_compact_mode(self, enabled):
+        self.compact_mode = bool(enabled)
+
+
+class ChunkedJobLoadHarness(QMainWindow):
+    _start_job_loading = page_nukedash.page_nukedash._start_job_loading
+    _count_sortable_tasks = page_nukedash.page_nukedash._count_sortable_tasks
+    _sort_shot_entries = page_nukedash.page_nukedash._sort_shot_entries
+
+    def __init__(self):
+        super().__init__()
+        central = QWidget(self)
+        layout = QVBoxLayout(central)
+        self.setCentralWidget(central)
+        self.timelines_tabs = QTabWidget(central)
+        layout.addWidget(self.timelines_tabs)
+
+        self._chunked_loader = ImmediateChunkLoader()
+        self._project_load_profiler = NullProfiler()
+        self._task_materialize_queue = []
+        self._active_job_id = None
+        self._card_spacing = 8
+        self._task_style = "card"
+        self._compact_view_enabled = False
+        self._row_height = 0
+        self.show_hidden_shots = False
+        self.show_hidden_tasks = False
+        self._timeline_widgets = {}
+        self._handle_nuke_open_request = None
+
+    def _reset_task_materialize_queue(self):
+        self._task_materialize_queue = []
+
+    def _update_assets_action_buttons(self, loading=False):
+        return
+
+    def _effective_shots_layout_mode(self):
+        return "grid"
+
+    def _current_task_render_state(self):
+        return {}
+
+    def _filters_enabled(self):
+        return False
+
+    def _on_job_load_complete(self):
+        return
+
+
 def build_assignment_sync_harness(main_module):
     job_one = {"id": 1, "title": "Job A", "timelines": [{"id": 101, "title": "TL 1"}]}
     job_two = {
@@ -554,6 +647,50 @@ class NukeDashLoadTimingTests(unittest.TestCase):
         ]
         self.assertEqual(len(header_lines), 1)
         self.assertIn("reason=boom", header_lines[0])
+
+
+class NukeDashChunkedJobLoadTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_start_job_loading_creates_all_shot_cards_in_initial_chunked_pass(self):
+        harness = ChunkedJobLoadHarness()
+        job_data = {
+            "id": 101,
+            "title": "Job A",
+            "timelines": [
+                {
+                    "id": 501,
+                    "title": "Timeline 1",
+                    "shots": [
+                        {"id": 11, "title": "Shot 11", "tasks": []},
+                        {"id": 12, "title": "Shot 12", "tasks": []},
+                        {"id": 13, "title": "Shot 13", "tasks": []},
+                    ],
+                }
+            ],
+        }
+        try:
+            with mock.patch.object(page_nukedash.widgets, "ShotCard", MinimalLoadingShotCard):
+                harness._start_job_loading(job_data)
+
+            self.assertEqual(harness.timelines_tabs.count(), 1)
+            timeline_widget = harness.timelines_tabs.widget(0)
+            self.assertIsNotNone(timeline_widget)
+
+            shot_names = []
+            for index in range(timeline_widget.shots_layout.count()):
+                item = timeline_widget.shots_layout.itemAt(index)
+                widget = item.widget() if item else None
+                if widget is not None:
+                    shot_names.append(widget.objectName())
+
+            self.assertEqual(shot_names, ["shot-11", "shot-12", "shot-13"])
+        finally:
+            harness.close()
+            harness.deleteLater()
+            self.app.processEvents()
 
 
 if __name__ == "__main__":

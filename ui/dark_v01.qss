@@ -443,6 +443,135 @@ QPushButton#btn_delete_task:hover {
     border-color: #D14D4D;
 }
 
+QCheckBox#task_done_toggle {
+    spacing: 0px;
+    padding: 0px;
+    margin: 0px;
+}
+
+QCheckBox#task_done_toggle::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #4B5563;
+    border-radius: 7px;
+    background-color: #141619;
+}
+
+QCheckBox#task_done_toggle::indicator:hover {
+    border-color: #81c784;
+}
+
+QCheckBox#task_done_toggle::indicator:checked {
+    background-color: #678542;
+    border-color: #81c784;
+}
+
+QFrame#task_frame[presentation="checklist"] {
+    background-color: #1B2026;
+    border: 1px solid #2F3542;
+    border-radius: 3px;
+}
+
+QFrame#task_frame[presentation="checklist"]:hover {
+    background-color: #20262E;
+    border-color: #4B5563;
+}
+
+QFrame#task_frame[presentation="checklist"][done="true"] {
+    background-color: #171B20;
+    border-color: #252C35;
+}
+
+QFrame#task_frame[presentation="checklist"][flash="true"] {
+    background-color: #243126;
+    border-color: #81c784;
+}
+
+QPushButton#btn_task_title[presentation="checklist"] {
+    color: #F3F4F6;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 0px 2px;
+    text-align: left;
+    letter-spacing: 0px;
+}
+
+QPushButton#btn_task_title[presentation="checklist"][done="true"] {
+    color: #A8B0BB;
+}
+
+QLineEdit#edit_task_notes_inline[presentation="checklist"] {
+    background-color: #15191E;
+    color: #C9D1DA;
+    border: 1px solid #2F3542;
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-size: 10px;
+    min-height: 18px;
+}
+
+QLineEdit#edit_task_notes_inline[presentation="checklist"]:focus {
+    border-color: #FF6B35;
+    background-color: #20262E;
+}
+
+QLineEdit#edit_task_notes_inline[presentation="checklist"][done="true"] {
+    color: #9CA3AF;
+    background-color: #14171B;
+    border-color: #252C35;
+}
+
+QPushButton#btn_status[presentation="checklist"],
+QPushButton#btn_assigned[presentation="checklist"],
+QPushButton#btn_priority[presentation="checklist"],
+QPushButton#btn_budget_hours[presentation="checklist"] {
+    min-height: 18px;
+    padding: 2px 6px;
+    font-size: 8px;
+}
+
+QPushButton#btn_assigned[presentation="checklist"][done="true"],
+QPushButton#btn_priority[presentation="checklist"][done="true"],
+QPushButton#btn_budget_hours[presentation="checklist"][done="true"] {
+    background-color: #171B20;
+    border-color: #252C35;
+    color: #6B7280;
+}
+
+QPushButton#btn_notes[presentation="checklist"] {
+    background-color: transparent;
+    color: #9CA3AF;
+    border: 1px solid #2F3542;
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-size: 8px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+QPushButton#btn_notes[presentation="checklist"]:hover {
+    border-color: #FF6B35;
+    color: #FFFFFF;
+    background-color: #252931;
+}
+
+QPushButton#btn_notes[presentation="checklist"][done="true"] {
+    color: #6B7280;
+    border-color: #252C35;
+}
+
+QPushButton#btn_hide_task[presentation="checklist"],
+QPushButton#btn_delete_task[presentation="checklist"] {
+    min-width: 18px;
+    max-width: 18px;
+    min-height: 18px;
+    max-height: 18px;
+    padding: 0px;
+    font-size: 8px;
+    border-width: 1px;
+}
+
 /* === COLOR BUTTONS === */
 QPushButton#btn_colour_none {
     background-color: #6B7280;
@@ -1392,6 +1521,10 @@ QFrame#task_frame[compact="true"] {
     border-width: 1px;
 }
 
+QFrame#task_frame[presentation="checklist"][compact="true"] {
+    border-width: 1px;
+}
+
 QPushButton#btn_task_title[compact="true"] {
     font-size: 9px;
     padding: 0 1px;
@@ -1404,5 +1537,23 @@ QPushButton#btn_budget_hours[compact="true"],
 QPushButton#btn_hide_task[compact="true"] {
     padding: 2px 4px;
     font-size: 8px;
+    min-height: 16px;
+}
+
+QPushButton#btn_task_title[presentation="checklist"][compact="true"] {
+    font-size: 10px;
+    padding: 0 1px;
+}
+
+QPushButton#btn_status[presentation="checklist"][compact="true"],
+QPushButton#btn_assigned[presentation="checklist"][compact="true"],
+QPushButton#btn_priority[presentation="checklist"][compact="true"],
+QPushButton#btn_budget_hours[presentation="checklist"][compact="true"],
+QPushButton#btn_notes[presentation="checklist"][compact="true"],
+QLineEdit#edit_task_notes_inline[presentation="checklist"][compact="true"],
+QPushButton#btn_hide_task[presentation="checklist"][compact="true"],
+QPushButton#btn_delete_task[presentation="checklist"][compact="true"] {
+    padding: 1px 4px;
+    font-size: 7px;
     min-height: 16px;
 }

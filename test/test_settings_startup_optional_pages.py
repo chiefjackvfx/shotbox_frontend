@@ -158,6 +158,30 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             page.deleteLater()
             self.app.processEvents()
 
+    def test_nukedash_task_style_combo_loads_and_saves(self):
+        manager = InMemorySettingsManager({"nukedash_task_style": "checklist"})
+
+        with mock.patch.object(settings.SettingsPage, "_load_django_users", lambda self: None), \
+            mock.patch.object(settings.SettingsPage, "_refresh_update_panel", lambda self: None), \
+            mock.patch.object(settings.QMessageBox, "information", lambda *args, **kwargs: None):
+            page = settings.SettingsPage(settings_manager=manager)
+
+        try:
+            self.assertEqual(page.nukedash_task_style_combo.currentData(), "checklist")
+
+            page.nukedash_task_style_combo.setCurrentIndex(
+                page.nukedash_task_style_combo.findData("card")
+            )
+
+            with mock.patch.object(settings.QMessageBox, "information", lambda *args, **kwargs: None):
+                page._save_all_settings()
+
+            self.assertEqual(manager.get("nukedash_task_style"), "card")
+        finally:
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
     def test_threede_executable_field_loads_and_saves(self):
         manager = InMemorySettingsManager(
             {"threede_exe_path": r"C:\Users\Giger\Documents\3DE4_win64_r8.0v2\bin\3DE4.exe"}

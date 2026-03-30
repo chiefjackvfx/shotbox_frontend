@@ -8,7 +8,7 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
             <split size="1619"/>
             <splitter orientation="1">
                 <split size="1619"/>
-                <dock id="" activePageId="DAG.1" focus="true">
+                <dock id="" activePageId="DAG.1">
                     <page id="DAG.1"/>
                 </dock>
             </splitter>
@@ -20,7 +20,7 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
                     <page id="uk.co.thefoundry.backgroundrenderview.1"/>
                 </dock>
                 <split size="687"/>
-                <dock id="" activePageId="Viewer.1">
+                <dock id="" hideTitles="1" activePageId="Viewer.1">
                     <page id="Viewer.1"/>
                 </dock>
             </splitter>
@@ -119,13 +119,14 @@ Retime {
  xpos 303
  ypos 221
 }
+set N17646f90 [stack 0]
 Group {
  name MS_slate_overlay
  tile_color 0xefb500ff
  note_font "Verdana Bold Italic"
- selected true
  xpos 303
  ypos 274
+ show_group_view true
  addUserKnob {20 settings t "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
  addUserKnob {26 text l "" +STARTLINE T "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
  addUserKnob {26 ""}
@@ -183,7 +184,7 @@ Group {
   xpos -728
   ypos -1049
  }
-set N12256b20 [stack 0]
+set N13041f40 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -204,7 +205,7 @@ set N12256b20 [stack 0]
   xpos -1089
   ypos -1047
  }
-set N122b15f0 [stack 0]
+set N130362e0 [stack 0]
  Dot {
   name Dot13
   xpos -1808
@@ -225,7 +226,7 @@ set N122b15f0 [stack 0]
   xpos -1840
   ypos -576
  }
-set N1234eac0 [stack 0]
+set N12d5e5a0 [stack 0]
  AddTimeCode {
   frame {{"\[value startfr]"}}
   useFrame true
@@ -233,7 +234,7 @@ set N1234eac0 [stack 0]
   xpos -1840
   ypos -410
  }
-set N123d59e0 [stack 0]
+set N12d67150 [stack 0]
  Dot {
   name Dot14
   xpos -2527
@@ -244,7 +245,7 @@ set N123d59e0 [stack 0]
   xpos -2527
   ypos 793
  }
-set N12354e90 [stack 0]
+set N127ee5e0 [stack 0]
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -289,7 +290,7 @@ set N12354e90 [stack 0]
   xpos -2380
   ypos 864
  }
-push $N12354e90
+push $N127ee5e0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -331,10 +332,11 @@ push $N12354e90
   name Text11
   label "duration time\n"
   note_font "Verdana Bold"
+  selected true
   xpos -2380
   ypos 784
  }
-push $N12354e90
+push $N127ee5e0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -386,25 +388,25 @@ push $N12354e90
   xpos -2200
   ypos 790
  }
-push $N1234eac0
+push $N12d5e5a0
  Dot {
   name Dot3
   xpos -1987
   ypos -567
  }
-set N11ea5060 [stack 0]
+set N130c94f0 [stack 0]
  Dot {
   name Dot6
   xpos -2168
   ypos -567
  }
-set N1267ca30 [stack 0]
+set N12ede310 [stack 0]
  Dot {
   name Dot7
   xpos -2347
   ypos -567
  }
-set N12677540 [stack 0]
+set N1277c760 [stack 0]
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -417,25 +419,25 @@ set N12677540 [stack 0]
   xpos -2740
   ypos -575
  }
-set N12688130 [stack 0]
+set N12ec7690 [stack 0]
  Dot {
   name Dot8
   xpos -2888
   ypos -567
  }
-set N118f7460 [stack 0]
+set N130bd1e0 [stack 0]
  Dot {
   name Dot9
   xpos -3067
   ypos -567
  }
-set N126304e0 [stack 0]
+set N130b48e0 [stack 0]
  Dot {
   name Dot10
   xpos -3247
   ypos -567
  }
-set N12646200 [stack 0]
+set N130da610 [stack 0]
  Dot {
   name Dot11
   xpos -3428
@@ -485,7 +487,7 @@ set N12646200 [stack 0]
   xpos -3460
   ypos 624
  }
-push $N12646200
+push $N130da610
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -529,7 +531,7 @@ push $N12646200
   xpos -3280
   ypos 544
  }
-push $N126304e0
+push $N130b48e0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -572,7 +574,7 @@ push $N126304e0
   xpos -3100
   ypos 464
  }
-push $N118f7460
+push $N130bd1e0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -616,7 +618,7 @@ push $N118f7460
   xpos -2920
   ypos 384
  }
-push $N12688130
+push $N12ec7690
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -661,7 +663,7 @@ push $N12688130
   xpos -2740
   ypos 304
  }
-push $N12677540
+push $N1277c760
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -705,7 +707,7 @@ push $N12677540
   xpos -2381
   ypos 224
  }
-push $N1267ca30
+push $N12ede310
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -747,7 +749,7 @@ push $N1267ca30
   xpos -2200
   ypos 144
  }
-push $N11ea5060
+push $N130c94f0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -792,7 +794,7 @@ push $N11ea5060
   xpos -2021
   ypos 64
  }
-push $N123d59e0
+push $N12d67150
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -837,7 +839,7 @@ push $N123d59e0
   xpos -1840
   ypos -16
  }
-push $N122b15f0
+push $N130362e0
  NoOp {
   name utility
   xpos -1120
@@ -848,7 +850,7 @@ push $N122b15f0
   addUserKnob {7 addres l "add res" R -500 500}
   addres {{parent.slateextend*2}}
  }
-set N1272dc80 [stack 0]
+set N12e31640 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -876,7 +878,7 @@ set N1272dc80 [stack 0]
   xpos -1480
   ypos -734
  }
-push $N1272dc80
+push $N12e31640
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -889,7 +891,7 @@ push $N1272dc80
   xpos -1120
   ypos -736
  }
-set N11d9d7c0 [stack 0]
+set N127d2760 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -922,8 +924,8 @@ set N11d9d7c0 [stack 0]
   xpos -1447
   ypos -487
  }
-set N122bba00 [stack 0]
-push $N122bba00
+set N12d07f20 [stack 0]
+push $N12d07f20
  Dilate {
   size {{parent.linewidth}}
   name Dilate1
@@ -942,7 +944,7 @@ push $N122bba00
   xpos -1448
   ypos -247
  }
-push $N11d9d7c0
+push $N127d2760
  Merge2 {
   inputs 2
   name Merge5
@@ -1056,7 +1058,7 @@ push $N11d9d7c0
   xpos -1120
   ypos 1189
  }
-push $N12256b20
+push $N13041f40
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -1088,7 +1090,7 @@ push $N12256b20
   xpos -2082
   ypos 826
  }
-push $N123d59e0
+push $N12d67150
  NoOp {
   name readtime
   xpos -2740
@@ -1162,4 +1164,14 @@ Write {
  name WriteCompMP4
  xpos 303
  ypos 339
+}
+push $N17646f90
+Viewer {
+ frame_range 1001-1100
+ fps 25
+ viewerProcess "sRGB (ACES)"
+ monitorOutNDISenderName "NukeX - preview_template_v001 - Viewer1"
+ name Viewer1
+ xpos 303
+ ypos 308
 }

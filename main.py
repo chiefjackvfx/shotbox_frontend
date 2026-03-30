@@ -359,6 +359,7 @@ class MainWindow(QMainWindow):
         # UI density defaults for nukedash
         shots_layout_mode = self._settings_manager.get("shots_layout_mode", "list")
         compact_view_enabled = bool(self._settings_manager.get("compact_view_enabled", False))
+        task_style = self._settings_manager.get("nukedash_task_style", "card")
         preview_size = self._settings_manager.get("preview_thumbnail_size", "Medium")
         card_spacing = self._settings_manager.get("card_spacing", 8)
         row_height = self._settings_manager.get("row_height", 0)
@@ -367,6 +368,8 @@ class MainWindow(QMainWindow):
                 self.page_nukedash.checkBox_compact_view.setChecked(compact_view_enabled)
             if hasattr(self.page_nukedash, "apply_shots_layout_mode"):
                 self.page_nukedash.apply_shots_layout_mode(shots_layout_mode)
+            if hasattr(self.page_nukedash, "apply_task_style"):
+                self.page_nukedash.apply_task_style(task_style)
             self.page_nukedash.apply_ui_density_settings(
                 preview_size=preview_size,
                 card_spacing=card_spacing,
@@ -767,6 +770,10 @@ class MainWindow(QMainWindow):
         elif key == "compact_view_enabled":
             if hasattr(self, "page_nukedash") and hasattr(self.page_nukedash, "checkBox_compact_view"):
                 self.page_nukedash.checkBox_compact_view.setChecked(bool(value))
+
+        elif key == "nukedash_task_style":
+            if hasattr(self, "page_nukedash") and hasattr(self.page_nukedash, "apply_task_style"):
+                self.page_nukedash.apply_task_style(value)
 
         elif key == "startup_tab":
             if isinstance(value, int):

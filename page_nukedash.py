@@ -257,6 +257,10 @@ def resolve_effective_shots_layout_mode(
     return normalized
 
 
+def _normalize_task_style(style: str) -> str:
+    return "checklist" if str(style).lower() == "checklist" else "card"
+
+
 class page_nukedash(QMainWindow):
     jobs_data_updated = pyqtSignal(list)
     active_job_changed = pyqtSignal(dict)
@@ -407,6 +411,9 @@ class page_nukedash(QMainWindow):
         self._settings_manager = get_settings_manager()
         saved_layout_mode = self._settings_manager.get("shots_layout_mode", "list")
         self._shots_layout_mode = "grid" if str(saved_layout_mode).lower() == "grid" else "list"
+        self._task_style = _normalize_task_style(
+            self._settings_manager.get("nukedash_task_style", "card")
+        )
         self._compact_view_enabled = False
         self._compact_auto_grid_breakpoint = 1200
         if hasattr(self, "checkBox_compact_view") and self.checkBox_compact_view:
@@ -2433,6 +2440,8 @@ class page_nukedash(QMainWindow):
                 continue
             if hasattr(widget, "set_layout_mode"):
                 widget.set_layout_mode(effective_mode, self._card_spacing)
+            if hasattr(widget, "set_task_style"):
+                widget.set_task_style(self._task_style)
             if hasattr(widget, "set_compact_mode"):
                 widget.set_compact_mode(self._compact_view_enabled)
             self._apply_density_to_timeline(widget)
@@ -2460,6 +2469,17 @@ class page_nukedash(QMainWindow):
 
         if self._compact_view_enabled:
             self._apply_compact_view_state()
+
+    def apply_task_style(self, style: str) -> None:
+        self._task_style = _normalize_task_style(style)
+        tabs = getattr(self, "timelines_tabs", None)
+        if tabs is None:
+            return
+        for i in range(tabs.count()):
+            widget = tabs.widget(i)
+            if widget and hasattr(widget, "set_task_style"):
+                widget.set_task_style(self._task_style)
+        self._apply_filters(force=True)
 
     def apply_shots_layout_mode(self, mode: str):
         """Switch between list and grid layouts for shot cards."""
@@ -2898,6 +2918,8 @@ class page_nukedash(QMainWindow):
                             widget.set_nuke_open_handler(self._handle_nuke_open_request)
                         if hasattr(widget, "set_layout_mode"):
                             widget.set_layout_mode(effective_layout_mode, self._card_spacing)
+                        if hasattr(widget, "set_task_style"):
+                            widget.set_task_style(self._task_style)
                         if hasattr(widget, "set_compact_mode"):
                             widget.set_compact_mode(self._compact_view_enabled)
                         # Clear existing shot cards
@@ -2919,6 +2941,7 @@ class page_nukedash(QMainWindow):
                         w._last_timeline = data
                         w._layout_mode = effective_layout_mode
                         w._compact_mode = self._compact_view_enabled
+                        w._task_style = self._task_style
                         w._nuke_open_handler = self._handle_nuke_open_request
                         w.setObjectName(n)
 
@@ -2987,17 +3010,20 @@ class page_nukedash(QMainWindow):
                             layout = timeline_widget.shots_layout
                             for i in range(layout.count()):
                                 item = layout.itemAt(i)
-                                if item and item.widget() and item.widget().objectName() == shot_name:
+                                card_widget = item.widget() if item else None
+                                if card_widget and card_widget.objectName() == shot_name:
                                     # Already exists, update it instead of creating duplicate
-                                    item.widget().update_from_data(shot_data)
-                                    if hasattr(item.widget(), "set_task_render_state"):
-                                        item.widget().set_task_render_state(render_state)
-                                    if hasattr(item.widget(), "set_nuke_open_handler"):
-                                        item.widget().set_nuke_open_handler(self._handle_nuke_open_request)
+                                    card_widget.update_from_data(shot_data)
+                                    if hasattr(card_widget, "set_task_render_state"):
+                                        card_widget.set_task_render_state(render_state)
+                                    if hasattr(card_widget, "set_nuke_open_handler"):
+                                        card_widget.set_nuke_open_handler(self._handle_nuke_open_request)
+                                    if hasattr(card_widget, "set_task_style"):
+                                        card_widget.set_task_style(self._task_style)
                                     return
 
                             with self._project_load_profiler.measure_work("shot_card_create"):
-                                card = widgets.ShotCard(shot_data)
+                                card = widgets.ShotCard(shot_data, task_style=self._task_style)
                             card.setObjectName(shot_name)
                             if hasattr(card, "set_task_render_state"):
                                 card.set_task_render_state(render_state)
@@ -3181,6 +3207,8 @@ class page_nukedash(QMainWindow):
                 w = existing[name]
                 if hasattr(w, "set_nuke_open_handler"):
                     w.set_nuke_open_handler(self._handle_nuke_open_request)
+                if hasattr(w, "set_task_style"):
+                    w.set_task_style(self._task_style)
                 if hasattr(w, "update_from_data"):
                     w.update_from_data(tl)
                 idx = tabs.indexOf(w)
@@ -3193,6 +3221,7 @@ class page_nukedash(QMainWindow):
                     layout_mode=effective_layout_mode,
                     card_spacing=self._card_spacing,
                     compact_mode=self._compact_view_enabled,
+                    task_style=self._task_style,
                     nuke_open_handler=self._handle_nuke_open_request,
                 )
                 w.setObjectName(name)
