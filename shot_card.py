@@ -244,6 +244,33 @@ def setup_shot_card_ui(widget):
     widget.horizontalLayout_4.addWidget(widget.btn_edit_shot_notes)
     
     widget.verticalLayout_3.addWidget(widget.frame_2)
+
+    # last conform row - sits directly under notes
+    widget.frame_last_conform = QFrame(widget.frame_4)
+    widget.frame_last_conform.setObjectName("frame_last_conform")
+    widget.frame_last_conform.setMaximumSize(QSize(16777215, 30))
+    widget.frame_last_conform.setFrameShape(QFrame.Shape.StyledPanel)
+    widget.frame_last_conform.setFrameShadow(QFrame.Shadow.Raised)
+
+    widget.horizontalLayout_last_conform = QHBoxLayout(widget.frame_last_conform)
+    widget.horizontalLayout_last_conform.setObjectName("horizontalLayout_last_conform")
+    widget.horizontalLayout_last_conform.setContentsMargins(0, 0, 0, 0)
+
+    widget.label_last_conform = QLabel(widget.frame_last_conform)
+    widget.label_last_conform.setObjectName("label_last_conform")
+    widget.label_last_conform.setText("None")
+
+    widget.horizontalLayout_last_conform.addWidget(widget.label_last_conform)
+
+    widget.horizontalSpacer_last_conform = QSpacerItem(
+        40,
+        20,
+        QSizePolicy.Policy.Expanding,
+        QSizePolicy.Policy.Minimum,
+    )
+    widget.horizontalLayout_last_conform.addItem(widget.horizontalSpacer_last_conform)
+
+    widget.verticalLayout_3.addWidget(widget.frame_last_conform)
     
     # shot_btns - action buttons row
     widget.shot_btns = QFrame(widget.frame_4)
@@ -280,12 +307,6 @@ def setup_shot_card_ui(widget):
 
     
     widget.horizontalLayout_3.addWidget(widget.btn_latest_render)
-
-    widget.label_last_conform = QLabel(widget.shot_btns)
-    widget.label_last_conform.setObjectName("label_last_conform")
-    widget.label_last_conform.setText("None")
-
-    widget.horizontalLayout_3.addWidget(widget.label_last_conform)
 
     
     widget.horizontalSpacer = QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
