@@ -248,6 +248,43 @@ class PreviewPathLogicTests(unittest.TestCase):
             self.assertEqual(version, 3)
             self.assertFalse(file_exists)
 
+    def test_build_preview_output_path_uses_plate_name_and_detects_existing_plate_preview(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_dir = Path(tmpdir)
+            preview_dir = shot_dir / module.PreviewConfig.PREVIEW_SUBDIR
+            preview_dir.mkdir(parents=True)
+            (preview_dir / "sho010_plate_01_v001.mp4").write_bytes(b"preview")
+
+            output_path, version, file_exists = module.build_preview_output_path(
+                str(shot_dir),
+                "sho010",
+                version=1,
+                plate_name="plate_01",
+            )
+
+            self.assertEqual(output_path.name, "sho010_plate_01_v001.mp4")
+            self.assertEqual(version, 1)
+            self.assertTrue(file_exists)
+            self.assertTrue(module.preview_version_exists(str(shot_dir), "sho010", 1))
+            self.assertTrue(
+                module.preview_version_exists(str(shot_dir), "sho010", 1, plate_name="plate_01")
+            )
+
+    def test_build_precomp_exr_output_path_uses_plate_name(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_dir = Path(tmpdir)
+
+            sequence_path, output_dir, file_exists = module.build_precomp_exr_output_path(
+                str(shot_dir),
+                "sho010",
+                version=1,
+                plate_name="plate_02",
+            )
+
+            self.assertEqual(output_dir.name, "sho010_plate_02_v01")
+            self.assertEqual(sequence_path.name, "sho010_plate_02_v01_####.exr")
+            self.assertFalse(file_exists)
+
     def test_preview_input_exists_accepts_exr_sequence_pattern(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_dir = Path(tmpdir)

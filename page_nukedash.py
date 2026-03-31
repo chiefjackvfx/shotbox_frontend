@@ -2384,6 +2384,7 @@ class page_nukedash(QMainWindow):
                             "shot": shot,
                             "source_type": "original_clip",
                             "source_path": original_clip,
+                            "plate_name": "plate_01",
                             "version": 1,
                             "job_name": job_name,
                         })
@@ -2607,6 +2608,7 @@ class page_nukedash(QMainWindow):
             version = task["version"]
             job_name = task["job_name"]
             source_type = task["source_type"]
+            plate_name = task.get("plate_name")
             media_type = task.get("media_type")
             
             # Update progress
@@ -2655,6 +2657,7 @@ class page_nukedash(QMainWindow):
                 fps=fps,
                 quality=preview_quality,
                 version=version,
+                plate_name=plate_name,
                 on_output=lambda line: print(line),
                 check_cancelled=check_cancelled,
             )

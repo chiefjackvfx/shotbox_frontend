@@ -1163,6 +1163,7 @@ class ShotCard(QWidget):
         self._lock_state = "none"
         self._lock_owner_machine = None
         self._lock_script_name = None
+        self._original_clip_entries = []
 
         # Color buttons are now styled via QSS (styles_v02.qss)
         # Initial color indicator will be set in update_from_data via _apply_colour_code
@@ -2085,17 +2086,25 @@ class ShotCard(QWidget):
             colourspace = data.get("colourspace", "—")
             self.label_colourspace.setText(f"Colourspace.: {colourspace[8:-12] if colourspace else '—'}")
 
-        # Update original clip label (show just filename, not full path)
+        # Update original clip label
         if hasattr(self, 'label_original_clip'):
-            original_clip = data.get("original_clip", "—")
-            if original_clip and original_clip != "—":
-                clip_name = Path(original_clip).name
-                self.label_original_clip.setText(f"Clip: {clip_name[8:-5]}")
-                self.label_original_clip.setProperty("clip_path", original_clip)
-                self.label_original_clip.setToolTip(f"{original_clip}\n(Right-click for options)")
+            self._original_clip_entries = self._resolve_original_clip_entries(data)
+            self.label_original_clip.setText("Clips")
+
+            primary_clip = self._primary_original_clip_entry()
+            self.label_original_clip.setProperty("clip_path", primary_clip["clip_path"] if primary_clip else None)
+
+            if self._original_clip_entries:
+                if len(self._original_clip_entries) == 1:
+                    tooltip = f'{self._original_clip_entries[0]["clip_path"]}\n(Right-click for options)'
+                else:
+                    clip_names = "\n".join(entry["clip_name"] for entry in self._original_clip_entries[:5])
+                    extra_count = max(len(self._original_clip_entries) - 5, 0)
+                    if extra_count:
+                        clip_names = f"{clip_names}\n+{extra_count} more"
+                    tooltip = f"{len(self._original_clip_entries)} OG clips\n{clip_names}\n(Right-click for options)"
+                self.label_original_clip.setToolTip(tooltip)
             else:
-                self.label_original_clip.setText("Clip: —")
-                self.label_original_clip.setProperty("clip_path", None)
                 self.label_original_clip.setToolTip("")
 
         self._apply_colour_code(data.get("colour_code"))
@@ -2134,6 +2143,117 @@ class ShotCard(QWidget):
 
         self._sync_task_widgets_from_data()
         self.set_compact_mode(self._compact_mode)
+
+    def _is_valid_original_clip_path(self, value) -> bool:
+        normalized_value = str(value or "").strip()
+        return normalized_value not in {"", "None", "—"}
+
+    def _resolve_original_clip_entries(self, data: dict | None = None) -> list[dict]:
+        payload = data or self.data or {}
+        raw_original_clips = payload.get("original_clips") or []
+
+        clip_paths: list[str] = []
+        seen_paths: set[str] = set()
+
+        if isinstance(raw_original_clips, (list, tuple)):
+            for raw_path in raw_original_clips:
+                clip_path = str(raw_path or "").strip()
+                if not self._is_valid_original_clip_path(clip_path) or clip_path in seen_paths:
+                    continue
+                clip_paths.append(clip_path)
+                seen_paths.add(clip_path)
+
+        using_original_clips = bool(clip_paths)
+        if not using_original_clips:
+            original_clip = str(payload.get("original_clip") or "").strip()
+            if self._is_valid_original_clip_path(original_clip):
+                clip_paths.append(original_clip)
+
+        clip_entries: list[dict] = []
+        for index, clip_path in enumerate(clip_paths, start=1):
+            clip_entries.append(
+                {
+                    "clip_path": clip_path,
+                    "clip_name": Path(clip_path).name,
+                    "plate_index": index,
+                    "plate_name": f"plate_{index:02d}",
+                    "menu_label": Path(clip_path).name if using_original_clips else "OG Clip",
+                }
+            )
+
+        return clip_entries
+
+    def _primary_original_clip_entry(self) -> dict | None:
+        if not self._original_clip_entries:
+            return None
+        return self._original_clip_entries[0]
+
+    def _resolve_original_clip_target(
+        self,
+        clip_path: str | None = None,
+        plate_name: str | None = None,
+    ) -> tuple[str | None, str | None]:
+        normalized_clip_path = str(clip_path or "").strip()
+        normalized_plate_name = str(plate_name or "").strip() or None
+
+        if normalized_clip_path:
+            for clip_entry in self._original_clip_entries:
+                if clip_entry["clip_path"] == normalized_clip_path:
+                    return clip_entry["clip_path"], clip_entry["plate_name"]
+            return normalized_clip_path, normalized_plate_name
+
+        primary_clip = self._primary_original_clip_entry()
+        if primary_clip is None:
+            return None, normalized_plate_name
+        return primary_clip["clip_path"], normalized_plate_name or primary_clip["plate_name"]
+
+    def _populate_original_clip_submenu(self, menu: QMenu, clip_entry: dict) -> None:
+        clip_path = clip_entry["clip_path"]
+        clip_name = clip_entry["clip_name"]
+        plate_name = clip_entry["plate_name"]
+
+        open_location = menu.addAction("Open in Files")
+        open_location.triggered.connect(
+            lambda checked=False, path=clip_path: self.filesIO.openFileLocation(path)
+        )
+
+        copy_path = menu.addAction("Copy Path")
+        copy_path.triggered.connect(
+            lambda checked=False, path=clip_path: self._copy_to_clipboard(path)
+        )
+
+        copy_name = menu.addAction("Copy Filename")
+        copy_name.triggered.connect(
+            lambda checked=False, filename=clip_name: self._copy_to_clipboard(filename)
+        )
+
+        menu.addSeparator()
+
+        make_preview = menu.addAction("Make Preview")
+        make_preview.triggered.connect(
+            lambda checked=False, path=clip_path, plate=plate_name: self._on_make_preview_clicked(
+                clip_path=path,
+                plate_name=plate,
+            )
+        )
+
+        make_precomp_exr = menu.addAction("Make Precomp EXR (ACEScg)")
+        make_precomp_exr.triggered.connect(
+            lambda checked=False, path=clip_path, plate=plate_name: self._on_make_precomp_exr_clicked(
+                clip_path=path,
+                plate_name=plate,
+            )
+        )
+
+    def _populate_original_clip_menu(self, menu: QMenu) -> None:
+        if not self._original_clip_entries:
+            no_clip = menu.addAction("No OG clips available")
+            no_clip.setEnabled(False)
+            return
+
+        for clip_entry in self._original_clip_entries:
+            clip_menu = menu.addMenu(clip_entry["menu_label"])
+            self._populate_original_clip_submenu(clip_menu, clip_entry)
         
     def _setup_flow_layout(self):
         """Backwards-compatible alias for the classic task-card layout."""
@@ -2754,13 +2874,30 @@ class ShotCard(QWidget):
         # Update database (will be reflected when API data comes back)
         self._api.update_shot(shot_id=self._shot_id, colour_code=colour)
     
-    def _on_make_preview_clicked(self):
+    def _on_make_preview_clicked(
+        self,
+        checked: bool = False,
+        clip_path: str | None = None,
+        plate_name: str | None = None,
+    ):
         """Generate a preview video from the original clip using Nuke headless (always v001)."""
-        self._make_preview_from_source(source_type="original_clip")
+        self._make_preview_from_source(
+            source_type="original_clip",
+            clip_path=clip_path,
+            plate_name=plate_name,
+        )
 
-    def _on_make_precomp_exr_clicked(self):
+    def _on_make_precomp_exr_clicked(
+        self,
+        checked: bool = False,
+        clip_path: str | None = None,
+        plate_name: str | None = None,
+    ):
         """Generate a precomp EXR sequence from the original clip (v01, ACEScg)."""
-        self._make_precomp_exr_from_original()
+        self._make_precomp_exr_from_original(
+            clip_path=clip_path,
+            plate_name=plate_name,
+        )
     
     def _on_make_preview_from_render_clicked(self):
         """Generate a preview video from the latest render using Nuke headless (matches render version)."""
@@ -2792,7 +2929,12 @@ class ShotCard(QWidget):
 
         return "Project"
     
-    def _make_preview_from_source(self, source_type: str = "original_clip"):
+    def _make_preview_from_source(
+        self,
+        source_type: str = "original_clip",
+        clip_path: str | None = None,
+        plate_name: str | None = None,
+    ):
         """
         Generate a preview video from either original clip or render.
         
@@ -2818,6 +2960,9 @@ class ShotCard(QWidget):
             )
             return
         
+        target_plate_name = None
+        render_type = None
+
         # Get source path and version based on source type
         if source_type == "render":
             # Get render path from button property
@@ -2835,13 +2980,16 @@ class ShotCard(QWidget):
             if version is None:
                 version = 1  # Fallback to v001 if no version found
         else:
-            # Get original clip path
-            clip_path = self.label_original_clip.property("clip_path")
-            if not clip_path:
+            resolved_clip_path, resolved_plate_name = self._resolve_original_clip_target(
+                clip_path=clip_path,
+                plate_name=plate_name,
+            )
+            if not resolved_clip_path:
                 QMessageBox.warning(self, "Make Preview", "No original clip path available.")
                 return
-            input_path = self.filesIO.convert_path(clip_path)
+            input_path = self.filesIO.convert_path(resolved_clip_path)
             version = 1  # Original clip always creates v001
+            target_plate_name = resolved_plate_name or "plate_01"
         
         # Get shot metadata
         shot_dir = self.filesIO.convert_path(self.shot_dir)
@@ -2885,6 +3033,7 @@ class ShotCard(QWidget):
             shot_dir=shot_dir,
             shot_name=shot_name,
             version=version,
+            plate_name=target_plate_name,
         )
         if file_exists and not overwrite_enabled:
             QMessageBox.information(
@@ -2904,11 +3053,18 @@ class ShotCard(QWidget):
             fps=fps,
             quality=preview_quality,
             version=version,
+            plate_name=target_plate_name,
+        )
+
+        preview_target_label = (
+            f"{shot_name} {target_plate_name} v{version:03d}"
+            if target_plate_name
+            else f"{shot_name} v{version:03d}"
         )
         
         # Show progress dialog for the actual render
         progress = QProgressDialog(
-            f"Generating preview for {shot_name} v{version:03d}...\n\nThis may take a few minutes.",
+            f"Generating preview for {preview_target_label}...\n\nThis may take a few minutes.",
             "Cancel", 0, 0, self
         )
         progress.setWindowTitle("Make Preview")
@@ -2955,7 +3111,11 @@ class ShotCard(QWidget):
                 f"Preview generation failed.\n\n{error_text}"
             )
 
-    def _make_precomp_exr_from_original(self):
+    def _make_precomp_exr_from_original(
+        self,
+        clip_path: str | None = None,
+        plate_name: str | None = None,
+    ):
         """Generate a precomp EXR sequence from the original clip using Nuke headless."""
         from PyQt6.QtWidgets import QMessageBox, QProgressDialog, QApplication
         from PyQt6.QtCore import Qt
@@ -2970,17 +3130,21 @@ class ShotCard(QWidget):
             )
             return
 
-        clip_path = self.label_original_clip.property("clip_path")
-        if not clip_path:
+        resolved_clip_path, resolved_plate_name = self._resolve_original_clip_target(
+            clip_path=clip_path,
+            plate_name=plate_name,
+        )
+        if not resolved_clip_path:
             QMessageBox.warning(self, "Make Precomp EXR", "No original clip path available.")
             return
 
-        input_path = self.filesIO.convert_path(clip_path)
+        input_path = self.filesIO.convert_path(resolved_clip_path)
         shot_dir = self.filesIO.convert_path(self.shot_dir)
         shot_name = self.data.get("title", "shot")
         colourspace = self.data.get("colourspace", "sRGB")
         fps = self.data.get("fps", 25)
         version = 1
+        target_plate_name = resolved_plate_name or "plate_01"
 
         settings = get_settings_manager()
         overwrite_enabled = bool(settings.get("preview_overwrite", False))
@@ -3004,6 +3168,7 @@ class ShotCard(QWidget):
             shot_dir=shot_dir,
             shot_name=shot_name,
             version=version,
+            plate_name=target_plate_name,
         )
         if file_exists and not overwrite_enabled:
             QMessageBox.information(
@@ -3013,7 +3178,7 @@ class ShotCard(QWidget):
             return
 
         progress = QProgressDialog(
-            f"Generating precomp EXR for {shot_name} v{version:02d}...\n\nThis may take a few minutes.",
+            f"Generating precomp EXR for {shot_name} {target_plate_name} v{version:02d}...\n\nThis may take a few minutes.",
             "Cancel", 0, 0, self
         )
         progress.setWindowTitle("Make Precomp EXR")
@@ -3036,6 +3201,7 @@ class ShotCard(QWidget):
             colourspace=colourspace or "sRGB",
             fps=fps,
             version=version,
+            plate_name=target_plate_name,
             on_output=on_output,
             check_cancelled=check_cancelled,
         )
@@ -3212,31 +3378,8 @@ class ShotCard(QWidget):
         
         # Check if right-click was on label_original_clip
         elif hasattr(self, 'label_original_clip') and widget == self.label_original_clip:
-            clip_path = self.label_original_clip.property("clip_path")
             menu = QMenu(self)
-            
-            if clip_path:
-                open_location = menu.addAction("Open in Explorer")
-                open_location.triggered.connect(lambda: self.filesIO.openFileLocation(clip_path))
-                
-                copy_path = menu.addAction("Copy Path")
-                copy_path.triggered.connect(lambda: self._copy_to_clipboard(clip_path))
-                
-                copy_name = menu.addAction("Copy Filename")
-                clip_name = Path(clip_path).name
-                copy_name.triggered.connect(lambda: self._copy_to_clipboard(clip_name))
-                
-                menu.addSeparator()
-                
-                make_preview = menu.addAction("Make Preview")
-                make_preview.triggered.connect(self._on_make_preview_clicked)
-
-                make_precomp_exr = menu.addAction("Make Precomp EXR (ACEScg)")
-                make_precomp_exr.triggered.connect(self._on_make_precomp_exr_clicked)
-            else:
-                no_clip = menu.addAction("No clip path available")
-                no_clip.setEnabled(False)
-            
+            self._populate_original_clip_menu(menu)
             menu.exec(event.globalPos())
     
     def _copy_to_clipboard(self, text):

@@ -208,7 +208,7 @@ def setup_shot_card_ui(widget):
     # Original clip label (right-click for menu)
     widget.label_original_clip = QLabel(widget.frame_metadata)
     widget.label_original_clip.setObjectName("label_original_clip")
-    widget.label_original_clip.setText("Clip: —")
+    widget.label_original_clip.setText("Clips")
     
     widget.horizontalLayout_metadata.addWidget(widget.label_original_clip)
     

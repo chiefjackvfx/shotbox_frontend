@@ -75,6 +75,36 @@ class FilesIOPreviewLogicTests(unittest.TestCase):
             self.assertEqual(preview_path, str(new_preview))
             self.assertEqual(preview_name, new_preview.name)
 
+    def test_latest_preview_accepts_plate_specific_name(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_dir = Path(tmpdir)
+            preview_dir = shot_dir / "renders" / "precomp" / "previews"
+            preview_dir.mkdir(parents=True)
+            plate_preview = preview_dir / "sho010_plate_01_v001.mp4"
+            plate_preview.write_bytes(b"preview")
+
+            preview_path, preview_name = filesIO.Folders().latest_preview(str(shot_dir))
+
+            self.assertEqual(preview_path, str(plate_preview))
+            self.assertEqual(preview_name, plate_preview.name)
+
+    def test_latest_preview_prefers_newer_plate_preview_when_versions_tie(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_dir = Path(tmpdir)
+            preview_dir = shot_dir / "renders" / "precomp" / "previews"
+            preview_dir.mkdir(parents=True)
+            older_preview = preview_dir / "sho010_plate_01_v001.mp4"
+            newer_preview = preview_dir / "sho010_plate_02_v001.mp4"
+            older_preview.write_bytes(b"older")
+            newer_preview.write_bytes(b"newer")
+            os.utime(older_preview, (1000, 1000))
+            os.utime(newer_preview, (2000, 2000))
+
+            preview_path, preview_name = filesIO.Folders().latest_preview(str(shot_dir))
+
+            self.assertEqual(preview_path, str(newer_preview))
+            self.assertEqual(preview_name, newer_preview.name)
+
 
 if __name__ == "__main__":
     unittest.main()

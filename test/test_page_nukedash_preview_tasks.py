@@ -88,6 +88,28 @@ class PreviewTaskCollectionTests(unittest.TestCase):
 
             self.assertEqual(tasks, [])
 
+    def test_collect_preview_tasks_skips_existing_plate_specific_v001_preview(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "sho010"
+            preview_dir = shot_root / "renders" / "precomp" / "previews"
+            preview_dir.mkdir(parents=True)
+            (preview_dir / "sho010_plate_01_v001.mp4").write_bytes(b"preview")
+
+            shot = {
+                "id": 7,
+                "title": "sho010",
+                "base_path": str(shot_root),
+                "original_clip": str(shot_root / "plates" / "V1.mov"),
+                "preview_video": "",
+            }
+
+            tasks = _PreviewTaskHarness()._collect_preview_tasks(
+                self._job_payload(shot),
+                FakeFolders(),
+            )
+
+            self.assertEqual(tasks, [])
+
     def test_collect_preview_tasks_uses_exr_sequence_pattern_for_render(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "sho010"

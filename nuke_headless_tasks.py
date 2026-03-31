@@ -360,15 +360,43 @@ def resolve_preview_input_colourspace(
     return requested_colourspace or "sRGB"
 
 
+def _normalize_plate_name(plate_name: Optional[str]) -> Optional[str]:
+    normalized_plate_name = str(plate_name or "").strip()
+    return normalized_plate_name or None
+
+
+def _source_output_base_name(shot_name: str, plate_name: Optional[str] = None) -> str:
+    normalized_plate_name = _normalize_plate_name(plate_name)
+    if normalized_plate_name is None:
+        return shot_name
+    return f"{shot_name}_{normalized_plate_name}"
+
+
+def _preview_matches_name(file_name: str, shot_name: str, plate_name: Optional[str] = None) -> bool:
+    import re
+
+    normalized_plate_name = _normalize_plate_name(plate_name)
+    if normalized_plate_name is None:
+        pattern = rf"^{re.escape(shot_name)}(?:_plate_\d{{2}})?_v\d+(?:_preview)?\.mp4$"
+    else:
+        pattern = rf"^{re.escape(shot_name)}_{re.escape(normalized_plate_name)}_v\d+(?:_preview)?\.mp4$"
+    return bool(re.match(pattern, file_name, re.IGNORECASE))
+
+
 def _preview_file_candidates(
     shot_dir: str,
     shot_name: str,
+    plate_name: Optional[str] = None,
     preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
 ) -> List[Path]:
     previews_dir = Path(shot_dir) / preview_subdir
     if not previews_dir.exists():
         return []
-    return sorted(previews_dir.glob(f"{shot_name}_v*.mp4"))
+    return sorted(
+        preview_path
+        for preview_path in previews_dir.glob("*.mp4")
+        if _preview_matches_name(preview_path.name, shot_name, plate_name=plate_name)
+    )
 
 
 def _is_legacy_preview_name(file_name: str) -> bool:
@@ -379,11 +407,17 @@ def list_existing_preview_paths(
     shot_dir: str,
     shot_name: str,
     version: int,
+    plate_name: Optional[str] = None,
     preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
 ) -> List[Path]:
     """Find preview files for a shot/version in either new or legacy naming."""
     matches: List[Path] = []
-    for preview_path in _preview_file_candidates(shot_dir, shot_name, preview_subdir=preview_subdir):
+    for preview_path in _preview_file_candidates(
+        shot_dir,
+        shot_name,
+        plate_name=plate_name,
+        preview_subdir=preview_subdir,
+    ):
         path_version = extract_version_from_path(preview_path.name)
         if path_version == version:
             matches.append(preview_path)
@@ -395,22 +429,32 @@ def preview_version_exists(
     shot_dir: str,
     shot_name: str,
     version: int,
+    plate_name: Optional[str] = None,
     preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
 ) -> bool:
-    return bool(list_existing_preview_paths(shot_dir, shot_name, version, preview_subdir=preview_subdir))
+    return bool(
+        list_existing_preview_paths(
+            shot_dir,
+            shot_name,
+            version,
+            plate_name=plate_name,
+            preview_subdir=preview_subdir,
+        )
+    )
 
 
 def build_preview_output_path(
     shot_dir: str,
     shot_name: str,
     version: Optional[int] = None,
+    plate_name: Optional[str] = None,
     preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR
 ) -> Tuple[Path, int, bool]:
     """
     Build the output path for a preview video.
     
     Creates the output directory if it doesn't exist.
-    Output format: {shot_name}_v{version:03d}.mp4
+    Output format: {shot_name}[_plate_01]_v{version:03d}.mp4
     
     Args:
         shot_dir: Base shot directory
@@ -426,12 +470,23 @@ def build_preview_output_path(
     
     if version is not None:
         # Use explicit version
-        output_path = previews_dir / f"{shot_name}_v{version:03d}.mp4"
-        file_exists = preview_version_exists(shot_dir, shot_name, version, preview_subdir=preview_subdir)
+        output_path = previews_dir / f"{_source_output_base_name(shot_name, plate_name)}_v{version:03d}.mp4"
+        file_exists = preview_version_exists(
+            shot_dir,
+            shot_name,
+            version,
+            plate_name=plate_name,
+            preview_subdir=preview_subdir,
+        )
         return output_path, version, file_exists
     
     # Auto-increment: find next version number
-    existing_previews = _preview_file_candidates(shot_dir, shot_name, preview_subdir=preview_subdir)
+    existing_previews = _preview_file_candidates(
+        shot_dir,
+        shot_name,
+        plate_name=plate_name,
+        preview_subdir=preview_subdir,
+    )
     
     if existing_previews:
         versions = []
@@ -443,7 +498,7 @@ def build_preview_output_path(
     else:
         next_version = 1
     
-    output_path = previews_dir / f"{shot_name}_v{next_version:03d}.mp4"
+    output_path = previews_dir / f"{_source_output_base_name(shot_name, plate_name)}_v{next_version:03d}.mp4"
     return output_path, next_version, False  # Auto-increment never conflicts
 
 
@@ -468,10 +523,8 @@ def extract_version_from_path(file_path: str) -> Optional[int]:
 
 
 def _preview_slate_name(shot_name: str, output_path: str) -> str:
-    version = extract_version_from_path(output_path)
-    if version is None:
-        return shot_name
-    return f"{shot_name}_v{version:03d}"
+    output_stem = Path(output_path).stem
+    return output_stem or shot_name
 
 
 def _duration_timecode(frame_count: int, fps: float) -> str:
@@ -680,20 +733,22 @@ def build_precomp_exr_output_path(
     shot_dir: str,
     shot_name: str,
     version: int = 1,
+    plate_name: Optional[str] = None,
     precomp_subdir: str = PreviewConfig.PRECOMP_SUBDIR,
 ) -> Tuple[Path, Path, bool]:
     """
     Build the output path for a precomp EXR sequence.
 
-    Output folder: renders/precomp/{shot_name}_v{version:02d}
-    Output file: {shot_name}_v{version:02d}_####.exr
+    Output folder: renders/precomp/{shot_name}[_plate_01]_v{version:02d}
+    Output file: {shot_name}[_plate_01]_v{version:02d}_####.exr
 
     Returns:
         Tuple of (sequence_path, output_dir, file_exists)
     """
-    precomp_dir = Path(shot_dir) / precomp_subdir / f"{shot_name}_v{version:02d}"
+    output_base_name = _source_output_base_name(shot_name, plate_name)
+    precomp_dir = Path(shot_dir) / precomp_subdir / f"{output_base_name}_v{version:02d}"
     precomp_dir.mkdir(parents=True, exist_ok=True)
-    sequence_path = precomp_dir / f"{shot_name}_v{version:02d}_####.exr"
+    sequence_path = precomp_dir / f"{output_base_name}_v{version:02d}_####.exr"
     file_exists = any(precomp_dir.glob("*.exr"))
     return sequence_path, precomp_dir, file_exists
 
@@ -905,6 +960,7 @@ class PreviewGenerator:
         fps: float = 25,
         quality: str = PreviewConfig.DEFAULT_QUALITY,
         version: Optional[int] = None,
+        plate_name: Optional[str] = None,
         on_output: Optional[Callable[[str], None]] = None,
         check_cancelled: Optional[Callable[[], bool]] = None,
     ) -> PreviewResult:
@@ -921,6 +977,7 @@ class PreviewGenerator:
             fps: Output FPS
             quality: Output quality
             version: Explicit version number. If None, auto-increments.
+            plate_name: Optional source plate suffix such as plate_01.
             on_output: Optional callback for stdout lines
             check_cancelled: Optional callback to check if operation was cancelled
             
@@ -954,7 +1011,10 @@ class PreviewGenerator:
         
         # Build output path
         output_path, actual_version, file_exists = build_preview_output_path(
-            shot_dir, shot_name, version=version
+            shot_dir,
+            shot_name,
+            version=version,
+            plate_name=plate_name,
         )
         
         # If file exists, return with file_exists flag for caller to handle
@@ -1058,6 +1118,7 @@ class PreviewGenerator:
         fps: float = 25,
         quality: str = PreviewConfig.DEFAULT_QUALITY,
         version: Optional[int] = None,
+        plate_name: Optional[str] = None,
         on_output: Optional[Callable[[str], None]] = None,
         check_cancelled: Optional[Callable[[], bool]] = None,
     ) -> PreviewResult:
@@ -1068,12 +1129,20 @@ class PreviewGenerator:
         """
         # Build output path to check if it exists
         output_path, actual_version, file_exists = build_preview_output_path(
-            shot_dir, shot_name, version=version
+            shot_dir,
+            shot_name,
+            version=version,
+            plate_name=plate_name,
         )
         
         # Delete existing file if it exists
         if file_exists:
-            existing_paths = list_existing_preview_paths(shot_dir, shot_name, actual_version)
+            existing_paths = list_existing_preview_paths(
+                shot_dir,
+                shot_name,
+                actual_version,
+                plate_name=plate_name,
+            )
             try:
                 for existing_path in existing_paths:
                     if existing_path.exists():
@@ -1095,6 +1164,7 @@ class PreviewGenerator:
             fps=fps,
             quality=quality,
             version=version,
+            plate_name=plate_name,
             on_output=on_output,
             check_cancelled=check_cancelled,
         )
@@ -1107,13 +1177,14 @@ class PreviewGenerator:
         colourspace: str = "sRGB",
         fps: float = 25,
         version: int = 1,
+        plate_name: Optional[str] = None,
         on_output: Optional[Callable[[str], None]] = None,
         check_cancelled: Optional[Callable[[], bool]] = None,
     ) -> PrecompResult:
         """
         Generate a precomp EXR sequence from the original clip.
 
-        Output is placed in renders/precomp/{shot_name}_v{version:02d}.
+        Output is placed in renders/precomp/{shot_name}[_plate_01]_v{version:02d}.
         """
         if not self.nuke_available:
             return PrecompResult(
@@ -1135,6 +1206,7 @@ class PreviewGenerator:
             shot_dir=shot_dir,
             shot_name=shot_name,
             version=version,
+            plate_name=plate_name,
         )
 
         if file_exists:
@@ -1228,6 +1300,7 @@ class PreviewGenerator:
         colourspace: str = "sRGB",
         fps: float = 25,
         version: int = 1,
+        plate_name: Optional[str] = None,
         on_output: Optional[Callable[[str], None]] = None,
         check_cancelled: Optional[Callable[[], bool]] = None,
     ) -> PrecompResult:
@@ -1236,6 +1309,7 @@ class PreviewGenerator:
             shot_dir=shot_dir,
             shot_name=shot_name,
             version=version,
+            plate_name=plate_name,
         )
 
         if file_exists and output_dir.exists():
@@ -1255,6 +1329,7 @@ class PreviewGenerator:
             colourspace=colourspace,
             fps=fps,
             version=version,
+            plate_name=plate_name,
             on_output=on_output,
             check_cancelled=check_cancelled,
         )

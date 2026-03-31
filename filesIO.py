@@ -210,11 +210,15 @@ class Folders:
                 version = self._preview_version_from_name(file.name)
                 if version is None:
                     continue
-                candidates.append((version, self._is_legacy_preview_name(file.name), file))
+                try:
+                    modified_time = file.stat().st_mtime
+                except Exception:
+                    modified_time = 0.0
+                candidates.append((version, modified_time, self._is_legacy_preview_name(file.name), file))
 
             if candidates:
-                candidates.sort(key=lambda item: (-item[0], item[1], item[2].name.lower()))
-                best_file = candidates[0][2]
+                candidates.sort(key=lambda item: (-item[0], -item[1], item[2], item[3].name.lower()))
+                best_file = candidates[0][3]
                 return str(best_file), str(best_file.name)
             return None, None
         except:
@@ -228,6 +232,7 @@ class Folders:
 
     def _is_legacy_preview_name(self, file_name: str) -> bool:
         return file_name.lower().endswith("_preview.mp4")
+
     def conform(self, clip):
         print(clip)
         

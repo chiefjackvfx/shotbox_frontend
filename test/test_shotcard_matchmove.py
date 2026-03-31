@@ -71,6 +71,7 @@ class FakeMenu:
         self.parent = parent
         self.actions: list[FakeAction] = []
         self.submenus: list[tuple[str, FakeMenu]] = []
+        self.separator_count = 0
         self.exec_pos = None
         FakeMenu.instances.append(self)
 
@@ -83,6 +84,9 @@ class FakeMenu:
         menu = FakeMenu(self.parent)
         self.submenus.append((text, menu))
         return menu
+
+    def addSeparator(self):
+        self.separator_count += 1
 
     def exec(self, pos):
         self.exec_pos = pos
@@ -105,7 +109,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def _make_card(self, base_path: str):
+    def _make_card(self, base_path: str, data_overrides: dict | None = None):
         data = {
             "id": 7,
             "title": "sho010",
@@ -115,6 +119,8 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             "colourspace": "",
             "matchmove_path": None,
         }
+        if data_overrides:
+            data.update(data_overrides)
         fake_folders = FakeFolders()
         patches = [
             mock.patch.object(widgets, "HAS_MULTIMEDIA", False),
@@ -133,6 +139,12 @@ class ShotCardMatchmoveTests(unittest.TestCase):
         self.addCleanup(card.close)
         self.addCleanup(card.deleteLater)
         return card, fake_folders
+
+    def _find_action(self, menu: FakeMenu, text: str) -> FakeAction:
+        for action in menu.actions:
+            if action.text == text:
+                return action
+        raise AssertionError(f"Action not found: {text}")
 
     def test_open_shot_assets_uses_shot_assets_directory(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -249,6 +261,83 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             card, _fake_folders = self._make_card(str(shot_root))
 
             self.assertEqual(card._resolve_preview_project_name(), "ProjectB")
+
+    def test_original_clip_label_always_shows_clips(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
+            shot_root.mkdir(parents=True)
+            original_clip = shot_root / "plates" / "V1.mov"
+            card, _fake_folders = self._make_card(
+                str(shot_root),
+                data_overrides={"original_clip": str(original_clip)},
+            )
+
+            self.assertEqual(card.label_original_clip.text(), "Clips")
+
+    def test_original_clip_menu_shows_disabled_state_without_clips(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
+            shot_root.mkdir(parents=True)
+            card, _fake_folders = self._make_card(
+                str(shot_root),
+                data_overrides={"original_clip": "", "original_clips": []},
+            )
+
+            menu = FakeMenu()
+            card._populate_original_clip_menu(menu)
+
+            self.assertEqual(menu.actions[0].text, "No OG clips available")
+            self.assertFalse(menu.actions[0].enabled)
+
+    def test_original_clip_menu_falls_back_to_single_og_clip_submenu(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
+            shot_root.mkdir(parents=True)
+            original_clip = shot_root / "plates" / "V1.mov"
+            card, _fake_folders = self._make_card(
+                str(shot_root),
+                data_overrides={"original_clip": str(original_clip), "original_clips": []},
+            )
+
+            menu = FakeMenu()
+            card._populate_original_clip_menu(menu)
+
+            self.assertEqual([label for label, _submenu in menu.submenus], ["OG Clip"])
+
+    def test_original_clip_menu_uses_original_clips_filenames_and_selected_actions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
+            shot_root.mkdir(parents=True)
+            clip_a = shot_root / "plates" / "V1.mov"
+            clip_b = shot_root / "plates" / "V2.mov"
+            card, fake_folders = self._make_card(
+                str(shot_root),
+                data_overrides={
+                    "original_clip": str(clip_a),
+                    "original_clips": [str(clip_a), str(clip_b)],
+                },
+            )
+
+            menu = FakeMenu()
+            with mock.patch.object(card, "_copy_to_clipboard") as copy_to_clipboard, \
+                mock.patch.object(card, "_on_make_preview_clicked") as make_preview, \
+                mock.patch.object(card, "_on_make_precomp_exr_clicked") as make_precomp:
+                card._populate_original_clip_menu(menu)
+                labels = [label for label, _submenu in menu.submenus]
+                self.assertEqual(labels, [clip_a.name, clip_b.name])
+
+                second_submenu = menu.submenus[1][1]
+                self._find_action(second_submenu, "Open in Files").triggered.fire()
+                self._find_action(second_submenu, "Copy Path").triggered.fire()
+                self._find_action(second_submenu, "Copy Filename").triggered.fire()
+                self._find_action(second_submenu, "Make Preview").triggered.fire()
+                self._find_action(second_submenu, "Make Precomp EXR (ACEScg)").triggered.fire()
+
+            self.assertEqual(fake_folders.opened_locations[-1], clip_b)
+            copy_to_clipboard.assert_any_call(str(clip_b))
+            copy_to_clipboard.assert_any_call(clip_b.name)
+            make_preview.assert_called_once_with(clip_path=str(clip_b), plate_name="plate_02")
+            make_precomp.assert_called_once_with(clip_path=str(clip_b), plate_name="plate_02")
 
     def test_create_matchmove_project_creates_work_and_export_and_patches_shot(self):
         with tempfile.TemporaryDirectory() as tmpdir:
