@@ -363,6 +363,9 @@ class TaskWidget(QWidget):
         self._data = {}
         self._compact_mode = False
         self._last_non_done_status = None
+        self._title_edit_active = False
+        self._title_edit_ignore_finish = False
+        self._title_edit_original = ""
 
         self._apply_presentation_properties()
 
@@ -390,6 +393,9 @@ class TaskWidget(QWidget):
 
         if hasattr(self, "btn_task_title") and self.btn_task_title:
             self.btn_task_title.clicked.connect(self._on_title_clicked)
+        if hasattr(self, "edit_title_inline") and self.edit_title_inline:
+            self.edit_title_inline.editingFinished.connect(self._on_inline_title_edit_finished)
+            self.edit_title_inline.installEventFilter(self)
         if hasattr(self, "btn_notes") and self.btn_notes:
             self.btn_notes.clicked.connect(self._on_notes_clicked)
         if hasattr(self, "edit_notes_inline") and self.edit_notes_inline:
@@ -429,6 +435,7 @@ class TaskWidget(QWidget):
         for widget in (
             getattr(self, "task_frame", None),
             getattr(self, "btn_task_title", None),
+            getattr(self, "edit_title_inline", None),
             getattr(self, "btn_status", None),
             getattr(self, "btn_assigned", None),
             getattr(self, "btn_priority", None),
@@ -524,6 +531,58 @@ class TaskWidget(QWidget):
             hours = 0.0
         return f"{hours:.1f}h"
 
+    def _set_inline_title_text(self, value) -> None:
+        if not (hasattr(self, "edit_title_inline") and self.edit_title_inline):
+            return
+        blocker = QSignalBlocker(self.edit_title_inline)
+        self.edit_title_inline.setText(str(value or "").replace("\n", " ").replace("\r", " "))
+        del blocker
+
+    def _show_inline_title_editor(self, active: bool) -> None:
+        self._title_edit_active = bool(active)
+        title_stack = getattr(self, "title_stack", None)
+        editor = getattr(self, "edit_title_inline", None)
+        title_button = getattr(self, "btn_task_title", None)
+        if title_stack is not None and editor is not None and title_button is not None:
+            title_stack.setCurrentWidget(editor if self._title_edit_active else title_button)
+            return
+        if title_button is not None:
+            title_button.setVisible(not self._title_edit_active)
+        if editor is not None:
+            editor.setVisible(self._title_edit_active)
+
+    def _focus_inline_title_editor(self) -> None:
+        if not (hasattr(self, "edit_title_inline") and self.edit_title_inline):
+            return
+        self.edit_title_inline.setFocus(Qt.FocusReason.OtherFocusReason)
+        self.edit_title_inline.selectAll()
+
+    def _begin_inline_title_edit(self) -> None:
+        if not self._is_checklist_presentation():
+            return
+        if not (hasattr(self, "edit_title_inline") and self.edit_title_inline):
+            return
+        current_title = str((self._data or {}).get("title") or "")
+        self._title_edit_original = current_title
+        self._set_inline_title_text(current_title)
+        self._show_inline_title_editor(True)
+        QTimer.singleShot(0, self._focus_inline_title_editor)
+
+    def _end_inline_title_edit(self, restore_text: str | None = None) -> None:
+        if restore_text is not None:
+            self._set_inline_title_text(restore_text)
+        self._show_inline_title_editor(False)
+        self._title_edit_original = ""
+
+    def _cancel_inline_title_edit(self) -> None:
+        if not self._title_edit_active:
+            return
+        restore_text = self._title_edit_original or str((self._data or {}).get("title") or "")
+        self._title_edit_ignore_finish = True
+        self._end_inline_title_edit(restore_text=restore_text)
+        if hasattr(self, "btn_task_title") and self.btn_task_title:
+            self.btn_task_title.setFocus(Qt.FocusReason.OtherFocusReason)
+
     def _inline_notes_display_text(self, value) -> str:
         text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
         if "\n" not in text:
@@ -551,6 +610,7 @@ class TaskWidget(QWidget):
         for widget in (
             getattr(self, "task_frame", None),
             getattr(self, "btn_task_title", None),
+            getattr(self, "edit_title_inline", None),
             getattr(self, "btn_assigned", None),
             getattr(self, "btn_priority", None),
             getattr(self, "btn_budget_hours", None),
@@ -575,6 +635,7 @@ class TaskWidget(QWidget):
         for widget in (
             getattr(self, "task_frame", None),
             getattr(self, "btn_task_title", None),
+            getattr(self, "edit_title_inline", None),
             getattr(self, "btn_status", None),
             getattr(self, "btn_assigned", None),
             getattr(self, "btn_priority", None),
@@ -628,6 +689,10 @@ class TaskWidget(QWidget):
                 tooltip_parts = [part for part in (title, notes) if part]
                 tooltip_text = "\n".join(tooltip_parts)
                 self.btn_task_title.setToolTip(tooltip_text or title)
+            if hasattr(self, "edit_title_inline") and self.edit_title_inline:
+                self.edit_title_inline.setPlaceholderText("Task name")
+                self.edit_title_inline.setMinimumWidth(110 if self._compact_mode else 150)
+                self.edit_title_inline.setToolTip(title or "Task name")
             if hasattr(self, "edit_notes_inline") and self.edit_notes_inline:
                 self.edit_notes_inline.setPlaceholderText("Add note...")
                 self.edit_notes_inline.setMinimumWidth(90 if self._compact_mode else 120)
@@ -660,6 +725,7 @@ class TaskWidget(QWidget):
                 self.check_done_task.setToolTip("Mark task done" if not is_done else "Restore task status")
             if hasattr(self, "task_frame") and self.task_frame:
                 self.task_frame.setToolTip("\n".join(part for part in (title, notes) if part))
+            self._show_inline_title_editor(self._title_edit_active)
         else:
             top_row = getattr(self, "top_row", None)
             middle_row = getattr(self, "middle_row", None)
@@ -905,6 +971,11 @@ class TaskWidget(QWidget):
 
         if hasattr(self, "btn_task_title") and self.btn_task_title:
             self.btn_task_title.setText(title)
+        if hasattr(self, "edit_title_inline") and self.edit_title_inline:
+            if not self._title_edit_active:
+                self._set_inline_title_text(title)
+                self._title_edit_original = title
+            self.edit_title_inline.setToolTip(title or "Task name")
         if hasattr(self, "btn_notes") and self.btn_notes:
             if self._is_checklist_presentation():
                 self.btn_notes.setText("Note")
@@ -945,6 +1016,9 @@ class TaskWidget(QWidget):
     def _on_title_clicked(self):
         if self._task_id is None:
             return
+        if self._is_checklist_presentation():
+            self._begin_inline_title_edit()
+            return
 
         current_title = (self._data or {}).get("title") or self.btn_task_title.text() or ""
 
@@ -981,6 +1055,30 @@ class TaskWidget(QWidget):
                 if hasattr(self, "btn_notes") and self.btn_notes and not self._is_checklist_presentation():
                     self.btn_notes.setText(prev_note or "No notes")
 
+    def _on_inline_title_edit_finished(self) -> None:
+        if self._task_id is None:
+            return
+        if not (hasattr(self, "edit_title_inline") and self.edit_title_inline):
+            return
+        if self._title_edit_ignore_finish:
+            self._title_edit_ignore_finish = False
+            return
+        if not self._title_edit_active:
+            return
+
+        current_title = str((self._data or {}).get("title") or "").strip()
+        new_title = self.edit_title_inline.text().strip()
+        if not new_title or new_title == current_title:
+            self._end_inline_title_edit(restore_text=current_title)
+            return
+
+        self._end_inline_title_edit()
+        try:
+            updated = self._api.update_task(self._task_id, title=new_title)
+            self._apply_updated_task(updated)
+        except Exception:
+            self._set_inline_title_text(current_title)
+
     def _on_inline_notes_edit_finished(self) -> None:
         if self._task_id is None:
             return
@@ -997,6 +1095,16 @@ class TaskWidget(QWidget):
             self._apply_updated_task(updated)
         except Exception:
             self._set_inline_notes_text(current_note)
+
+    def eventFilter(self, watched, event):
+        if (
+            watched is getattr(self, "edit_title_inline", None)
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_Escape
+        ):
+            self._cancel_inline_title_edit()
+            return True
+        return super().eventFilter(watched, event)
 
 class ShotCard(QWidget):
     # Color code mapping - centralized for easy maintenance

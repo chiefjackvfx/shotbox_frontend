@@ -500,6 +500,28 @@ QPushButton#btn_task_title[presentation="checklist"][done="true"] {
     color: #A8B0BB;
 }
 
+QLineEdit#edit_task_title_inline[presentation="checklist"] {
+    background-color: #171B20;
+    color: #F3F4F6;
+    border: 1px solid #4B5563;
+    border-radius: 2px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: bold;
+    min-height: 18px;
+}
+
+QLineEdit#edit_task_title_inline[presentation="checklist"]:focus {
+    border-color: #FF6B35;
+    background-color: #20262E;
+}
+
+QLineEdit#edit_task_title_inline[presentation="checklist"][done="true"] {
+    color: #D1D5DB;
+    background-color: #161A1E;
+    border-color: #39414C;
+}
+
 QLineEdit#edit_task_notes_inline[presentation="checklist"] {
     background-color: #15191E;
     color: #C9D1DA;
@@ -1543,6 +1565,12 @@ QPushButton#btn_hide_task[compact="true"] {
 QPushButton#btn_task_title[presentation="checklist"][compact="true"] {
     font-size: 10px;
     padding: 0 1px;
+}
+
+QLineEdit#edit_task_title_inline[presentation="checklist"][compact="true"] {
+    padding: 1px 4px;
+    font-size: 10px;
+    min-height: 16px;
 }
 
 QPushButton#btn_status[presentation="checklist"][compact="true"],

@@ -29,20 +29,13 @@ notifications_size: large
 notifications_subtle: false
 nuke_exe_path: ''
 nukedash_filter_state:
-  artist_id: 1
+  artist_id: null
   enabled: true
   show_hidden_shots: false
   show_hidden_tasks: false
   show_to_conform: false
   sort_mode: title_asc
-  status_values:
-  - approved
-  - assigned
-  - in_progress
-  - not_started
-  - rejected
-  - unassigned
-  - waiting_for_approval
+  status_values: []
 nukedash_task_style: checklist
 polling_interval: 25
 preview_output_subdir: renders/precomp/previews
@@ -60,5 +53,5 @@ theme_file: dark_v01.qss
 threede_exe_path: /home/rockybtw/Documents/3DE4_linux64_r8.1/bin/3DE4
 window_height: 1419
 window_width: 1280
-window_x: 2560
+window_x: 1280
 window_y: 0

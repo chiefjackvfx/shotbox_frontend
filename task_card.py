@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSizePolicy, QCheckBox, QLineEdit
+    QFrame, QSizePolicy, QCheckBox, QLineEdit, QStackedWidget
 )
 from PyQt6.QtCore import Qt
 
@@ -158,11 +158,24 @@ def _setup_task_checklist_ui(widget):
     widget.check_done_task.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
     layout.addWidget(widget.check_done_task)
 
-    widget.btn_task_title = QPushButton("Task Name", widget.task_frame)
+    widget.title_stack = QStackedWidget(widget.task_frame)
+    widget.title_stack.setObjectName("task_title_stack")
+    widget.title_stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+    widget.btn_task_title = QPushButton("Task Name", widget.title_stack)
     widget.btn_task_title.setObjectName("btn_task_title")
     widget.btn_task_title.setFlat(True)
     widget.btn_task_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-    layout.addWidget(widget.btn_task_title, 1)
+    widget.title_stack.addWidget(widget.btn_task_title)
+
+    widget.edit_title_inline = QLineEdit(widget.title_stack)
+    widget.edit_title_inline.setObjectName("edit_task_title_inline")
+    widget.edit_title_inline.setPlaceholderText("Task name")
+    widget.edit_title_inline.setClearButtonEnabled(True)
+    widget.edit_title_inline.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+    widget.title_stack.addWidget(widget.edit_title_inline)
+
+    layout.addWidget(widget.title_stack, 1)
 
     widget.edit_notes_inline = QLineEdit(widget.task_frame)
     widget.edit_notes_inline.setObjectName("edit_task_notes_inline")
