@@ -359,7 +359,7 @@ class MainWindow(QMainWindow):
         # UI density defaults for nukedash
         shots_layout_mode = self._settings_manager.get("shots_layout_mode", "list")
         compact_view_enabled = bool(self._settings_manager.get("compact_view_enabled", False))
-        task_style = self._settings_manager.get("nukedash_task_style", "card")
+        task_style = self._settings_manager.get("nukedash_task_style", "checklist")
         preview_size = self._settings_manager.get("preview_thumbnail_size", "Medium")
         card_spacing = self._settings_manager.get("card_spacing", 8)
         row_height = self._settings_manager.get("row_height", 0)

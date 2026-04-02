@@ -444,27 +444,34 @@ QPushButton#btn_delete_task:hover {
     border-color: #D14D4D;
 }
 
-QCheckBox#task_done_toggle {
-    spacing: 0px;
+QPushButton#task_done_toggle {
+    background-color: transparent;
+    border: none;
+    color: #9CA3AF;
     padding: 0px;
     margin: 0px;
+    font-size: 24px;
+    font-weight: 700;
+    text-align: center;
 }
 
-QCheckBox#task_done_toggle::indicator {
-    width: 14px;
-    height: 14px;
-    border: 1px solid #4B5563;
-    border-radius: 7px;
-    background-color: #141619;
+QPushButton#task_done_toggle:hover {
+    color: #D4D4D4;
 }
 
-QCheckBox#task_done_toggle::indicator:hover {
-    border-color: #81c784;
+QPushButton#task_done_toggle[progressStage="25"],
+QPushButton#task_done_toggle[progressStage="50"],
+QPushButton#task_done_toggle[progressStage="75"] {
+    color: #8FB3D9;
 }
 
-QCheckBox#task_done_toggle::indicator:checked {
-    background-color: #678542;
-    border-color: #81c784;
+QPushButton#task_done_toggle[taskStatus="waiting_for_approval"] {
+    color: #D8B65C;
+}
+
+QPushButton#task_done_toggle[taskStatus="approved"],
+QPushButton#task_done_toggle[taskStatus="done"] {
+    color: #81c784;
 }
 
 QFrame#task_frame[presentation="checklist"] {

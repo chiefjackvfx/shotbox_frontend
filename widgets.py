@@ -89,6 +89,16 @@ DEFAULT_FPS = 25.0
 DEFAULT_FOCAL_LENGTH_MM = 35.0
 _MATCHMOVE_HELPERS = None
 _MATCHMOVE_HELPERS_IMPORT_ERROR = None
+TASK_PROGRESS_STEP = 25
+TASK_TERMINAL_PROGRESS_STATUSES = {"waiting_for_approval", "approved", "done"}
+TASK_COMPLETED_STATUSES = {"approved", "done"}
+TASK_PROGRESS_GLYPHS = {
+    0: "○",
+    25: "◔",
+    50: "◑",
+    75: "◕",
+    100: "●",
+}
 
 
 def _load_matchmove_helpers():
@@ -391,7 +401,6 @@ class TaskWidget(QWidget):
         self._task_id = task_data.get("id")
         self._data = {}
         self._compact_mode = False
-        self._last_non_done_status = None
         self._title_edit_active = False
         self._title_edit_ignore_finish = False
         self._title_edit_original = ""
@@ -453,7 +462,9 @@ class TaskWidget(QWidget):
             self.btn_hide_task.clicked.connect(self._on_hide_clicked)
 
         if hasattr(self, "check_done_task") and self.check_done_task:
-            self.check_done_task.toggled.connect(self._on_done_toggled)
+            self.check_done_task.increment_requested.connect(self._on_progress_increment_requested)
+            self.check_done_task.decrement_requested.connect(self._on_progress_decrement_requested)
+            self.check_done_task.complete_requested.connect(self._on_progress_complete_requested)
 
         self.update_from_data(task_data)
 
@@ -626,13 +637,122 @@ class TaskWidget(QWidget):
         self.edit_notes_inline.setText(self._inline_notes_display_text(value))
         del blocker
 
-    def _fallback_undo_status(self) -> str:
-        if self._last_non_done_status and self._last_non_done_status != "done":
-            return self._last_non_done_status
-        artist_id = (self._data or {}).get("artist")
-        if artist_id not in (None, "", 0):
-            return "in_progress"
-        return "unassigned"
+    def _current_task_status(self) -> str:
+        value = (self._data or {}).get("status")
+        return value if isinstance(value, str) else ""
+
+    def _coerce_task_progress(self, value, status: str | None = None) -> int:
+        status_value = status if isinstance(status, str) else ""
+        if status_value in TASK_TERMINAL_PROGRESS_STATUSES:
+            return 100
+        try:
+            progress = int(round(float(value)))
+        except Exception:
+            progress = 0
+        return max(0, min(100, progress))
+
+    def _current_task_progress(self) -> int:
+        return self._coerce_task_progress(
+            (self._data or {}).get("progress"),
+            self._current_task_status(),
+        )
+
+    def _progress_stage(self, progress: int) -> int:
+        progress_value = max(0, min(100, int(progress)))
+        return min(
+            TASK_PROGRESS_GLYPHS,
+            key=lambda step: (abs(step - progress_value), step),
+        )
+
+    def _is_completed_status(self, status: str | None) -> bool:
+        return (status or "") in TASK_COMPLETED_STATUSES
+
+    def _progress_tooltip(self, progress: int, status: str) -> str:
+        if status == "approved":
+            return "Approved. Right click to reduce progress"
+        if status == "done":
+            return "Completed. Right click to reduce progress"
+        if progress >= 100 and status == "waiting_for_approval":
+            return "Left click to approve, right click to reduce progress"
+        if progress >= 100:
+            return "Left click to send for approval, right click to reduce progress"
+        return "Left click +25%, right click -25%, double click to jump to 100%"
+
+    def _refresh_progress_control(self) -> None:
+        if not (hasattr(self, "check_done_task") and self.check_done_task):
+            return
+        progress = self._current_task_progress()
+        status = self._current_task_status()
+        stage = self._progress_stage(progress)
+        self.check_done_task.setText(TASK_PROGRESS_GLYPHS.get(stage, "○"))
+        self.check_done_task.setProperty("progressStage", str(stage))
+        self.check_done_task.setProperty("taskStatus", status or "unassigned")
+        self.check_done_task.setToolTip(self._progress_tooltip(progress, status))
+        self.check_done_task.style().unpolish(self.check_done_task)
+        self.check_done_task.style().polish(self.check_done_task)
+
+    def _patch_task_progress(self, fields: dict, *, flash_done: bool = False) -> None:
+        if self._task_id is None or not fields:
+            return
+        try:
+            updated = self._api.update_task(self._task_id, **fields)
+            self._apply_updated_task(updated, flash_done=flash_done)
+        except Exception:
+            pass
+
+    def _on_progress_increment_requested(self) -> None:
+        status_value = self._current_task_status()
+        progress_value = self._current_task_progress()
+
+        if self._task_id is None or self._is_completed_status(status_value):
+            return
+
+        if progress_value >= 100:
+            if status_value == "waiting_for_approval":
+                self._patch_task_progress(
+                    {"status": "approved", "progress": 100},
+                    flash_done=True,
+                )
+            elif status_value not in TASK_TERMINAL_PROGRESS_STATUSES:
+                self._patch_task_progress(
+                    {"status": "waiting_for_approval", "progress": 100},
+                    flash_done=True,
+                )
+            return
+
+        next_progress = min(100, progress_value + TASK_PROGRESS_STEP)
+        payload = {"progress": next_progress}
+        flash_done = False
+        if next_progress >= 100:
+            payload["progress"] = 100
+            payload["status"] = "waiting_for_approval"
+            flash_done = True
+        self._patch_task_progress(payload, flash_done=flash_done)
+
+    def _on_progress_decrement_requested(self) -> None:
+        status_value = self._current_task_status()
+        progress_value = self._current_task_progress()
+
+        if self._task_id is None or progress_value <= 0:
+            return
+
+        next_progress = max(0, progress_value - TASK_PROGRESS_STEP)
+        payload = {"progress": next_progress}
+        if status_value in TASK_TERMINAL_PROGRESS_STATUSES and next_progress < 100:
+            payload["status"] = "in_progress"
+        self._patch_task_progress(payload)
+
+    def _on_progress_complete_requested(self) -> None:
+        status_value = self._current_task_status()
+        progress_value = self._current_task_progress()
+
+        if self._task_id is None or self._is_completed_status(status_value) or progress_value >= 100:
+            return
+
+        self._patch_task_progress(
+            {"progress": 100, "status": "waiting_for_approval"},
+            flash_done=True,
+        )
 
     def _set_done_state_properties(self, done: bool) -> None:
         done_value = "true" if done else "false"
@@ -688,7 +808,7 @@ class TaskWidget(QWidget):
         priority_text = self._priority_label((self._data or {}).get("priority", 5))
         hours_text = self._format_hours((self._data or {}).get("budget_hours", 0))
         is_hidden = bool((self._data or {}).get("hidden", False))
-        is_done = ((self._data or {}).get("status") == "done")
+        is_done = self._is_completed_status((self._data or {}).get("status"))
 
         task_layout = getattr(self, "task_layout", None)
         if task_layout is not None:
@@ -751,7 +871,7 @@ class TaskWidget(QWidget):
             if hasattr(self, "btn_delete_task") and self.btn_delete_task:
                 self.btn_delete_task.setVisible(True)
             if hasattr(self, "check_done_task") and self.check_done_task:
-                self.check_done_task.setToolTip("Mark task done" if not is_done else "Restore task status")
+                self._refresh_progress_control()
             if hasattr(self, "task_frame") and self.task_frame:
                 self.task_frame.setToolTip("\n".join(part for part in (title, notes) if part))
             self._show_inline_title_editor(self._title_edit_active)
@@ -837,6 +957,7 @@ class TaskWidget(QWidget):
                     self.task_frame.setToolTip(notes)
 
         self._set_done_state_properties(is_done)
+        self._refresh_progress_control()
 
     def _on_delete_clicked(self):
         if not self._task_id:
@@ -870,26 +991,6 @@ class TaskWidget(QWidget):
                 self._notify_filter_state_changed()
         except Exception:
             pass
-
-    def _on_done_toggled(self, checked: bool) -> None:
-        if self._task_id is None:
-            return
-        current_status = (self._data or {}).get("status")
-        if checked and current_status == "done":
-            return
-        if (not checked) and current_status != "done":
-            return
-        if checked and current_status not in (None, "", "done"):
-            self._last_non_done_status = current_status
-        new_status = "done" if checked else self._fallback_undo_status()
-        try:
-            updated = self._api.update_task(self._task_id, status=new_status)
-            self._apply_updated_task(updated, flash_done=checked)
-        except Exception:
-            if hasattr(self, "check_done_task") and self.check_done_task:
-                blocker = QSignalBlocker(self.check_done_task)
-                self.check_done_task.setChecked(current_status == "done")
-                del blocker
 
     def _on_status_action(self, action: QAction):
         if self._task_id is None:
@@ -985,18 +1086,17 @@ class TaskWidget(QWidget):
                 self.btn_assigned.setText(self._artist_label(prev_artist_id))
 
     def update_from_data(self, task_data: dict):
-        task_data = task_data or {}
-        self._data = task_data
+        task_data = dict(task_data or {})
 
         title = task_data.get("title") or ""
         notes = str(task_data.get("notes") or "")
         status_value = task_data.get("status")
+        progress_value = self._coerce_task_progress(task_data.get("progress"), status_value)
         artist_id = task_data.get("artist")
         priority_value = task_data.get("priority", 5)
         budget_hours_value = task_data.get("budget_hours", 0)
-
-        if status_value and status_value != "done":
-            self._last_non_done_status = status_value
+        task_data["progress"] = progress_value
+        self._data = task_data
 
         if hasattr(self, "btn_task_title") and self.btn_task_title:
             self.btn_task_title.setText(title)
@@ -1034,11 +1134,6 @@ class TaskWidget(QWidget):
 
         if self.btn_budget_hours:
             self.btn_budget_hours.setText(self._format_hours(budget_hours_value))
-
-        if hasattr(self, "check_done_task") and self.check_done_task:
-            blocker = QSignalBlocker(self.check_done_task)
-            self.check_done_task.setChecked(status_value == "done")
-            del blocker
 
         self.set_compact_mode(self._compact_mode)
 
@@ -1844,7 +1939,7 @@ class ShotCard(QWidget):
             task_id = self._normalize_task_id(task.get("id"))
             if task_id is None:
                 continue
-            if task.get("status") == "done":
+            if (task.get("status") or "") in TASK_COMPLETED_STATUSES:
                 done_ids.append(task_id)
             else:
                 active_ids.append(task_id)

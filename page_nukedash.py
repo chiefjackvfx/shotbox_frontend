@@ -420,7 +420,7 @@ class page_nukedash(QMainWindow):
         saved_layout_mode = self._settings_manager.get("shots_layout_mode", "list")
         self._shots_layout_mode = "grid" if str(saved_layout_mode).lower() == "grid" else "list"
         self._task_style = _normalize_task_style(
-            self._settings_manager.get("nukedash_task_style", "card")
+            self._settings_manager.get("nukedash_task_style", "checklist")
         )
         self._compact_view_enabled = False
         self._compact_auto_grid_breakpoint = 1200

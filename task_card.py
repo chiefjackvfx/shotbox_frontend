@@ -1,8 +1,64 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSizePolicy, QCheckBox, QLineEdit, QStackedWidget
+    QFrame, QSizePolicy, QLineEdit, QStackedWidget, QApplication
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+
+
+class TaskProgressButton(QPushButton):
+    increment_requested = pyqtSignal()
+    decrement_requested = pyqtSignal()
+    complete_requested = pyqtSignal()
+
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self._single_click_timer = QTimer(self)
+        self._single_click_timer.setSingleShot(True)
+        self._single_click_timer.timeout.connect(self.increment_requested.emit)
+        self._suppress_next_left_release = False
+
+    def _double_click_interval(self) -> int:
+        app = QApplication.instance()
+        if app is None:
+            return 250
+        return max(1, int(app.doubleClickInterval()))
+
+    def _cancel_pending_single_click(self) -> None:
+        if self._single_click_timer.isActive():
+            self._single_click_timer.stop()
+
+    def mouseReleaseEvent(self, event):
+        button = event.button()
+        inside = self.rect().contains(event.position().toPoint())
+
+        if button == Qt.MouseButton.LeftButton:
+            if self._suppress_next_left_release:
+                self._suppress_next_left_release = False
+                event.accept()
+                return
+            if inside:
+                self._single_click_timer.start(self._double_click_interval())
+            event.accept()
+            return
+
+        if button == Qt.MouseButton.RightButton:
+            self._cancel_pending_single_click()
+            if inside:
+                self.decrement_requested.emit()
+            event.accept()
+            return
+
+        super().mouseReleaseEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._cancel_pending_single_click()
+            self._suppress_next_left_release = True
+            if self.rect().contains(event.position().toPoint()):
+                self.complete_requested.emit()
+            event.accept()
+            return
+        super().mouseDoubleClickEvent(event)
 
 
 def _setup_task_card_ui(widget):
@@ -152,10 +208,13 @@ def _setup_task_checklist_ui(widget):
     layout.setContentsMargins(8, 5, 8, 5)
     layout.setSpacing(6)
 
-    widget.check_done_task = QCheckBox("", widget.task_frame)
+    widget.check_done_task = TaskProgressButton("", widget.task_frame)
     widget.check_done_task.setObjectName("task_done_toggle")
+    widget.check_done_task.setFlat(True)
     widget.check_done_task.setCursor(Qt.CursorShape.PointingHandCursor)
     widget.check_done_task.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+    widget.check_done_task.setFixedSize(28, 28)
+    widget.check_done_task.setToolTip("Left click +25%, right click -25%, double click to jump to 100%")
     layout.addWidget(widget.check_done_task)
 
     widget.title_stack = QStackedWidget(widget.task_frame)

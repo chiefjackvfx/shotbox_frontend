@@ -19,11 +19,14 @@ from PyQt6.QtWidgets import QApplication, QFrame, QVBoxLayout, QWidget
 import widgets
 
 
-def make_task(task_id: int, *, title: str, status: str, artist=None) -> dict:
+def make_task(task_id: int, *, title: str, status: str, artist=None, progress=None) -> dict:
+    if progress is None:
+        progress = 100 if status in {"waiting_for_approval", "approved", "done"} else 0
     return {
         "id": task_id,
         "title": title,
         "status": status,
+        "progress": progress,
         "artist": artist,
         "hidden": False,
         "notes": "",
@@ -41,6 +44,13 @@ class FakeTaskApi:
         self.calls.append({"task_id": task_id, "fields": dict(fields)})
         updated = dict(self.task_data)
         updated.update(fields)
+        if updated.get("status") in {"waiting_for_approval", "approved", "done"}:
+            updated["progress"] = 100
+        else:
+            try:
+                updated["progress"] = max(0, min(100, int(updated.get("progress", 0))))
+            except Exception:
+                updated["progress"] = 0
         self.task_data = dict(updated)
         return updated
 
@@ -85,7 +95,11 @@ class TaskStyleSwitchingTests(unittest.TestCase):
         widget.activateWindow()
         self.app.processEvents()
 
-    def test_checklist_style_rebuilds_loaded_widgets_and_moves_done_last(self):
+    def _wait_for_single_click(self) -> None:
+        QTest.qWait(self.app.doubleClickInterval() + 30)
+        self.app.processEvents()
+
+    def test_checklist_style_rebuilds_loaded_widgets_and_moves_completed_last(self):
         card = MinimalStyleShotCard(
             {
                 "id": 999,
@@ -93,12 +107,14 @@ class TaskStyleSwitchingTests(unittest.TestCase):
                 "tasks": [
                     make_task(11, title="Done first", status="done"),
                     make_task(12, title="Active second", status="assigned"),
+                    make_task(13, title="Waiting third", status="waiting_for_approval"),
+                    make_task(14, title="Approved fourth", status="approved"),
                 ],
             }
         )
         try:
-            card.set_visible_task_ids([11, 12])
-            card.materialize_task_ids([11, 12])
+            card.set_visible_task_ids([11, 12, 13, 14])
+            card.materialize_task_ids([11, 12, 13, 14])
 
             before = []
             layout = card.frame_tasks.layout()
@@ -108,7 +124,10 @@ class TaskStyleSwitchingTests(unittest.TestCase):
                 if isinstance(widget, widgets.TaskWidget):
                     before.append((widget._data.get("id"), widget._presentation))
 
-            self.assertEqual(before, [(11, "card"), (12, "card")])
+            self.assertEqual(
+                before,
+                [(11, "card"), (12, "card"), (13, "card"), (14, "card")],
+            )
 
             card.set_task_style("checklist")
 
@@ -120,50 +139,133 @@ class TaskStyleSwitchingTests(unittest.TestCase):
                 if isinstance(widget, widgets.TaskWidget):
                     after.append((widget._data.get("id"), widget._presentation))
 
-            self.assertEqual(after, [(12, "checklist"), (11, "checklist")])
+            self.assertEqual(
+                after,
+                [(12, "checklist"), (13, "checklist"), (11, "checklist"), (14, "checklist")],
+            )
         finally:
             card.close()
             card.deleteLater()
             self.app.processEvents()
 
-    def test_checklist_done_toggle_restores_previous_non_done_status(self):
+    def test_checklist_progress_left_clicks_move_to_waiting_then_approved(self):
         task = make_task(21, title="Toggle me", status="assigned")
         widget = widgets.TaskWidget(task, presentation="checklist")
         widget._api = FakeTaskApi(task)
         try:
             self._show_widget(widget)
-            widget.check_done_task.setChecked(True)
-            self.app.processEvents()
-            self.assertEqual(widget._data.get("status"), "done")
+            self.assertEqual(widget.check_done_task.text(), "○")
 
-            widget.check_done_task.setChecked(False)
-            self.app.processEvents()
+            QTest.mouseClick(widget.check_done_task, Qt.MouseButton.LeftButton)
+            self._wait_for_single_click()
+            self.assertEqual(widget._data.get("progress"), 25)
             self.assertEqual(widget._data.get("status"), "assigned")
+            self.assertEqual(widget.check_done_task.text(), "◔")
+
+            QTest.mouseClick(widget.check_done_task, Qt.MouseButton.LeftButton)
+            self._wait_for_single_click()
+            self.assertEqual(widget._data.get("progress"), 50)
+            self.assertEqual(widget.check_done_task.text(), "◑")
+
+            QTest.mouseClick(widget.check_done_task, Qt.MouseButton.LeftButton)
+            self._wait_for_single_click()
+            self.assertEqual(widget._data.get("progress"), 75)
+            self.assertEqual(widget.check_done_task.text(), "◕")
+
+            QTest.mouseClick(widget.check_done_task, Qt.MouseButton.LeftButton)
+            self._wait_for_single_click()
+            self.assertEqual(widget._data.get("progress"), 100)
+            self.assertEqual(widget._data.get("status"), "waiting_for_approval")
+            self.assertEqual(widget.check_done_task.text(), "●")
+
+            QTest.mouseClick(widget.check_done_task, Qt.MouseButton.LeftButton)
+            self._wait_for_single_click()
+            self.assertEqual(widget._data.get("progress"), 100)
+            self.assertEqual(widget._data.get("status"), "approved")
+            self.assertEqual(widget._api.calls[-1]["fields"], {"status": "approved", "progress": 100})
+            self.assertFalse(widget.btn_task_title.font().strikeOut())
         finally:
             widget.close()
             widget.deleteLater()
             self.app.processEvents()
 
-    def test_checklist_done_state_keeps_title_readable_without_strikeout(self):
-        task = make_task(22, title="Readable done task", status="assigned")
+    def test_checklist_right_click_reduces_progress_and_uncompletes_terminal_status(self):
+        task = make_task(22, title="Readable done task", status="approved")
         widget = widgets.TaskWidget(task, presentation="checklist")
         widget._api = FakeTaskApi(task)
         try:
             self._show_widget(widget)
-            widget.check_done_task.setChecked(True)
+            QTest.mouseClick(widget.check_done_task, Qt.MouseButton.RightButton)
             self.app.processEvents()
+            self.assertEqual(widget._data.get("progress"), 75)
+            self.assertEqual(widget._data.get("status"), "in_progress")
+            self.assertEqual(widget.check_done_task.text(), "◕")
             self.assertFalse(widget.btn_task_title.font().strikeOut())
+        finally:
+            widget.close()
+            widget.deleteLater()
+            self.app.processEvents()
 
-            widget.check_done_task.setChecked(False)
+    def test_checklist_double_click_jumps_to_waiting_without_extra_increment(self):
+        task = make_task(23, title="Jump me", status="assigned", progress=25)
+        widget = widgets.TaskWidget(task, presentation="checklist")
+        widget._api = FakeTaskApi(task)
+        try:
+            self._show_widget(widget)
+            QTest.mouseDClick(widget.check_done_task, Qt.MouseButton.LeftButton)
+            QTest.qWait(self.app.doubleClickInterval() + 30)
             self.app.processEvents()
+
+            self.assertEqual(widget._data.get("progress"), 100)
+            self.assertEqual(widget._data.get("status"), "waiting_for_approval")
+            self.assertEqual(widget.check_done_task.text(), "●")
+            self.assertEqual(len(widget._api.calls), 1)
+            self.assertEqual(
+                widget._api.calls[0]["fields"],
+                {"progress": 100, "status": "waiting_for_approval"},
+            )
+        finally:
+            widget.close()
+            widget.deleteLater()
+            self.app.processEvents()
+
+    def test_checklist_left_click_on_approved_is_noop(self):
+        task = make_task(24, title="Already approved", status="approved")
+        widget = widgets.TaskWidget(task, presentation="checklist")
+        widget._api = FakeTaskApi(task)
+        try:
+            self._show_widget(widget)
+            QTest.mouseClick(widget.check_done_task, Qt.MouseButton.LeftButton)
+            self._wait_for_single_click()
+
+            self.assertEqual(widget._data.get("progress"), 100)
+            self.assertEqual(widget._data.get("status"), "approved")
+            self.assertEqual(widget._api.calls, [])
             self.assertFalse(widget.btn_task_title.font().strikeOut())
+        finally:
+            widget.close()
+            widget.deleteLater()
+            self.app.processEvents()
+
+    def test_checklist_right_click_on_zero_progress_is_noop(self):
+        task = make_task(25, title="Zero progress", status="assigned", progress=0)
+        widget = widgets.TaskWidget(task, presentation="checklist")
+        widget._api = FakeTaskApi(task)
+        try:
+            self._show_widget(widget)
+            QTest.mouseClick(widget.check_done_task, Qt.MouseButton.RightButton)
+            self.app.processEvents()
+
+            self.assertEqual(widget._data.get("progress"), 0)
+            self.assertEqual(widget._data.get("status"), "assigned")
+            self.assertEqual(widget._api.calls, [])
         finally:
             widget.close()
             widget.deleteLater()
             self.app.processEvents()
 
     def test_checklist_inline_notes_editor_updates_task_notes(self):
-        task = make_task(23, title="Inline notes", status="assigned")
+        task = make_task(26, title="Inline notes", status="assigned")
         widget = widgets.TaskWidget(task, presentation="checklist")
         widget._api = FakeTaskApi(task)
         try:
@@ -183,7 +285,7 @@ class TaskStyleSwitchingTests(unittest.TestCase):
             self.app.processEvents()
 
     def test_checklist_title_click_enters_inline_edit_mode(self):
-        task = make_task(24, title="Track roto", status="assigned")
+        task = make_task(27, title="Track roto", status="assigned")
         widget = widgets.TaskWidget(task, presentation="checklist")
         widget._api = FakeTaskApi(task)
         try:
@@ -203,7 +305,7 @@ class TaskStyleSwitchingTests(unittest.TestCase):
             self.app.processEvents()
 
     def test_checklist_inline_title_editor_updates_task_title_on_enter(self):
-        task = make_task(25, title="Prep comp", status="assigned")
+        task = make_task(28, title="Prep comp", status="assigned")
         widget = widgets.TaskWidget(task, presentation="checklist")
         widget._api = FakeTaskApi(task)
         try:
@@ -225,7 +327,7 @@ class TaskStyleSwitchingTests(unittest.TestCase):
             self.app.processEvents()
 
     def test_checklist_inline_title_editor_saves_on_focus_loss(self):
-        task = make_task(26, title="Integrate pass", status="assigned")
+        task = make_task(29, title="Integrate pass", status="assigned")
         widget = widgets.TaskWidget(task, presentation="checklist")
         widget._api = FakeTaskApi(task)
         try:
