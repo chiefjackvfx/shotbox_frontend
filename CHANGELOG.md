@@ -2,6 +2,16 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 1.6.0 - 2026-04-02
+
+### Added
+
+- added check list feature ui
+
+### Changed
+
+- filters on at boot
+
 ## 1.5.0 - 2026-03-29
 
 ### Added
