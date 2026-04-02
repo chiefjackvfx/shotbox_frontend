@@ -208,7 +208,7 @@ class FilterHarness(QMainWindow):
             self.comboBox_sort_artist.addItem(f"Artist {artist_id}", artist_id)
 
         self._setup_status_filter_dropdown()
-        self.checkBox_enable_filters.setChecked(False)
+        self.checkBox_enable_filters.setChecked(True)
         self.checkBox_enable_filters.stateChanged.connect(self._on_enable_filters_changed)
         self._set_filter_controls_enabled(self._filters_enabled())
 
@@ -355,19 +355,9 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.harness.checkBox_enable_filters.setChecked(bool(enabled))
         self.app.processEvents()
 
-    def test_filters_start_disabled_and_controls_are_greyed_out(self):
-        self.assertFalse(self.harness.checkBox_enable_filters.isChecked())
-        self.assertFalse(self.harness.checkBox_show_to_conform.isEnabled())
-        self.assertFalse(self.harness.checkBox_hidden_shot.isEnabled())
-        self.assertFalse(self.harness.checkBox_hidden_tasks.isEnabled())
-        self.assertFalse(self.harness.comboBox_sort.isEnabled())
-        self.assertFalse(self.harness.comboBox_sort_artist.isEnabled())
-        self.assertFalse(self.harness.comboBox_sort_status.isEnabled())
-        self.assertFalse(self.harness.Search_bar.isEnabled())
-
-    def test_enabling_filters_reenables_filter_controls(self):
-        self._set_filters_enabled(True)
-
+    def test_filters_start_enabled_and_controls_are_available(self):
+        self.assertTrue(self.harness.checkBox_enable_filters.isChecked())
+        self.assertTrue(self.harness.checkBox_enable_filters.isEnabled())
         self.assertTrue(self.harness.checkBox_show_to_conform.isEnabled())
         self.assertTrue(self.harness.checkBox_hidden_shot.isEnabled())
         self.assertTrue(self.harness.checkBox_hidden_tasks.isEnabled())
@@ -376,8 +366,8 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertTrue(self.harness.comboBox_sort_status.isEnabled())
         self.assertTrue(self.harness.Search_bar.isEnabled())
 
-    def test_filters_off_shows_all_shots_and_tasks(self):
-        self.assertEqual(self._visible_task_ids(101), [1, 2, 3, 4])
+    def test_default_filters_hide_hidden_tasks_but_show_all_matching_shots(self):
+        self.assertEqual(self._visible_task_ids(101), [1, 2, 3])
         self.assertEqual(self._visible_task_ids(102), [5])
         self.assertEqual(self._visible_task_ids(103), [6])
         self.assertTrue(self._shot_card(101).isVisible())
@@ -385,25 +375,7 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertTrue(self._shot_card(103).isVisible())
         self.assertEqual(self.harness.Label_results.text(), "3 results")
 
-    def test_filters_off_skips_task_visibility_and_sort_logic(self):
-        def fail_task_visibility(*args, **kwargs):
-            raise AssertionError("_apply_task_visibility should not run when filters are disabled")
-
-        def fail_sort(*args, **kwargs):
-            raise AssertionError("_apply_sort_to_timeline should not run when filters are disabled")
-
-        self.harness._apply_task_visibility = fail_task_visibility
-        self.harness._apply_sort_to_timeline = fail_sort
-
-        if hasattr(self.harness, "_last_filter_sig"):
-            del self.harness._last_filter_sig
-        self.harness._apply_filters(force=True)
-        self.app.processEvents()
-
-        self.assertEqual(self.harness.Label_results.text(), "3 results")
-
     def test_turning_filters_off_restores_all_task_widgets_visible(self):
-        self._set_filters_enabled(True)
         self._select_status("done")
 
         self.assertEqual(self._visible_task_ids(101), [1])
@@ -411,6 +383,14 @@ class NukeDashStatusFilterTests(unittest.TestCase):
 
         self._set_filters_enabled(False)
 
+        self.assertFalse(self.harness.checkBox_enable_filters.isChecked())
+        self.assertFalse(self.harness.checkBox_show_to_conform.isEnabled())
+        self.assertFalse(self.harness.checkBox_hidden_shot.isEnabled())
+        self.assertFalse(self.harness.checkBox_hidden_tasks.isEnabled())
+        self.assertFalse(self.harness.comboBox_sort.isEnabled())
+        self.assertFalse(self.harness.comboBox_sort_artist.isEnabled())
+        self.assertFalse(self.harness.comboBox_sort_status.isEnabled())
+        self.assertFalse(self.harness.Search_bar.isEnabled())
         self.assertEqual(self._visible_task_ids(101), [1, 2, 3, 4])
         self.assertEqual(self._visible_task_ids(102), [5])
         self.assertEqual(self._visible_task_ids(103), [6])
@@ -418,7 +398,6 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertEqual(self.harness.Label_results.text(), "3 results")
 
     def test_done_filter_hides_non_matching_tasks_and_shots(self):
-        self._set_filters_enabled(True)
         self._select_status("done")
 
         self.assertEqual(self.harness._status_filter_values, {"done"})
@@ -428,7 +407,6 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertEqual(self.harness.Label_results.text(), "2 results")
 
     def test_multiple_statuses_use_or_semantics_per_task(self):
-        self._set_filters_enabled(True)
         self._select_status("done")
         self._select_status("approved")
 
@@ -438,7 +416,6 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertFalse(self._shot_card(102).isVisible())
 
     def test_artist_and_status_filters_intersect_on_same_task(self):
-        self._set_filters_enabled(True)
         self._select_status("done")
         self._set_artist_filter(2)
 
@@ -448,7 +425,6 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertEqual(self.harness.Label_results.text(), "1 results")
 
     def test_clearing_filters_restores_all_non_hidden_tasks(self):
-        self._set_filters_enabled(True)
         self._select_status("done")
         self._set_artist_filter(2)
 
@@ -463,7 +439,6 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertTrue(self._shot_card(103).isVisible())
 
     def test_status_edit_reapplies_filters_immediately(self):
-        self._set_filters_enabled(True)
         self._select_status("done")
 
         task_widget = self._task_widget(6)

@@ -261,9 +261,18 @@
               </spacer>
              </item>
              <item>
-              <widget class="QCheckBox" name="checkBox_enable_filters">
+             <widget class="QCheckBox" name="checkBox_enable_filters">
+               <property name="enabled">
+                <bool>true</bool>
+               </property>
+               <property name="toolTip">
+                <string>Turn filters on or off.</string>
+               </property>
                <property name="text">
                 <string>Enable filters</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
                </property>
               </widget>
              </item>

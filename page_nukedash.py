@@ -579,7 +579,7 @@ class page_nukedash(QMainWindow):
 
     def _default_saved_filter_state(self) -> dict:
         return {
-            "enabled": False,
+            "enabled": True,
             "sort_mode": "title_asc",
             "artist_id": None,
             "status_values": [],
@@ -592,7 +592,7 @@ class page_nukedash(QMainWindow):
         normalized = self._default_saved_filter_state()
         if isinstance(state, dict):
             normalized.update(state)
-        normalized["enabled"] = bool(normalized.get("enabled", False))
+        normalized["enabled"] = bool(normalized.get("enabled", True))
         normalized["sort_mode"] = str(normalized.get("sort_mode", "title_asc") or "title_asc")
         normalized["artist_id"] = normalized.get("artist_id")
         normalized["status_values"] = [
@@ -699,7 +699,7 @@ class page_nukedash(QMainWindow):
             if hasattr(self, "checkBox_enable_filters") and self.checkBox_enable_filters:
                 self.checkBox_enable_filters.blockSignals(True)
                 self.checkBox_enable_filters.setChecked(
-                    bool(self._saved_filter_state.get("enabled", False))
+                    bool(self._saved_filter_state.get("enabled", True))
                 )
                 self.checkBox_enable_filters.blockSignals(False)
             if hasattr(self, "checkBox_hidden_shot") and self.checkBox_hidden_shot:

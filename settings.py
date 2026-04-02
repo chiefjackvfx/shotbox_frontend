@@ -106,7 +106,7 @@ DEFAULT_SETTINGS = {
     "last_timeline_index": 0,  # Last selected timeline tab index
     "last_scroll_position": 0,  # Last scroll position in timeline
     "nukedash_filter_state": {
-        "enabled": False,
+        "enabled": True,
         "sort_mode": "title_asc",
         "artist_id": None,
         "status_values": [],

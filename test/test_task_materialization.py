@@ -340,6 +340,7 @@ class TaskMaterializationTests(unittest.TestCase):
         )
         try:
             self.assertTrue(harness.checkBox_enable_filters.isChecked())
+            self.assertTrue(harness.checkBox_enable_filters.isEnabled())
             self.assertTrue(harness.checkBox_hidden_shot.isChecked())
             self.assertTrue(harness.checkBox_hidden_tasks.isChecked())
             self.assertEqual(harness.comboBox_sort.currentData(), "title_desc")
@@ -368,7 +369,8 @@ class TaskMaterializationTests(unittest.TestCase):
             },
         )
         try:
-            self.assertFalse(harness.checkBox_enable_filters.isChecked())
+            self.assertTrue(harness.checkBox_enable_filters.isChecked())
+            self.assertTrue(harness.checkBox_enable_filters.isEnabled())
             self.assertFalse(harness.checkBox_hidden_shot.isChecked())
             self.assertFalse(harness.checkBox_hidden_tasks.isChecked())
             self.assertEqual(harness.comboBox_sort.currentData(), "title_asc")
@@ -405,7 +407,7 @@ class TaskMaterializationTests(unittest.TestCase):
             harness.deleteLater()
             self.app.processEvents()
 
-    def test_force_apply_materializes_tasks_even_with_cached_signature(self):
+    def test_force_apply_materializes_visible_tasks_even_with_cached_signature(self):
         harness = MaterializationHarness(self._shots())
         try:
             harness._last_filter_sig = ("filters_disabled", 0)
@@ -413,7 +415,7 @@ class TaskMaterializationTests(unittest.TestCase):
             harness._apply_filters(force=True)
             self.app.processEvents()
 
-            self.assertEqual(sorted(harness.all_task_widget_ids()), [1, 2, 3, 4, 5, 6])
+            self.assertEqual(sorted(harness.all_task_widget_ids()), [1, 2, 3, 5, 6])
         finally:
             harness.close()
             harness.deleteLater()
@@ -448,6 +450,7 @@ class TaskMaterializationTests(unittest.TestCase):
                 harness._process_task_materialize_queue()
                 self.app.processEvents()
 
+            self.assertFalse(harness.checkBox_enable_filters.isChecked())
             self.assertEqual(sorted(harness.all_task_widget_ids()), [1, 2, 3, 4, 5, 6])
             self.assertIs(harness.find_task_widget(1), first_widget)
         finally:
