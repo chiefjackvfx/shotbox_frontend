@@ -79,6 +79,20 @@ class FakeFolders:
         return folder
 
 
+class GuardFolders:
+    def latest_nk(self, folder):
+        raise AssertionError("ShotCard init should not scan latest_nk")
+
+    def latest_render_info(self, folder):
+        raise AssertionError("ShotCard init should not scan latest_render_info")
+
+    def latest_preview(self, folder):
+        raise AssertionError("ShotCard init should not scan latest_preview")
+
+    def convert_path(self, folder):
+        return folder
+
+
 class ThumbnailDensityNoThumbTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -133,6 +147,29 @@ class ThumbnailDensityNoThumbTests(unittest.TestCase):
 
                 loader.load.assert_called_once()
                 self.assertFalse(card.label_thumbnail.isHidden())
+            finally:
+                card.close()
+                card.deleteLater()
+                self.app.processEvents()
+
+    def test_shot_card_init_is_cheap_and_does_not_create_poll_timers(self):
+        data = {
+            "id": 2,
+            "title": "Shot 002",
+            "notes": "",
+            "base_path": "/tmp",
+            "tasks": [],
+        }
+
+        with mock.patch.object(widgets, "HAS_MULTIMEDIA", False), \
+            mock.patch.object(widgets.http_help, "DjangoAPI", return_value=mock.Mock()), \
+            mock.patch.object(widgets.filesIO, "Folders", return_value=GuardFolders()):
+            card = widgets.ShotCard(data)
+
+            try:
+                self.assertFalse(hasattr(card, "_nk_poll_timer"))
+                self.assertFalse(hasattr(card, "_render_poll_timer"))
+                self.assertFalse(hasattr(card, "_preview_poll_timer"))
             finally:
                 card.close()
                 card.deleteLater()

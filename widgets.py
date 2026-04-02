@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import inspect
 import random
 import traceback
 from pathlib import Path
@@ -175,46 +176,74 @@ def _children_by_object_name(layout: QLayout) -> dict[str, QWidget]:
             out[w.objectName()] = w
     return out
 
+
+def _ordered_widget_names(layout: QLayout) -> list[str]:
+    names = []
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        widget = item.widget() if item else None
+        if widget is not None and widget.objectName():
+            names.append(widget.objectName())
+    return names
+
+
 def _ensure_order(layout: QLayout, desired_names: list[str]):
     """Move existing widgets to match desired order without recreating."""
-    # For FlowLayout and similar layouts that don't support insertWidget,
-    # we need to remove all and re-add in order
-    
-    # Collect all widgets by name
-    widgets_by_name = {}
-    for i in range(layout.count()):
-        w = layout.itemAt(i).widget()
-        if w is not None and w.objectName():
-            widgets_by_name[w.objectName()] = w
-    
-    # Check if layout supports insertWidget (QVBoxLayout, QHBoxLayout, etc.)
-    has_insert = hasattr(layout, 'insertWidget')
-    
-    if has_insert:
-        # Original behavior for layouts that support insertWidget
-        pos = 0
-        for desired in desired_names:
-            for i in range(layout.count()):
-                w = layout.itemAt(i).widget()
-                if w and w.objectName() == desired:
-                    if i != pos:
-                        layout.removeWidget(w)
-                        layout.insertWidget(pos, w)
-                    pos += 1
-                    break
-    else:
-        # For FlowLayout and similar: remove all and re-add in order
-        # First, collect all widgets
-        all_widgets = []
-        while layout.count():
-            item = layout.takeAt(0)
-            if item.widget():
-                all_widgets.append(item.widget())
-        
-        # Re-add in desired order
-        for name in desired_names:
-            if name in widgets_by_name:
-                layout.addWidget(widgets_by_name[name])
+    if not desired_names:
+        return
+
+    current_names = _ordered_widget_names(layout)
+    desired_existing = [name for name in desired_names if name in current_names]
+    current_existing = [name for name in current_names if name in set(desired_existing)]
+    if desired_existing == current_existing:
+        return
+
+    if hasattr(layout, "reorder_by_object_names"):
+        if layout.reorder_by_object_names(desired_names):
+            layout.invalidate()
+        return
+
+    widgets_by_name = _children_by_object_name(layout)
+    if not hasattr(layout, "insertWidget"):
+        return
+
+    pos = 0
+    for desired in desired_names:
+        widget = widgets_by_name.get(desired)
+        if widget is None:
+            continue
+        current_index = -1
+        for i in range(layout.count()):
+            item = layout.itemAt(i)
+            candidate = item.widget() if item else None
+            if candidate is widget:
+                current_index = i
+                break
+        if current_index < 0:
+            continue
+        if current_index != pos:
+            layout.removeWidget(widget)
+            layout.insertWidget(pos, widget)
+        pos += 1
+
+
+def _create_shot_card(
+    shot_data: dict,
+    *,
+    parent=None,
+    task_style: str = "card",
+    api=None,
+    folders=None,
+):
+    kwargs = {"task_style": task_style}
+    init_params = inspect.signature(ShotCard.__init__).parameters
+    if "parent" in init_params:
+        kwargs["parent"] = parent
+    if api is not None and "api" in init_params:
+        kwargs["api"] = api
+    if folders is not None and "folders" in init_params:
+        kwargs["folders"] = folders
+    return ShotCard(shot_data, **kwargs)
 
 
 def _normalize_layout_mode(mode: str) -> str:
@@ -1117,7 +1146,7 @@ class ShotCard(QWidget):
         "None": "#333333"       # Default/no color
     }
     
-    def __init__(self, data=None, parent=None, task_style="card"):
+    def __init__(self, data=None, parent=None, task_style="card", api=None, folders=None):
         super().__init__(parent)
         data = data or {}
         self.data = data
@@ -1157,13 +1186,19 @@ class ShotCard(QWidget):
         
         self._shot_id = data.get("id")
         self.shot_dir = data.get("base_path")
-        self._api = http_help.DjangoAPI()
-        self.filesIO = filesIO.Folders()
+        self._api = api or http_help.DjangoAPI()
+        self.filesIO = folders or filesIO.Folders()
         self._nuke_open_handler = None
         self._lock_state = "none"
         self._lock_owner_machine = None
         self._lock_script_name = None
         self._original_clip_entries = []
+        self._file_state_signature = None
+        self._last_nk_file = None
+        self._last_nk_mtime = None
+        self._last_render_file = None
+        self._last_render_mtime = None
+        self._last_preview_version = None
 
         # Color buttons are now styled via QSS (styles_v02.qss)
         # Initial color indicator will be set in update_from_data via _apply_colour_code
@@ -1192,18 +1227,8 @@ class ShotCard(QWidget):
 
         self.btn_edit_shot_notes.clicked.connect(self._on_add_note_clicked)
 
-        # Initial setup for nuke button
-        with project_load_profiler.measure_installed_work("disk_latest_nk"):
-            latest_nk = self.filesIO.latest_nk(self.shot_dir)
-        if latest_nk:
-            self.btn_open_nuke.setText(latest_nk.name)
-            self.btn_open_nuke.setProperty("file_path", str(latest_nk))  # Store path on button
-            self.btn_open_nuke.clicked.connect(
-                lambda checked=False, path=latest_nk: self._on_open_nuke_clicked(path)
-            )
-        else:
-            self.btn_open_nuke.setText("No .nk file")
-            self.btn_open_nuke.setProperty("file_path", None)
+        self.btn_open_nuke.clicked.connect(self._open_current_nuke_file)
+        self._set_nuke_file_state(file_path=None, file_name=None, file_mtime=None)
         _set_dynamic_property(self.btn_open_nuke, "lock_state", "none")
         
         self.btn_open_assets.clicked.connect(self._open_shot_assets)
@@ -1211,42 +1236,121 @@ class ShotCard(QWidget):
         self.btn_open_assets.customContextMenuRequested.connect(self._on_assets_context_menu)
         self.btn_open_precomp.clicked.connect(lambda: self.filesIO.openFileLocation(Path(self.shot_dir) / "renders" / "precomp" ))
 
-        with project_load_profiler.measure_installed_work("disk_latest_render_info"):
-            render_info = self.filesIO.latest_render_info(self.shot_dir)
-        if render_info:
-            render_path = render_info.get("render_path")
-            render_display = render_info.get("display_name", "")
-            render_relpath = render_info.get("render_relpath")
-            render_sequence_path = render_info.get("sequence_path")
-            render_dir = render_info.get("render_dir")
-            render_version = render_info.get("version")
-            self.btn_latest_render.setProperty("file_path", render_path)  # Store path on button
-            self.btn_latest_render.setProperty("render_relpath", render_relpath)
-            self.btn_latest_render.setProperty("render_display", render_display)
-            self.btn_latest_render.setProperty("render_type", render_info.get("type"))
-            self.btn_latest_render.setProperty("render_sequence_path", render_sequence_path)
-            self.btn_latest_render.setProperty("render_dir", render_dir)
-            self.btn_latest_render.setProperty("render_version", render_version)
-        else:
-            self.btn_latest_render.setProperty("file_path", None)
-            self.btn_latest_render.setProperty("render_relpath", None)
-            self.btn_latest_render.setProperty("render_display", None)
-            self.btn_latest_render.setProperty("render_type", None)
-            self.btn_latest_render.setProperty("render_sequence_path", None)
-            self.btn_latest_render.setProperty("render_dir", None)
-            self.btn_latest_render.setProperty("render_version", None)
+        self._set_render_file_state()
         self._set_render_button_text()
         self.btn_latest_render.clicked.connect(self._on_push_to_dvr_clicked)  # Use new handler 
 
         self._set_task_layout_mode(self._task_style)
-
-        # Set up automatic file polling
-        self._setup_nk_polling()
-        self._setup_render_polling()
-        self._setup_preview_polling()
         self.set_thumbnails_enabled(self._thumbnails_enabled)
 
         self.update_from_data(data)
+
+    def _set_nuke_file_state(
+        self,
+        *,
+        file_path: str | None,
+        file_name: str | None,
+        file_mtime: float | None,
+    ) -> None:
+        self._last_nk_file = file_name
+        self._last_nk_mtime = file_mtime
+        self.btn_open_nuke.setProperty("file_path", file_path)
+        self.refresh_lock_state_from_data()
+        self._set_nuke_button_label()
+        self._set_nuke_button_tooltip()
+
+    def _set_render_file_state(
+        self,
+        *,
+        render_path: str | None = None,
+        render_relpath: str | None = None,
+        render_display: str | None = None,
+        render_type: str | None = None,
+        render_sequence_path: str | None = None,
+        render_dir: str | None = None,
+        render_version: int | None = None,
+        render_mtime: float | None = None,
+    ) -> None:
+        self._last_render_file = render_relpath or render_display
+        self._last_render_mtime = render_mtime
+        self.btn_latest_render.setProperty("file_path", render_path)
+        self.btn_latest_render.setProperty("render_relpath", render_relpath)
+        self.btn_latest_render.setProperty("render_display", render_display)
+        self.btn_latest_render.setProperty("render_type", render_type)
+        self.btn_latest_render.setProperty("render_sequence_path", render_sequence_path)
+        self.btn_latest_render.setProperty("render_dir", render_dir)
+        self.btn_latest_render.setProperty("render_version", render_version)
+        self._set_render_button_text()
+        self._refresh_last_conform_indicator()
+        self._apply_compact_tooltips()
+
+    def refresh_file_state_tooltips(self) -> None:
+        self._set_nuke_button_tooltip()
+        self._apply_compact_tooltips()
+
+    def apply_file_state_snapshot(self, snapshot: filesIO.ShotFileStateSnapshot) -> str | None:
+        if snapshot is None:
+            return None
+
+        signature = (
+            snapshot.nk_path,
+            snapshot.nk_mtime,
+            snapshot.render_path,
+            snapshot.render_relpath,
+            snapshot.render_display,
+            snapshot.render_type,
+            snapshot.render_sequence_path,
+            snapshot.render_dir,
+            snapshot.render_version,
+            snapshot.render_mtime,
+            snapshot.preview_path,
+            snapshot.preview_name,
+            snapshot.preview_version,
+        )
+        if signature == self._file_state_signature:
+            return None
+
+        self._file_state_signature = signature
+        self._set_nuke_file_state(
+            file_path=snapshot.nk_path,
+            file_name=snapshot.nk_name,
+            file_mtime=snapshot.nk_mtime,
+        )
+        self._set_render_file_state(
+            render_path=snapshot.render_path,
+            render_relpath=snapshot.render_relpath,
+            render_display=snapshot.render_display,
+            render_type=snapshot.render_type,
+            render_sequence_path=snapshot.render_sequence_path,
+            render_dir=snapshot.render_dir,
+            render_version=snapshot.render_version,
+            render_mtime=snapshot.render_mtime,
+        )
+
+        preview_relative = None
+        if snapshot.preview_path:
+            self._preview_video_path = str(snapshot.preview_path)
+            self._has_preview = True
+            self._last_preview_version = snapshot.preview_version
+            preview_relative = f"renders/precomp/previews/{snapshot.preview_name}"
+            self.data["preview_video"] = preview_relative
+            if hasattr(self, "_preview_indicator"):
+                self._preview_indicator.show()
+                self._position_preview_indicator()
+        elif not (self.data or {}).get("preview_video"):
+            self._preview_video_path = None
+            self._has_preview = False
+            if hasattr(self, "_preview_indicator"):
+                self._preview_indicator.hide()
+
+        self.refresh_file_state_tooltips()
+        return preview_relative
+
+    def _open_current_nuke_file(self, checked: bool = False):
+        file_path = self.btn_open_nuke.property("file_path")
+        if not file_path:
+            return
+        self._on_open_nuke_clicked(file_path)
     
     def _apply_colour_code(self, colour_code):
         """Apply color code to the shot card color indicator strip."""
@@ -1634,6 +1738,26 @@ class ShotCard(QWidget):
             self.btn_latest_render.setText(str(render_display))
         else:
             self.btn_latest_render.setText("No Render")
+
+    def _refresh_last_conform_indicator(self) -> None:
+        if not hasattr(self, "label_last_conform"):
+            return
+
+        last_conform = (self.data or {}).get("last_conform")
+        if last_conform and last_conform not in (None, "None", ""):
+            self.label_last_conform.setText(last_conform)
+            current_render = (
+                self.btn_latest_render.property("render_display")
+                or self.btn_latest_render.text()
+            )
+            if current_render and self._normalize_render_label(last_conform) == self._normalize_render_label(current_render):
+                self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
+            else:
+                self.label_last_conform.setStyleSheet("")
+            return
+
+        self.label_last_conform.setText("None")
+        self.label_last_conform.setStyleSheet("")
 
     def _set_hide_button_label(self) -> None:
         hidden = bool((self.data or {}).get("hidden", False))
@@ -2109,24 +2233,11 @@ class ShotCard(QWidget):
 
         self._apply_colour_code(data.get("colour_code"))
         self._set_hide_button_label()
-
-        if hasattr(self, 'label_last_conform'):
-            last_conform = data.get("last_conform")
-            if last_conform and last_conform not in (None, "None", ""):
-                self.label_last_conform.setText(last_conform)
-                current_render = None
-                if hasattr(self, 'btn_latest_render'):
-                    current_render = (
-                        self.btn_latest_render.property("render_display")
-                        or self.btn_latest_render.text()
-                    )
-                if current_render and self._normalize_render_label(last_conform) == self._normalize_render_label(current_render):
-                    self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
-                else:
-                    self.label_last_conform.setStyleSheet("")
-            else:
-                self.label_last_conform.setText("None")
-                self.label_last_conform.setStyleSheet("")
+        if not self.btn_latest_render.property("file_path"):
+            render_hint = str(data.get("last_render") or "").strip()
+            self.btn_latest_render.setProperty("render_display", render_hint or None)
+            self._set_render_button_text()
+        self._refresh_last_conform_indicator()
 
         if hasattr(self, 'btn_open_nuke'):
             self.refresh_lock_state_from_data()
@@ -3476,6 +3587,9 @@ class TimelineFrame(QWidget):
         compact_mode=False,
         task_style="card",
         nuke_open_handler=None,
+        api=None,
+        folders=None,
+        desired_order: list[str] | None = None,
     ):
         super().__init__()
         timeline = timeline or {}
@@ -3485,6 +3599,8 @@ class TimelineFrame(QWidget):
         self._compact_mode = bool(compact_mode)
         self._task_style = _normalize_task_style(task_style)
         self._nuke_open_handler = nuke_open_handler
+        self._api = api
+        self._folders = folders
         self.setObjectName(f"timeline-{timeline.get('id')}")
 
         self.frame = QFrame()
@@ -3499,7 +3615,7 @@ class TimelineFrame(QWidget):
         main_layout.addWidget(self.frame)
         self.setLayout(main_layout)
         
-        self.update_from_data(timeline)
+        self.update_from_data(timeline, desired_order=desired_order)
     
     def set_show_hidden(self, flag: bool):
         """Update show_hidden flag. Visibility is handled by main.py _apply_filters."""
@@ -3513,7 +3629,7 @@ class TimelineFrame(QWidget):
             if isinstance(card, ShotCard):
                 card.set_nuke_open_handler(handler)
 
-    def update_from_data(self, timeline: dict):
+    def update_from_data(self, timeline: dict, *, desired_order: list[str] | None = None):
         """Update shot cards from timeline data. Does NOT manage visibility - that's handled by _apply_filters."""
         self._last_timeline = timeline or self._last_timeline
 
@@ -3539,14 +3655,14 @@ class TimelineFrame(QWidget):
             self.shots_layout.removeWidget(dup_widget)
             dup_widget.deleteLater()
         
-        desired_order = []
+        api_order = []
 
         for shot in timeline.get("shots", []):
             sid = shot.get("id")
             if sid is None:
                 continue
             name = f"shot-{sid}"
-            desired_order.append(name)
+            api_order.append(name)
             
             if name in existing:
                 # Update existing widget data
@@ -3556,7 +3672,13 @@ class TimelineFrame(QWidget):
                     existing[name].set_nuke_open_handler(self._nuke_open_handler)
             else:
                 # Create new widget
-                card = ShotCard(shot, task_style=self._task_style)
+                card = _create_shot_card(
+                    shot,
+                    parent=self,
+                    task_style=self._task_style,
+                    api=self._api,
+                    folders=self._folders,
+                )
                 card.setObjectName(name)
                 if self._nuke_open_handler is not None:
                     card.set_nuke_open_handler(self._nuke_open_handler)
@@ -3576,12 +3698,13 @@ class TimelineFrame(QWidget):
 
         # Remove stale widgets
         for name, widget in list(existing.items()):
-            if name not in desired_order:
+            if name not in api_order:
                 self.shots_layout.removeWidget(widget)
                 widget.deleteLater()
 
         # Maintain order
-        _ensure_order(self.shots_layout, desired_order)
+        resolved_order = desired_order or api_order
+        _ensure_order(self.shots_layout, resolved_order)
         self.set_compact_mode(self._compact_mode)
 
     def set_layout_mode(self, layout_mode: str, card_spacing: int | None = None):

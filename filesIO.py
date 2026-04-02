@@ -1,4 +1,5 @@
 from pathlib import Path
+from dataclasses import dataclass
 import re
 import platform  # System and platform identification
 import os
@@ -8,15 +9,37 @@ try:
 except:pass
 from PyQt6.QtWidgets import *  # UI widgets (buttons, tables, etc.)
 
+
+@dataclass(frozen=True)
+class ShotFileStateSnapshot:
+    shot_dir: str
+    nk_path: str | None = None
+    nk_name: str | None = None
+    nk_mtime: float | None = None
+    render_path: str | None = None
+    render_relpath: str | None = None
+    render_display: str | None = None
+    render_sequence_path: str | None = None
+    render_dir: str | None = None
+    render_type: str | None = None
+    render_version: int | None = None
+    render_mtime: float | None = None
+    preview_path: str | None = None
+    preview_name: str | None = None
+    preview_version: int | None = None
+
+
 class Folders:
     def __init__(self):
         pass
-    def latest_nk(self, folder):
-        folder = self.convert_path(folder)
-        folder = Path(folder)
-        scripts = folder / "scripts"
+
+    def _shot_dir_path(self, folder) -> Path:
+        return Path(self.convert_path(folder))
+
+    def _latest_nk_in_shot_dir(self, shot_dir: Path):
+        scripts = shot_dir / "scripts"
         files = list(scripts.glob("*.nk"))
-        
+
         version_pattern = re.compile(r"_v(\d+)\.nk$", re.IGNORECASE)
 
         best_file = None
@@ -31,6 +54,9 @@ class Folders:
                     best_file = file
 
         return best_file
+
+    def latest_nk(self, folder):
+        return self._latest_nk_in_shot_dir(self._shot_dir_path(folder))
     def latest_render(self, folder):
         render_info = self.latest_render_info(folder)
         if not render_info:
@@ -38,9 +64,7 @@ class Folders:
         return render_info.get("render_path", "none"), render_info.get("display_name", "No Render")
 
     def latest_render_info(self, folder):
-        folder = self.convert_path(folder)
-        folder = Path(folder)
-        renders_dir = folder / "renders" / "comp"
+        renders_dir = self._shot_dir_path(folder) / "renders" / "comp"
 
         if not renders_dir.exists():
             return None
@@ -195,9 +219,7 @@ class Folders:
 
     def latest_preview(self, folder):
         """Find the highest version preview video in renders/precomp/previews."""
-        folder = self.convert_path(folder)
-        folder = Path(folder)
-        previews_dir = folder / "renders" / "precomp" / "previews"
+        previews_dir = self._shot_dir_path(folder) / "renders" / "precomp" / "previews"
 
         if not previews_dir.exists():
             return None, None
@@ -229,6 +251,40 @@ class Folders:
         if match:
             return int(match.group(1))
         return None
+
+    def scan_shot_file_state(self, folder) -> ShotFileStateSnapshot:
+        shot_dir = self._shot_dir_path(folder)
+        latest_nk = self._latest_nk_in_shot_dir(shot_dir)
+        render_info = self.latest_render_info(shot_dir)
+        preview_path, preview_name = self.latest_preview(shot_dir)
+        preview_version = (
+            self._preview_version_from_name(preview_name) if preview_name else None
+        )
+
+        nk_path = str(latest_nk) if latest_nk else None
+        nk_name = latest_nk.name if latest_nk else None
+        try:
+            nk_mtime = latest_nk.stat().st_mtime if latest_nk else None
+        except Exception:
+            nk_mtime = None
+
+        return ShotFileStateSnapshot(
+            shot_dir=str(shot_dir),
+            nk_path=nk_path,
+            nk_name=nk_name,
+            nk_mtime=nk_mtime,
+            render_path=render_info.get("render_path") if render_info else None,
+            render_relpath=render_info.get("render_relpath") if render_info else None,
+            render_display=render_info.get("display_name") if render_info else None,
+            render_sequence_path=render_info.get("sequence_path") if render_info else None,
+            render_dir=render_info.get("render_dir") if render_info else None,
+            render_type=render_info.get("type") if render_info else None,
+            render_version=render_info.get("version") if render_info else None,
+            render_mtime=render_info.get("mtime") if render_info else None,
+            preview_path=str(preview_path) if preview_path else None,
+            preview_name=preview_name,
+            preview_version=preview_version,
+        )
 
     def _is_legacy_preview_name(self, file_name: str) -> bool:
         return file_name.lower().endswith("_preview.mp4")

@@ -88,22 +88,15 @@ class LoadingDialog(QDialog):
     def set_message(self, message: str):
         """Update the loading message."""
         self._label.setText(message)
-        # Process events to update UI immediately
-        from PyQt6.QtWidgets import QApplication
-        QApplication.processEvents()
     
     def set_detail(self, detail: str):
         """Update the detail text (current item being loaded)."""
         self._detail_label.setText(detail)
-        from PyQt6.QtWidgets import QApplication
-        QApplication.processEvents()
     
     def set_progress(self, current: int, total: int):
         """Set determinate progress."""
         self._progress.setRange(0, total)
         self._progress.setValue(current)
-        from PyQt6.QtWidgets import QApplication
-        QApplication.processEvents()
     
     def set_indeterminate(self):
         """Set indeterminate (animated) mode."""
@@ -132,9 +125,6 @@ class LoadingDialog(QDialog):
         self.show()
         self.raise_()
         self.activateWindow()
-        # Process events to ensure dialog is painted
-        from PyQt6.QtWidgets import QApplication
-        QApplication.processEvents()
     
     def hide_loading(self):
         """Hide the dialog."""
@@ -157,9 +147,10 @@ class ChunkedJobLoader(QObject):
         self._current_idx = 0
         self._total = 0
         self._callback = None
-        self._batch_size = 1  # Process one item at a time for smoother UI
-    
-    def start_loading(self, tasks: list, callback=None, batch_size=1):
+        self._batch_size = 4
+        self._batch_time_budget_ms = 8.0
+
+    def start_loading(self, tasks: list, callback=None, batch_size=4):
         """
         Start processing tasks. Each task is a tuple of (callable, description).
         callback is called when all done.
@@ -179,8 +170,8 @@ class ChunkedJobLoader(QObject):
         # Emit initial progress
         self.progress.emit(0, self._total, f"Loading 0/{self._total}...")
         
-        # Start processing - use 1ms timer to yield to event loop between tasks
-        self._timer.start(1)
+        # Use a zero-delay timer so work happens in short event-loop slices.
+        self._timer.start(0)
     
     def _process_next(self):
         """Process the next task in the queue."""
@@ -190,26 +181,42 @@ class ChunkedJobLoader(QObject):
             if self._callback:
                 self._callback()
             return
-        
-        # Get task - can be callable or tuple of (callable, description)
-        task_item = self._queue[self._current_idx]
-        if isinstance(task_item, tuple):
-            task, description = task_item
-            self.detail.emit(description)
-        else:
-            task = task_item
-            description = ""
-        
-        # Emit progress
-        self.progress.emit(self._current_idx + 1, self._total, f"Loading {self._current_idx + 1}/{self._total}...")
-        
-        # Execute the task
-        try:
-            task()
-        except Exception as e:
-            pass  # Silent fail
-        
-        self._current_idx += 1
+
+        deadline = time.perf_counter() + (self._batch_time_budget_ms / 1000.0)
+        processed = 0
+
+        while self._current_idx < self._total and processed < max(1, int(self._batch_size)):
+            task_item = self._queue[self._current_idx]
+            if isinstance(task_item, tuple):
+                task, description = task_item
+                self.detail.emit(description)
+            else:
+                task = task_item
+
+            self.progress.emit(
+                self._current_idx + 1,
+                self._total,
+                f"Loading {self._current_idx + 1}/{self._total}...",
+            )
+
+            try:
+                task()
+            except Exception:
+                pass
+
+            self._current_idx += 1
+            processed += 1
+            if time.perf_counter() >= deadline:
+                break
+
+        if self._current_idx >= self._total:
+            self._timer.stop()
+            self.finished.emit()
+            if self._callback:
+                self._callback()
+            return
+
+        self._timer.start(0)
     
     def stop(self):
         """Stop loading."""
@@ -292,6 +299,7 @@ class page_nukedash(QMainWindow):
 
         self.comboBox_jobs.currentIndexChanged.connect(self._on_job_selected)
         self.filesIO = filesIO.Folders()
+        self._shot_card_api = http_help.DjangoAPI()
 
         if hasattr(self, "btn_open_timeline_assets") and self.btn_open_timeline_assets:
             self.btn_open_timeline_assets.clicked.connect(self._on_open_timeline_assets_clicked)
@@ -439,12 +447,23 @@ class page_nukedash(QMainWindow):
         self._project_load_report_timer.timeout.connect(self._emit_project_load_report_if_ready)
         self._project_load_report_poll_ms = 50
         self._project_load_report_grace_seconds = 2.0
-        self._task_materialize_batch_size = 1
+        self._task_materialize_batch_size = 8
+        self._task_materialize_time_budget_ms = 8.0
         self._task_materialize_queue = []
         self._task_materialize_timer = QTimer(self)
         self._task_materialize_timer.setSingleShot(True)
         self._task_materialize_timer.timeout.connect(self._process_task_materialize_queue)
         self._set_task_loading_text("Tasks loaded")
+
+        self._shot_file_poll_targets = []
+        self._shot_file_poll_cursor = 0
+        self._shot_file_poll_batch_size = 8
+        self._shot_file_poll_timer = QTimer(self)
+        self._shot_file_poll_timer.setInterval(1000)
+        self._shot_file_poll_timer.timeout.connect(self._poll_visible_shot_card_file_state_batch)
+        self._shot_file_tooltip_timer = QTimer(self)
+        self._shot_file_tooltip_timer.setInterval(30_000)
+        self._shot_file_tooltip_timer.timeout.connect(self._refresh_visible_shot_card_tooltips)
 
         self._lock_sync_timer = QTimer(self)
         self._lock_sync_timer.setInterval(self._lock_interval_ms)
@@ -468,6 +487,8 @@ class page_nukedash(QMainWindow):
         self._set_filter_controls_enabled(self._filters_enabled())
         self._worker.fetch()
         self._start_lock_maintenance_timers()
+        self._shot_file_poll_timer.start()
+        self._shot_file_tooltip_timer.start()
         
         # Connect scroll detection after UI is loaded
         QTimer.singleShot(100, self._setup_scroll_detection)
@@ -494,6 +515,99 @@ class page_nukedash(QMainWindow):
                 vbar = scroll_area.verticalScrollBar()
                 if vbar:
                     vbar.valueChanged.connect(self._on_scroll_activity)
+
+    def _iter_timeline_shot_cards(
+        self,
+        timeline_widget: QWidget | None = None,
+        *,
+        visible_only: bool = False,
+    ) -> list:
+        tabs = getattr(self, "timelines_tabs", None)
+        widget = timeline_widget or (tabs.currentWidget() if tabs is not None else None)
+        if not widget or not hasattr(widget, "shots_layout"):
+            return []
+
+        cards = []
+        for index in range(widget.shots_layout.count()):
+            item = widget.shots_layout.itemAt(index)
+            card = item.widget() if item else None
+            if card is None or not hasattr(card, "data"):
+                continue
+            if visible_only and not card.isVisible():
+                continue
+            cards.append(card)
+        return cards
+
+    def _reset_shot_file_poll_targets(self) -> None:
+        new_targets = self._iter_timeline_shot_cards(visible_only=True)
+        old_names = [
+            getattr(card, "objectName", lambda: "")()
+            for card in getattr(self, "_shot_file_poll_targets", [])
+        ]
+        new_names = [getattr(card, "objectName", lambda: "")() for card in new_targets]
+        if new_names == old_names:
+            self._shot_file_poll_targets = new_targets
+            if new_targets:
+                self._shot_file_poll_cursor %= len(new_targets)
+            else:
+                self._shot_file_poll_cursor = 0
+            return
+        self._shot_file_poll_targets = new_targets
+        self._shot_file_poll_cursor = 0
+
+    def _sync_preview_video_cache(self, shot_id: int, preview_video: str) -> None:
+        for job in getattr(self, "_jobs_by_id", {}).values():
+            for timeline in job.get("timelines", []) or []:
+                for shot in timeline.get("shots", []) or []:
+                    if shot.get("id") == shot_id:
+                        shot["preview_video"] = preview_video
+                        return
+
+    def _poll_visible_shot_card_file_state_batch(self) -> None:
+        self._reset_shot_file_poll_targets()
+        targets = getattr(self, "_shot_file_poll_targets", [])
+        if not targets:
+            return
+
+        total = len(targets)
+        batch_size = max(1, min(self._shot_file_poll_batch_size, (total + 9) // 10))
+        processed = 0
+        while processed < min(batch_size, total):
+            if self._shot_file_poll_cursor >= total:
+                self._shot_file_poll_cursor = 0
+            shot_card = targets[self._shot_file_poll_cursor]
+            self._shot_file_poll_cursor += 1
+            processed += 1
+
+            if shot_card is None or not shot_card.isVisible():
+                continue
+            shot_dir = getattr(shot_card, "shot_dir", None)
+            if not shot_dir:
+                continue
+
+            preview_before = str((shot_card.data or {}).get("preview_video") or "").strip()
+            snapshot = self.filesIO.scan_shot_file_state(shot_dir)
+            preview_relative = None
+            if hasattr(shot_card, "apply_file_state_snapshot"):
+                preview_relative = shot_card.apply_file_state_snapshot(snapshot)
+            if not preview_relative or preview_relative == preview_before:
+                continue
+
+            shot_id = getattr(shot_card, "_shot_id", None)
+            if shot_id is None:
+                continue
+
+            self._sync_preview_video_cache(int(shot_id), preview_relative)
+            try:
+                self._shot_card_api.update_shot(int(shot_id), preview_video=preview_relative)
+            except Exception:
+                pass
+
+    def _refresh_visible_shot_card_tooltips(self) -> None:
+        for shot_card in self._iter_timeline_shot_cards(visible_only=True):
+            refresh = getattr(shot_card, "refresh_file_state_tooltips", None)
+            if callable(refresh):
+                refresh()
 
     def _set_loaded_time_text(self, value: str) -> None:
         label = getattr(self, "label_loaded_time", None)
@@ -862,6 +976,9 @@ class page_nukedash(QMainWindow):
             self._start_task_loading_timing()
         batch_size = getattr(self, "_task_materialize_batch_size", 20)
         budget = batch_size if max_widgets is None else max(0, int(max_widgets))
+        deadline = time.perf_counter() + (
+            max(0.0, float(getattr(self, "_task_materialize_time_budget_ms", 8.0))) / 1000.0
+        )
         while budget > 0 and self._task_materialize_queue:
             entry = self._task_materialize_queue[0]
             shot_card = entry.get("shot_card")
@@ -884,6 +1001,8 @@ class page_nukedash(QMainWindow):
                 entry["task_ids"] = []
             if not entry["task_ids"]:
                 self._task_materialize_queue.pop(0)
+            if max_widgets is None and time.perf_counter() >= deadline:
+                break
         timer = getattr(self, "_task_materialize_timer", None)
         if self._task_materialize_queue and timer is not None:
             timer.start(0)
@@ -1945,6 +2064,27 @@ class page_nukedash(QMainWindow):
 
         return sorted_entries
 
+    def _desired_shot_order_names(self, shots: list[dict], hide_hidden_tasks: bool) -> list[str]:
+        shot_entries = []
+        for shot in shots or []:
+            shot_id = shot.get("id")
+            if shot_id is None:
+                continue
+            try:
+                shot_id_value = int(shot_id)
+            except (TypeError, ValueError):
+                shot_id_value = 0
+            shot_entries.append(
+                {
+                    "name": f"shot-{shot_id}",
+                    "shot": shot,
+                    "title": str(shot.get("title", "") or "").lower(),
+                    "shot_id": shot_id_value,
+                    "task_count": self._count_sortable_tasks(shot, hide_hidden_tasks),
+                }
+            )
+        return [entry["name"] for entry in self._sort_shot_entries(shot_entries) if entry["name"]]
+
     def _apply_sort_to_timeline(self, timeline_widget: QWidget, hide_hidden_tasks: bool) -> None:
         if not timeline_widget or not hasattr(timeline_widget, "shots_layout"):
             return
@@ -2077,6 +2217,12 @@ class page_nukedash(QMainWindow):
                 self.Label_results.setText(f"{current_timeline_visible_count} results")
             self._prepare_task_loading_progress(current_tab_index)
             self._process_task_materialize_queue(self._task_materialize_batch_size)
+            reset_poll_targets = getattr(self, "_reset_shot_file_poll_targets", None)
+            if callable(reset_poll_targets):
+                reset_poll_targets()
+            poll_batch = getattr(self, "_poll_visible_shot_card_file_state_batch", None)
+            if callable(poll_batch):
+                poll_batch()
             return
 
         # Build a signature of current filter state to avoid redundant work
@@ -2192,6 +2338,12 @@ class page_nukedash(QMainWindow):
             self.Label_results.setText(f"{current_timeline_visible_count} results")
         self._prepare_task_loading_progress(current_tab_index)
         self._process_task_materialize_queue(self._task_materialize_batch_size)
+        reset_poll_targets = getattr(self, "_reset_shot_file_poll_targets", None)
+        if callable(reset_poll_targets):
+            reset_poll_targets()
+        poll_batch = getattr(self, "_poll_visible_shot_card_file_state_batch", None)
+        if callable(poll_batch):
+            poll_batch()
 
     def _apply_task_visibility(
         self,
@@ -2946,6 +3098,8 @@ class page_nukedash(QMainWindow):
                         w._compact_mode = self._compact_view_enabled
                         w._task_style = self._task_style
                         w._nuke_open_handler = self._handle_nuke_open_request
+                        w._api = self._shot_card_api
+                        w._folders = self.filesIO
                         w.setObjectName(n)
 
                         # Set up the basic layout structure
@@ -3026,7 +3180,13 @@ class page_nukedash(QMainWindow):
                                     return
 
                             with self._project_load_profiler.measure_work("shot_card_create"):
-                                card = widgets.ShotCard(shot_data, task_style=self._task_style)
+                                card = widgets._create_shot_card(
+                                    shot_data,
+                                    parent=timeline_widget,
+                                    task_style=self._task_style,
+                                    api=self._shot_card_api,
+                                    folders=self.filesIO,
+                                )
                             card.setObjectName(shot_name)
                             if hasattr(card, "set_task_render_state"):
                                 card.set_task_render_state(render_state)
@@ -3199,12 +3359,17 @@ class page_nukedash(QMainWindow):
         timelines = job_data.get("timelines", [])
         keep_names = set()
         effective_layout_mode = self._effective_shots_layout_mode()
+        hide_hidden_tasks = not self.show_hidden_tasks
 
         for tl in timelines:
             tid = tl.get("id")
             name = f"timeline-{tid}"
             title = tl.get("title", f"Timeline {tid}")
             keep_names.add(name)
+            desired_order = self._desired_shot_order_names(
+                tl.get("shots", []) or [],
+                hide_hidden_tasks,
+            )
             
             if name in existing:
                 w = existing[name]
@@ -3213,7 +3378,7 @@ class page_nukedash(QMainWindow):
                 if hasattr(w, "set_task_style"):
                     w.set_task_style(self._task_style)
                 if hasattr(w, "update_from_data"):
-                    w.update_from_data(tl)
+                    w.update_from_data(tl, desired_order=desired_order)
                 idx = tabs.indexOf(w)
                 if idx >= 0:
                     tabs.setTabText(idx, title)
@@ -3226,6 +3391,9 @@ class page_nukedash(QMainWindow):
                     compact_mode=self._compact_view_enabled,
                     task_style=self._task_style,
                     nuke_open_handler=self._handle_nuke_open_request,
+                    api=self._shot_card_api,
+                    folders=self.filesIO,
+                    desired_order=desired_order,
                 )
                 w.setObjectName(name)
                 if hasattr(w, "shots_layout"):
@@ -3256,7 +3424,8 @@ class page_nukedash(QMainWindow):
         layout = self.jobs_container.layout()
         mapping = {}
         for i in range(layout.count()):
-            w = layout.itemAt(i).widget()
+            item = layout.itemAt(i)
+            w = item.widget() if item else None
             if w is not None and w.objectName():
                 mapping[w.objectName()] = w
 
@@ -3294,5 +3463,9 @@ class page_nukedash(QMainWindow):
         # order
         widgets._ensure_order(layout, desired_order)
         # --- add vertical spacer at the end ---
+        for i in reversed(range(layout.count())):
+            item = layout.itemAt(i)
+            if isinstance(item, QSpacerItem):
+                layout.takeAt(i)
         spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
         layout.addItem(spacer)

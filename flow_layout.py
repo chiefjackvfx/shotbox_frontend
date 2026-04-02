@@ -1,5 +1,5 @@
 # flow_layout.py
-from PyQt6.QtWidgets import QLayout, QLayoutItem, QSizePolicy
+from PyQt6.QtWidgets import QLayout, QLayoutItem, QSizePolicy, QWidgetItem
 from PyQt6.QtCore import Qt, QRect, QSize, QPoint
 
 
@@ -27,6 +27,78 @@ class FlowLayout(QLayout):
     def addItem(self, item: QLayoutItem):
         """Add an item to the layout."""
         self._item_list.append(item)
+
+    def insertWidget(self, index: int, widget):
+        """Insert or move a widget without rebuilding the whole layout."""
+        bounded_index = max(0, min(int(index), len(self._item_list)))
+        existing_index = self.indexOf(widget)
+        if existing_index >= 0:
+            item = self._item_list.pop(existing_index)
+            if existing_index < bounded_index:
+                bounded_index -= 1
+            self._item_list.insert(bounded_index, item)
+            self.invalidate()
+            return
+
+        self.addChildWidget(widget)
+        self._item_list.insert(bounded_index, QWidgetItem(widget))
+        self.invalidate()
+
+    def indexOf(self, widget):
+        """Return the index of a widget in the layout."""
+        for index, item in enumerate(self._item_list):
+            if item.widget() is widget:
+                return index
+        return -1
+
+    def removeWidget(self, widget):
+        """Remove a widget from the layout without deleting the widget."""
+        index = self.indexOf(widget)
+        if index < 0:
+            return
+        self.takeAt(index)
+        self.invalidate()
+
+    def reorder_by_object_names(self, desired_names: list[str]) -> bool:
+        """Reorder widgets in-place based on object names."""
+        if not desired_names:
+            return False
+
+        named_items = {}
+        unnamed_items = []
+        duplicate_named_items = []
+
+        for item in self._item_list:
+            widget = item.widget()
+            name = widget.objectName() if widget is not None else ""
+            if not name:
+                unnamed_items.append(item)
+            elif name in named_items:
+                duplicate_named_items.append(item)
+            else:
+                named_items[name] = item
+
+        desired_existing = [name for name in desired_names if name in named_items]
+        current_existing = [
+            item.widget().objectName()
+            for item in self._item_list
+            if item.widget() is not None and item.widget().objectName() in named_items
+        ]
+        if desired_existing == current_existing:
+            return False
+
+        reordered_items = []
+        for name in desired_names:
+            item = named_items.pop(name, None)
+            if item is not None:
+                reordered_items.append(item)
+
+        reordered_items.extend(named_items.values())
+        reordered_items.extend(duplicate_named_items)
+        reordered_items.extend(unnamed_items)
+        self._item_list = reordered_items
+        self.invalidate()
+        return True
 
     def horizontalSpacing(self):
         """Get horizontal spacing between items."""

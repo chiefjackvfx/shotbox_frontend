@@ -17,6 +17,7 @@ if str(PYQT_FRONTEND_DIR) not in sys.path:
 
 from PyQt6.QtWidgets import QApplication, QComboBox, QLabel, QMainWindow, QTabWidget, QVBoxLayout, QWidget
 
+import filesIO
 import page_nukedash
 import project_load_profiler
 
@@ -329,6 +330,123 @@ class MinimalLoadingShotCard(QWidget):
         self.compact_mode = bool(enabled)
 
 
+class RecordingTimelineWidget(QWidget):
+    def __init__(self, name: str):
+        super().__init__()
+        self.setObjectName(name)
+        self.shots_layout = QVBoxLayout()
+        self.setLayout(self.shots_layout)
+        self.update_calls = []
+
+    def set_nuke_open_handler(self, handler):
+        self.nuke_open_handler = handler
+
+    def set_task_style(self, task_style):
+        self.task_style = task_style
+
+    def update_from_data(self, timeline, desired_order=None):
+        self.update_calls.append((timeline, list(desired_order or [])))
+
+
+class SilentUpdateHarness(QMainWindow):
+    _silent_update_job = page_nukedash.page_nukedash._silent_update_job
+    _desired_shot_order_names = page_nukedash.page_nukedash._desired_shot_order_names
+    _count_sortable_tasks = page_nukedash.page_nukedash._count_sortable_tasks
+    _sort_shot_entries = page_nukedash.page_nukedash._sort_shot_entries
+
+    def __init__(self, timeline_widget: QWidget):
+        super().__init__()
+        central = QWidget(self)
+        layout = QVBoxLayout(central)
+        self.setCentralWidget(central)
+        self.timelines_tabs = QTabWidget(central)
+        self.timelines_tabs.addTab(timeline_widget, "Timeline 1")
+        layout.addWidget(self.timelines_tabs)
+
+        self._task_style = "card"
+        self._compact_view_enabled = False
+        self._card_spacing = 8
+        self.show_hidden_shots = False
+        self.show_hidden_tasks = False
+        self._handle_nuke_open_request = None
+        self._shot_card_api = mock.Mock()
+        self.filesIO = mock.Mock()
+        self._last_job_sig = None
+        self._task_materialize_queue = []
+        self.sort_mode = "title_desc"
+        self.show()
+        QApplication.processEvents()
+
+    def _reset_task_materialize_queue(self):
+        self._task_materialize_queue = []
+
+    def _effective_shots_layout_mode(self):
+        return "grid"
+
+    def _filters_enabled(self):
+        return True
+
+    def _current_sort_mode(self) -> str:
+        return self.sort_mode
+
+    def _apply_compact_view_state(self):
+        return
+
+    def _update_assets_action_buttons(self):
+        return
+
+
+class PollTrackingShotCard(QWidget):
+    def __init__(self, shot_id: int, shot_dir: str, parent=None):
+        super().__init__(parent)
+        self._shot_id = shot_id
+        self.shot_dir = shot_dir
+        self.data = {"id": shot_id}
+        self.snapshots = []
+        self.setObjectName(f"shot-{shot_id}")
+
+    def apply_file_state_snapshot(self, snapshot):
+        self.snapshots.append(snapshot)
+        return None
+
+
+class PollTimelineWidget(QWidget):
+    def __init__(self, cards: list[QWidget], parent=None):
+        super().__init__(parent)
+        self.shots_layout = QVBoxLayout()
+        self.setLayout(self.shots_layout)
+        for card in cards:
+            self.shots_layout.addWidget(card)
+
+
+class FilePollHarness(QMainWindow):
+    _iter_timeline_shot_cards = page_nukedash.page_nukedash._iter_timeline_shot_cards
+    _reset_shot_file_poll_targets = page_nukedash.page_nukedash._reset_shot_file_poll_targets
+    _sync_preview_video_cache = page_nukedash.page_nukedash._sync_preview_video_cache
+    _poll_visible_shot_card_file_state_batch = (
+        page_nukedash.page_nukedash._poll_visible_shot_card_file_state_batch
+    )
+
+    def __init__(self, timelines: list[QWidget]):
+        super().__init__()
+        central = QWidget(self)
+        layout = QVBoxLayout(central)
+        self.setCentralWidget(central)
+        self.timelines_tabs = QTabWidget(central)
+        for index, widget in enumerate(timelines, start=1):
+            self.timelines_tabs.addTab(widget, f"Timeline {index}")
+        layout.addWidget(self.timelines_tabs)
+
+        self._shot_file_poll_targets = []
+        self._shot_file_poll_cursor = 0
+        self._shot_file_poll_batch_size = 2
+        self.filesIO = mock.Mock()
+        self._shot_card_api = mock.Mock()
+        self._jobs_by_id = {}
+        self.show()
+        QApplication.processEvents()
+
+
 class ChunkedJobLoadHarness(QMainWindow):
     _start_job_loading = page_nukedash.page_nukedash._start_job_loading
     _count_sortable_tasks = page_nukedash.page_nukedash._count_sortable_tasks
@@ -354,6 +472,8 @@ class ChunkedJobLoadHarness(QMainWindow):
         self.show_hidden_tasks = False
         self._timeline_widgets = {}
         self._handle_nuke_open_request = None
+        self._shot_card_api = mock.Mock()
+        self.filesIO = mock.Mock()
 
     def _reset_task_materialize_queue(self):
         self._task_materialize_queue = []
@@ -687,6 +807,124 @@ class NukeDashChunkedJobLoadTests(unittest.TestCase):
                     shot_names.append(widget.objectName())
 
             self.assertEqual(shot_names, ["shot-11", "shot-12", "shot-13"])
+        finally:
+            harness.close()
+            harness.deleteLater()
+            self.app.processEvents()
+
+
+class NukeDashSilentRefreshOrderTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_silent_update_job_passes_sorted_order_to_existing_timeline_refresh(self):
+        timeline_widget = RecordingTimelineWidget("timeline-501")
+        harness = SilentUpdateHarness(timeline_widget)
+        job_data = {
+            "id": 101,
+            "title": "Job A",
+            "timelines": [
+                {
+                    "id": 501,
+                    "title": "Timeline 1",
+                    "shots": [
+                        {"id": 11, "title": "Alpha", "tasks": []},
+                        {"id": 12, "title": "Gamma", "tasks": []},
+                        {"id": 13, "title": "Beta", "tasks": []},
+                    ],
+                }
+            ],
+        }
+        try:
+            harness._silent_update_job(job_data)
+            self.assertEqual(
+                timeline_widget.update_calls[-1][1],
+                ["shot-12", "shot-13", "shot-11"],
+            )
+        finally:
+            harness.close()
+            harness.deleteLater()
+            self.app.processEvents()
+
+    def test_silent_update_job_keeps_real_timeline_widget_sorted_without_followup_pass(self):
+        initial_timeline = {
+            "id": 501,
+            "title": "Timeline 1",
+            "shots": [
+                {"id": 11, "title": "Alpha", "tasks": []},
+                {"id": 12, "title": "Beta", "tasks": []},
+                {"id": 13, "title": "Gamma", "tasks": []},
+            ],
+        }
+        job_data = {
+            "id": 101,
+            "title": "Job A",
+            "timelines": [initial_timeline],
+        }
+        with mock.patch.object(page_nukedash.widgets, "ShotCard", MinimalLoadingShotCard):
+            timeline_widget = page_nukedash.widgets.TimelineFrame(
+                initial_timeline,
+                show_hidden=False,
+                layout_mode="grid",
+                card_spacing=8,
+                compact_mode=False,
+                task_style="card",
+                api=mock.Mock(),
+                folders=mock.Mock(),
+            )
+            harness = SilentUpdateHarness(timeline_widget)
+            try:
+                harness._silent_update_job(job_data)
+
+                shot_names = []
+                for index in range(timeline_widget.shots_layout.count()):
+                    item = timeline_widget.shots_layout.itemAt(index)
+                    widget = item.widget() if item else None
+                    if widget is not None:
+                        shot_names.append(widget.objectName())
+
+                self.assertEqual(shot_names, ["shot-13", "shot-12", "shot-11"])
+            finally:
+                harness.close()
+                harness.deleteLater()
+                timeline_widget.deleteLater()
+                self.app.processEvents()
+
+
+class NukeDashFilePollTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def test_file_poll_batches_visible_cards_on_current_timeline_only(self):
+        timeline_one_cards = [
+            PollTrackingShotCard(1, "/tmp/shot001"),
+            PollTrackingShotCard(2, "/tmp/shot002"),
+            PollTrackingShotCard(3, "/tmp/shot003"),
+        ]
+        timeline_two_cards = [
+            PollTrackingShotCard(4, "/tmp/shot004"),
+        ]
+        harness = FilePollHarness(
+            [
+                PollTimelineWidget(timeline_one_cards),
+                PollTimelineWidget(timeline_two_cards),
+            ]
+        )
+        harness.filesIO.scan_shot_file_state.side_effect = (
+            lambda shot_dir: filesIO.ShotFileStateSnapshot(shot_dir=shot_dir)
+        )
+        try:
+            harness._poll_visible_shot_card_file_state_batch()
+            harness._poll_visible_shot_card_file_state_batch()
+            harness._poll_visible_shot_card_file_state_batch()
+
+            scanned_dirs = [
+                call.args[0] for call in harness.filesIO.scan_shot_file_state.call_args_list
+            ]
+            self.assertEqual(scanned_dirs[:3], ["/tmp/shot001", "/tmp/shot002", "/tmp/shot003"])
+            self.assertNotIn("/tmp/shot004", scanned_dirs)
         finally:
             harness.close()
             harness.deleteLater()

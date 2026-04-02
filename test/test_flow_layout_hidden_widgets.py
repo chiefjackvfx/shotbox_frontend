@@ -15,6 +15,7 @@ from PyQt6.QtCore import QRect, QSize
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from flow_layout import FlowLayout
+import widgets
 
 
 class FixedSizeWidget(QWidget):
@@ -54,6 +55,33 @@ class FlowLayoutHiddenWidgetsTests(unittest.TestCase):
 
         self.assertEqual(first.geometry().y(), third.geometry().y())
         self.assertGreater(third.geometry().x(), first.geometry().x())
+
+    def test_ensure_order_reorders_flow_layout_without_rebuilding_widgets(self):
+        container = QWidget()
+        layout = FlowLayout(container, margin=0, h_spacing=10, v_spacing=10)
+        container.setLayout(layout)
+
+        first = FixedSizeWidget(50, 20, container)
+        first.setObjectName("shot-1")
+        second = FixedSizeWidget(50, 20, container)
+        second.setObjectName("shot-2")
+        third = FixedSizeWidget(50, 20, container)
+        third.setObjectName("shot-3")
+
+        layout.addWidget(first)
+        layout.addWidget(second)
+        layout.addWidget(third)
+
+        widgets._ensure_order(layout, ["shot-3", "shot-1", "shot-2"])
+
+        ordered_widgets = [layout.itemAt(i).widget() for i in range(layout.count())]
+        self.assertEqual(
+            [widget.objectName() for widget in ordered_widgets],
+            ["shot-3", "shot-1", "shot-2"],
+        )
+        self.assertIs(ordered_widgets[0], third)
+        self.assertIs(ordered_widgets[1], first)
+        self.assertIs(ordered_widgets[2], second)
 
 
 if __name__ == "__main__":
