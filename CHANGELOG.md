@@ -2,6 +2,16 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 2.0.0 - 2026-04-07
+
+### Added
+
+- todo list ui option to task cards. and progress buttons
+
+### Fixed
+
+- match move bug
+
 ## 1.6.0 - 2026-04-02
 
 ### Added
