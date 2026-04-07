@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 2.0.1 - 2026-04-07
+
+### Fixed
+
+- nuke template fix
+
 ## 2.0.0 - 2026-04-07
 
 ### Added
