@@ -571,6 +571,23 @@ def resolve_requested_frame_range(
     return sequence_start, sequence_end
 
 
+def build_3de_frame_mapping(sequence_start_frame: int, sequence_end_frame: int) -> dict[str, int]:
+    # 3DE sequence attrs use source frame numbers, but playback/current-frame APIs use
+    # 1-based camera-local indices. Frame offset preserves the original timeline labels.
+    if sequence_end_frame < sequence_start_frame:
+        raise ValueError("Sequence end frame must be greater than or equal to the start frame.")
+
+    frame_count = sequence_end_frame - sequence_start_frame + 1
+    return {
+        "sequence_start": int(sequence_start_frame),
+        "sequence_end": int(sequence_end_frame),
+        "playback_start": 1,
+        "playback_end": frame_count,
+        "frame_offset": int(sequence_start_frame),
+        "frame_count": frame_count,
+    }
+
+
 def build_project_notes(request: MatchmoveProjectRequest) -> str:
     lines = [
         "ShotBox 3DE Project",
@@ -617,9 +634,7 @@ def build_3de_runtime_script(
                 "camera_name": clip.camera_name,
                 "lens_name": clip.lens_name,
                 "sequence_path": clip.sequence_info.sequence_path_pattern.replace("\\", "/"),
-                "sequence_start": clip.sequence_start_frame,
-                "sequence_end": clip.sequence_end_frame,
-                "frame_count": clip.internal_frame_count,
+                **build_3de_frame_mapping(clip.sequence_start_frame, clip.sequence_end_frame),
                 "image_width": clip.sequence_info.width,
                 "image_height": clip.sequence_info.height,
                 "pixel_aspect": float(clip.sequence_info.header_pixel_aspect),
@@ -693,11 +708,12 @@ def main():
         )
         tde4.setCameraImageWidth(camera, clip["image_width"])
         tde4.setCameraImageHeight(camera, clip["image_height"])
+        tde4.setCameraFrameOffset(camera, clip["frame_offset"])
         tde4.setCameraFPS(camera, CONFIG["fps"])
-        tde4.setCameraPlaybackRange(camera, clip["sequence_start"], clip["sequence_end"])
-        tde4.setCameraCalculationRange(camera, clip["sequence_start"], clip["sequence_end"])
+        tde4.setCameraPlaybackRange(camera, clip["playback_start"], clip["playback_end"])
+        tde4.setCameraCalculationRange(camera, clip["playback_start"], clip["playback_end"])
         tde4.setCameraFrameRangeCalculationFlag(camera, 1)
-        tde4.setCurrentFrame(camera, clip["sequence_start"])
+        tde4.setCurrentFrame(camera, clip["playback_start"])
 
         tde4.setCameraFocusMode(camera, "FOCUS_USE_FROM_LENS")
         tde4.setCameraFocalLengthMode(camera, "FOCAL_USE_FROM_LENS")
@@ -717,10 +733,12 @@ def main():
         print("8-bit conversion:", f"gamma={{CONFIG['color_gamma']}}", f"softclip={{CONFIG['color_softclip']}}")
         print("Sequence path:", clip["sequence_path"])
         print("Sequence range:", f"{{clip['sequence_start']}}-{{clip['sequence_end']}}")
+        print("Playback range:", f"{{clip['playback_start']}}-{{clip['playback_end']}}")
+        print("Frame offset:", clip["frame_offset"])
 
     if created_cameras:
         tde4.setCurrentCamera(created_cameras[0])
-        tde4.setCurrentFrame(created_cameras[0], CONFIG["clips"][0]["sequence_start"])
+        tde4.setCurrentFrame(created_cameras[0], CONFIG["clips"][0]["playback_start"])
 
     saved = tde4.saveProject(CONFIG["project_path"], 0)
     if not saved:

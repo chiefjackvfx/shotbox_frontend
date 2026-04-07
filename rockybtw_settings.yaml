@@ -18,7 +18,7 @@ enable_assignment_board: true
 enable_import_page: true
 enable_review_page: true
 enable_xml_import_page: true
-last_job_id: 83
+last_job_id: 86
 last_scroll_position: 0
 last_timeline_index: 0
 notifications: 'off'
@@ -53,5 +53,5 @@ theme_file: dark_v01.qss
 threede_exe_path: /home/rockybtw/Documents/3DE4_linux64_r8.1/bin/3DE4
 window_height: 1419
 window_width: 1280
-window_x: 1280
+window_x: 1283
 window_y: 0
