@@ -41,7 +41,7 @@ Root {
  proxy_type scale
  proxy_format "1024 778 0 0 1024 778 1 1K_Super_35(full-ap)"
  colorManagement OCIO
- OCIO_config aces_1.2
+ OCIO_config fn-nuke_studio-config-v3.0.0_aces-v2.0_ocio-v2.4
  defaultViewerLUT "OCIO LUTs"
  workingSpaceLUT "ACES - ACEScg"
  monitorLut ACES/sRGB

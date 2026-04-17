@@ -398,6 +398,12 @@ class PreviewTemplateEditorTests(unittest.TestCase):
         self.assertEqual(nuke.root()["frame"].value(), 1001)
         self.assertEqual(nuke.root()["first_frame"].value(), 1001)
         self.assertEqual(nuke.root()["last_frame"].value(), 1024)
+        self.assertEqual(nuke.root()["colorManagement"].value(), "OCIO")
+        self.assertEqual(
+            nuke.root()["OCIO_config"].value(),
+            module.PreviewConfig.OCIO_CONFIG_NAME,
+        )
+        self.assertEqual(nuke.root()["workingSpaceLUT"].value(), "ACES - ACEScg")
         self.assertEqual(nuke.root()["name"].value(), "sho010_v001.nk")
         self.assertEqual(nuke.toNode("WriteCompMP4")["colorspace"].value(), "color_picking")
         self.assertEqual(nuke.toNode("WriteCompMP4")["ocioColorspace"].value(), "scene_linear")
@@ -442,6 +448,10 @@ class PreviewTemplateEditorTests(unittest.TestCase):
         self.assertEqual(nuke.toNode("Text11")["message"].value(), "")
         self.assertEqual(nuke.root()["first_frame"].value(), 1001)
         self.assertEqual(nuke.root()["last_frame"].value(), 1100)
+        self.assertEqual(
+            nuke.root()["OCIO_config"].value(),
+            module.PreviewConfig.OCIO_CONFIG_NAME,
+        )
         self.assertEqual(nuke.toNode("Read1")["colorspace"].value(), "ACES - ACEScg")
         self.assertEqual(nuke.toNode("WriteCompMP4")["mov64_quality"].value(), "High")
 

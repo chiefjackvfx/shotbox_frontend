@@ -183,7 +183,7 @@ NoOp {
  addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
  addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
 }
-set N117d4f30 [stack 0]
+set N112b22a0 [stack 0]
 PostageStamp {
  name Stamp2
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
@@ -240,7 +240,7 @@ Dot {
  xpos 214
  ypos 810
 }
-set N117f1d00 [stack 0]
+set N1121c850 [stack 0]
 VectorGenerator {
  motionEstimation Regularized
  vectorDetailReg 1
@@ -249,7 +249,7 @@ VectorGenerator {
  ypos 849
 }
 push 0
-push $N117f1d00
+push $N1121c850
 Denoise2 {
  inputs 3
  enable_temporal true
@@ -356,7 +356,7 @@ NoOp {
  addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
  addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
 }
-set N1433c6b0 [stack 0]
+set N13e0b5f0 [stack 0]
 PostageStamp {
  name Stamp5
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
@@ -408,7 +408,7 @@ PostageStamp {
  addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
  addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
 }
-push $N117d4f30
+push $N112b22a0
 PostageStamp {
  name Stamp1
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
@@ -474,7 +474,7 @@ Group {
   ypos 300
  }
 end_group
-push $N1433c6b0
+push $N13e0b5f0
 PostageStamp {
  name Stamp8
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
@@ -534,7 +534,7 @@ Dot {
  xpos 104
  ypos 2322
 }
-set N143835b0 [stack 0]
+set N13e4c350 [stack 0]
 Dot {
  inputs 0
  name Dot11
@@ -545,13 +545,13 @@ Dot {
  xpos 544
  ypos 2250
 }
-set N143a0440 [stack 0]
+set N13d5c190 [stack 0]
 Dot {
  name Dot57
  xpos 544
  ypos 2370
 }
-set N143a6d60 [stack 0]
+set N13d460a0 [stack 0]
 Group {
  inputs 2
  name common_key1
@@ -623,14 +623,14 @@ Group {
   xpos -407
   ypos 305
  }
-set N144173e0 [stack 0]
+set N13f58760 [stack 0]
  Invert {
   name Invert4
   xpos -407
   ypos 360
   disable {{"parent.size>=0 ? 1 : 0" i}}
  }
-set N1441e2e0 [stack 0]
+set N13f5f660 [stack 0]
  Blur {
   size {{parent.size.w i} {parent.size.h i}}
   crop {{parent.crop i}}
@@ -639,7 +639,7 @@ set N1441e2e0 [stack 0]
   xpos -615
   ypos 477
  }
-push $N1441e2e0
+push $N13f5f660
  Blur {
   size {{parent.size.w*parent.Multiplier i} {parent.size.h*parent.Multiplier i}}
   crop {{parent.crop i}}
@@ -654,7 +654,7 @@ push $N1441e2e0
   xpos -537
   ypos 572
  }
-push $N1441e2e0
+push $N13f5f660
  Blur {
   size {{parent.size.w*parent.Multiplier*2 i} {parent.size.h*parent.Multiplier*2 i}}
   crop {{parent.crop i}}
@@ -669,7 +669,7 @@ push $N1441e2e0
   xpos -477
   ypos 637
  }
-push $N1441e2e0
+push $N13f5f660
  Blur {
   size {{parent.size.w*parent.Multiplier*4 i} {parent.size.h*parent.Multiplier*4 i}}
   crop {{parent.crop i}}
@@ -690,7 +690,7 @@ push $N1441e2e0
   ypos 768
   disable {{"parent.size>=0 ? 1 : 0" i}}
  }
-push $N144173e0
+push $N13f58760
  Dot {
   name Dot2
   xpos -101
@@ -721,14 +721,14 @@ Dot {
  xpos 104
  ypos 2538
 }
-set N144f0100 [stack 0]
+set N14031540 [stack 0]
 Dot {
  name Dot12
  xpos 104
  ypos 2682
 }
-push $N144f0100
-push $N143835b0
+push $N14031540
+push $N13e4c350
 Dot {
  name Dot13
  xpos 434
@@ -739,7 +739,7 @@ Dot {
  xpos 434
  ypos 2466
 }
-push $N117d4f30
+push $N112b22a0
 PostageStamp {
  name Stamp9
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
@@ -799,8 +799,8 @@ Dot {
  xpos 764
  ypos 2538
 }
-set N1450ab20 [stack 0]
-push $N143a6d60
+set N1404bf60 [stack 0]
+push $N13d460a0
 Group {
  inputs 4
  name DasGrain
@@ -1045,20 +1045,20 @@ Group {
   xpos 764
   ypos -390
  }
-set N145cf790 [stack 0]
+set N14122620 [stack 0]
  Dot {
   name Dot28
   xpos 764
   ypos -198
  }
-set N145d61b0 [stack 0]
+set N14128cd0 [stack 0]
  Dot {
   name Dot32
   xpos 764
   ypos 234
  }
-set N145dcd40 [stack 0]
-push $N145d61b0
+set N1412f6d0 [stack 0]
+push $N14128cd0
  Dot {
   name Dot27
   xpos 624
@@ -1075,7 +1075,7 @@ push $N145d61b0
   xpos 624
   ypos -54
  }
-set N146093e0 [stack 0]
+set N1415b1f0 [stack 0]
  Input {
   inputs 0
   name PLATE
@@ -1090,7 +1090,7 @@ set N146093e0 [stack 0]
   xpos 324
   ypos -726
  }
-set N14616d30 [stack 0]
+set N14168b40 [stack 0]
  OCIOColorSpace {
   in_colorspace scene_linear
   out_colorspace scene_linear
@@ -1103,7 +1103,7 @@ set N14616d30 [stack 0]
   xpos 324
   ypos -198
  }
-set N1463c630 [stack 0]
+set N141a1410 [stack 0]
  Dot {
   name Dot6
   xpos 464
@@ -1138,7 +1138,7 @@ set N1463c630 [stack 0]
   xpos 464
   ypos 90
  }
-push $N146093e0
+push $N1415b1f0
  Merge2 {
   inputs 2
   operation plus
@@ -1172,8 +1172,8 @@ push $N146093e0
   xpos 624
   ypos 306
  }
-set N146dd950 [stack 0]
-push $N145dcd40
+set N14241960 [stack 0]
+push $N1412f6d0
  Merge2 {
   inputs 2
   operation from
@@ -1191,19 +1191,19 @@ push $N145dcd40
   xpos 764
   ypos 522
  }
-set N146f9c60 [stack 0]
+set N1425dc70 [stack 0]
  Dot {
   name Dot30
   xpos 764
   ypos 690
  }
-set N147006a0 [stack 0]
+set N142646b0 [stack 0]
  Dot {
   name Dot55
   xpos 764
   ypos 1170
  }
-set N14707230 [stack 0]
+set N1426b240 [stack 0]
  Input {
   inputs 0
   name mask
@@ -1218,21 +1218,21 @@ set N14707230 [stack 0]
   xpos 1204
   ypos 258
  }
-set N14714950 [stack 0]
+set N14278960 [stack 0]
  Dot {
   name Dot26
   xpos 1204
   ypos 1074
  }
-set N1471b3b0 [stack 0]
+set N1427f3c0 [stack 0]
  Invert {
   name Invert2
   xpos 180
   ypos 1064
   disable {{!parent.invert_1}}
  }
-push $N147006a0
-push $N1463c630
+push $N142646b0
+push $N141a1410
  Merge2 {
   inputs 2
   operation from
@@ -1249,14 +1249,14 @@ push $N1463c630
   xpos 324
   ypos 786
  }
-set N14746bb0 [stack 0]
+set N142aabc0 [stack 0]
  Dot {
   name Dot5
   xpos 104
   ypos 786
  }
-set N1474d650 [stack 0]
-push $N1474d650
+set N142b1660 [stack 0]
+push $N142b1660
  Copy {
   inputs 2
   from0 {{{parent.Copy2.from0}}}
@@ -1275,8 +1275,8 @@ push $N1474d650
   xpos 70
   ypos 926
  }
-set N14767c30 [stack 0]
-push $N146f9c60
+set N142cbc40 [stack 0]
+push $N1425dc70
  Colorspace {
   colorspace_out AlexaV3LogC
   name Colorspace5
@@ -1294,14 +1294,14 @@ push $N146f9c60
   xpos -116
   ypos 522
  }
-set N147ad000 [stack 0]
+set N14311010 [stack 0]
  Dot {
   name Dot48
   xpos -116
   ypos 786
  }
-set N147b3e00 [stack 0]
-push $N147b3e00
+set N14317e10 [stack 0]
+push $N14317e10
  Copy {
   inputs 2
   from0 rgba.blue
@@ -1336,7 +1336,7 @@ push $N147b3e00
   xpos -40
   ypos 985
  }
-push $N14767c30
+push $N142cbc40
  Copy {
   inputs 2
   from0 rgba.alpha
@@ -1396,7 +1396,7 @@ push $N14767c30
   xpos 70
   ypos 1424
  }
-push $N147ad000
+push $N14311010
  Dot {
   name Dot16
   xpos -336
@@ -1425,7 +1425,7 @@ push $N147ad000
   xpos 840
   ypos 1502
  }
-push $N14616d30
+push $N14168b40
  Dot {
   name Dot51
   xpos 115
@@ -1444,7 +1444,7 @@ push $N14616d30
   xpos 984
   ypos -605
  }
-set N148a91b0 [stack 0]
+set N1440cb30 [stack 0]
  Switch {
   inputs 2
   which {{parent.meta}}
@@ -1467,13 +1467,13 @@ set N148a91b0 [stack 0]
   xpos -685
   ypos 3762
  }
-push $N14714950
+push $N14278960
  Dot {
   name Dot40
   xpos 874
   ypos 258
  }
-push $N146dd950
+push $N14241960
  Dot {
   name Dot34
   xpos 624
@@ -1488,7 +1488,7 @@ push $N146dd950
   xpos 840
   ypos 374
  }
-push $N148a91b0
+push $N1440cb30
  OCIOColorSpace {
   in_colorspace {{OCIOColorSpace1.in_colorspace x1001 7}}
   out_colorspace {{OCIOColorSpace1.out_colorspace x1001 7}}
@@ -1501,7 +1501,7 @@ push $N148a91b0
   xpos 984
   ypos -390
  }
-set N1490b780 [stack 0]
+set N14481f40 [stack 0]
  Merge2 {
   inputs 2
   operation from
@@ -1519,7 +1519,7 @@ set N1490b780 [stack 0]
   xpos 984
   ypos 2658
  }
-set N14927a80 [stack 0]
+set N1449da50 [stack 0]
  ColorLookup {
   lut {master {}
     red {curve x0.00382891763 0.0002557597445 x0.007590188179 0.0002960292788 x0.01285281964 0.0003363993789 x0.0197017882 0.0004224070649 x0.02941314131 0.0004961362375 x0.04079099745 0.0005678633893 x0.05852931738 0.0006819239172 x0.07195483893 0.0008004350806 x0.1015054211 0.000923921764 x0.1350959986 0.001097035256 x0.178611353 0.001195716955 x0.2347512543 0.00138423128 x0.3000544012 0.00175979199 x0.4047375619 0.002084045775 x0.5263175964 0.002373547234 x0.6850759983 0.003520714591 x0.8822851777 0.004078153046 x1.164262295 0.003909756967 x1.558669448 0.004522861415 x1.988148332 0.005021561272}
@@ -1530,7 +1530,7 @@ set N14927a80 [stack 0]
   xpos 730
   ypos 2654
  }
-push $N1471b3b0
+push $N1427f3c0
  Dot {
   name Dot38
   xpos 1204
@@ -1546,19 +1546,19 @@ push $N1471b3b0
   xpos 544
   ypos 2271
  }
-set N14954f50 [stack 0]
+set N144cabd0 [stack 0]
  Dot {
   name Dot20
   xpos 544
   ypos 2391
  }
-push $N14954f50
+push $N144cabd0
  Dot {
   name Dot17
   xpos 434
   ypos 2271
  }
-set N14962620 [stack 0]
+set N144d82a0 [stack 0]
  Dot {
   name Dot13
   xpos 214
@@ -1578,7 +1578,7 @@ set N14962620 [stack 0]
   xpos -116
   ypos 1938
  }
-push $N14707230
+push $N1426b240
  ColorLookup {
   channels rgb
   lut {master {}
@@ -1595,7 +1595,7 @@ push $N14707230
   xpos 764
   ypos 1746
  }
-push $N14746bb0
+push $N142aabc0
  Dot {
   name Dot33
   xpos 324
@@ -1618,7 +1618,7 @@ push $N14746bb0
   xpos 324
   ypos 1842
  }
-set N149b61e0 [stack 0]
+set N1452be60 [stack 0]
  Dot {
   name Dot25
   xpos 104
@@ -1666,7 +1666,7 @@ set N149b61e0 [stack 0]
    xpos 214
    ypos -750
   }
-set N149e6c00 [stack 0]
+set N1455c310 [stack 0]
   Dot {
    name Dot16
    xpos 434
@@ -1682,13 +1682,13 @@ set N149e6c00 [stack 0]
    xpos 434
    ypos -606
   }
-set N14a041f0 [stack 0]
+set N145797c0 [stack 0]
   Dot {
    name Dot15
    xpos 654
    ypos -606
   }
-set N14a0ac00 [stack 0]
+set N145801d0 [stack 0]
   Dot {
    name Dot7
    xpos 874
@@ -1724,7 +1724,7 @@ set N14a0ac00 [stack 0]
    xpos 874
    ypos -366
   }
-push $N14a0ac00
+push $N145801d0
   BlinkScript {
    ProgramGroup 1
    KernelDescription "3 \"VoroNoise\" iterate pixelWise 19bb7e8333a60e3042117ce5163537b5b88551a8d1747223464ea753b25d637e 2 \"src\" Read Point \"dst\" Write Point 6 \"Frequency\" Float 1 AABIQg== \"Seed\" Int 1 AAAAAA== \"aspect ratio\" Float 1 AACAPw== \"width\" Int 1 AAAAAA== \"height\" Int 1 AAAAAA== \"Randomness\" Float 1 AAAAPw== 6 \"frequency\" 1 1 Default \"seed\" 1 1 Default \"aspect_ratio\" 1 1 Default \"width\" 1 1 Default \"height\" 1 1 Default \"randomness\" 1 1 Default 0"
@@ -1789,8 +1789,8 @@ push $N14a0ac00
    xpos 654
    ypos 42
   }
-set N14b2f570 [stack 0]
-push $N14a041f0
+set N146a4450 [stack 0]
+push $N145797c0
   Expression {
    expr0 "(x + .5) / width"
    expr1 "(y + .5) / height"
@@ -1820,7 +1820,7 @@ push $N14a041f0
    xpos 434
    ypos 210
   }
-push $N14b2f570
+push $N146a4450
   Expression {
    temp_name0 view_index
    temp_expr0 "parent.parent.stereo == 1 ? \[lsearch \[value root.views] \[view]] / 2 : 0"
@@ -1881,13 +1881,13 @@ push $N14b2f570
    xpos 654
    ypos 354
   }
-set N14bb1010 [stack 0]
+set N14725a10 [stack 0]
   Dot {
    name Dot13
    xpos 654
    ypos 546
   }
-push $N14bb1010
+push $N14725a10
   Dot {
    name Dot8
    xpos 874
@@ -1931,8 +1931,8 @@ push $N14bb1010
    xpos 874
    ypos 762
   }
-push $N14bb1010
-push $N149e6c00
+push $N14725a10
+push $N1455c310
   FrameHold {
    firstFrame {{parent.sample_frame}}
    name FrameHold1
@@ -1954,7 +1954,7 @@ push $N149e6c00
    xpos 180
    ypos 350
   }
-set N14c2e0a0 [stack 0]
+set N147a2aa0 [stack 0]
   TimeBlur {
    divisions {{"max(Transform1.size == 1 ? 2 : pow2(Transform1.size), 1)"}}
    shutter 1
@@ -1964,8 +1964,8 @@ set N14c2e0a0 [stack 0]
    ypos 446
    disable {{"parent.edge_blend_size < 1"}}
   }
-set N14c3e150 [stack 0]
-push $N14c2e0a0
+set N147b2b50 [stack 0]
+push $N147a2aa0
   Dot {
    name Dot1
    xpos -6
@@ -2007,7 +2007,7 @@ push $N14c2e0a0
    xpos -6
    ypos 666
   }
-push $N14c3e150
+push $N147b2b50
   Grade {
    inputs 1+1
    white 1.4
@@ -2056,8 +2056,8 @@ push $N14c3e150
   xpos 104
   ypos 2391
  }
-push $N14962620
-push $N149b61e0
+push $N144d82a0
+push $N1452be60
  Multiply {
   inputs 1+1
   channels rgb
@@ -2086,7 +2086,7 @@ push $N149b61e0
   xpos 324
   ypos 2490
  }
-set N14d192d0 [stack 0]
+set N1488dcd0 [stack 0]
  MergeExpression {
   inputs 2
   temp_name0 reverse
@@ -2103,7 +2103,7 @@ set N14d192d0 [stack 0]
   xpos 324
   ypos 2850
  }
-push $N14927a80
+push $N1449da50
  Merge2 {
   inputs 2
   operation plus
@@ -2120,7 +2120,7 @@ push $N14927a80
   xpos 984
   ypos 3018
  }
-set N14d4ef90 [stack 0]
+set N148c3990 [stack 0]
  OCIOColorSpace {
   in_colorspace {{OCIOColorSpace1.out_colorspace x1001 7}}
   out_colorspace {{OCIOColorSpace1.in_colorspace x1001 7}}
@@ -2133,13 +2133,13 @@ set N14d4ef90 [stack 0]
   xpos 984
   ypos 3162
  }
-set N14d74db0 [stack 0]
+set N148fd0b0 [stack 0]
  Dot {
   name Dot41
   xpos 1204
   ypos 3162
  }
-set N14d7b7d0 [stack 0]
+set N14903470 [stack 0]
  Dot {
   name Dot36
   xpos 1314
@@ -2152,7 +2152,7 @@ set N14d7b7d0 [stack 0]
   xpos 1280
   ypos 3254
  }
-push $N14d7b7d0
+push $N14903470
  Merge2 {
   inputs 2
   operation difference
@@ -2176,13 +2176,13 @@ push $N14d7b7d0
   xpos 1204
   ypos 3402
  }
-push $N1490b780
+push $N14481f40
  Dot {
   name Dot45
   xpos 1424
   ypos -390
  }
-push $N14d4ef90
+push $N148c3990
  Merge2 {
   inputs 2
   operation from
@@ -2198,7 +2198,7 @@ push $N14d4ef90
   xpos 1424
   ypos 3522
  }
-push $N14d192d0
+push $N1488dcd0
  Dot {
   name Dot14
   xpos 104
@@ -2209,13 +2209,13 @@ push $N14d192d0
   xpos 104
   ypos 3402
  }
-push $N145cf790
+push $N14122620
  Dot {
   name Dot47
   xpos -556
   ypos -390
  }
-push $N1463c630
+push $N141a1410
  Merge2 {
   inputs 2
   operation from
@@ -2231,7 +2231,7 @@ push $N1463c630
   xpos -556
   ypos 3522
  }
-push $N14d74db0
+push $N148fd0b0
  Switch {
   inputs 5
   which {{output}}
@@ -2254,7 +2254,7 @@ push $N14d74db0
   ypos 3854
  }
 end_group
-push $N1450ab20
+push $N1404bf60
 Dot {
  name Dot61
  xpos 764
@@ -2266,7 +2266,7 @@ Keymix {
  xpos 510
  ypos 2673
 }
-push $N143a0440
+push $N13d5c190
 Dot {
  name Dot3
  xpos 874
@@ -2289,7 +2289,7 @@ Reformat {
  xpos 510
  ypos 2967
 }
-set N14e63b40 [stack 0]
+set N149eaa90 [stack 0]
 Write {
  file ../renders/comp/sho010_v001.mov
  file_type mov
@@ -2310,7 +2310,7 @@ Write {
  mov64_bitrate_tolerance 4000000
  mov64_quality_min 1
  mov64_quality_max 3
- colorspace "Input - ARRI - V3 LogC (EI800) - Wide Gamut"
+ colorspace "ARRI LogC3 (EI800)"
  create_directories true
  checkHashOnRead false
  in_colorspace scene_linear
@@ -2322,12 +2322,12 @@ Write {
  xpos 400
  ypos 3027
 }
-push $N14e63b40
+push $N149eaa90
 Write {
  file ../renders/comp/sho010_v001/sho010_v001_####.exr
  file_type exr
  first_part rgba
- colorspace "Input - ARRI - V3 LogC (EI800) - Wide Gamut"
+ colorspace "ARRI LogC3 (EI800)"
  create_directories true
  checkHashOnRead false
  in_colorspace scene_linear
@@ -2418,7 +2418,7 @@ Group {
   xpos -728
   ypos -1049
  }
-set N14f85a70 [stack 0]
+set N14b6fd70 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -2439,7 +2439,7 @@ set N14f85a70 [stack 0]
   xpos -1089
   ypos -1047
  }
-set N14f9a050 [stack 0]
+set N14b834c0 [stack 0]
  Dot {
   name Dot13
   xpos -1808
@@ -2460,7 +2460,7 @@ set N14f9a050 [stack 0]
   xpos -1840
   ypos -576
  }
-set N14fa7200 [stack 0]
+set N14b906e0 [stack 0]
  AddTimeCode {
   frame {{"\[value startfr]"}}
   useFrame true
@@ -2468,7 +2468,7 @@ set N14fa7200 [stack 0]
   xpos -1840
   ypos -410
  }
-set N14fb4310 [stack 0]
+set N14b9d7f0 [stack 0]
  Dot {
   name Dot14
   xpos -2527
@@ -2479,7 +2479,7 @@ set N14fb4310 [stack 0]
   xpos -2527
   ypos 793
  }
-set N14fc7330 [stack 0]
+set N14bb0810 [stack 0]
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2524,7 +2524,7 @@ set N14fc7330 [stack 0]
   xpos -2380
   ypos 864
  }
-push $N14fc7330
+push $N14bb0810
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2569,7 +2569,7 @@ push $N14fc7330
   xpos -2380
   ypos 784
  }
-push $N14fc7330
+push $N14bb0810
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2621,25 +2621,25 @@ push $N14fc7330
   xpos -2200
   ypos 790
  }
-push $N14fa7200
+push $N14b906e0
  Dot {
   name Dot3
   xpos -1987
   ypos -567
  }
-set N1505ada0 [stack 0]
+set N14c43c60 [stack 0]
  Dot {
   name Dot6
   xpos -2168
   ypos -567
  }
-set N150615f0 [stack 0]
+set N14c4a4b0 [stack 0]
  Dot {
   name Dot7
   xpos -2347
   ypos -567
  }
-set N15068180 [stack 0]
+set N14c51040 [stack 0]
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -2652,25 +2652,25 @@ set N15068180 [stack 0]
   xpos -2740
   ypos -575
  }
-set N1506ed10 [stack 0]
+set N14c57bd0 [stack 0]
  Dot {
   name Dot8
   xpos -2888
   ypos -567
  }
-set N15082490 [stack 0]
+set N14c6b350 [stack 0]
  Dot {
   name Dot9
   xpos -3067
   ypos -567
  }
-set N15089570 [stack 0]
+set N14c71c20 [stack 0]
  Dot {
   name Dot10
   xpos -3247
   ypos -567
  }
-set N150900c0 [stack 0]
+set N14c78f80 [stack 0]
  Dot {
   name Dot11
   xpos -3428
@@ -2720,7 +2720,7 @@ set N150900c0 [stack 0]
   xpos -3460
   ypos 624
  }
-push $N150900c0
+push $N14c78f80
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2764,7 +2764,7 @@ push $N150900c0
   xpos -3280
   ypos 544
  }
-push $N15089570
+push $N14c71c20
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2807,7 +2807,7 @@ push $N15089570
   xpos -3100
   ypos 464
  }
-push $N15082490
+push $N14c6b350
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2851,7 +2851,7 @@ push $N15082490
   xpos -2920
   ypos 384
  }
-push $N1506ed10
+push $N14c57bd0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2896,7 +2896,7 @@ push $N1506ed10
   xpos -2740
   ypos 304
  }
-push $N15068180
+push $N14c51040
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2940,7 +2940,7 @@ push $N15068180
   xpos -2381
   ypos 224
  }
-push $N150615f0
+push $N14c4a4b0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -2982,7 +2982,7 @@ push $N150615f0
   xpos -2200
   ypos 144
  }
-push $N1505ada0
+push $N14c43c60
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -3027,7 +3027,7 @@ push $N1505ada0
   xpos -2021
   ypos 64
  }
-push $N14fb4310
+push $N14b9d7f0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -3072,7 +3072,7 @@ push $N14fb4310
   xpos -1840
   ypos -16
  }
-push $N14f9a050
+push $N14b834c0
  NoOp {
   name utility
   xpos -1120
@@ -3083,7 +3083,7 @@ push $N14f9a050
   addUserKnob {7 addres l "add res" R -500 500}
   addres {{parent.slateextend*2}}
  }
-set N152161e0 [stack 0]
+set N14dfed00 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -3111,7 +3111,7 @@ set N152161e0 [stack 0]
   xpos -1480
   ypos -734
  }
-push $N152161e0
+push $N14dfed00
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -3124,7 +3124,7 @@ push $N152161e0
   xpos -1120
   ypos -736
  }
-set N152451e0 [stack 0]
+set N14e2dd00 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -3157,8 +3157,8 @@ set N152451e0 [stack 0]
   xpos -1447
   ypos -487
  }
-set N152813a0 [stack 0]
-push $N152813a0
+set N14e69ec0 [stack 0]
+push $N14e69ec0
  Dilate {
   size {{parent.linewidth}}
   name Dilate1
@@ -3177,7 +3177,7 @@ push $N152813a0
   xpos -1448
   ypos -247
  }
-push $N152451e0
+push $N14e2dd00
  Merge2 {
   inputs 2
   name Merge5
@@ -3291,7 +3291,7 @@ push $N152451e0
   xpos -1120
   ypos 1189
  }
-push $N14f85a70
+push $N14b6fd70
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -3323,7 +3323,7 @@ push $N14f85a70
   xpos -2082
   ypos 826
  }
-push $N14fb4310
+push $N14b9d7f0
  NoOp {
   name readtime
   xpos -2740
@@ -3339,17 +3339,16 @@ push $N14fb4310
   tc1 00:00:02:12
  }
 end_group
-set N14f64db0 [stack 0]
+set N14b4f280 [stack 0]
 Viewer {
  frame_range 1001-1100
  fps 25
- viewerProcess "ACES 2.0 - SDR 100 nits (Rec.709) (sRGB - Display)"
  monitorOutNDISenderName "NukeX - template_current - Viewer1"
  name Viewer1
  xpos 510
  ypos 2895
 }
-push $N14f64db0
+push $N14b4f280
 Write {
  file "../renders/precomp/previews/\[string range  \[basename \[value root.name]] 0 end-3].mp4"
  file_type mov

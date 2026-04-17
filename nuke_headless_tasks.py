@@ -54,10 +54,12 @@ class PreviewConfig:
     # Default Nuke search paths by platform
     NUKE_SEARCH_PATHS = {
         'Linux': [
+            "/opt/Nuke17.0v1/Nuke17.0",
             "/opt/Nuke16.0v8/Nuke16.0",
             "/opt/Nuke15.2v2/Nuke15.2",
             "/opt/Nuke15.1v1/Nuke15.1",
             "/opt/Nuke15.0v2/Nuke15.0",
+            "/usr/local/Nuke17.0v1/Nuke17.0",
             "/usr/local/Nuke16.0v8/Nuke16.0",
             "/usr/local/Nuke15.2v2/Nuke15.2",
             "/usr/local/Nuke15.1v1/Nuke15.1",
@@ -65,6 +67,7 @@ class PreviewConfig:
             "/usr/local/Nuke14.0v5/Nuke14.0",
         ],
         'Windows': [
+            "C:/Program Files/Nuke17.0v1/Nuke17.0.exe",
             "C:/Program Files/Nuke16.0v8/Nuke16.0.exe",
             "C:/Program Files/Nuke15.2v2/Nuke15.2.exe",
             "C:/Program Files/Nuke15.1v1/Nuke15.1.exe",
@@ -91,6 +94,9 @@ class PreviewConfig:
 
     # Preview runtime template
     PREVIEW_TEMPLATE_NAME = "preview_template_v001.nk"
+
+    # Nuke 17 / OCIO v2.4 studio config used across generated scripts and headless renders
+    OCIO_CONFIG_NAME = "fn-nuke_studio-config-v3.0.0_aces-v2.0_ocio-v2.4"
 
 
 def _extract_nuke_from_dir(candidate_dir: str) -> Optional[str]:
@@ -610,7 +616,7 @@ class _PreviewTemplateEditor:
         self._set_optional_knob(root, "last_frame", vfx_last)
         self._set_optional_knob(root, "fps", fps)
         self._set_optional_knob(root, "colorManagement", "OCIO")
-        self._set_optional_knob(root, "OCIO_config", "aces_1.2")
+        self._set_optional_knob(root, "OCIO_config", PreviewConfig.OCIO_CONFIG_NAME)
         self._set_optional_knob(root, "workingSpaceLUT", "ACES - ACEScg")
         if "name" in root.knobs():
             try:
@@ -1443,9 +1449,9 @@ class MakePrecompExrTask:
 
         root = nuke.root()
         root['colorManagement'].setValue('OCIO')
-        root['OCIO_config'].setValue('aces_1.2')
+        root['OCIO_config'].setValue(PreviewConfig.OCIO_CONFIG_NAME)
         root['workingSpaceLUT'].setValue('ACES - ACEScg')
-        print("Color management: OCIO with ACES 1.2")
+        print(f"Color management: OCIO with {PreviewConfig.OCIO_CONFIG_NAME}")
 
         read = nuke.createNode('Read', inpanel=False)
         read['file'].fromUserText(input_path)

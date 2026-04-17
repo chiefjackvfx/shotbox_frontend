@@ -53,7 +53,7 @@ Root {
  fps find&replace fps
  format "find&replace format"
  colorManagement OCIO
- OCIO_config custom
+ OCIO_config fn-nuke_studio-config-v3.0.0_aces-v2.0_ocio-v2.4
  customOCIOConfigPath Z:/PROJECTS/2_Repository/18_NUKE_TOOLS/technical/aces_1.2_custom_v01/config_custom_v01.ocio
  defaultViewerLUT "OCIO LUTs"
  workingSpaceLUT scene_linear
