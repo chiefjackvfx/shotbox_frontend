@@ -1,36 +1,50 @@
-#! /opt/Nuke16.0v8/libnuke-16.0.8.so -nx
-#write_info WriteCompMP4 file:"../renders/precomp/previews/sho010_v001.mp4" format:"1920 1200 1" chans:":rgba.red:rgba.green:rgba.blue:" framerange:"1001 1100" fps:"0" colorspace:"color_picking	color_picking (Output - sRGB)" datatype:"unknown" transfer:"unknown" views:"main" colorManagement:"OCIO"
-version 16.0 v8
+#! /opt/Nuke17.0v1/libnuke-17.0.1.so -nx
+#write_info WriteCompMP4 file:"../renders/precomp/previews/sho010_v001.mp4" format:"1920 1200 1" chans:":rgba.red:rgba.green:rgba.blue:" framerange:"1001 1100" fps:"0" colorspace:"color_picking	color_picking (sRGB)" datatype:"unknown" transfer:"unknown" views:"main" colorManagement:"OCIO"
+version 17.0 v1
 define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 <layout version="1.0">
-    <window x="0" y="0" w="2559" h="1419" screen="0">
+    <window x="2560" y="32" w="2560" h="1387" maximized="1" screen="0">
         <splitter orientation="1">
-            <split size="1619"/>
-            <splitter orientation="1">
-                <split size="1619"/>
-                <dock id="" activePageId="DAG.1">
+            <split size="40"/>
+            <dock id="" hideTitles="1" activePageId="Toolbar.1">
+                <page id="Toolbar.1"/>
+            </dock>
+            <split size="1897" stretch="1"/>
+            <splitter orientation="2">
+                <split size="1349"/>
+                <dock id="" activePageId="DAG.1" focus="true">
                     <page id="DAG.1"/>
+                    <page id="Curve Editor.1"/>
+                    <page id="DopeSheet.1"/>
                 </dock>
             </splitter>
-            <split size="936"/>
+            <split size="615"/>
             <splitter orientation="2">
-                <split size="690"/>
+                <split size="1080"/>
                 <dock id="" activePageId="Properties.1">
                     <page id="Properties.1"/>
                     <page id="uk.co.thefoundry.backgroundrenderview.1"/>
                 </dock>
-                <split size="687"/>
-                <dock id="" hideTitles="1" activePageId="Viewer.1">
-                    <page id="Viewer.1"/>
+                <split size="265"/>
+                <dock id="" activePageId="com.adrianpueyo.KnobScripterPane">
+                    <page id="com.adrianpueyo.KnobScripterPane"/>
                 </dock>
             </splitter>
+        </splitter>
+    </window>
+    <window x="0" y="0" w="2560" h="1415" screen="1">
+        <splitter orientation="2">
+            <split size="1415"/>
+            <dock id="" activePageId="Viewer.1">
+                <page id="Viewer.1"/>
+            </dock>
         </splitter>
     </window>
 </layout>
 }
 Root {
  inputs 0
- name /home/rockybtw/Nextcloud2/01_projects/shotbox/shotbox_frontend/preview_template_v001.nk
+ name /home/gambit/Nextcloud/01_projects/shotbox/shotbox_frontend/preview_template_v001.nk
  project_directory /home/rockybtw/Documents/projects/LNER_TEST/VFX/60s_cut_7/sho010/scripts
  frame 1001
  first_frame 1001
@@ -41,11 +55,11 @@ Root {
  proxy_type scale
  proxy_format "1024 778 0 0 1024 778 1 1K_Super_35(full-ap)"
  colorManagement OCIO
- OCIO_config aces_1.2
+ OCIO_config fn-nuke_studio-config-v3.0.0_aces-v2.0_ocio-v2.4
  defaultViewerLUT "OCIO LUTs"
- workingSpaceLUT "ACES - ACEScg"
- monitorLut ACES/sRGB
- monitorOutLUT "sRGB (ACES)"
+ workingSpaceLUT ACEScg
+ monitorLut "ACES 2.0 - SDR 100 nits (Rec.709) (sRGB - Display)"
+ monitorOutLUT "ACES 2.0 - SDR 100 nits (Rec.709) (sRGB - Display)"
  int8Lut matte_paint
  int16Lut texture_paint
  logLut compositing_log
@@ -97,7 +111,7 @@ Read {
  inputs 0
  file_type exr
  origset true
- colorspace "Input - ARRI - V3 LogC (EI800) - Wide Gamut"
+ colorspace "ARRI LogC3 (EI800)"
  name Read1
  label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
  xpos 303
@@ -119,7 +133,7 @@ Retime {
  xpos 303
  ypos 221
 }
-set N17646f90 [stack 0]
+set N113e5a80 [stack 0]
 Group {
  name MS_slate_overlay
  tile_color 0xefb500ff
@@ -184,7 +198,7 @@ Group {
   xpos -728
   ypos -1049
  }
-set N13041f40 [stack 0]
+set N11416b60 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -205,7 +219,7 @@ set N13041f40 [stack 0]
   xpos -1089
   ypos -1047
  }
-set N130362e0 [stack 0]
+set N1142a660 [stack 0]
  Dot {
   name Dot13
   xpos -1808
@@ -226,7 +240,7 @@ set N130362e0 [stack 0]
   xpos -1840
   ypos -576
  }
-set N12d5e5a0 [stack 0]
+set N11437880 [stack 0]
  AddTimeCode {
   frame {{"\[value startfr]"}}
   useFrame true
@@ -234,7 +248,7 @@ set N12d5e5a0 [stack 0]
   xpos -1840
   ypos -410
  }
-set N12d67150 [stack 0]
+set N11444c40 [stack 0]
  Dot {
   name Dot14
   xpos -2527
@@ -245,7 +259,7 @@ set N12d67150 [stack 0]
   xpos -2527
   ypos 793
  }
-set N127ee5e0 [stack 0]
+set N11457b60 [stack 0]
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -290,7 +304,7 @@ set N127ee5e0 [stack 0]
   xpos -2380
   ypos 864
  }
-push $N127ee5e0
+push $N11457b60
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -336,7 +350,7 @@ push $N127ee5e0
   xpos -2380
   ypos 784
  }
-push $N127ee5e0
+push $N11457b60
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -388,25 +402,25 @@ push $N127ee5e0
   xpos -2200
   ypos 790
  }
-push $N12d5e5a0
+push $N11437880
  Dot {
   name Dot3
   xpos -1987
   ypos -567
  }
-set N130c94f0 [stack 0]
+set N114e9af0 [stack 0]
  Dot {
   name Dot6
   xpos -2168
   ypos -567
  }
-set N12ede310 [stack 0]
+set N114f0340 [stack 0]
  Dot {
   name Dot7
   xpos -2347
   ypos -567
  }
-set N1277c760 [stack 0]
+set N114f6ed0 [stack 0]
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -419,25 +433,25 @@ set N1277c760 [stack 0]
   xpos -2740
   ypos -575
  }
-set N12ec7690 [stack 0]
+set N114fda60 [stack 0]
  Dot {
   name Dot8
   xpos -2888
   ypos -567
  }
-set N130bd1e0 [stack 0]
+set N11511820 [stack 0]
  Dot {
   name Dot9
   xpos -3067
   ypos -567
  }
-set N130b48e0 [stack 0]
+set N115180f0 [stack 0]
  Dot {
   name Dot10
   xpos -3247
   ypos -567
  }
-set N130da610 [stack 0]
+set N1151ec40 [stack 0]
  Dot {
   name Dot11
   xpos -3428
@@ -487,7 +501,7 @@ set N130da610 [stack 0]
   xpos -3460
   ypos 624
  }
-push $N130da610
+push $N1151ec40
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -531,7 +545,7 @@ push $N130da610
   xpos -3280
   ypos 544
  }
-push $N130b48e0
+push $N115180f0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -574,7 +588,7 @@ push $N130b48e0
   xpos -3100
   ypos 464
  }
-push $N130bd1e0
+push $N11511820
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -618,14 +632,14 @@ push $N130bd1e0
   xpos -2920
   ypos 384
  }
-push $N12ec7690
+push $N114fda60
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
   font_height_toolbar 100
   message "\[date %d/%m/%y]"
   old_message {
-   {50 57 47 48 51 47 50 54}
+   {49 55 47 48 52 47 50 54}
   }
   old_expression_markers {
    {0 7}
@@ -663,7 +677,7 @@ push $N12ec7690
   xpos -2740
   ypos 304
  }
-push $N1277c760
+push $N114f6ed0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -707,7 +721,7 @@ push $N1277c760
   xpos -2381
   ypos 224
  }
-push $N12ede310
+push $N114f0340
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -749,7 +763,7 @@ push $N12ede310
   xpos -2200
   ypos 144
  }
-push $N130c94f0
+push $N114e9af0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -794,7 +808,7 @@ push $N130c94f0
   xpos -2021
   ypos 64
  }
-push $N12d67150
+push $N11444c40
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -839,7 +853,7 @@ push $N12d67150
   xpos -1840
   ypos -16
  }
-push $N130362e0
+push $N1142a660
  NoOp {
   name utility
   xpos -1120
@@ -850,7 +864,7 @@ push $N130362e0
   addUserKnob {7 addres l "add res" R -500 500}
   addres {{parent.slateextend*2}}
  }
-set N12e31640 [stack 0]
+set N116a4910 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -878,7 +892,7 @@ set N12e31640 [stack 0]
   xpos -1480
   ypos -734
  }
-push $N12e31640
+push $N116a4910
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -891,7 +905,7 @@ push $N12e31640
   xpos -1120
   ypos -736
  }
-set N127d2760 [stack 0]
+set N116d3720 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -924,8 +938,8 @@ set N127d2760 [stack 0]
   xpos -1447
   ypos -487
  }
-set N12d07f20 [stack 0]
-push $N12d07f20
+set N11710780 [stack 0]
+push $N11710780
  Dilate {
   size {{parent.linewidth}}
   name Dilate1
@@ -944,7 +958,7 @@ push $N12d07f20
   xpos -1448
   ypos -247
  }
-push $N127d2760
+push $N116d3720
  Merge2 {
   inputs 2
   name Merge5
@@ -1058,7 +1072,7 @@ push $N127d2760
   xpos -1120
   ypos 1189
  }
-push $N13041f40
+push $N11416b60
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -1090,7 +1104,7 @@ push $N13041f40
   xpos -2082
   ypos 826
  }
-push $N12d67150
+push $N11444c40
  NoOp {
   name readtime
   xpos -2740
@@ -1158,18 +1172,18 @@ Write {
  colorspace color_picking
  create_directories true
  checkHashOnRead false
- ocioColorspace "ACES - ACEScg"
- display ACES
- view sRGB
+ ocioColorspace ACEScg
+ display "sRGB - Display"
+ view "ACES 2.0 - SDR 100 nits (Rec.709)"
  name WriteCompMP4
  xpos 303
  ypos 339
 }
-push $N17646f90
+push $N113e5a80
 Viewer {
  frame_range 1001-1100
  fps 25
- viewerProcess "sRGB (ACES)"
+ viewerProcess "ACES 2.0 - SDR 100 nits (Rec.709) (sRGB - Display)"
  monitorOutNDISenderName "NukeX - preview_template_v001 - Viewer1"
  name Viewer1
  xpos 303

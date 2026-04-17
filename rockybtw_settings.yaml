@@ -12,15 +12,15 @@ debug_modes:
   project_load_profiler: true
   suppress_qt_multimedia_warnings: true
   ui_updates: false
-django_username: 1
+django_username: null
 enable_activity_page: true
 enable_assignment_board: true
 enable_import_page: true
 enable_review_page: true
 enable_xml_import_page: true
-last_job_id: 41
+last_job_id: 86
 last_scroll_position: 0
-last_timeline_index: 0
+last_timeline_index: 1
 notifications: 'off'
 notifications_animations: false
 notifications_do_not_disturb: false
@@ -45,7 +45,7 @@ preview_thumbnail_size: Small
 remember_last_session: true
 remember_window_size: true
 row_height: 5
-server_url: http://192.168.10.207:8000
+server_url: http://192.168.10.88:8000
 shots_layout_mode: grid
 show_startup_loading_dialog: true
 startup_tab: 0

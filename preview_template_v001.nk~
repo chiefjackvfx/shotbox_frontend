@@ -15,7 +15,7 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
             <split size="936"/>
             <splitter orientation="2">
                 <split size="690"/>
-                <dock id="" activePageId="Properties.1" focus="true">
+                <dock id="" activePageId="Properties.1">
                     <page id="Properties.1"/>
                     <page id="uk.co.thefoundry.backgroundrenderview.1"/>
                 </dock>
@@ -111,11 +111,11 @@ Reformat {
 }
 Retime {
  input.last 1
+ output.first 1001
  output.first_lock true
- output.last 1
+ output.last 1001
  time ""
  name Retime1
- selected true
  xpos 303
  ypos 221
 }
@@ -126,6 +126,7 @@ Group {
  note_font "Verdana Bold Italic"
  xpos 303
  ypos 274
+ show_group_view true
  addUserKnob {20 settings t "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
  addUserKnob {26 text l "" +STARTLINE T "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
  addUserKnob {26 ""}
@@ -331,6 +332,7 @@ push $N127ee5e0
   name Text11
   label "duration time\n"
   note_font "Verdana Bold"
+  selected true
   xpos -2380
   ypos 784
  }
