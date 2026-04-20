@@ -2,6 +2,13 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 2.0.3 - 2026-04-20
+
+### Changed
+
+- better nuke 17 template
+- nuke in use says username not machione name
+
 ## 2.0.2 - 2026-04-07
 
 ### Fixed
