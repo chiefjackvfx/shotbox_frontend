@@ -300,7 +300,6 @@ class _TemplateEditor:
         "ReadCompEXR",
         "WriteCompMP4",
         "MS_slate_overlay",
-        "Text11",
     )
     REQUIRED_SLATE_KNOBS = (
         "projecttext",
@@ -468,7 +467,7 @@ class _TemplateEditor:
         )
 
         read_comp_mov = self._required_node("ReadCompMov")
-        self._set_knob(read_comp_mov["file"], self.request.comp_mov_file)
+        self._set_file_knob_if_static(read_comp_mov, self.request.comp_mov_file)
         self._set_knob(read_comp_mov["colorspace"], map_input_colorspace(self.request.colourspace))
         self._set_knob(read_comp_mov["label"], READ_NODE_LABEL)
 
@@ -479,7 +478,7 @@ class _TemplateEditor:
         self._set_optional_knob(retime_preview, "output.last", self.request.frame_last)
 
         read_comp_exr = self._required_node("ReadCompEXR")
-        self._set_knob(read_comp_exr["file"], self.request.comp_exr_file)
+        self._set_file_knob_if_static(read_comp_exr, self.request.comp_exr_file)
         self._set_knob(read_comp_exr["colorspace"], map_input_colorspace(self.request.colourspace))
         self._set_knob(read_comp_exr["label"], READ_NODE_LABEL)
 
@@ -504,12 +503,6 @@ class _TemplateEditor:
             slate_group.end()
 
     def _update_preview_text(self):
-        text11 = self._required_node("Text11")
-        self._set_knob(
-            text11["message"],
-            f"{self.request.frame_first}-{self.request.frame_last}\n{self._duration_timecode()}",
-        )
-
         text10 = self.nuke.toNode("Text10")
         if text10 is not None and "message" in text10.knobs():
             self._set_knob(text10["message"], str(max(self.request.duration - 1, 0)))
@@ -519,7 +512,7 @@ class _TemplateEditor:
             self._set_knob(text12["message"], f"{self.request.shot_name}\n{self.request.fps:g}fps")
 
     def _configure_write_node(self, node, relative_file: str, *, file_type: str, colorspace: Optional[str]):
-        self._set_knob(node["file"], relative_file)
+        self._set_file_knob_if_static(node, relative_file)
         self._set_optional_knob(node, "file_type", file_type)
         self._set_optional_knob(node, "create_directories", True)
         self._set_optional_knob(node, "checkHashOnRead", False)
@@ -562,6 +555,17 @@ class _TemplateEditor:
         if callable(from_user_text):
             from_user_text(normalized_absolute)
         self._set_knob(knob, self._relative_to_script(absolute_path))
+
+    def _set_file_knob_if_static(self, node, relative_file: str):
+        if self._node_uses_root_name_expression(node):
+            return
+        self._set_knob(node["file"], relative_file)
+
+    def _node_uses_root_name_expression(self, node) -> bool:
+        if node is None or "file" not in node.knobs():
+            return False
+        current_value = node["file"].value()
+        return isinstance(current_value, str) and "root.name" in current_value
 
     def _create_node(self, class_name: str, name: str, *, xpos: int, ypos: int, inputs: Optional[Iterable] = None):
         factory = getattr(self.nuke.nodes, class_name, None)

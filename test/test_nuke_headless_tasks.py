@@ -165,7 +165,6 @@ class _FakeNuke:
             _FakeNode("Read1", media_ranges=media_ranges),
             _FakeNode("Retime1"),
             _FakeNode("WriteCompMP4"),
-            _FakeNode("Text11"),
         ]
         readtime = _FakeNode("readtime")
         self.top_nodes.append(_FakeGroupNode("MS_slate_overlay", self, inner_nodes=[readtime]))
@@ -394,7 +393,6 @@ class PreviewTemplateEditorTests(unittest.TestCase):
         self.assertEqual(nuke.toNode("Read1")["colorspace"].value(), "Utility - sRGB - Texture")
         self.assertEqual(nuke.toNode("WriteCompMP4")["file"].value(), "/tmp/sho010_v001.mp4")
         self.assertEqual(nuke.toNode("WriteCompMP4")["mov64_quality"].value(), "Medium")
-        self.assertEqual(nuke.toNode("Text11")["message"].value(), "")
         self.assertEqual(nuke.root()["frame"].value(), 1001)
         self.assertEqual(nuke.root()["first_frame"].value(), 1001)
         self.assertEqual(nuke.root()["last_frame"].value(), 1024)
@@ -445,7 +443,6 @@ class PreviewTemplateEditorTests(unittest.TestCase):
 
         self.assertEqual((first, last), (1001, 1100))
         self.assertEqual(nuke.executed, ("WriteCompMP4", 1001, 1100))
-        self.assertEqual(nuke.toNode("Text11")["message"].value(), "")
         self.assertEqual(nuke.root()["first_frame"].value(), 1001)
         self.assertEqual(nuke.root()["last_frame"].value(), 1100)
         self.assertEqual(

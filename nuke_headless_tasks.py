@@ -648,12 +648,6 @@ class _PreviewTemplateEditor:
         finally:
             slate_group.end()
 
-        # The template ships with a separate white Text11 overlay. Blank it so
-        # only the slate's built-in orange text renders in previews.
-        text11 = self.nuke.toNode("Text11")
-        if text11 is not None:
-            self._set_optional_knob(text11, "message", "")
-
         self.nuke.execute(write, vfx_first, vfx_last)
         return vfx_first, vfx_last
 

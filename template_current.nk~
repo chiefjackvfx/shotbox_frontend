@@ -43,6 +43,14 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 }
 Root {
  inputs 0
+ gsv  {
+  __default__ {
+  }
+  __panel__ {
+   tab {Main}
+  }
+ 
+}
  name /home/gambit/Nextcloud/01_projects/shotbox/shotbox_frontend/template_current.nk
  project_directory /home/rockybtw/Documents/projects/LNER_TEST/VFX/60s_cut_7/sho010/scripts
  frame 1001
@@ -135,166 +143,6 @@ BackdropNode {
 Read {
  inputs 0
  file_type mov
- file ../plates/V1-0001_A005C012_2510312B.mov
- last 100
- origlast 100
- origset true
- colorspace "ARRI LogC3 (EI800)"
- name Read1
- label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
- xpos 282
- ypos 87
-}
-Retime {
- output.first 1001
- output.first_lock true
- output.last 1100
- time ""
- name Retime1
- xpos 282
- ypos 255
-}
-NoOp {
- name Anchor_3a190e900
- help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
- onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.anchorOnCreate()\n    except:\n        pass"
- knobChanged stamps.anchorKnobChanged()
- autolabel "nuke.thisNode().knob(\"title\").value()"
- tile_color 0xffffff01
- note_font_size 20
- xpos 282
- ypos 322
- addUserKnob {20 anchor_tab l "Anchor Stamp"}
- addUserKnob {26 identifier -STARTLINE +HIDDEN T anchor}
- addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the internal node name."}
- title master
- addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T master}
- addUserKnob {26 prev_name l "" +STARTLINE +HIDDEN T Anchor_3a190e900}
- addUserKnob {3 showing l "" +STARTLINE +HIDDEN}
- addUserKnob {1 tags l Tags t "Comma-separated tags to help find this Anchor via the Stamp Selector."}
- tags 2D,
- addUserKnob {26 line1 l "" +STARTLINE}
- addUserKnob {26 stamps_label l Stamps: T " "}
- addUserKnob {22 createStamp l new t "Create a new Stamp for this Anchor." -STARTLINE T stamps.stampCreateWired(nuke.thisNode())}
- addUserKnob {22 selectStamps l select t "Select all of this Anchor's Stamps." -STARTLINE T stamps.wiredSelectSimilar(nuke.thisNode().name())}
- addUserKnob {22 reconnectStamps l reconnect t "Reconnect all of this Anchor's Stamps." -STARTLINE T stamps.anchorReconnectWired()}
- addUserKnob {22 zoomNext l "zoom next" t "Navigate to this Anchor's next Stamp on the Node Graph." -STARTLINE T stamps.wiredZoomNext(nuke.thisNode().name())}
- addUserKnob {26 line2 l "" +STARTLINE}
- addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
- addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
-}
-set N117d4f30 [stack 0]
-PostageStamp {
- name Stamp2
- help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
- onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredOnCreate()\n    except Exception:\n        pass\n"
- knobChanged "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredKnobChanged()\n    except:\n        pass"
- autolabel "nuke.thisNode().knob(\"title\").value()"
- tile_color 0x1000001
- note_font "Bitstream Vera Sans"
- note_font_size 20
- xpos 180
- ypos 730
- hide_input true
- addUserKnob {20 wired_tab l "Wired Stamp"}
- addUserKnob {26 identifier -STARTLINE +HIDDEN T wired}
- addUserKnob {3 lockCallbacks l "" +STARTLINE +HIDDEN}
- addUserKnob {6 toReconnect -STARTLINE +HIDDEN}
- addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor."}
- title master
- addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T master}
- addUserKnob {26 tags l Tags: t "Tags of this stamp's Anchor. Click 'show anchor' to change them." T <i>2D</i>}
- addUserKnob {26 backdrops l Backdrops: t "Labels of backdrop nodes that contain this stamp's Anchor." T "<i>PLATE/s & ASSETS</i>"}
- addUserKnob {26 line1 l "" +STARTLINE}
- addUserKnob {6 postageStamp_show l "postage stamp" t "Enable the postage stamp thumbnail for this node." +STARTLINE}
- addUserKnob {26 anchor_label l Anchor: T " "}
- addUserKnob {22 show_anchor l " show anchor " t "Show the properties panel for this Stamp's Anchor." -STARTLINE T stamps.wiredShowAnchor()}
- addUserKnob {22 zoom_anchor l "zoom anchor" t "Navigate to this Stamp's Anchor on the Node Graph." -STARTLINE T stamps.wiredZoomAnchor()}
- addUserKnob {26 stamps_label l Stamps: T " "}
- addUserKnob {22 zoomNext l " zoom next " t "Navigate to this Stamp's next sibling on the Node Graph." -STARTLINE T stamps.wiredZoomNext()}
- addUserKnob {22 selectSimilar l " select similar " t "Select all similar Stamps to this one on the Node Graph." -STARTLINE T stamps.wiredSelectSimilar()}
- addUserKnob {26 space_1 l "" +STARTLINE T " "}
- addUserKnob {26 reconnect_label l Reconnect: t "Reconnect by the stored Anchor name." T " "}
- addUserKnob {22 reconnect_this l this t "Reconnect this Stamp to its Anchor using the stored Anchor name." -STARTLINE T "n = nuke.thisNode()\ntry:\n    n.setInput(0, nuke.toNode(n.knob(\"anchor\").value()))\nexcept Exception:\n    nuke.message(\"Unable to reconnect.\")\ntry:\n    import stamps\n    stamps.wiredGetStyle(n)\nexcept Exception:\n    pass\n"}
- addUserKnob {22 reconnect_similar l similar t "Reconnect this Stamp and similar ones using the stored anchor name." -STARTLINE T stamps.wiredReconnectSimilar()}
- addUserKnob {22 reconnect_all l all t "Reconnect all Stamps to their Anchors using the stored names." -STARTLINE T stamps.wiredReconnectAll()}
- addUserKnob {26 space_2 l "" +STARTLINE T " "}
- addUserKnob {20 advanced_reconnection l "Advanced Reconnection" n 2}
- addUserKnob {26 reconnect_by_title_label l "<font color=gold>By Title:" t "Reconnect by searching for a matching title." T " "}
- addUserKnob {22 reconnect_by_title_this l this t "Find an Anchor that shares this Stamp's title and connect to it." -STARTLINE T stamps.wiredReconnectByTitle()}
- addUserKnob {22 reconnect_by_title_similar l similar t "Find an Anchor by title and reconnect this Stamp and similar ones to it." -STARTLINE T stamps.wiredReconnectByTitleSimilar()}
- addUserKnob {22 reconnect_by_title_selected l selected t "For each selected Stamp, reconnect using an Anchor that shares its title." -STARTLINE T stamps.wiredReconnectByTitleSelected()}
- addUserKnob {26 reconnect_by_selection_label l "<font color=orangered>By Selection:" t "Force reconnect to a selected Anchor." T " "}
- addUserKnob {22 reconnect_by_selection_this l this t "Force reconnect this Stamp to a selected Anchor." -STARTLINE T stamps.wiredReconnectBySelection()}
- addUserKnob {22 reconnect_by_selection_similar l similar t "Force reconnect this Stamp and similar ones to a selected Anchor." -STARTLINE T stamps.wiredReconnectBySelectionSimilar()}
- addUserKnob {22 reconnect_by_selection_selected l selected t "Force reconnect all selected Stamps to the selected Anchor." -STARTLINE T stamps.wiredReconnectBySelectionSelected()}
- addUserKnob {1 anchor l Anchor}
- anchor Anchor_3a190e900
- addUserKnob {6 auto_reconnect_by_title l "<font color=#ED9977>&nbsp; auto-reconnect by title" t "On copy-paste, auto-reconnect by title instead of stored Anchor name; turns off automatically." +STARTLINE}
- addUserKnob {26 line2 l "" +STARTLINE}
- addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
- addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
-}
-Dot {
- name Dot1
- xpos 214
- ypos 810
-}
-set N117f1d00 [stack 0]
-VectorGenerator {
- motionEstimation Regularized
- vectorDetailReg 1
- name VectorGenerator1
- xpos 70
- ypos 849
-}
-push 0
-push $N117f1d00
-Denoise2 {
- inputs 3
- enable_temporal true
- userMessage "Move the analysis region to analyse noise or press Lock Noise Analysis to disable this message."
- profileCurve {profile {curve 0 x0.125 0 0 0 0 0 0 0 0}}
- serializeKnob "0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00
-0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 
-18446744073709551615"
- name Denoise1
- xpos 180
- ypos 921
-}
-Write {
- file ../renders/precomp/sho010_DN_v001/sho010_DN_v001_####.exr
- file_type exr
- first_part rgba
- create_directories true
- checkHashOnRead false
- in_colorspace scene_linear
- out_colorspace scene_linear
- ocioColorspace scene_linear
- display "sRGB - Display"
- view "ACES 2.0 - SDR 100 nits (Rec.709)"
- name WriteDN1
- xpos 180
- ypos 993
-}
-Read {
- inputs 0
- file_type mov
  file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3].mov"
  origset true
  colorspace "ARRI LogC3 (EI800)"
@@ -356,7 +204,7 @@ NoOp {
  addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
  addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
 }
-set N1433c6b0 [stack 0]
+set N14e7a4a0 [stack 0]
 PostageStamp {
  name Stamp5
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
@@ -408,7 +256,58 @@ PostageStamp {
  addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
  addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
 }
-push $N117d4f30
+Read {
+ inputs 0
+ file_type mov
+ file ../plates/V1-0001_A005C012_2510312B.mov
+ last 100
+ origlast 100
+ origset true
+ colorspace "ARRI LogC3 (EI800)"
+ name Read1
+ label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
+ xpos 282
+ ypos 87
+}
+Retime {
+ output.first 1001
+ output.first_lock true
+ output.last 1100
+ time ""
+ name Retime1
+ xpos 282
+ ypos 255
+}
+NoOp {
+ name Anchor_3a190e900
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.anchorOnCreate()\n    except:\n        pass"
+ knobChanged stamps.anchorKnobChanged()
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0xffffff01
+ note_font_size 20
+ xpos 282
+ ypos 322
+ addUserKnob {20 anchor_tab l "Anchor Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T anchor}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor.\nIMPORTANT: This is only for display purposes, and is different from the internal node name."}
+ title master
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T master}
+ addUserKnob {26 prev_name l "" +STARTLINE +HIDDEN T Anchor_3a190e900}
+ addUserKnob {3 showing l "" +STARTLINE +HIDDEN}
+ addUserKnob {1 tags l Tags t "Comma-separated tags to help find this Anchor via the Stamp Selector."}
+ tags 2D,
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 createStamp l new t "Create a new Stamp for this Anchor." -STARTLINE T stamps.stampCreateWired(nuke.thisNode())}
+ addUserKnob {22 selectStamps l select t "Select all of this Anchor's Stamps." -STARTLINE T stamps.wiredSelectSimilar(nuke.thisNode().name())}
+ addUserKnob {22 reconnectStamps l reconnect t "Reconnect all of this Anchor's Stamps." -STARTLINE T stamps.anchorReconnectWired()}
+ addUserKnob {22 zoomNext l "zoom next" t "Navigate to this Anchor's next Stamp on the Node Graph." -STARTLINE T stamps.wiredZoomNext(nuke.thisNode().name())}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
+}
+set N12387600 [stack 0]
 PostageStamp {
  name Stamp1
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
@@ -474,7 +373,1122 @@ Group {
   ypos 300
  }
 end_group
-push $N1433c6b0
+Read {
+ inputs 0
+ file_type exr
+ file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3]/\[string range  \[basename \[value root.name]] 0 end-3]_####.exr"
+ origset true
+ colorspace "ARRI LogC3 (EI800)"
+ name ReadCompEXR
+ label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
+ xpos 620
+ ypos 3100
+}
+Reformat {
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ name Reformat2
+ xpos 620
+ ypos 3230
+}
+Group {
+ name MS_slate_overlay
+ tile_color 0xefb500ff
+ note_font "Verdana Bold Italic"
+ xpos 620
+ ypos 3313
+ addUserKnob {20 settings t "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
+ addUserKnob {26 text l "" +STARTLINE T "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
+ addUserKnob {26 ""}
+ addUserKnob {7 slateextend l "slate area" R 0 200}
+ slateextend 60
+ addUserKnob {41 color l "overlay color" T Constant1.color}
+ addUserKnob {6 enableline l "use line" +STARTLINE}
+ enableline true
+ addUserKnob {3 linewidth l "&nbsp;&nbsp;&nbsp;&nbsp;width&nbsp;" -STARTLINE}
+ linewidth 2
+ addUserKnob {26 elements l "<b><span style=\"color:#ffaf24\">Elements</span>"}
+ addUserKnob {6 framecount l "frame count" +STARTLINE}
+ framecount true
+ addUserKnob {6 timecode1 l timecode -STARTLINE}
+ timecode1 true
+ addUserKnob {6 date1 l date -STARTLINE}
+ date1 true
+ addUserKnob {6 fpscounter l framerate +STARTLINE}
+ fpscounter true
+ addUserKnob {6 compname l "comp name" -STARTLINE}
+ compname true
+ addUserKnob {3 startfr l "start frame"}
+ startfr 1001
+ addUserKnob {6 duration t "\nDisplay duration of entire timeline based on project sttings." -STARTLINE}
+ duration true
+ addUserKnob {4 durationtype l "" -STARTLINE M {frames timecode both ""}}
+ durationtype both
+ addUserKnob {41 set l "apply duration" t "\nPress this to run the timeline calculation.\n\nRun this again if the timeline range changes during production." -STARTLINE T readtime.set}
+ addUserKnob {6 project +STARTLINE}
+ addUserKnob {1 projecttext l "" -STARTLINE}
+ projecttext project
+ addUserKnob {6 artist +STARTLINE}
+ addUserKnob {1 artisttext l "" -STARTLINE}
+ artisttext artist
+ addUserKnob {6 comment +STARTLINE}
+ addUserKnob {1 commenttext l "" -STARTLINE}
+ commenttext "add comment here"
+ addUserKnob {26 Font l "<b><span style=\"color:#ffaf24\">Font</span>"}
+ addUserKnob {3 fontsize1 l "font size" t "\nControls all fonts at once"}
+ fontsize1 3
+ addUserKnob {3 commentsize l "&nbsp;&nbsp;comment size&nbsp;" -STARTLINE}
+ commentsize 3
+ addUserKnob {3 xedgedistance l "&nbsp;distance to side&nbsp;" t "\nSets the distance from the markers to the format baoundarys." -STARTLINE}
+ xedgedistance 20
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos -760
+  ypos -1292
+ }
+ Dot {
+  name Dot5
+  xpos -728
+  ypos -1049
+ }
+set N15bde180 [stack 0]
+ Shuffle2 {
+  fromInput1 {
+   {0}
+   B
+  }
+  fromInput2 {
+   {0}
+   B
+  }
+  mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
+  name Shuffle4
+  label "\[value in1]"
+  xpos -941
+  ypos -1057
+ }
+ Dot {
+  name Dot1
+  xpos -1089
+  ypos -1047
+ }
+set N15bf1be0 [stack 0]
+ Dot {
+  name Dot13
+  xpos -1808
+  ypos -1048
+ }
+ Shuffle2 {
+  fromInput1 {
+   {0}
+   B
+  }
+  fromInput2 {
+   {0}
+   B
+  }
+  mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
+  name Shuffle1
+  label emtpy
+  xpos -1840
+  ypos -576
+ }
+set N15bfee00 [stack 0]
+ AddTimeCode {
+  frame {{"\[value startfr]"}}
+  useFrame true
+  name AddTimeCode1
+  xpos -1840
+  ypos -410
+ }
+set N15c0bf10 [stack 0]
+ Dot {
+  name Dot14
+  xpos -2527
+  ypos -408
+ }
+ Dot {
+  name Dot12
+  xpos -2527
+  ypos 793
+ }
+set N15c1ef30 [stack 0]
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "total:  \[value readtime.durationframe] / \[value readtime.tc1]"
+  old_message {
+   {116 111 116 97 108 58 32 32 49 48 48 32 47 32 48 48 58 48 48 58 48 50 58 49 50}
+  }
+  old_expression_markers {
+   {8 10 14 24}
+  }
+  box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+  xjustify center
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 8
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text12
+  label "duration both\n"
+  note_font "Verdana Bold"
+  xpos -2380
+  ypos 864
+ }
+push $N15c1ef30
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "total: \[value readtime.tc1]"
+  old_message {
+   {116 111 116 97 108 58 32 48 48 58 48 48 58 48 50 58 49 50}
+  }
+  old_expression_markers {
+   {7 17}
+  }
+  box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+  xjustify center
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 5
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  scale {1 1}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text11
+  label "duration time\n"
+  note_font "Verdana Bold"
+  xpos -2380
+  ypos 784
+ }
+push $N15c1ef30
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "total: \[value readtime.durationframe]"
+  old_message {
+   {116 111 116 97 108 58 32 49 48 48}
+  }
+  old_expression_markers {
+   {7 9}
+  }
+  box {0 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+  xjustify center
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 5
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text10
+  label "duration frame\n"
+  note_font "Verdana Bold"
+  xpos -2380
+  ypos 704
+ }
+ Switch {
+  inputs 3
+  which {{parent.durationtype}}
+  name Switch1
+  xpos -2200
+  ypos 790
+ }
+push $N15bfee00
+ Dot {
+  name Dot3
+  xpos -1987
+  ypos -567
+ }
+set N15cb2370 [stack 0]
+ Dot {
+  name Dot6
+  xpos -2168
+  ypos -567
+ }
+set N15cb8bc0 [stack 0]
+ Dot {
+  name Dot7
+  xpos -2347
+  ypos -567
+ }
+set N15cbf750 [stack 0]
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v+utility.addres}}
+  box_fixed true
+  resize none
+  black_outside true
+  name Reformat2
+  label height
+  xpos -2740
+  ypos -575
+ }
+set N15cc62e0 [stack 0]
+ Dot {
+  name Dot8
+  xpos -2888
+  ypos -567
+ }
+set N15cd9a60 [stack 0]
+ Dot {
+  name Dot9
+  xpos -3067
+  ypos -567
+ }
+set N15ce0330 [stack 0]
+ Dot {
+  name Dot10
+  xpos -3247
+  ypos -567
+ }
+set N15ce7690 [stack 0]
+ Dot {
+  name Dot11
+  xpos -3428
+  ypos -567
+ }
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "fps: \[python \{(nuke.root().fps() )\}]"
+  old_message {
+   {102 112 115 58 32 50 53}
+  }
+  old_expression_markers {
+   {5 6}
+  }
+  box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? timecode1==0 ? parent.utility.inres.u-xedgedistance-(fontsize1*40) : parent.utility.inres.u-xedgedistance-(fontsize1*120) : timecode1==1 ?  parent.utility.inres.u-xedgedistance-(fontsize1*70) : parent.utility.inres.u-xedgedistance-(fontsize1*70)\n||\nframecount==0 && timecode1==0 ? parent.utility.inres.u-xedgedistance:0"} {abs(parent.utility.addres/2)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 36
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text9
+  label "framerate\n"
+  note_font "Verdana Bold"
+  xpos -3460
+  ypos 624
+ }
+push $N15ce7690
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "   \[value \[python nuke.thisGroup().name()].artisttext]\n"
+  old_message {
+   {32 32 32 97 114 116 105 115 116 10}
+  }
+  old_expression_markers {
+   {3 8}
+  }
+  box {{parent.utility.inres.u/2} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u} {parent.utility.inres.v+(utility.addres)}}
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 3
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.07)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text8
+  label artist
+  note_font "Verdana Bold"
+  xpos -3280
+  ypos 544
+ }
+push $N15ce0330
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 0 0 ] \"\"].\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 1 1 ] \"\"]\n"
+  old_message {
+   {116 101 109 112 108 97 116 101 95 99 117 114 114 101 110 116 46 110 107 10}
+  }
+  old_expression_markers {
+   {0 15 17 18}
+  }
+  box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.07) x1000 1.375}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text7
+  label "comp name"
+  note_font "Verdana Bold"
+  xpos -3100
+  ypos 464
+ }
+push $N15cd9a60
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[value \[python nuke.thisGroup().name()].projecttext]   "
+  old_message {
+   {112 114 111 106 101 99 116 32 32 32}
+  }
+  old_expression_markers {
+   {0 6}
+  }
+  box {0 {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u/2} {parent.utility.inres.v+(utility.addres)}}
+  xjustify center
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.12)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text6
+  label project
+  note_font "Verdana Bold"
+  xpos -2920
+  ypos 384
+ }
+push $N15cc62e0
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[date %d/%m/%y]"
+  old_message {
+   {50 48 47 48 52 47 50 54}
+  }
+  old_expression_markers {
+   {0 7}
+  }
+  box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 15
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.09)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text4
+  label date
+  note_font "Verdana Bold"
+  xpos -2740
+  ypos 304
+ }
+push $N15cbf750
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[value \[python nuke.thisGroup().name()].commenttext]"
+  old_message {
+   {97 100 100 32 99 111 109 109 101 110 116 32 104 101 114 101}
+  }
+  old_expression_markers {
+   {0 15}
+  }
+  box {{parent.xedgedistance x1000 0} 0 {parent.utility.inres.u/2.7} {abs(parent.utility.addres/2)}}
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 52
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*((commentsize)*0.01))+0.1}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text3
+  label comment
+  note_font "Verdana Bold"
+  xpos -2381
+  ypos 224
+ }
+push $N15cb8bc0
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message |
+  old_message {
+   {124}
+  }
+  box {0 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*33) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 1
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text2
+  label divider
+  note_font "Verdana Bold"
+  xpos -2200
+  ypos 144
+ }
+push $N15cb2370
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[frame]"
+  old_message {
+   {49 48 48 49}
+  }
+  old_expression_markers {
+   {0 3}
+  }
+  box {0 0 {parent.utility.inres.u-xedgedistance} {abs(parent.utility.addres/2)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 7
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text1
+  label frame
+  note_font "Verdana Bold"
+  xpos -2021
+  ypos 64
+ }
+push $N15c0bf10
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[timecode]"
+  old_message {
+   {48 49 58 48 48 58 48 48 58 48 48}
+  }
+  old_expression_markers {
+   {0 10}
+  }
+  box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*50) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 10
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text5
+  label time
+  note_font "Verdana Bold"
+  xpos -1840
+  ypos -16
+ }
+push $N15bf1be0
+ NoOp {
+  name utility
+  xpos -1120
+  ypos -810
+  addUserKnob {20 User}
+  addUserKnob {30 inres l "in res"}
+  inres {{"\[value input.format.r]"} {"slateextend<0 ? \[value input.format.t]+slateextend : \[value input.format.t]"}}
+  addUserKnob {7 addres l "add res" R -500 500}
+  addres {{parent.slateextend*2}}
+ }
+set N15e6d7b0 [stack 0]
+ Shuffle2 {
+  fromInput1 {
+   {0}
+   B
+  }
+  fromInput2 {
+   {0}
+   B
+  }
+  mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
+  name Shuffle2
+  label "\[value in1]"
+  xpos -1480
+  ypos -816
+ }
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v+utility.addres}}
+  box_fixed true
+  resize none
+  black_outside true
+  name Reformat3
+  label height
+  xpos -1480
+  ypos -734
+ }
+push $N15e6d7b0
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v}}
+  box_fixed true
+  resize none
+  black_outside true
+  name Reformat1
+  label height
+  xpos -1120
+  ypos -736
+ }
+set N15e9c7b0 [stack 0]
+ Shuffle2 {
+  fromInput1 {
+   {0}
+   B
+  }
+  fromInput2 {
+   {0}
+   B
+  }
+  mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
+  name Shuffle3
+  label "\[value in1]"
+  xpos -1300
+  ypos -736
+ }
+ Dot {
+  name Dot4
+  xpos -1267
+  ypos -646
+ }
+ Merge2 {
+  inputs 2
+  operation mask
+  name Merge3
+  xpos -1480
+  ypos -648
+ }
+ Dot {
+  name Dot2
+  xpos -1447
+  ypos -487
+ }
+set N15ed8970 [stack 0]
+push $N15ed8970
+ Dilate {
+  size {{parent.linewidth}}
+  name Dilate1
+  xpos -1299
+  ypos -497
+ }
+ Merge2 {
+  inputs 2
+  operation from
+  name Merge4
+  xpos -1480
+  ypos -410
+ }
+ Dot {
+  name Dot17
+  xpos -1448
+  ypos -247
+ }
+push $N15e9c7b0
+ Merge2 {
+  inputs 2
+  name Merge5
+  xpos -1120
+  ypos -249
+  disable {{!parent.enableline}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge1
+  xpos -1120
+  ypos -10
+  disable {{"slateextend==0 ? 1: !parent.timecode1"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge2
+  xpos -1120
+  ypos 70
+  disable {{"slateextend==0 ? 1:!parent.framecount"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge7
+  xpos -1120
+  ypos 150
+  disable {{"slateextend==0 ? 1:framecount==1 && timecode1==1 ? 0:1"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge8
+  xpos -1120
+  ypos 230
+  disable {{"slateextend==0 ? 1:!parent.comment"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge9
+  xpos -1120
+  ypos 310
+  disable {{"slateextend==0 ? 1:!parent.date1"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge10
+  xpos -1120
+  ypos 390
+  disable {{"slateextend==0 ? 1:!parent.project"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge11
+  xpos -1120
+  ypos 470
+  disable {{"slateextend==0 ? 1:!parent.compname"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge12
+  xpos -1120
+  ypos 551
+  disable {{"slateextend==0 ? 1:!parent.artist"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge13
+  xpos -1120
+  ypos 630
+  disable {{"slateextend==0 ? 1:!parent.fpscounter"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge14
+  xpos -1120
+  ypos 790
+  disable {{"slateextend==0 ? 1:!parent.duration"}}
+ }
+ Constant {
+  inputs 0
+  color {0.9822503924 0.1274376512 0.02217387967 0}
+  name Constant1
+  xpos -1300
+  ypos 925
+ }
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v+utility.addres}}
+  box_fixed true
+  name Reformat5
+  label height
+  xpos -1300
+  ypos 1023
+ }
+ Copy {
+  inputs 2
+  from0 rgba.alpha
+  to0 rgba.alpha
+  name Copy1
+  xpos -1120
+  ypos 1023
+ }
+ Premult {
+  name Premult1
+  xpos -1120
+  ypos 1109
+ }
+ Crop {
+  box {0 0 {"\[value input.format.r]"} {"\[value input.format.t]"}}
+  name Crop1
+  xpos -1120
+  ypos 1189
+ }
+push $N15bde180
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v+utility.addres}}
+  box_fixed true
+  resize none
+  black_outside true
+  name Reformat4
+  label height
+  xpos -761
+  ypos -897
+ }
+ Merge2 {
+  inputs 2
+  bbox A
+  name Merge6
+  xpos -761
+  ypos 1189
+ }
+ Output {
+  name Output1
+  xpos -760
+  ypos 1429
+ }
+ StickyNote {
+  inputs 0
+  name StickyNote1
+  label "\[frames \{first\}] - \[frames \{last\}]\n\nimport re\n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.Root().firstFrame()\nlast_frame = nuke.Root().lastFrame()\n\n# Function to convert frames to timecode\ndef frames_to_timecode(frames, fps=24):\n    hours = int(frames // (fps * 3600))\n    minutes = int((frames % (fps * 3600)) // (fps * 60))\n    seconds = int((frames % (fps * 60)) // fps)\n    frames_remaining = int(frames % fps)\n    return f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames_remaining:02\}\"\n\n# Calculate the total frames\ntotal_frames = last_frame - first_frame\n\n# Get the FPS from the project settings\nfps = nuke.Root()\['fps'].value()\n\n# Convert to timecode using the project FPS\ntimecode = frames_to_timecode(total_frames, fps=fps)\n\n# Function to replace or append the timecode in a given text\ndef replace_last_timecode(text, new_timecode):\n    # Regular expression to match timecode patterns\n    pattern = re.compile(r'\\b\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}\\b')\n    # Replace the last match with the new timecode\n    if pattern.search(text):\n        return pattern.sub(new_timecode, text, count=1)\n    else:\n        # If no timecode is found, just append the new timecode\n        return f\"\{text\}\\n\{new_timecode\}\" if text else new_timecode\n\n# Update Text11 with the timecode in the first line\ntext11_node = nuke.toNode(\"Text11\")  # Replace \"Text11\" with the correct node name\nif text11_node:\n    current_text11 = text11_node.knob(\"message\").value()\n    # Replace the old timecode with the new one, or prepend it if none exists\n    updated_text11 = replace_last_timecode(current_text11, timecode)\n    # Ensure the timecode is in the first line\n    if not re.search(r'^\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}', updated_text11):\n        updated_text11 = f\"\{timecode\}\\n\{updated_text11\}\"\n    text11_node.knob(\"message\").setValue(updated_text11)\nelse:\n    nuke.message(\"Text11 node not found\")\n\n# Update Text12 with the timecode while keeping existing content\ntext12_node = nuke.toNode(\"Text12\")  # Replace \"Text12\" with the correct node name\nif text12_node:\n    current_text12 = text12_node.knob(\"message\").value()\n    updated_text12 = replace_last_timecode(current_text12, timecode)\n    text12_node.knob(\"message\").setValue(updated_text12)\nelse:\n    nuke.message(\"Text12 node not found\")\n    \n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.root().firstFrame()\nlast_frame = nuke.root().lastFrame()\n\n# Calculate the total frames minus one\ntotal_frames_minus_one = last_frame - first_frame\n\n# Update Text10 with the total duration in frames minus one\ntext10_node = nuke.toNode(\"Text10\")  # Replace \"Text10\" with the correct node name\nif text10_node:\n    # Set the text to the total duration in frames minus one\n    text10_node.knob(\"message\").setValue(str(total_frames_minus_one))\nelse:\n    nuke.message(\"Text10 node not found\")\n\n"
+  xpos -2082
+  ypos 826
+ }
+push $N15c0bf10
+ NoOp {
+  name readtime
+  xpos -2740
+  ypos 790
+  hide_input true
+  addUserKnob {20 User}
+  addUserKnob {30 intime l "in time"}
+  intime {{root.first_frame} {root.last_frame}}
+  addUserKnob {3 durationframe l duration}
+  durationframe {{intime.v-intime.u+1}}
+  addUserKnob {22 set T "import nuke\n\n# Get the current node where the Python knob is being executed\nnode = nuke.thisNode()\n\n# Ensure the 'durationframe' knob exists and get the frame count from it\nif 'durationframe' in node.knobs():\n    frame_count = node\['durationframe'].value()\nelse:\n    nuke.message(\"Error: 'durationframe' knob not found in the current node.\")\n    raise ValueError(\"'durationframe' knob not found\")\n\n# Get the frame rate from the project settings\nframe_rate = nuke.root().fps()\n\n# Calculate hours, minutes, seconds, and frames\nhours = int(frame_count / (3600 * frame_rate))\nminutes = int((frame_count % (3600 * frame_rate)) / (60 * frame_rate))\nseconds = int((frame_count % (60 * frame_rate)) / frame_rate)\nframes = int(frame_count % frame_rate)\n\n# Format the timecode as HH:MM:SS:FF\ntimecode = f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames:02\}\"\n\n# Ensure the 'tc1' knob exists in the node\nif 'tc1' in node.knobs():\n    # Update the 'tc1' knob with the new timecode\n    node\['tc1'].setValue(timecode)\n    print(f\"Timecode updated to: \{timecode\} in 'tc1' knob.\")\nelse:\n    nuke.message(\"Error: 'tc1' knob not found in the current node.\")\n    raise ValueError(\"'tc1' knob not found\")\n" +STARTLINE}
+  addUserKnob {1 tc1 l timecode}
+  tc1 00:00:02:12
+ }
+end_group
+set N15bbd690 [stack 0]
+Viewer {
+ frame_range 1001-1100
+ fps 25
+ monitorOutNDISenderName "NukeX - template_current - Viewer1"
+ name Viewer1
+ xpos 510
+ ypos 2895
+}
+push $N12387600
+PostageStamp {
+ name Stamp2
+ help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
+ onCreate "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredOnCreate()\n    except Exception:\n        pass\n"
+ knobChanged "if nuke.GUI:\n    try:\n        import stamps; stamps.wiredKnobChanged()\n    except:\n        pass"
+ autolabel "nuke.thisNode().knob(\"title\").value()"
+ tile_color 0x1000001
+ note_font "Bitstream Vera Sans"
+ note_font_size 20
+ xpos 180
+ ypos 730
+ hide_input true
+ addUserKnob {20 wired_tab l "Wired Stamp"}
+ addUserKnob {26 identifier -STARTLINE +HIDDEN T wired}
+ addUserKnob {3 lockCallbacks l "" +STARTLINE +HIDDEN}
+ addUserKnob {6 toReconnect -STARTLINE +HIDDEN}
+ addUserKnob {1 title l Title: t "Displayed name on the Node Graph for this Stamp and its Anchor."}
+ title master
+ addUserKnob {26 prev_title l "" +STARTLINE +HIDDEN T master}
+ addUserKnob {26 tags l Tags: t "Tags of this stamp's Anchor. Click 'show anchor' to change them." T <i>2D</i>}
+ addUserKnob {26 backdrops l Backdrops: t "Labels of backdrop nodes that contain this stamp's Anchor." T "<i>PLATE/s & ASSETS</i>"}
+ addUserKnob {26 line1 l "" +STARTLINE}
+ addUserKnob {6 postageStamp_show l "postage stamp" t "Enable the postage stamp thumbnail for this node." +STARTLINE}
+ addUserKnob {26 anchor_label l Anchor: T " "}
+ addUserKnob {22 show_anchor l " show anchor " t "Show the properties panel for this Stamp's Anchor." -STARTLINE T stamps.wiredShowAnchor()}
+ addUserKnob {22 zoom_anchor l "zoom anchor" t "Navigate to this Stamp's Anchor on the Node Graph." -STARTLINE T stamps.wiredZoomAnchor()}
+ addUserKnob {26 stamps_label l Stamps: T " "}
+ addUserKnob {22 zoomNext l " zoom next " t "Navigate to this Stamp's next sibling on the Node Graph." -STARTLINE T stamps.wiredZoomNext()}
+ addUserKnob {22 selectSimilar l " select similar " t "Select all similar Stamps to this one on the Node Graph." -STARTLINE T stamps.wiredSelectSimilar()}
+ addUserKnob {26 space_1 l "" +STARTLINE T " "}
+ addUserKnob {26 reconnect_label l Reconnect: t "Reconnect by the stored Anchor name." T " "}
+ addUserKnob {22 reconnect_this l this t "Reconnect this Stamp to its Anchor using the stored Anchor name." -STARTLINE T "n = nuke.thisNode()\ntry:\n    n.setInput(0, nuke.toNode(n.knob(\"anchor\").value()))\nexcept Exception:\n    nuke.message(\"Unable to reconnect.\")\ntry:\n    import stamps\n    stamps.wiredGetStyle(n)\nexcept Exception:\n    pass\n"}
+ addUserKnob {22 reconnect_similar l similar t "Reconnect this Stamp and similar ones using the stored anchor name." -STARTLINE T stamps.wiredReconnectSimilar()}
+ addUserKnob {22 reconnect_all l all t "Reconnect all Stamps to their Anchors using the stored names." -STARTLINE T stamps.wiredReconnectAll()}
+ addUserKnob {26 space_2 l "" +STARTLINE T " "}
+ addUserKnob {20 advanced_reconnection l "Advanced Reconnection" n 2}
+ addUserKnob {26 reconnect_by_title_label l "<font color=gold>By Title:" t "Reconnect by searching for a matching title." T " "}
+ addUserKnob {22 reconnect_by_title_this l this t "Find an Anchor that shares this Stamp's title and connect to it." -STARTLINE T stamps.wiredReconnectByTitle()}
+ addUserKnob {22 reconnect_by_title_similar l similar t "Find an Anchor by title and reconnect this Stamp and similar ones to it." -STARTLINE T stamps.wiredReconnectByTitleSimilar()}
+ addUserKnob {22 reconnect_by_title_selected l selected t "For each selected Stamp, reconnect using an Anchor that shares its title." -STARTLINE T stamps.wiredReconnectByTitleSelected()}
+ addUserKnob {26 reconnect_by_selection_label l "<font color=orangered>By Selection:" t "Force reconnect to a selected Anchor." T " "}
+ addUserKnob {22 reconnect_by_selection_this l this t "Force reconnect this Stamp to a selected Anchor." -STARTLINE T stamps.wiredReconnectBySelection()}
+ addUserKnob {22 reconnect_by_selection_similar l similar t "Force reconnect this Stamp and similar ones to a selected Anchor." -STARTLINE T stamps.wiredReconnectBySelectionSimilar()}
+ addUserKnob {22 reconnect_by_selection_selected l selected t "Force reconnect all selected Stamps to the selected Anchor." -STARTLINE T stamps.wiredReconnectBySelectionSelected()}
+ addUserKnob {1 anchor l Anchor}
+ anchor Anchor_3a190e900
+ addUserKnob {6 auto_reconnect_by_title l "<font color=#ED9977>&nbsp; auto-reconnect by title" t "On copy-paste, auto-reconnect by title instead of stored Anchor name; turns off automatically." +STARTLINE}
+ addUserKnob {26 line2 l "" +STARTLINE}
+ addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
+ addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
+}
+Dot {
+ name Dot1
+ xpos 214
+ ypos 810
+}
+set N12290c10 [stack 0]
+VectorGenerator {
+ motionEstimation Regularized
+ vectorDetailReg 1
+ name VectorGenerator1
+ xpos 70
+ ypos 849
+}
+push 0
+push $N12290c10
+Denoise2 {
+ inputs 3
+ enable_temporal true
+ userMessage "Move the analysis region to analyse noise or press Lock Noise Analysis to disable this message."
+ profileCurve {profile {curve 0 x0.125 0 0 0 0 0 0 0 0}}
+ serializeKnob "0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00
+0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 0.000000000e+00 
+18446744073709551615"
+ name Denoise1
+ xpos 180
+ ypos 921
+}
+Write {
+ file ../renders/precomp/sho010_DN_v001/sho010_DN_v001_####.exr
+ file_type exr
+ first_part rgba
+ create_directories true
+ checkHashOnRead false
+ ocioColorspace scene_linear
+ display "sRGB - Display"
+ view "ACES 2.0 - SDR 100 nits (Rec.709)"
+ name WriteDN1
+ xpos 180
+ ypos 993
+}
+push $N14e7a4a0
 PostageStamp {
  name Stamp8
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
@@ -534,7 +1548,7 @@ Dot {
  xpos 104
  ypos 2322
 }
-set N143835b0 [stack 0]
+set N14ebad40 [stack 0]
 Dot {
  inputs 0
  name Dot11
@@ -545,13 +1559,13 @@ Dot {
  xpos 544
  ypos 2250
 }
-set N143a0440 [stack 0]
+set N14e9e150 [stack 0]
 Dot {
  name Dot57
  xpos 544
  ypos 2370
 }
-set N143a6d60 [stack 0]
+set N14db3f30 [stack 0]
 Group {
  inputs 2
  name common_key1
@@ -623,14 +1637,14 @@ Group {
   xpos -407
   ypos 305
  }
-set N144173e0 [stack 0]
+set N14fc54c0 [stack 0]
  Invert {
   name Invert4
   xpos -407
   ypos 360
   disable {{"parent.size>=0 ? 1 : 0" i}}
  }
-set N1441e2e0 [stack 0]
+set N14fcc3c0 [stack 0]
  Blur {
   size {{parent.size.w i} {parent.size.h i}}
   crop {{parent.crop i}}
@@ -639,7 +1653,7 @@ set N1441e2e0 [stack 0]
   xpos -615
   ypos 477
  }
-push $N1441e2e0
+push $N14fcc3c0
  Blur {
   size {{parent.size.w*parent.Multiplier i} {parent.size.h*parent.Multiplier i}}
   crop {{parent.crop i}}
@@ -654,7 +1668,7 @@ push $N1441e2e0
   xpos -537
   ypos 572
  }
-push $N1441e2e0
+push $N14fcc3c0
  Blur {
   size {{parent.size.w*parent.Multiplier*2 i} {parent.size.h*parent.Multiplier*2 i}}
   crop {{parent.crop i}}
@@ -669,7 +1683,7 @@ push $N1441e2e0
   xpos -477
   ypos 637
  }
-push $N1441e2e0
+push $N14fcc3c0
  Blur {
   size {{parent.size.w*parent.Multiplier*4 i} {parent.size.h*parent.Multiplier*4 i}}
   crop {{parent.crop i}}
@@ -690,7 +1704,7 @@ push $N1441e2e0
   ypos 768
   disable {{"parent.size>=0 ? 1 : 0" i}}
  }
-push $N144173e0
+push $N14fc54c0
  Dot {
   name Dot2
   xpos -101
@@ -721,14 +1735,14 @@ Dot {
  xpos 104
  ypos 2538
 }
-set N144f0100 [stack 0]
+set N1509e1d0 [stack 0]
 Dot {
  name Dot12
  xpos 104
  ypos 2682
 }
-push $N144f0100
-push $N143835b0
+push $N1509e1d0
+push $N14ebad40
 Dot {
  name Dot13
  xpos 434
@@ -739,7 +1753,7 @@ Dot {
  xpos 434
  ypos 2466
 }
-push $N117d4f30
+push $N12387600
 PostageStamp {
  name Stamp9
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
@@ -799,8 +1813,8 @@ Dot {
  xpos 764
  ypos 2538
 }
-set N1450ab20 [stack 0]
-push $N143a6d60
+set N150b8bf0 [stack 0]
+push $N14db3f30
 Group {
  inputs 4
  name DasGrain
@@ -1045,20 +2059,20 @@ Group {
   xpos 764
   ypos -390
  }
-set N145cf790 [stack 0]
+set N1518fed0 [stack 0]
  Dot {
   name Dot28
   xpos 764
   ypos -198
  }
-set N145d61b0 [stack 0]
+set N15196220 [stack 0]
  Dot {
   name Dot32
   xpos 764
   ypos 234
  }
-set N145dcd40 [stack 0]
-push $N145d61b0
+set N1519cb70 [stack 0]
+push $N15196220
  Dot {
   name Dot27
   xpos 624
@@ -1075,7 +2089,7 @@ push $N145d61b0
   xpos 624
   ypos -54
  }
-set N146093e0 [stack 0]
+set N151c8ab0 [stack 0]
  Input {
   inputs 0
   name PLATE
@@ -1090,7 +2104,7 @@ set N146093e0 [stack 0]
   xpos 324
   ypos -726
  }
-set N14616d30 [stack 0]
+set N151d6400 [stack 0]
  OCIOColorSpace {
   in_colorspace scene_linear
   out_colorspace scene_linear
@@ -1103,7 +2117,7 @@ set N14616d30 [stack 0]
   xpos 324
   ypos -198
  }
-set N1463c630 [stack 0]
+set N1520efc0 [stack 0]
  Dot {
   name Dot6
   xpos 464
@@ -1138,7 +2152,7 @@ set N1463c630 [stack 0]
   xpos 464
   ypos 90
  }
-push $N146093e0
+push $N151c8ab0
  Merge2 {
   inputs 2
   operation plus
@@ -1172,8 +2186,8 @@ push $N146093e0
   xpos 624
   ypos 306
  }
-set N146dd950 [stack 0]
-push $N145dcd40
+set N152af1f0 [stack 0]
+push $N1519cb70
  Merge2 {
   inputs 2
   operation from
@@ -1191,19 +2205,19 @@ push $N145dcd40
   xpos 764
   ypos 522
  }
-set N146f9c60 [stack 0]
+set N152cb500 [stack 0]
  Dot {
   name Dot30
   xpos 764
   ypos 690
  }
-set N147006a0 [stack 0]
+set N152d1f40 [stack 0]
  Dot {
   name Dot55
   xpos 764
   ypos 1170
  }
-set N14707230 [stack 0]
+set N152d8ad0 [stack 0]
  Input {
   inputs 0
   name mask
@@ -1218,21 +2232,21 @@ set N14707230 [stack 0]
   xpos 1204
   ypos 258
  }
-set N14714950 [stack 0]
+set N152e61f0 [stack 0]
  Dot {
   name Dot26
   xpos 1204
   ypos 1074
  }
-set N1471b3b0 [stack 0]
+set N152ecc50 [stack 0]
  Invert {
   name Invert2
   xpos 180
   ypos 1064
   disable {{!parent.invert_1}}
  }
-push $N147006a0
-push $N1463c630
+push $N152d1f40
+push $N1520efc0
  Merge2 {
   inputs 2
   operation from
@@ -1249,14 +2263,14 @@ push $N1463c630
   xpos 324
   ypos 786
  }
-set N14746bb0 [stack 0]
+set N15318450 [stack 0]
  Dot {
   name Dot5
   xpos 104
   ypos 786
  }
-set N1474d650 [stack 0]
-push $N1474d650
+set N1531eef0 [stack 0]
+push $N1531eef0
  Copy {
   inputs 2
   from0 {{{parent.Copy2.from0}}}
@@ -1275,8 +2289,8 @@ push $N1474d650
   xpos 70
   ypos 926
  }
-set N14767c30 [stack 0]
-push $N146f9c60
+set N153394d0 [stack 0]
+push $N152cb500
  Colorspace {
   colorspace_out AlexaV3LogC
   name Colorspace5
@@ -1294,14 +2308,14 @@ push $N146f9c60
   xpos -116
   ypos 522
  }
-set N147ad000 [stack 0]
+set N1537e8a0 [stack 0]
  Dot {
   name Dot48
   xpos -116
   ypos 786
  }
-set N147b3e00 [stack 0]
-push $N147b3e00
+set N153856a0 [stack 0]
+push $N153856a0
  Copy {
   inputs 2
   from0 rgba.blue
@@ -1336,7 +2350,7 @@ push $N147b3e00
   xpos -40
   ypos 985
  }
-push $N14767c30
+push $N153394d0
  Copy {
   inputs 2
   from0 rgba.alpha
@@ -1396,7 +2410,7 @@ push $N14767c30
   xpos 70
   ypos 1424
  }
-push $N147ad000
+push $N1537e8a0
  Dot {
   name Dot16
   xpos -336
@@ -1425,7 +2439,7 @@ push $N147ad000
   xpos 840
   ypos 1502
  }
-push $N14616d30
+push $N151d6400
  Dot {
   name Dot51
   xpos 115
@@ -1444,7 +2458,7 @@ push $N14616d30
   xpos 984
   ypos -605
  }
-set N148a91b0 [stack 0]
+set N1547a5e0 [stack 0]
  Switch {
   inputs 2
   which {{parent.meta}}
@@ -1467,13 +2481,13 @@ set N148a91b0 [stack 0]
   xpos -685
   ypos 3762
  }
-push $N14714950
+push $N152e61f0
  Dot {
   name Dot40
   xpos 874
   ypos 258
  }
-push $N146dd950
+push $N152af1f0
  Dot {
   name Dot34
   xpos 624
@@ -1488,7 +2502,7 @@ push $N146dd950
   xpos 840
   ypos 374
  }
-push $N148a91b0
+push $N1547a5e0
  OCIOColorSpace {
   in_colorspace {{OCIOColorSpace1.in_colorspace x1001 7}}
   out_colorspace {{OCIOColorSpace1.out_colorspace x1001 7}}
@@ -1501,7 +2515,7 @@ push $N148a91b0
   xpos 984
   ypos -390
  }
-set N1490b780 [stack 0]
+set N154eff70 [stack 0]
  Merge2 {
   inputs 2
   operation from
@@ -1519,7 +2533,7 @@ set N1490b780 [stack 0]
   xpos 984
   ypos 2658
  }
-set N14927a80 [stack 0]
+set N1550b780 [stack 0]
  ColorLookup {
   lut {master {}
     red {curve x0.00382891763 0.0002557597445 x0.007590188179 0.0002960292788 x0.01285281964 0.0003363993789 x0.0197017882 0.0004224070649 x0.02941314131 0.0004961362375 x0.04079099745 0.0005678633893 x0.05852931738 0.0006819239172 x0.07195483893 0.0008004350806 x0.1015054211 0.000923921764 x0.1350959986 0.001097035256 x0.178611353 0.001195716955 x0.2347512543 0.00138423128 x0.3000544012 0.00175979199 x0.4047375619 0.002084045775 x0.5263175964 0.002373547234 x0.6850759983 0.003520714591 x0.8822851777 0.004078153046 x1.164262295 0.003909756967 x1.558669448 0.004522861415 x1.988148332 0.005021561272}
@@ -1530,7 +2544,7 @@ set N14927a80 [stack 0]
   xpos 730
   ypos 2654
  }
-push $N1471b3b0
+push $N152ecc50
  Dot {
   name Dot38
   xpos 1204
@@ -1546,19 +2560,19 @@ push $N1471b3b0
   xpos 544
   ypos 2271
  }
-set N14954f50 [stack 0]
+set N15538900 [stack 0]
  Dot {
   name Dot20
   xpos 544
   ypos 2391
  }
-push $N14954f50
+push $N15538900
  Dot {
   name Dot17
   xpos 434
   ypos 2271
  }
-set N14962620 [stack 0]
+set N15545fd0 [stack 0]
  Dot {
   name Dot13
   xpos 214
@@ -1578,7 +2592,7 @@ set N14962620 [stack 0]
   xpos -116
   ypos 1938
  }
-push $N14707230
+push $N152d8ad0
  ColorLookup {
   channels rgb
   lut {master {}
@@ -1595,7 +2609,7 @@ push $N14707230
   xpos 764
   ypos 1746
  }
-push $N14746bb0
+push $N15318450
  Dot {
   name Dot33
   xpos 324
@@ -1618,7 +2632,7 @@ push $N14746bb0
   xpos 324
   ypos 1842
  }
-set N149b61e0 [stack 0]
+set N15599b90 [stack 0]
  Dot {
   name Dot25
   xpos 104
@@ -1666,7 +2680,7 @@ set N149b61e0 [stack 0]
    xpos 214
    ypos -750
   }
-set N149e6c00 [stack 0]
+set N155ca040 [stack 0]
   Dot {
    name Dot16
    xpos 434
@@ -1682,13 +2696,13 @@ set N149e6c00 [stack 0]
    xpos 434
    ypos -606
   }
-set N14a041f0 [stack 0]
+set N155e74f0 [stack 0]
   Dot {
    name Dot15
    xpos 654
    ypos -606
   }
-set N14a0ac00 [stack 0]
+set N155edf00 [stack 0]
   Dot {
    name Dot7
    xpos 874
@@ -1724,7 +2738,7 @@ set N14a0ac00 [stack 0]
    xpos 874
    ypos -366
   }
-push $N14a0ac00
+push $N155edf00
   BlinkScript {
    ProgramGroup 1
    KernelDescription "3 \"VoroNoise\" iterate pixelWise 19bb7e8333a60e3042117ce5163537b5b88551a8d1747223464ea753b25d637e 2 \"src\" Read Point \"dst\" Write Point 6 \"Frequency\" Float 1 AABIQg== \"Seed\" Int 1 AAAAAA== \"aspect ratio\" Float 1 AACAPw== \"width\" Int 1 AAAAAA== \"height\" Int 1 AAAAAA== \"Randomness\" Float 1 AAAAPw== 6 \"frequency\" 1 1 Default \"seed\" 1 1 Default \"aspect_ratio\" 1 1 Default \"width\" 1 1 Default \"height\" 1 1 Default \"randomness\" 1 1 Default 0"
@@ -1789,8 +2803,8 @@ push $N14a0ac00
    xpos 654
    ypos 42
   }
-set N14b2f570 [stack 0]
-push $N14a041f0
+set N15712260 [stack 0]
+push $N155e74f0
   Expression {
    expr0 "(x + .5) / width"
    expr1 "(y + .5) / height"
@@ -1820,7 +2834,7 @@ push $N14a041f0
    xpos 434
    ypos 210
   }
-push $N14b2f570
+push $N15712260
   Expression {
    temp_name0 view_index
    temp_expr0 "parent.parent.stereo == 1 ? \[lsearch \[value root.views] \[view]] / 2 : 0"
@@ -1881,13 +2895,13 @@ push $N14b2f570
    xpos 654
    ypos 354
   }
-set N14bb1010 [stack 0]
+set N15793d00 [stack 0]
   Dot {
    name Dot13
    xpos 654
    ypos 546
   }
-push $N14bb1010
+push $N15793d00
   Dot {
    name Dot8
    xpos 874
@@ -1931,8 +2945,8 @@ push $N14bb1010
    xpos 874
    ypos 762
   }
-push $N14bb1010
-push $N149e6c00
+push $N15793d00
+push $N155ca040
   FrameHold {
    firstFrame {{parent.sample_frame}}
    name FrameHold1
@@ -1954,7 +2968,7 @@ push $N149e6c00
    xpos 180
    ypos 350
   }
-set N14c2e0a0 [stack 0]
+set N15810d90 [stack 0]
   TimeBlur {
    divisions {{"max(Transform1.size == 1 ? 2 : pow2(Transform1.size), 1)"}}
    shutter 1
@@ -1964,8 +2978,8 @@ set N14c2e0a0 [stack 0]
    ypos 446
    disable {{"parent.edge_blend_size < 1"}}
   }
-set N14c3e150 [stack 0]
-push $N14c2e0a0
+set N15820e40 [stack 0]
+push $N15810d90
   Dot {
    name Dot1
    xpos -6
@@ -2007,7 +3021,7 @@ push $N14c2e0a0
    xpos -6
    ypos 666
   }
-push $N14c3e150
+push $N15820e40
   Grade {
    inputs 1+1
    white 1.4
@@ -2056,8 +3070,8 @@ push $N14c3e150
   xpos 104
   ypos 2391
  }
-push $N14962620
-push $N149b61e0
+push $N15545fd0
+push $N15599b90
  Multiply {
   inputs 1+1
   channels rgb
@@ -2086,7 +3100,7 @@ push $N149b61e0
   xpos 324
   ypos 2490
  }
-set N14d192d0 [stack 0]
+set N158fbfc0 [stack 0]
  MergeExpression {
   inputs 2
   temp_name0 reverse
@@ -2103,7 +3117,7 @@ set N14d192d0 [stack 0]
   xpos 324
   ypos 2850
  }
-push $N14927a80
+push $N1550b780
  Merge2 {
   inputs 2
   operation plus
@@ -2120,7 +3134,7 @@ push $N14927a80
   xpos 984
   ypos 3018
  }
-set N14d4ef90 [stack 0]
+set N15931c80 [stack 0]
  OCIOColorSpace {
   in_colorspace {{OCIOColorSpace1.out_colorspace x1001 7}}
   out_colorspace {{OCIOColorSpace1.in_colorspace x1001 7}}
@@ -2133,13 +3147,13 @@ set N14d4ef90 [stack 0]
   xpos 984
   ypos 3162
  }
-set N14d74db0 [stack 0]
+set N1596b3a0 [stack 0]
  Dot {
   name Dot41
   xpos 1204
   ypos 3162
  }
-set N14d7b7d0 [stack 0]
+set N15971760 [stack 0]
  Dot {
   name Dot36
   xpos 1314
@@ -2152,7 +3166,7 @@ set N14d7b7d0 [stack 0]
   xpos 1280
   ypos 3254
  }
-push $N14d7b7d0
+push $N15971760
  Merge2 {
   inputs 2
   operation difference
@@ -2176,13 +3190,13 @@ push $N14d7b7d0
   xpos 1204
   ypos 3402
  }
-push $N1490b780
+push $N154eff70
  Dot {
   name Dot45
   xpos 1424
   ypos -390
  }
-push $N14d4ef90
+push $N15931c80
  Merge2 {
   inputs 2
   operation from
@@ -2198,7 +3212,7 @@ push $N14d4ef90
   xpos 1424
   ypos 3522
  }
-push $N14d192d0
+push $N158fbfc0
  Dot {
   name Dot14
   xpos 104
@@ -2209,13 +3223,13 @@ push $N14d192d0
   xpos 104
   ypos 3402
  }
-push $N145cf790
+push $N1518fed0
  Dot {
   name Dot47
   xpos -556
   ypos -390
  }
-push $N1463c630
+push $N1520efc0
  Merge2 {
   inputs 2
   operation from
@@ -2231,7 +3245,7 @@ push $N1463c630
   xpos -556
   ypos 3522
  }
-push $N14d74db0
+push $N1596b3a0
  Switch {
   inputs 5
   which {{output}}
@@ -2254,7 +3268,7 @@ push $N14d74db0
   ypos 3854
  }
 end_group
-push $N1450ab20
+push $N150b8bf0
 Dot {
  name Dot61
  xpos 764
@@ -2266,7 +3280,7 @@ Keymix {
  xpos 510
  ypos 2673
 }
-push $N143a0440
+push $N14e9e150
 Dot {
  name Dot3
  xpos 874
@@ -2279,6 +3293,7 @@ Dot {
 }
 Switch {
  inputs 2
+ which 1
  name Switch1
  xpos 510
  ypos 2871
@@ -2289,9 +3304,9 @@ Reformat {
  xpos 510
  ypos 2967
 }
-set N14e63b40 [stack 0]
+set N15a58d80 [stack 0]
 Write {
- file ../renders/comp/sho010_v001.mov
+ file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3].mov"
  file_type mov
  mov64_format "mov (QuickTime / MOV)"
  mov64_codec appr
@@ -2299,7 +3314,6 @@ Write {
  mov_h264_codec_profile "High 4:2:0 8-bit"
  mov64_pixel_format {
   {0}
-  "yuv420p\tYCbCr 4:2:0 8-bit"
  }
  mov64_quality High
  mov64_fast_start true
@@ -2310,11 +3324,9 @@ Write {
  mov64_bitrate_tolerance 4000000
  mov64_quality_min 1
  mov64_quality_max 3
- colorspace "Input - ARRI - V3 LogC (EI800) - Wide Gamut"
+ colorspace "ARRI LogC3 (EI800)"
  create_directories true
  checkHashOnRead false
- in_colorspace scene_linear
- out_colorspace scene_linear
  ocioColorspace scene_linear
  display "sRGB - Display"
  view "ACES 2.0 - SDR 100 nits (Rec.709)"
@@ -2322,1034 +3334,7 @@ Write {
  xpos 400
  ypos 3027
 }
-push $N14e63b40
-Write {
- file ../renders/comp/sho010_v001/sho010_v001_####.exr
- file_type exr
- first_part rgba
- colorspace "Input - ARRI - V3 LogC (EI800) - Wide Gamut"
- create_directories true
- checkHashOnRead false
- in_colorspace scene_linear
- out_colorspace scene_linear
- ocioColorspace scene_linear
- display "sRGB - Display"
- view "ACES 2.0 - SDR 100 nits (Rec.709)"
- name WriteCompEXR
- xpos 620
- ypos 3027
-}
-Read {
- inputs 0
- file_type exr
- file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3]/\[string range  \[basename \[value root.name]] 0 end-3]_####.exr"
- origset true
- colorspace "ARRI LogC3 (EI800)"
- name ReadCompEXR
- label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
- xpos 620
- ypos 3100
-}
-Reformat {
- format "1920 1080 0 0 1920 1080 1 HD_1080"
- name Reformat2
- xpos 620
- ypos 3230
-}
-Group {
- name MS_slate_overlay
- tile_color 0xefb500ff
- note_font "Verdana Bold Italic"
- xpos 620
- ypos 3283
- addUserKnob {20 settings t "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
- addUserKnob {26 text l "" +STARTLINE T "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
- addUserKnob {26 ""}
- addUserKnob {7 slateextend l "slate area" R 0 200}
- slateextend 60
- addUserKnob {41 color l "overlay color" T Constant1.color}
- addUserKnob {6 enableline l "use line" +STARTLINE}
- enableline true
- addUserKnob {3 linewidth l "&nbsp;&nbsp;&nbsp;&nbsp;width&nbsp;" -STARTLINE}
- linewidth 2
- addUserKnob {26 elements l "<b><span style=\"color:#ffaf24\">Elements</span>"}
- addUserKnob {6 framecount l "frame count" +STARTLINE}
- framecount true
- addUserKnob {6 timecode1 l timecode -STARTLINE}
- timecode1 true
- addUserKnob {6 date1 l date -STARTLINE}
- date1 true
- addUserKnob {6 fpscounter l framerate +STARTLINE}
- fpscounter true
- addUserKnob {6 compname l "comp name" -STARTLINE}
- compname true
- addUserKnob {3 startfr l "start frame"}
- startfr 1001
- addUserKnob {6 duration t "\nDisplay duration of entire timeline based on project sttings." -STARTLINE}
- duration true
- addUserKnob {4 durationtype l "" -STARTLINE M {frames timecode both ""}}
- durationtype both
- addUserKnob {41 set l "apply duration" t "\nPress this to run the timeline calculation.\n\nRun this again if the timeline range changes during production." -STARTLINE T readtime.set}
- addUserKnob {6 project +STARTLINE}
- addUserKnob {1 projecttext l "" -STARTLINE}
- projecttext project
- addUserKnob {6 artist +STARTLINE}
- addUserKnob {1 artisttext l "" -STARTLINE}
- artisttext artist
- addUserKnob {6 comment +STARTLINE}
- addUserKnob {1 commenttext l "" -STARTLINE}
- commenttext "add comment here"
- addUserKnob {26 Font l "<b><span style=\"color:#ffaf24\">Font</span>"}
- addUserKnob {3 fontsize1 l "font size" t "\nControls all fonts at once"}
- fontsize1 3
- addUserKnob {3 commentsize l "&nbsp;&nbsp;comment size&nbsp;" -STARTLINE}
- commentsize 3
- addUserKnob {3 xedgedistance l "&nbsp;distance to side&nbsp;" t "\nSets the distance from the markers to the format baoundarys." -STARTLINE}
- xedgedistance 20
-}
- Input {
-  inputs 0
-  name Input1
-  xpos -760
-  ypos -1292
- }
- Dot {
-  name Dot5
-  xpos -728
-  ypos -1049
- }
-set N14f85a70 [stack 0]
- Shuffle2 {
-  fromInput1 {
-   {0}
-   B
-  }
-  fromInput2 {
-   {0}
-   B
-  }
-  mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
-  name Shuffle4
-  label "\[value in1]"
-  xpos -941
-  ypos -1057
- }
- Dot {
-  name Dot1
-  xpos -1089
-  ypos -1047
- }
-set N14f9a050 [stack 0]
- Dot {
-  name Dot13
-  xpos -1808
-  ypos -1048
- }
- Shuffle2 {
-  fromInput1 {
-   {0}
-   B
-  }
-  fromInput2 {
-   {0}
-   B
-  }
-  mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
-  name Shuffle1
-  label emtpy
-  xpos -1840
-  ypos -576
- }
-set N14fa7200 [stack 0]
- AddTimeCode {
-  frame {{"\[value startfr]"}}
-  useFrame true
-  name AddTimeCode1
-  xpos -1840
-  ypos -410
- }
-set N14fb4310 [stack 0]
- Dot {
-  name Dot14
-  xpos -2527
-  ypos -408
- }
- Dot {
-  name Dot12
-  xpos -2527
-  ypos 793
- }
-set N14fc7330 [stack 0]
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "total:  \[value readtime.durationframe] / \[value readtime.tc1]"
-  old_message {
-   {116 111 116 97 108 58 32 32 49 48 48 32 47 32 48 48 58 48 48 58 48 50 58 49 50}
-  }
-  old_expression_markers {
-   {8 10 14 24}
-  }
-  box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
-  xjustify center
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 8
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text12
-  label "duration both\n"
-  note_font "Verdana Bold"
-  xpos -2380
-  ypos 864
- }
-push $N14fc7330
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "total: \[value readtime.tc1]"
-  old_message {
-   {116 111 116 97 108 58 32 48 48 58 48 48 58 48 50 58 49 50}
-  }
-  old_expression_markers {
-   {7 17}
-  }
-  box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
-  xjustify center
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 5
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text11
-  label "duration time\n"
-  note_font "Verdana Bold"
-  xpos -2380
-  ypos 784
- }
-push $N14fc7330
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "total: \[value readtime.durationframe]"
-  old_message {
-   {116 111 116 97 108 58 32 49 48 48}
-  }
-  old_expression_markers {
-   {7 9}
-  }
-  box {0 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
-  xjustify center
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 5
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text10
-  label "duration frame\n"
-  note_font "Verdana Bold"
-  xpos -2380
-  ypos 704
- }
- Switch {
-  inputs 3
-  which {{parent.durationtype}}
-  name Switch1
-  xpos -2200
-  ypos 790
- }
-push $N14fa7200
- Dot {
-  name Dot3
-  xpos -1987
-  ypos -567
- }
-set N1505ada0 [stack 0]
- Dot {
-  name Dot6
-  xpos -2168
-  ypos -567
- }
-set N150615f0 [stack 0]
- Dot {
-  name Dot7
-  xpos -2347
-  ypos -567
- }
-set N15068180 [stack 0]
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v+utility.addres}}
-  box_fixed true
-  resize none
-  black_outside true
-  name Reformat2
-  label height
-  xpos -2740
-  ypos -575
- }
-set N1506ed10 [stack 0]
- Dot {
-  name Dot8
-  xpos -2888
-  ypos -567
- }
-set N15082490 [stack 0]
- Dot {
-  name Dot9
-  xpos -3067
-  ypos -567
- }
-set N15089570 [stack 0]
- Dot {
-  name Dot10
-  xpos -3247
-  ypos -567
- }
-set N150900c0 [stack 0]
- Dot {
-  name Dot11
-  xpos -3428
-  ypos -567
- }
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "fps: \[python \{(nuke.root().fps() )\}]"
-  old_message {
-   {102 112 115 58 32 50 53}
-  }
-  old_expression_markers {
-   {5 6}
-  }
-  box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? timecode1==0 ? parent.utility.inres.u-xedgedistance-(fontsize1*40) : parent.utility.inres.u-xedgedistance-(fontsize1*120) : timecode1==1 ?  parent.utility.inres.u-xedgedistance-(fontsize1*70) : parent.utility.inres.u-xedgedistance-(fontsize1*70)\n||\nframecount==0 && timecode1==0 ? parent.utility.inres.u-xedgedistance:0"} {abs(parent.utility.addres/2)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 36
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text9
-  label "framerate\n"
-  note_font "Verdana Bold"
-  xpos -3460
-  ypos 624
- }
-push $N150900c0
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "   \[value \[python nuke.thisGroup().name()].artisttext]\n"
-  old_message {
-   {32 32 32 97 114 116 105 115 116 10}
-  }
-  old_expression_markers {
-   {3 8}
-  }
-  box {{parent.utility.inres.u/2} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u} {parent.utility.inres.v+(utility.addres)}}
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 3
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.07)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text8
-  label artist
-  note_font "Verdana Bold"
-  xpos -3280
-  ypos 544
- }
-push $N15089570
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 0 0 ] \"\"].\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 1 1 ] \"\"]\n"
-  old_message {
-   {116 101 109 112 108 97 116 101 95 99 117 114 114 101 110 116 46 110 107 10}
-  }
-  old_expression_markers {
-   {0 15 17 18}
-  }
-  box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.07) x1000 1.375}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text7
-  label "comp name"
-  note_font "Verdana Bold"
-  xpos -3100
-  ypos 464
- }
-push $N15082490
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[value \[python nuke.thisGroup().name()].projecttext]   "
-  old_message {
-   {112 114 111 106 101 99 116 32 32 32}
-  }
-  old_expression_markers {
-   {0 6}
-  }
-  box {0 {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u/2} {parent.utility.inres.v+(utility.addres)}}
-  xjustify center
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.12)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text6
-  label project
-  note_font "Verdana Bold"
-  xpos -2920
-  ypos 384
- }
-push $N1506ed10
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[date %d/%m/%y]"
-  old_message {
-   {49 55 47 48 52 47 50 54}
-  }
-  old_expression_markers {
-   {0 7}
-  }
-  box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 15
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.09)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text4
-  label date
-  note_font "Verdana Bold"
-  xpos -2740
-  ypos 304
- }
-push $N15068180
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[value \[python nuke.thisGroup().name()].commenttext]"
-  old_message {
-   {97 100 100 32 99 111 109 109 101 110 116 32 104 101 114 101}
-  }
-  old_expression_markers {
-   {0 15}
-  }
-  box {{parent.xedgedistance x1000 0} 0 {parent.utility.inres.u/2.7} {abs(parent.utility.addres/2)}}
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 52
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*((commentsize)*0.01))+0.1}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text3
-  label comment
-  note_font "Verdana Bold"
-  xpos -2381
-  ypos 224
- }
-push $N150615f0
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message |
-  old_message {
-   {124}
-  }
-  box {0 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*33) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 1
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text2
-  label divider
-  note_font "Verdana Bold"
-  xpos -2200
-  ypos 144
- }
-push $N1505ada0
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[frame]"
-  old_message {
-   {49 48 48 49}
-  }
-  old_expression_markers {
-   {0 3}
-  }
-  box {0 0 {parent.utility.inres.u-xedgedistance} {abs(parent.utility.addres/2)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 7
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text1
-  label frame
-  note_font "Verdana Bold"
-  xpos -2021
-  ypos 64
- }
-push $N14fb4310
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[timecode]"
-  old_message {
-   {48 49 58 48 48 58 48 48 58 48 48}
-  }
-  old_expression_markers {
-   {0 10}
-  }
-  box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*50) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 10
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text5
-  label time
-  note_font "Verdana Bold"
-  xpos -1840
-  ypos -16
- }
-push $N14f9a050
- NoOp {
-  name utility
-  xpos -1120
-  ypos -810
-  addUserKnob {20 User}
-  addUserKnob {30 inres l "in res"}
-  inres {{"\[value input.format.r]"} {"slateextend<0 ? \[value input.format.t]+slateextend : \[value input.format.t]"}}
-  addUserKnob {7 addres l "add res" R -500 500}
-  addres {{parent.slateextend*2}}
- }
-set N152161e0 [stack 0]
- Shuffle2 {
-  fromInput1 {
-   {0}
-   B
-  }
-  fromInput2 {
-   {0}
-   B
-  }
-  mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
-  name Shuffle2
-  label "\[value in1]"
-  xpos -1480
-  ypos -816
- }
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v+utility.addres}}
-  box_fixed true
-  resize none
-  black_outside true
-  name Reformat3
-  label height
-  xpos -1480
-  ypos -734
- }
-push $N152161e0
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v}}
-  box_fixed true
-  resize none
-  black_outside true
-  name Reformat1
-  label height
-  xpos -1120
-  ypos -736
- }
-set N152451e0 [stack 0]
- Shuffle2 {
-  fromInput1 {
-   {0}
-   B
-  }
-  fromInput2 {
-   {0}
-   B
-  }
-  mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
-  name Shuffle3
-  label "\[value in1]"
-  xpos -1300
-  ypos -736
- }
- Dot {
-  name Dot4
-  xpos -1267
-  ypos -646
- }
- Merge2 {
-  inputs 2
-  operation mask
-  name Merge3
-  xpos -1480
-  ypos -648
- }
- Dot {
-  name Dot2
-  xpos -1447
-  ypos -487
- }
-set N152813a0 [stack 0]
-push $N152813a0
- Dilate {
-  size {{parent.linewidth}}
-  name Dilate1
-  xpos -1299
-  ypos -497
- }
- Merge2 {
-  inputs 2
-  operation from
-  name Merge4
-  xpos -1480
-  ypos -410
- }
- Dot {
-  name Dot17
-  xpos -1448
-  ypos -247
- }
-push $N152451e0
- Merge2 {
-  inputs 2
-  name Merge5
-  xpos -1120
-  ypos -249
-  disable {{!parent.enableline}}
- }
- Merge2 {
-  inputs 2
-  name Merge1
-  xpos -1120
-  ypos -10
-  disable {{"slateextend==0 ? 1: !parent.timecode1"}}
- }
- Merge2 {
-  inputs 2
-  name Merge2
-  xpos -1120
-  ypos 70
-  disable {{"slateextend==0 ? 1:!parent.framecount"}}
- }
- Merge2 {
-  inputs 2
-  name Merge7
-  xpos -1120
-  ypos 150
-  disable {{"slateextend==0 ? 1:framecount==1 && timecode1==1 ? 0:1"}}
- }
- Merge2 {
-  inputs 2
-  name Merge8
-  xpos -1120
-  ypos 230
-  disable {{"slateextend==0 ? 1:!parent.comment"}}
- }
- Merge2 {
-  inputs 2
-  name Merge9
-  xpos -1120
-  ypos 310
-  disable {{"slateextend==0 ? 1:!parent.date1"}}
- }
- Merge2 {
-  inputs 2
-  name Merge10
-  xpos -1120
-  ypos 390
-  disable {{"slateextend==0 ? 1:!parent.project"}}
- }
- Merge2 {
-  inputs 2
-  name Merge11
-  xpos -1120
-  ypos 470
-  disable {{"slateextend==0 ? 1:!parent.compname"}}
- }
- Merge2 {
-  inputs 2
-  name Merge12
-  xpos -1120
-  ypos 551
-  disable {{"slateextend==0 ? 1:!parent.artist"}}
- }
- Merge2 {
-  inputs 2
-  name Merge13
-  xpos -1120
-  ypos 630
-  disable {{"slateextend==0 ? 1:!parent.fpscounter"}}
- }
- Merge2 {
-  inputs 2
-  name Merge14
-  xpos -1120
-  ypos 790
-  disable {{"slateextend==0 ? 1:!parent.duration"}}
- }
- Constant {
-  inputs 0
-  color {0.9822503924 0.1274376512 0.02217387967 0}
-  name Constant1
-  xpos -1300
-  ypos 925
- }
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v+utility.addres}}
-  box_fixed true
-  name Reformat5
-  label height
-  xpos -1300
-  ypos 1023
- }
- Copy {
-  inputs 2
-  from0 rgba.alpha
-  to0 rgba.alpha
-  name Copy1
-  xpos -1120
-  ypos 1023
- }
- Premult {
-  name Premult1
-  xpos -1120
-  ypos 1109
- }
- Crop {
-  box {0 0 {"\[value input.format.r]"} {"\[value input.format.t]"}}
-  name Crop1
-  xpos -1120
-  ypos 1189
- }
-push $N14f85a70
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v+utility.addres}}
-  box_fixed true
-  resize none
-  black_outside true
-  name Reformat4
-  label height
-  xpos -761
-  ypos -897
- }
- Merge2 {
-  inputs 2
-  bbox A
-  name Merge6
-  xpos -761
-  ypos 1189
- }
- Output {
-  name Output1
-  xpos -760
-  ypos 1429
- }
- StickyNote {
-  inputs 0
-  name StickyNote1
-  label "\[frames \{first\}] - \[frames \{last\}]\n\nimport re\n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.Root().firstFrame()\nlast_frame = nuke.Root().lastFrame()\n\n# Function to convert frames to timecode\ndef frames_to_timecode(frames, fps=24):\n    hours = int(frames // (fps * 3600))\n    minutes = int((frames % (fps * 3600)) // (fps * 60))\n    seconds = int((frames % (fps * 60)) // fps)\n    frames_remaining = int(frames % fps)\n    return f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames_remaining:02\}\"\n\n# Calculate the total frames\ntotal_frames = last_frame - first_frame\n\n# Get the FPS from the project settings\nfps = nuke.Root()\['fps'].value()\n\n# Convert to timecode using the project FPS\ntimecode = frames_to_timecode(total_frames, fps=fps)\n\n# Function to replace or append the timecode in a given text\ndef replace_last_timecode(text, new_timecode):\n    # Regular expression to match timecode patterns\n    pattern = re.compile(r'\\b\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}\\b')\n    # Replace the last match with the new timecode\n    if pattern.search(text):\n        return pattern.sub(new_timecode, text, count=1)\n    else:\n        # If no timecode is found, just append the new timecode\n        return f\"\{text\}\\n\{new_timecode\}\" if text else new_timecode\n\n# Update Text11 with the timecode in the first line\ntext11_node = nuke.toNode(\"Text11\")  # Replace \"Text11\" with the correct node name\nif text11_node:\n    current_text11 = text11_node.knob(\"message\").value()\n    # Replace the old timecode with the new one, or prepend it if none exists\n    updated_text11 = replace_last_timecode(current_text11, timecode)\n    # Ensure the timecode is in the first line\n    if not re.search(r'^\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}', updated_text11):\n        updated_text11 = f\"\{timecode\}\\n\{updated_text11\}\"\n    text11_node.knob(\"message\").setValue(updated_text11)\nelse:\n    nuke.message(\"Text11 node not found\")\n\n# Update Text12 with the timecode while keeping existing content\ntext12_node = nuke.toNode(\"Text12\")  # Replace \"Text12\" with the correct node name\nif text12_node:\n    current_text12 = text12_node.knob(\"message\").value()\n    updated_text12 = replace_last_timecode(current_text12, timecode)\n    text12_node.knob(\"message\").setValue(updated_text12)\nelse:\n    nuke.message(\"Text12 node not found\")\n    \n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.root().firstFrame()\nlast_frame = nuke.root().lastFrame()\n\n# Calculate the total frames minus one\ntotal_frames_minus_one = last_frame - first_frame\n\n# Update Text10 with the total duration in frames minus one\ntext10_node = nuke.toNode(\"Text10\")  # Replace \"Text10\" with the correct node name\nif text10_node:\n    # Set the text to the total duration in frames minus one\n    text10_node.knob(\"message\").setValue(str(total_frames_minus_one))\nelse:\n    nuke.message(\"Text10 node not found\")\n\n"
-  xpos -2082
-  ypos 826
- }
-push $N14fb4310
- NoOp {
-  name readtime
-  xpos -2740
-  ypos 790
-  hide_input true
-  addUserKnob {20 User}
-  addUserKnob {30 intime l "in time"}
-  intime {{root.first_frame} {root.last_frame}}
-  addUserKnob {3 durationframe l duration}
-  durationframe {{intime.v-intime.u+1}}
-  addUserKnob {22 set T "import nuke\n\n# Get the current node where the Python knob is being executed\nnode = nuke.thisNode()\n\n# Ensure the 'durationframe' knob exists and get the frame count from it\nif 'durationframe' in node.knobs():\n    frame_count = node\['durationframe'].value()\nelse:\n    nuke.message(\"Error: 'durationframe' knob not found in the current node.\")\n    raise ValueError(\"'durationframe' knob not found\")\n\n# Get the frame rate from the project settings\nframe_rate = nuke.root().fps()\n\n# Calculate hours, minutes, seconds, and frames\nhours = int(frame_count / (3600 * frame_rate))\nminutes = int((frame_count % (3600 * frame_rate)) / (60 * frame_rate))\nseconds = int((frame_count % (60 * frame_rate)) / frame_rate)\nframes = int(frame_count % frame_rate)\n\n# Format the timecode as HH:MM:SS:FF\ntimecode = f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames:02\}\"\n\n# Ensure the 'tc1' knob exists in the node\nif 'tc1' in node.knobs():\n    # Update the 'tc1' knob with the new timecode\n    node\['tc1'].setValue(timecode)\n    print(f\"Timecode updated to: \{timecode\} in 'tc1' knob.\")\nelse:\n    nuke.message(\"Error: 'tc1' knob not found in the current node.\")\n    raise ValueError(\"'tc1' knob not found\")\n" +STARTLINE}
-  addUserKnob {1 tc1 l timecode}
-  tc1 00:00:02:12
- }
-end_group
-set N14f64db0 [stack 0]
-Viewer {
- frame_range 1001-1100
- fps 25
- viewerProcess "ACES 2.0 - SDR 100 nits (Rec.709) (sRGB - Display)"
- monitorOutNDISenderName "NukeX - template_current - Viewer1"
- name Viewer1
- xpos 510
- ypos 2895
-}
-push $N14f64db0
+push $N15bbd690
 Write {
  file "../renders/precomp/previews/\[string range  \[basename \[value root.name]] 0 end-3].mp4"
  file_type mov
@@ -3358,7 +3343,6 @@ Write {
  mov_h264_codec_profile "High 4:2:0 8-bit"
  mov64_pixel_format {
   {0}
-  "yuv420p\tYCbCr 4:2:0 8-bit"
  }
  mov64_quality Custom
  mov64_fast_start true
@@ -3372,12 +3356,25 @@ Write {
  colorspace color_picking
  create_directories true
  checkHashOnRead false
- in_colorspace scene_linear
- out_colorspace scene_linear
  ocioColorspace scene_linear
  display "sRGB - Display"
  view "ACES 2.0 - SDR 100 nits (Rec.709)"
  name WriteCompMP4
  xpos 620
  ypos 3372
+}
+push $N15a58d80
+Write {
+ file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3]/\[string range  \[basename \[value root.name]] 0 end-3]_####.exr"
+ file_type exr
+ first_part rgba
+ colorspace "ARRI LogC3 (EI800)"
+ create_directories true
+ checkHashOnRead false
+ ocioColorspace scene_linear
+ display "sRGB - Display"
+ view "ACES 2.0 - SDR 100 nits (Rec.709)"
+ name WriteCompEXR
+ xpos 620
+ ypos 3017
 }

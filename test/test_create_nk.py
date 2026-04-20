@@ -183,8 +183,16 @@ class _FakeNodeFactory:
         return creator
 
 
+COMP_MOV_EXPR = "../renders/comp/[string range [basename [value root.name]] 0 end-3].mov"
+COMP_EXR_EXPR = (
+    "../renders/comp/[string range [basename [value root.name]] 0 end-3]/"
+    "[string range [basename [value root.name]] 0 end-3]_####.exr"
+)
+PREVIEW_MP4_EXPR = "../renders/precomp/previews/[string range [basename [value root.name]] 0 end-3].mp4"
+
+
 class _FakeNuke:
-    def __init__(self, include_text10=False, include_text12=False):
+    def __init__(self, include_text10=False, include_text12=False, use_dynamic_output_paths=True):
         self.top_nodes = []
         self.current_group = None
         self.opened = None
@@ -206,7 +214,6 @@ class _FakeNuke:
                 _FakeNode("RetimePreview1", xpos=400, ypos=2895),
                 _FakeNode("ReadCompEXR", xpos=620, ypos=3111),
                 _FakeNode("WriteCompMP4", xpos=620, ypos=3339),
-                _FakeNode("Text11", xpos=620, ypos=3351),
             ]
         )
 
@@ -218,6 +225,13 @@ class _FakeNuke:
         readtime = _FakeNode("readtime")
         slate = _FakeGroupNode("MS_slate_overlay", self, inner_nodes=[readtime], xpos=620, ypos=3274)
         self.top_nodes.append(slate)
+
+        if use_dynamic_output_paths:
+            self.toNode("WriteCompMov")["file"].setValue(COMP_MOV_EXPR)
+            self.toNode("ReadCompMov")["file"].setValue(COMP_MOV_EXPR)
+            self.toNode("WriteCompEXR")["file"].setValue(COMP_EXR_EXPR)
+            self.toNode("ReadCompEXR")["file"].setValue(COMP_EXR_EXPR)
+            self.toNode("WriteCompMP4")["file"].setValue(PREVIEW_MP4_EXPR)
 
     def root(self):
         return self.root_node
@@ -396,12 +410,11 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(nuke.toNode("Retime1")["output.first"].value(), 1001)
             self.assertEqual(nuke.toNode("WriteDN1")["file"].value(), request.dn_exr_file)
             self.assertEqual(nuke.toNode("ReadDN1")["file"].value(), request.dn_exr_file)
-            self.assertEqual(nuke.toNode("WriteCompMov")["file"].value(), request.comp_mov_file)
-            self.assertEqual(nuke.toNode("ReadCompMov")["file"].value(), request.comp_mov_file)
-            self.assertEqual(nuke.toNode("WriteCompEXR")["file"].value(), request.comp_exr_file)
-            self.assertEqual(nuke.toNode("ReadCompEXR")["file"].value(), request.comp_exr_file)
-            self.assertEqual(nuke.toNode("WriteCompMP4")["file"].value(), request.preview_mp4_file)
-            self.assertEqual(nuke.toNode("Text11")["message"].value(), "1001-1010\n00:00:00:09")
+            self.assertEqual(nuke.toNode("WriteCompMov")["file"].value(), COMP_MOV_EXPR)
+            self.assertEqual(nuke.toNode("ReadCompMov")["file"].value(), COMP_MOV_EXPR)
+            self.assertEqual(nuke.toNode("WriteCompEXR")["file"].value(), COMP_EXR_EXPR)
+            self.assertEqual(nuke.toNode("ReadCompEXR")["file"].value(), COMP_EXR_EXPR)
+            self.assertEqual(nuke.toNode("WriteCompMP4")["file"].value(), PREVIEW_MP4_EXPR)
 
             slate = nuke.toNode("MS_slate_overlay")
             self.assertEqual(slate["projecttext"].value(), "ProjectA")
@@ -412,6 +425,22 @@ class CreateNkTests(unittest.TestCase):
                 self.assertEqual(nuke.toNode("readtime")["tc1"].value(), "00:00:00:09")
             finally:
                 slate.end()
+
+    def test_edit_updates_static_output_paths_for_legacy_templates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            template = root / "template_current.nk"
+            template.write_text("# template", encoding="utf-8")
+            request = self._request(root, template)
+            nuke = _FakeNuke(use_dynamic_output_paths=False)
+
+            module._TemplateEditor(nuke).edit(request)
+
+            self.assertEqual(nuke.toNode("WriteCompMov")["file"].value(), request.comp_mov_file)
+            self.assertEqual(nuke.toNode("ReadCompMov")["file"].value(), request.comp_mov_file)
+            self.assertEqual(nuke.toNode("WriteCompEXR")["file"].value(), request.comp_exr_file)
+            self.assertEqual(nuke.toNode("ReadCompEXR")["file"].value(), request.comp_exr_file)
+            self.assertEqual(nuke.toNode("WriteCompMP4")["file"].value(), request.preview_mp4_file)
 
     def test_extra_plates_create_read_and_retime_pairs_with_fixed_spacing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
