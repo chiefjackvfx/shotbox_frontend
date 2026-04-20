@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 
 import requests
 
-from nuke_lock_utils import local_system_id
+from nuke_lock_utils import local_machine_name, local_system_id, normalize_system_id
 
 TASK_STATUS_CHOICES = [
     ("unassigned", "Unassigned"),
@@ -82,6 +82,7 @@ class DjangoAPI:
     # Cached users list for username lookup
     _cached_users = None
     _system_id = None
+    _lock_owner_id = None
     _max_retry_backoff = 3.0
     
     def __init__(
@@ -106,6 +107,24 @@ class DjangoAPI:
         if not cls._system_id:
             cls._system_id = local_system_id()
         return cls._system_id
+
+    @classmethod
+    def _build_lock_owner_id(cls, username: str | None) -> str:
+        username_text = str(username or "").strip()
+        if username_text:
+            return normalize_system_id(f"{username_text}@{local_machine_name()}")
+        return local_system_id()
+
+    @classmethod
+    def refresh_lock_owner_id(cls) -> str:
+        cls._lock_owner_id = cls._build_lock_owner_id(cls._current_username)
+        return cls._lock_owner_id
+
+    @classmethod
+    def get_lock_owner_id(cls) -> str:
+        if not cls._lock_owner_id:
+            cls._lock_owner_id = cls._build_lock_owner_id(cls._current_username)
+        return cls._lock_owner_id
     
     @classmethod
     def set_default_base_url(cls, url: str):
@@ -120,6 +139,7 @@ class DjangoAPI:
         All API requests will include this username in the X-ShotBox-User header.
         """
         cls._current_username = username
+        cls.refresh_lock_owner_id()
         if username:
             print(f"[ShotBox] Activity tracking enabled for user: {username}")
     
@@ -134,6 +154,7 @@ class DjangoAPI:
         """
         if user_id is None:
             cls._current_username = None
+            cls.refresh_lock_owner_id()
             return
         
         # Try to find username from cached users
@@ -153,9 +174,13 @@ class DjangoAPI:
                 if user.get("id") == user_id:
                     cls.set_current_username(user.get("username"))
                     return
-            
+
+            cls._current_username = None
+            cls.refresh_lock_owner_id()
             print(f"[ShotBox] Warning: User ID {user_id} not found")
         except Exception as e:
+            cls._current_username = None
+            cls.refresh_lock_owner_id()
             print(f"[ShotBox] Could not look up user ID {user_id}: {e}")
     
     @classmethod
@@ -396,7 +421,7 @@ class DjangoAPI:
         if force and not release:
             payload["nuke_force_take"] = True
 
-        headers = {"X-ShotBox-System": DjangoAPI.get_system_id()}
+        headers = {"X-ShotBox-System": DjangoAPI.get_lock_owner_id()}
         try:
             r = self._request(
                 'PATCH',

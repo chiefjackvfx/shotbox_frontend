@@ -3,7 +3,17 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import unittest
 
-from pyqt_frontend.nuke_lock_utils import (
+import os
+from pathlib import Path
+import sys
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+FRONTEND_DIR = Path(__file__).resolve().parents[1]
+if str(FRONTEND_DIR) not in sys.path:
+    sys.path.insert(0, str(FRONTEND_DIR))
+
+from nuke_lock_utils import (
     STALE_THRESHOLD_SECONDS,
     display_owner_name,
     normalize_system_id,
@@ -35,6 +45,7 @@ class NukeLockUtilsTests(unittest.TestCase):
         assert info is not None
         self.assertEqual(info.display_owner, "artist")
         self.assertTrue(info.matches_system("artist@ws01"))
+        self.assertFalse(info.matches_system("artist@ws02"))
         self.assertFalse(info.is_stale(stale_threshold_seconds=STALE_THRESHOLD_SECONDS))
 
     def test_old_lock_is_stale(self):
