@@ -16,6 +16,29 @@ import filesIO
 
 
 class FilesIOPreviewLogicTests(unittest.TestCase):
+    def test_dvr_bin_name_uses_provided_shot_name(self):
+        bin_name = filesIO.Folders()._resolve_dvr_bin_name(
+            "/show/renders/comp/old001_v001.mov",
+            shot_name="SQ010_SH020",
+        )
+
+        self.assertEqual(bin_name, "SQ010_SH020")
+
+    def test_dvr_bin_name_trims_provided_shot_name(self):
+        bin_name = filesIO.Folders()._resolve_dvr_bin_name(
+            "/show/renders/comp/old001_v001.mov",
+            shot_name="  SQ010_SH020  ",
+        )
+
+        self.assertEqual(bin_name, "SQ010_SH020")
+
+    def test_dvr_bin_name_falls_back_to_legacy_clip_prefix(self):
+        bin_name = filesIO.Folders()._resolve_dvr_bin_name(
+            "/show/renders/comp/old001_v001.mov",
+        )
+
+        self.assertEqual(bin_name, "old001")
+
     def test_latest_render_info_prefers_exr_when_versions_tie(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_dir = Path(tmpdir)

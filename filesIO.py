@@ -291,8 +291,14 @@ class Folders:
 
     def conform(self, clip):
         print(clip)
+
+    def _resolve_dvr_bin_name(self, clip, shot_name=None):
+        resolved_shot_name = str(shot_name).strip() if shot_name is not None else ""
+        if resolved_shot_name:
+            return resolved_shot_name
+        return str(os.path.basename(str(clip))[:6])
         
-    def push2dvr(self, clip, matte=False):
+    def push2dvr(self, clip, matte=False, shot_name=None):
         """
         Push a clip to DaVinci Resolve media pool.
         
@@ -300,7 +306,7 @@ class Folders:
             bool: True if successful, False if failed
         """
         clip = self.convert_path(clip)
-        shotname = str(os.path.basename(clip)[:6])
+        shotname = self._resolve_dvr_bin_name(clip, shot_name=shot_name)
         print(f"clip: {clip}")
         
         if clip == "none":

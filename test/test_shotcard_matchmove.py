@@ -25,6 +25,7 @@ from matchmove_helpers import SequenceInfo
 class FakeFolders:
     def __init__(self):
         self.opened_locations: list[Path] = []
+        self.pushed_to_dvr: list[tuple[str, bool, str | None]] = []
 
     def latest_nk(self, folder):
         return None
@@ -40,6 +41,10 @@ class FakeFolders:
 
     def convert_path(self, path):
         return path
+
+    def push2dvr(self, clip, matte=False, shot_name=None):
+        self.pushed_to_dvr.append((clip, matte, shot_name))
+        return True
 
 
 class FakeSignal:
@@ -156,6 +161,28 @@ class ShotCardMatchmoveTests(unittest.TestCase):
 
             self.assertEqual(fake_folders.opened_locations[-1], shot_root / "Shot_Assets")
             self.assertTrue((shot_root / "Shot_Assets").is_dir())
+
+    def test_push_to_dvr_uses_shot_title_for_resolve_bin(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "SQ010_SH020"
+            shot_root.mkdir(parents=True)
+            render_path = shot_root / "renders" / "comp" / "legacy_v001.mov"
+            render_path.parent.mkdir(parents=True)
+            render_path.write_bytes(b"mov")
+            card, fake_folders = self._make_card(
+                str(shot_root),
+                data_overrides={"title": "SQ010_SH020"},
+            )
+            card.btn_latest_render.setProperty("file_path", str(render_path))
+            card.btn_latest_render.setProperty("render_type", "mov")
+            card.btn_latest_render.setProperty("render_display", render_path.name)
+
+            card._on_push_to_dvr_clicked()
+
+            self.assertEqual(
+                fake_folders.pushed_to_dvr,
+                [(str(render_path), False, "SQ010_SH020")],
+            )
 
     def test_assets_menu_opens_latest_matchmove_when_project_exists(self):
         with tempfile.TemporaryDirectory() as tmpdir:

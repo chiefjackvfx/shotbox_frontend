@@ -29,6 +29,7 @@ from nuke_headless_tasks import find_nuke_executable, map_input_colorspace
 READ_NODE_LABEL = "Fr. range: [value first] - [value last]\nRes: [value width] * [value height]"
 RUNTIME_TEMPLATE_NAME = "template_current.nk"
 EXTRA_PLATE_SPACING = 150
+TARGET_ROOT_FORMAT_WIDTH = 4096
 
 
 @dataclass
@@ -128,6 +129,26 @@ def _coerce_request(request: GenerateNkRequest | dict) -> GenerateNkRequest:
     if isinstance(request, GenerateNkRequest):
         return request
     return GenerateNkRequest.from_dict(request)
+
+
+def compute_target_root_format(source_width: int, source_height: int) -> tuple[int, int]:
+    """Return a 4096-wide root format with height rounded to the nearest even integer."""
+    width = TARGET_ROOT_FORMAT_WIDTH
+    source_width = int(source_width or 0)
+    source_height = int(source_height or 0)
+
+    if source_width <= 0 or source_height <= 0:
+        return width, 2304
+
+    raw_height = (source_height / source_width) * width
+    height = int(round(raw_height))
+    if height < 2:
+        height = 2
+    if height % 2:
+        lower = height - 1
+        upper = height + 1
+        height = upper if abs(upper - raw_height) <= abs(raw_height - lower) else lower
+    return width, height
 
 
 def _resolve_template_path(request: GenerateNkRequest) -> Path:
@@ -291,6 +312,7 @@ class _TemplateEditor:
         "BackdropINFO",
         "Read1",
         "Retime1",
+        "Reformat3",
         "WriteDN1",
         "ReadDN1",
         "WriteCompMov",
@@ -319,6 +341,7 @@ class _TemplateEditor:
         self._update_info_backdrop()
         self._update_primary_plate()
         self._update_extra_plates()
+        self._update_reformats()
         self._update_outputs()
         self._update_slate_overlay()
         self._update_preview_text()
@@ -379,6 +402,14 @@ class _TemplateEditor:
 
         if "project_directory" in root.knobs():
             root["project_directory"].fromScript("[python {nuke.script_directory()}]")
+
+    def _update_reformats(self):
+        reformat3 = self._required_node("Reformat3")
+        if "type" in reformat3.knobs():
+            self._set_optional_knob(reformat3, "type", "to box")
+        self._set_optional_knob(reformat3, "box_width", self.request.format_width)
+        self._set_optional_knob(reformat3, "box_height", self.request.format_height)
+        self._set_optional_knob(reformat3, "box_fixed", True)
 
     def _update_info_backdrop(self):
         self._set_knob(self._required_node("BackdropINFO")["label"], self._build_info_text())

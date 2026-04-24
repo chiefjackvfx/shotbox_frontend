@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 import unittest
 from unittest import mock
+import xml.etree.ElementTree as ET
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -101,7 +102,8 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
                 "generate_from_template",
                 side_effect=fake_generate_from_template,
             ):
-                script_path = Path(generator.create_nuke_script(shot, str(shot_folder), str(root)))
+                with mock.patch.object(generator, "_get_video_format", return_value=(6048, 4032)):
+                    script_path = Path(generator.create_nuke_script(shot, str(shot_folder), str(root)))
 
             self.assertEqual(script_path.name, "seq010_v001.nk")
             self.assertTrue(script_path.is_file())
@@ -117,6 +119,8 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
             self.assertEqual(request.project_name, root.name)
             self.assertEqual(request.artist_name, "Jack")
             self.assertEqual(request.colourspace, generator.colourspace)
+            self.assertEqual(request.format_width, 4096)
+            self.assertEqual(request.format_height, 2730)
             self.assertEqual(Path(request.template_path).name, "template_current.nk")
             self.assertEqual(Path(request.primary_plate_path).name, "plate.mov")
             self.assertEqual([Path(path).name for path in request.extra_plate_paths], ["plate_2.mov"])
@@ -225,6 +229,132 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
         self.assertEqual(shot.primary_clip.filepath, "/tmp/V1.mov")
         self.assertEqual(shot.clips[1].duration, 8)
         self.assertEqual(shot.clips[2].duration, 15)
+
+    def test_xml_parser_keeps_xml_duration_as_cut_length(self):
+        parser = module.XMLTimelineParser()
+        clip_elem = ET.fromstring(
+            """
+            <clipitem>
+                <name>seq010</name>
+                <in>0</in>
+                <out>63</out>
+                <duration>63</duration>
+                <start>1001</start>
+                <end>1063</end>
+                <file><pathurl>file:///tmp/plate.mov</pathurl></file>
+            </clipitem>
+            """
+        )
+
+        clip = parser._parse_clip(clip_elem, track=1, handles=10)
+
+        self.assertIsNotNone(clip)
+        self.assertEqual(clip.duration, 63)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            clip_path = root / "plate.mov"
+            clip_path.write_bytes(b"clip")
+
+            shot = module.ParsedShot(
+                index=0,
+                name="seq010",
+                clips=[
+                    module.ParsedClip(
+                        name="seq010",
+                        filepath=str(clip_path),
+                        in_point=0,
+                        out_point=63,
+                        duration=clip.duration,
+                        start_frame=1001,
+                        end_frame=1063,
+                        track=1,
+                        copied_filepath=str(clip_path),
+                    ),
+                ],
+                duration=clip.duration,
+                edit_inpoint=1001,
+                edit_outpoint=1063,
+            )
+
+            generator = module.NukeScriptGenerator()
+            with mock.patch.object(generator, "_get_video_format", return_value=(1920, 1080)):
+                request = generator._build_create_nk_request(
+                    shot,
+                    str(root),
+                    str(root / "scripts" / "seq010_v001.nk"),
+                    "Project_A",
+                )
+
+        self.assertEqual(request.duration, 63)
+        self.assertEqual(request.frame_first, 1001)
+        self.assertEqual(request.frame_last, 1063)
+
+    def test_xml_parser_keeps_62_frame_cut_with_25_handles(self):
+        parser = module.XMLTimelineParser()
+        clip_elem = ET.fromstring(
+            """
+            <clipitem>
+                <name>seq011</name>
+                <in>10</in>
+                <out>52</out>
+                <duration>62</duration>
+                <start>46</start>
+                <end>88</end>
+                <file><pathurl>file:///tmp/plate.mov</pathurl></file>
+            </clipitem>
+            """
+        )
+
+        clip = parser._parse_clip(clip_elem, track=1, handles=25)
+
+        self.assertIsNotNone(clip)
+        self.assertEqual(clip.duration, 62)
+
+    def test_xml_parser_logs_mismatch_but_uses_xml_duration(self):
+        parser = module.XMLTimelineParser()
+        clip_elem = ET.fromstring(
+            """
+            <clipitem>
+                <name>seq020</name>
+                <in>0</in>
+                <out>63</out>
+                <duration>63</duration>
+                <start>990</start>
+                <end>1063</end>
+                <file><pathurl>file:///tmp/plate.mov</pathurl></file>
+            </clipitem>
+            """
+        )
+
+        with mock.patch("builtins.print") as mocked_print:
+            clip = parser._parse_clip(clip_elem, track=1, handles=10)
+
+        self.assertIsNotNone(clip)
+        self.assertEqual(clip.duration, 63)
+        mocked_print.assert_any_call(
+            "[XMLParser] Duration mismatch for seq020: duration=63, inclusive_range=74. Using XML duration."
+        )
+
+    def test_xml_parser_falls_back_to_inclusive_range_when_duration_missing(self):
+        parser = module.XMLTimelineParser()
+        clip_elem = ET.fromstring(
+            """
+            <clipitem>
+                <name>seq030</name>
+                <in>0</in>
+                <out>63</out>
+                <start>1001</start>
+                <end>1063</end>
+                <file><pathurl>file:///tmp/plate.mov</pathurl></file>
+            </clipitem>
+            """
+        )
+
+        clip = parser._parse_clip(clip_elem, track=1, handles=10)
+
+        self.assertIsNotNone(clip)
+        self.assertEqual(clip.duration, 63)
 
     def test_single_shot_dialog_infers_job_name_above_vfx_or_nuke(self):
         dialog = module.SingleShotCreationDialog(add_to_db=True)

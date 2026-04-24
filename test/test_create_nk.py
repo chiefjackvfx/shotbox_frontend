@@ -126,6 +126,10 @@ class _FakeNode:
         "ocioColorspace",
         "display",
         "view",
+        "type",
+        "box_width",
+        "box_height",
+        "box_fixed",
     )
 
     def __init__(self, name, xpos=0, ypos=0):
@@ -206,6 +210,7 @@ class _FakeNuke:
                 _FakeNode("BackdropINFO", xpos=-771, ypos=68),
                 _FakeNode("Read1", xpos=282, ypos=87),
                 _FakeNode("Retime1", xpos=282, ypos=255),
+                _FakeNode("Reformat3", xpos=282, ypos=287),
                 _FakeNode("WriteDN1", xpos=180, ypos=993),
                 _FakeNode("ReadDN1", xpos=180, ypos=1071),
                 _FakeNode("WriteCompMov", xpos=400, ypos=2667),
@@ -283,8 +288,8 @@ class CreateNkTests(unittest.TestCase):
             edit_outpoint=1010,
             frame_first=1001,
             frame_last=1010,
-            format_width=1920,
-            format_height=1080,
+            format_width=4096,
+            format_height=2304,
             primary_plate_path=str(primary_plate),
             extra_plate_paths=[],
             dn_exr_file="../renders/precomp/seq010_DN_v001/seq010_DN_v001_####.exr",
@@ -393,7 +398,8 @@ class CreateNkTests(unittest.TestCase):
                 nuke.root_node["project_directory"].script_value,
                 "[python {nuke.script_directory()}]",
             )
-            self.assertEqual(nuke.root_node["format"].value(), "seq010_1920x1080")
+            self.assertEqual(nuke.root_node["format"].value(), "seq010_4096x2304")
+            self.assertIn("4096 2304 0 0 4096 2304 1 seq010_4096x2304", nuke.format_specs)
 
     def test_edit_updates_direct_template_nodes(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -415,6 +421,9 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(nuke.toNode("WriteCompEXR")["file"].value(), COMP_EXR_EXPR)
             self.assertEqual(nuke.toNode("ReadCompEXR")["file"].value(), COMP_EXR_EXPR)
             self.assertEqual(nuke.toNode("WriteCompMP4")["file"].value(), PREVIEW_MP4_EXPR)
+            self.assertEqual(nuke.toNode("Reformat3")["box_width"].value(), 4096)
+            self.assertEqual(nuke.toNode("Reformat3")["box_height"].value(), 2304)
+            self.assertEqual(nuke.toNode("Reformat3")["box_fixed"].value(), True)
 
             slate = nuke.toNode("MS_slate_overlay")
             self.assertEqual(slate["projecttext"].value(), "ProjectA")
@@ -490,6 +499,25 @@ class CreateNkTests(unittest.TestCase):
 
             with self.assertRaisesRegex(RuntimeError, "Template is missing required nodes: WriteCompMP4"):
                 module._TemplateEditor(nuke).edit(request)
+
+    def test_compute_target_root_format_uses_4096_width(self):
+        width, height = module.compute_target_root_format(6048, 4032)
+
+        self.assertEqual(width, 4096)
+        self.assertEqual(height, 2730)
+
+    def test_compute_target_root_format_varies_by_aspect_ratio(self):
+        width, height = module.compute_target_root_format(2048, 858)
+
+        self.assertEqual(width, 4096)
+        self.assertEqual(height, 1716)
+
+    def test_compute_target_root_format_rounds_to_nearest_even_height(self):
+        width, height = module.compute_target_root_format(1000, 501)
+
+        self.assertEqual(width, 4096)
+        self.assertEqual(height, 2052)
+        self.assertEqual(height % 2, 0)
 
 
 if __name__ == "__main__":

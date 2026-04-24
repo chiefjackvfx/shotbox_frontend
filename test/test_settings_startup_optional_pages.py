@@ -56,6 +56,39 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_normalize_changelog_markdown_trims_trailing_blank_blocks(self):
+        changelog = """# Changelog
+
+## 1.0.0 - 2026-03-28
+
+### Changed
+
+- First change
+- Second change
+-
+
+
+
+"""
+
+        normalized = settings._normalize_changelog_markdown(changelog)
+
+        self.assertEqual(
+            normalized,
+            "\n".join(
+                [
+                    "# Changelog",
+                    "",
+                    "## 1.0.0 - 2026-03-28",
+                    "",
+                    "### Changed",
+                    "",
+                    "- First change",
+                    "- Second change",
+                ]
+            ),
+        )
+
     def test_startup_optional_page_checkboxes_load_and_save(self):
         manager = InMemorySettingsManager(
             {

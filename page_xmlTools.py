@@ -343,11 +343,40 @@ class ConfigureMixin(UIToolsMixin):
         except:
             return "1920 1080"
 
+    def resolve_xml_clip_duration(self, clip_name, duration_text, start_frame_text, end_frame_text, handles):
+        """Resolve XML cut duration from timing fields without inflating it for handles."""
+        xml_duration = int(duration_text) if duration_text not in (None, "") else 0
+        start_frame = int(start_frame_text)
+        end_frame = int(end_frame_text)
+        inclusive_duration = (end_frame - start_frame) + 1
+
+        if xml_duration > 0:
+            if inclusive_duration > 0 and xml_duration != inclusive_duration:
+                print(
+                    f"[XMLTools] Duration mismatch for {clip_name}: "
+                    f"duration={xml_duration}, inclusive_range={inclusive_duration}. "
+                    "Using XML duration."
+                )
+            base_duration = xml_duration
+        elif inclusive_duration > 0:
+            base_duration = inclusive_duration
+        else:
+            print(
+                f"[XMLTools] Invalid timing for {clip_name}: "
+                f"duration={xml_duration}, start={start_frame}, end={end_frame}. "
+                "Defaulting base duration to 1."
+            )
+            base_duration = 1
+
+        return base_duration
+
     def folderSetup(self, shotIndex, read_paths, thumb, duration, single=False):
         """Set up folder structure and Nuke script for a shot."""
         print(f"Making shot {shotIndex}: {read_paths}, Duration: {duration}")
         
-        if not single:
+        # XML imports pass the handled shot length in; only fall back to the
+        # source clip duration when that value is missing.
+        if not single and not duration:
             duration = self.movDuration(read_paths[0])
 
         last_frame = duration + 1000
@@ -974,7 +1003,13 @@ class page_xmlTools(QWidget, ConfigureMixin):
                             startFrame = clip.find("start").text
                             endFrame = clip.find("end").text
 
-                            trueDuration = int(endFrame) - int(startFrame) + self.spinboxHandles.value() * 2
+                            trueDuration = self.resolve_xml_clip_duration(
+                                name,
+                                duration,
+                                startFrame,
+                                endFrame,
+                                self.spinboxHandles.value(),
+                            )
 
                             # Store in appropriate track list
                             if 1 <= track <= 5:

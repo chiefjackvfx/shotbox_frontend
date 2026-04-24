@@ -307,17 +307,23 @@ class XMLTimelineParser:
                     filepath = self._normalize_filepath(pathurl.text)
             
             # Get timing info
-            in_point = int(clip_elem.find("in").text or 0)
+            in_point = self._parse_int_element(clip_elem, "in", default=0)
             if in_point == 90000:  # Special case in some XMLs
                 in_point = 0
                 
-            out_point = int(clip_elem.find("out").text or 0)
-            duration = int(clip_elem.find("duration").text or 0)
-            start_frame = int(clip_elem.find("start").text or 0)
-            end_frame = int(clip_elem.find("end").text or 0)
+            out_point = self._parse_int_element(clip_elem, "out", default=0)
+            duration = self._parse_int_element(clip_elem, "duration", default=0)
+            start_frame = self._parse_int_element(clip_elem, "start", default=0)
+            end_frame = self._parse_int_element(clip_elem, "end", default=0)
             
-            # Calculate true duration with handles
-            true_duration = (end_frame - start_frame) + (handles * 2)
+            # Prefer the XML cut duration, falling back to the inclusive start/end span.
+            true_duration = self._resolve_xml_clip_duration(
+                clip_name=name,
+                xml_duration=duration,
+                start_frame=start_frame,
+                end_frame=end_frame,
+                handles=handles,
+            )
             
             return ParsedClip(
                 name=name,
@@ -332,6 +338,48 @@ class XMLTimelineParser:
         except Exception as e:
             print(f"[XMLParser] Error parsing clip: {e}")
             return None
+
+    def _parse_int_element(self, clip_elem: ET.Element, tag: str, default: int = 0) -> int:
+        """Parse an integer XML child value, tolerating missing/blank nodes."""
+        element = clip_elem.find(tag)
+        if element is None or element.text is None:
+            return default
+        text = element.text.strip()
+        if not text:
+            return default
+        return int(text)
+
+    def _resolve_xml_clip_duration(
+        self,
+        *,
+        clip_name: str,
+        xml_duration: int,
+        start_frame: int,
+        end_frame: int,
+        handles: int,
+    ) -> int:
+        """Return the XML cut duration, falling back to the inclusive start/end span."""
+        inclusive_duration = (end_frame - start_frame) + 1
+
+        if xml_duration > 0:
+            if inclusive_duration > 0 and xml_duration != inclusive_duration:
+                print(
+                    f"[XMLParser] Duration mismatch for {clip_name}: "
+                    f"duration={xml_duration}, inclusive_range={inclusive_duration}. "
+                    "Using XML duration."
+                )
+            base_duration = xml_duration
+        elif inclusive_duration > 0:
+            base_duration = inclusive_duration
+        else:
+            print(
+                f"[XMLParser] Invalid timing for {clip_name}: "
+                f"duration={xml_duration}, start={start_frame}, end={end_frame}. "
+                "Defaulting base duration to 1."
+            )
+            base_duration = 1
+
+        return base_duration
     
     def _normalize_filepath(self, pathurl: str) -> str:
         """Normalize file path from XML URL format."""
@@ -521,7 +569,8 @@ class NukeScriptGenerator:
             raise RuntimeError(f"Shot {shot.name} has no primary clip.")
 
         primary_clip_path = primary_clip.copied_filepath or primary_clip.filepath
-        width, height = self._get_video_format(primary_clip_path)
+        source_width, source_height = self._get_video_format(primary_clip_path)
+        width, height = create_nk.compute_target_root_format(source_width, source_height)
         frame_first = 1001
         frame_last = frame_first + max(shot.duration, 1) - 1
         extra_plate_paths: List[str] = []

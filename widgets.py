@@ -3497,7 +3497,7 @@ class ShotCard(QWidget):
             render_display = Path(render_path).name if render_path else None
         
         # Push to DaVinci Resolve - only update database if successful
-        success = self.filesIO.push2dvr(dvr_path)
+        success = self.filesIO.push2dvr(dvr_path, shot_name=self._shot_title())
         
         if success and self._shot_id and render_display:
             try:

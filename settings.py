@@ -38,6 +38,28 @@ CHANGELOG_ENTRY_RE = re.compile(
 )
 
 
+def _normalize_changelog_markdown(markdown_text: str) -> str:
+    """Clean changelog markdown so the viewer does not render blank trailing blocks."""
+    text = (markdown_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    cleaned_lines = []
+    blank_run = 0
+
+    for raw_line in text.split("\n"):
+        line = raw_line.rstrip()
+        if re.fullmatch(r"\s*[-*+]\s*", line):
+            continue
+        if not line.strip():
+            blank_run += 1
+            if blank_run > 1:
+                continue
+            cleaned_lines.append("")
+            continue
+        blank_run = 0
+        cleaned_lines.append(line)
+
+    return "\n".join(cleaned_lines).strip()
+
+
 def get_settings_file_path() -> str:
     """Get the path to the settings YAML file (username_settings.yaml)."""
     try:
@@ -719,7 +741,9 @@ class SettingsPage(QWidget):
 
     def _read_change_log_text(self) -> str:
         try:
-            return CHANGELOG_PATH.read_text(encoding="utf-8")
+            return _normalize_changelog_markdown(
+                CHANGELOG_PATH.read_text(encoding="utf-8")
+            )
         except OSError:
             return "Could not load changelog."
 
