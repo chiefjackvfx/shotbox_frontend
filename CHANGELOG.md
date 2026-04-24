@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 2.0.4 - 2026-04-24
+
+### Fixed
+
+- push to dvr fix
+
 ## 2.0.3 - 2026-04-20
 
 ### Changed
