@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 2.0.5 - 2026-04-30
+
+### Fixed
+
+- patch
+
 ## 2.0.4 - 2026-04-24
 
 ### Fixed
