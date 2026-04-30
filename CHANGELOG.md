@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 3.0.0 - 2026-04-30
+
+### Added
+
+- mac support! for paul
+
 ## 2.0.5 - 2026-04-30
 
 ### Fixed
