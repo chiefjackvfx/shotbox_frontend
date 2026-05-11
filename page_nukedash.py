@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QSpacerItem,
     QSizePolicy,
     QMessageBox,
+    QFileDialog,
 )
 
 import widgets
@@ -33,6 +34,7 @@ import http_help
 import filesIO
 import nuke_detector
 import project_load_profiler
+import nukedash_excel_export
 from nuke_lock_utils import display_owner_name, parse_lock_info
 from settings import get_settings_manager
 from timeline_matchmove_dialog import TimelineMatchmoveCandidate, TimelineMatchmoveDialog
@@ -388,6 +390,9 @@ class page_nukedash(QMainWindow):
         #self.btn_make_previews = QPushButton("Make All Previews")
         self.btn_make_previews.setToolTip("Generate previews for all shots with original clips or latest renders")
         self.btn_make_previews.clicked.connect(self._on_make_all_previews_clicked)
+        if hasattr(self, "btn_export_excel") and self.btn_export_excel:
+            self.btn_export_excel.setToolTip("Export the current job timelines to an Excel summary")
+            self.btn_export_excel.clicked.connect(self._on_export_excel_clicked)
         
 
         self.jobs_container = self.frame_jobs
@@ -2880,6 +2885,49 @@ class page_nukedash(QMainWindow):
         self._fail_project_switch_profile(str(msg))
         pass  # Could log to file if needed
         # print("API error:", msg)
+
+    def _active_job_data(self) -> dict | None:
+        if self._active_job_id is not None:
+            job = getattr(self, "_jobs_by_id", {}).get(self._active_job_id)
+            if isinstance(job, dict):
+                return job
+        combo = getattr(self, "comboBox_jobs", None)
+        if combo is not None:
+            job_id = combo.currentData()
+            job = getattr(self, "_jobs_by_id", {}).get(job_id)
+            if isinstance(job, dict):
+                return job
+        return None
+
+    def _on_export_excel_clicked(self):
+        job_data = self._active_job_data()
+        if not isinstance(job_data, dict):
+            QMessageBox.warning(self, "Export Excel", "No active job is loaded.")
+            return
+
+        default_name = nukedash_excel_export.default_export_filename(job_data)
+        default_path = str(Path.home() / default_name)
+        destination, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Timeline Summary",
+            default_path,
+            "Excel Workbook (*.xlsx)",
+        )
+        if not destination:
+            return
+
+        try:
+            output_path = nukedash_excel_export.export_job_timeline_summary(
+                job_data,
+                destination,
+                include_hidden=self.show_hidden_shots,
+                base_url=getattr(widgets, "BASE_URL", None),
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Export Excel", f"Could not export Excel file:\n{exc}")
+            return
+
+        QMessageBox.information(self, "Export Excel", f"Exported timeline summary:\n{output_path}")
 
     @pyqtSlot(list)
     def _on_data(self, jobs):

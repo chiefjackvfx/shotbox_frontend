@@ -140,7 +140,6 @@ class FilterHarness(QMainWindow):
     _set_all_status_filters = page_nukedash.page_nukedash._set_all_status_filters
     _setup_status_filter_dropdown = page_nukedash.page_nukedash._setup_status_filter_dropdown
     _update_status_filter_label = page_nukedash.page_nukedash._update_status_filter_label
-
     def __init__(self, shot_groups: list[list[dict]]):
         super().__init__()
 
@@ -455,7 +454,6 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertEqual(self._shot_card(103).data["tasks"][0]["status"], "assigned")
         self.assertFalse(self._shot_card(103).isVisible())
         self.assertEqual(self.harness.Label_results.text(), "1 results")
-
 
 if __name__ == "__main__":
     unittest.main()

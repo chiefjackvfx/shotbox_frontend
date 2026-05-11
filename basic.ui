@@ -183,6 +183,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QPushButton" name="btn_export_excel">
+               <property name="text">
+                <string>Excel</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QCheckBox" name="checkBox_compact_view">
                <property name="text">
                 <string>compact view</string>
