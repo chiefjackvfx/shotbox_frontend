@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 3.1.0 - 2026-07-13
+
+### Added
+
+- back to work
+
 ## 3.0.0 - 2026-04-30
 
 ### Added
