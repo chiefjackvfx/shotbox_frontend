@@ -863,4 +863,5 @@ def open_3de_project(project_path: str) -> list[str]:
     three_de_path = resolve_3de_executable()
     command = [three_de_path, "-open", project_path]
     subprocess.Popen(command, **_background_launch_kwargs())
+    print(project_path)
     return command
