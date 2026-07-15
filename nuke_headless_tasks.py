@@ -93,7 +93,7 @@ class PreviewConfig:
     DEFAULT_ARTIST = "ShotBox"
 
     # Preview runtime template
-    PREVIEW_TEMPLATE_NAME = "preview_template_v001.nk"
+    PREVIEW_TEMPLATE_NAME = "preview_template_v002.nk"
 
     # Nuke 17 / OCIO v2.4 studio config used across generated scripts and headless renders
     OCIO_CONFIG_NAME = "fn-nuke_studio-config-v3.0.0_aces-v2.0_ocio-v2.4"

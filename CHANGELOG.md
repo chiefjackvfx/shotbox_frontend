@@ -119,7 +119,7 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
-- XML import now builds shots under VFX instead of nuke, using VFX/<timeline>/<shot>/....
+- XML import now builds shots under VFX instead of nuke, using VFX/timeline>/shot>/....
 - Imported source clips are copied into each shot’s local plates/ folder, with duplicate filenames resolved safely, so generated .nk files reference local media instead of external paths.
 - New import-created scripts and thumbnails now start at v001 with 3-digit version padding.
 - Legacy shot .txt / note-file creation was removed from the import flow.

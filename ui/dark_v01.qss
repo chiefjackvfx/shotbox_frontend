@@ -695,7 +695,7 @@ QPushButton#btn_edit_shot_notes:hover {
 
 /* Action Buttons Row */
 QPushButton#btn_open_nuke,
-QPushButton#btn_open_assets,
+QToolButton#btn_open_assets,
 QPushButton#btn_open_precomp,
 QPushButton#btn_latest_render {
     background-color: #2F3542;
@@ -711,11 +711,23 @@ QPushButton#btn_latest_render {
 }
 
 QPushButton#btn_open_nuke:hover,
-QPushButton#btn_open_assets:hover,
+QToolButton#btn_open_assets:hover,
 QPushButton#btn_open_precomp:hover,
 QPushButton#btn_latest_render:hover {
     background-color: #404754;
     border-color: #FF6B35;
+}
+
+QToolButton#btn_open_assets[has_matchmove="true"] {
+    background-color: #2F4237;
+    border-color: #678542;
+    color: #DDF1CB;
+}
+
+QToolButton#btn_open_assets[has_matchmove="true"]:hover,
+QToolButton#btn_open_assets[has_matchmove="true"]:pressed {
+    background-color: #3A5243;
+    border-color: #8FB267;
 }
 
 QPushButton#btn_open_nuke[lock_state="foreign_active"] {
@@ -1537,7 +1549,7 @@ QPushButton#btn_hide_shot[compact="true"],
 QPushButton#btn_open_nuke[compact="true"],
 QPushButton#btn_latest_render[compact="true"],
 QPushButton#bnt_addTask[compact="true"],
-QPushButton#btn_open_assets[compact="true"],
+QToolButton#btn_open_assets[compact="true"],
 QPushButton#btn_open_precomp[compact="true"] {
     padding: 4px 6px;
     font-size: 10px;

@@ -694,7 +694,7 @@ class SettingsPage(QWidget):
 
         self.change_log_view = QTextBrowser()
         self.change_log_view.setReadOnly(True)
-        self.change_log_view.setMinimumHeight(220)
+        self.change_log_view.setMinimumHeight(400)
         self.change_log_view.setPlaceholderText("No changelog loaded.")
         self.change_log_view.setOpenExternalLinks(False)
         updates_layout.addRow("", self.change_log_view)

@@ -1294,6 +1294,7 @@ class ShotCard(QWidget):
         self._last_render_file = None
         self._last_render_mtime = None
         self._last_preview_version = None
+        self._latest_matchmove_project = None
 
         # Color buttons are now styled via QSS (styles_v02.qss)
         # Initial color indicator will be set in update_from_data via _apply_colour_code
@@ -1326,9 +1327,10 @@ class ShotCard(QWidget):
         self._set_nuke_file_state(file_path=None, file_name=None, file_mtime=None)
         _set_dynamic_property(self.btn_open_nuke, "lock_state", "none")
         
-        self.btn_open_assets.clicked.connect(self._open_shot_assets)
-        self.btn_open_assets.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.btn_open_assets.customContextMenuRequested.connect(self._on_assets_context_menu)
+        self._assets_menu = QMenu(self)
+        self._assets_menu.aboutToShow.connect(self._on_assets_menu_about_to_show)
+        self.btn_open_assets.setMenu(self._assets_menu)
+        self.btn_open_assets.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self.btn_open_precomp.clicked.connect(lambda: self.filesIO.openFileLocation(Path(self.shot_dir) / "renders" / "precomp" ))
 
         self._set_render_file_state()
@@ -1384,6 +1386,7 @@ class ShotCard(QWidget):
         self._apply_compact_tooltips()
 
     def apply_file_state_snapshot(self, snapshot: filesIO.ShotFileStateSnapshot) -> str | None:
+        self._refresh_matchmove_state()
         if snapshot is None:
             return None
 
@@ -1525,23 +1528,61 @@ class ShotCard(QWidget):
         assets_dir.mkdir(parents=True, exist_ok=True)
         self.filesIO.openFileLocation(assets_dir)
 
-    def _show_assets_matchmove_menu(self, global_pos) -> bool:
+    def _set_matchmove_project_state(self, latest_project) -> None:
+        self._latest_matchmove_project = latest_project
+        has_matchmove = latest_project is not None
+        _set_dynamic_property(
+            self.btn_open_assets,
+            "has_matchmove",
+            "true" if has_matchmove else "false",
+        )
+        self.btn_open_assets.setText("Assets · 3DE" if has_matchmove else "Assets")
+        if has_matchmove:
+            project_path = str(latest_project)
+            self.btn_open_assets.setToolTip(
+                f"Matchmove: {latest_project.name}\n{project_path}\nClick for asset options"
+            )
+        else:
+            self.btn_open_assets.setToolTip("Open assets and matchmove options")
+
+    def _refresh_matchmove_state(self):
+        latest_project = None
+        if self.shot_dir:
+            try:
+                latest_project = find_latest_matchmove_project(
+                    self._resolved_matchmove_dir(),
+                    self._shot_title(),
+                )
+            except Exception:
+                latest_project = None
+        self._set_matchmove_project_state(latest_project)
+        return latest_project
+
+    def _populate_assets_menu(self, menu: QMenu) -> bool:
         if not self.shot_dir:
             return False
+
+        menu.clear()
+        open_assets = menu.addAction("Open Assets in File Browser")
+        open_assets.triggered.connect(self._open_shot_assets)
+        menu.addSeparator()
 
         try:
             try:
                 _load_matchmove_helpers()
             except Exception as exc:
+                self._set_matchmove_project_state(None)
                 _show_matchmove_unavailable(self, exc)
+                unavailable = menu.addAction("Matchmove unavailable")
+                unavailable.setEnabled(False)
                 return True
 
             shot_name = self._shot_title()
             matchmove_dir = self._resolved_matchmove_dir()
             latest_project = find_latest_matchmove_project(matchmove_dir, shot_name)
+            self._set_matchmove_project_state(latest_project)
             shot_root = self._normalized_shot_dir()
 
-            menu = QMenu(self)
             if latest_project is not None:
                 action = menu.addAction(f"Open {latest_project.name}")
                 action.triggered.connect(
@@ -1564,10 +1605,9 @@ class ShotCard(QWidget):
                     else:
                         empty_action = menu.addAction("No renders/precomp folder found")
                     empty_action.setEnabled(False)
-
-            menu.exec(global_pos)
             return True
         except Exception as exc:
+            self._set_matchmove_project_state(None)
             traceback_text = traceback.format_exc(limit=10)
             QMessageBox.critical(
                 self,
@@ -1577,10 +1617,9 @@ class ShotCard(QWidget):
             )
             return True
 
-    def _on_assets_context_menu(self, pos) -> None:
+    def _on_assets_menu_about_to_show(self) -> None:
         try:
-            global_pos = self.btn_open_assets.mapToGlobal(pos)
-            self._show_assets_matchmove_menu(global_pos)
+            self._populate_assets_menu(self._assets_menu)
         except Exception as exc:
             traceback_text = traceback.format_exc(limit=10)
             QMessageBox.critical(
@@ -1589,6 +1628,14 @@ class ShotCard(QWidget):
                 "Opening the Assets matchmove menu failed.\n\n"
                 f"{exc}\n\n{traceback_text}",
             )
+
+    def _show_assets_matchmove_menu(self, global_pos) -> bool:
+        """Show the Assets menu at an explicit position for compatibility."""
+        menu = QMenu(self)
+        shown = self._populate_assets_menu(menu)
+        if shown:
+            menu.exec(global_pos)
+        return shown
 
     def _open_matchmove_project(self, project_path: str) -> None:
         try:
@@ -1684,6 +1731,8 @@ class ShotCard(QWidget):
                 self.data["matchmove_path"] = matchmove_dir
         else:
             self.data["matchmove_path"] = matchmove_dir
+
+        self._refresh_matchmove_state()
 
         message_lines = [
             f"Created {Path(project_path).name}",
@@ -2256,8 +2305,6 @@ class ShotCard(QWidget):
         if hasattr(self, "bnt_addTask") and self.bnt_addTask:
             self.bnt_addTask.setText("Add" if self._compact_mode else "Add task")
         if hasattr(self, "btn_open_assets") and self.btn_open_assets:
-            #self.btn_open_assets.setText("Ast" if self._compact_mode else "assets folder")
-            self.btn_open_assets.setToolTip("Open assets folder")
             self.btn_open_assets.setVisible(not self._compact_mode)
         if hasattr(self, "btn_open_precomp") and self.btn_open_precomp:
             #self.btn_open_precomp.setText("Pre" if self._compact_mode else "Precomp folder")
@@ -2327,6 +2374,7 @@ class ShotCard(QWidget):
                 self.label_original_clip.setToolTip("")
 
         self._apply_colour_code(data.get("colour_code"))
+        self._refresh_matchmove_state()
         self._set_hide_button_label()
         if not self.btn_latest_render.property("file_path"):
             render_hint = str(data.get("last_render") or "").strip()
@@ -3518,12 +3566,8 @@ class ShotCard(QWidget):
         """Handle right-click context menu events."""
         widget = self.childAt(event.pos())
         
-        # Check if right-click was on btn_open_nuke, btn_latest_render, or btn_open_assets
+        # Check if right-click was on btn_open_nuke or btn_latest_render
         if widget is None:
-            return
-            
-        # Assets button handles its own context menu directly.
-        if widget == self.btn_open_assets:
             return
 
         if widget == self.btn_open_nuke or widget == self.btn_latest_render:

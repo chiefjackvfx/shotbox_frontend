@@ -6,7 +6,7 @@ Now includes a 12px color indicator strip on the left side of the card
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import (
-    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QToolButton,
     QSizePolicy, QSpacerItem, QVBoxLayout
 )
 
@@ -289,9 +289,10 @@ def setup_shot_card_ui(widget):
     
     widget.horizontalLayout_3.addWidget(widget.btn_open_nuke)
     
-    widget.btn_open_assets = QPushButton(widget.shot_btns)
+    widget.btn_open_assets = QToolButton(widget.shot_btns)
     widget.btn_open_assets.setObjectName("btn_open_assets")
     widget.btn_open_assets.setText("Assets")
+    widget.btn_open_assets.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
     
     widget.horizontalLayout_3.addWidget(widget.btn_open_assets)
     
