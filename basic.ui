@@ -389,7 +389,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="btn_open_timeline_assets">
+              <widget class="QToolButton" name="btn_open_timeline_assets">
                <property name="text">
                 <string>Timeline Assets</string>
                </property>

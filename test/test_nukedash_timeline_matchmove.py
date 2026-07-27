@@ -16,7 +16,7 @@ if str(FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(FRONTEND_DIR))
 
 from PyQt6.QtCore import QPoint
-from PyQt6.QtWidgets import QApplication, QComboBox, QMainWindow, QPushButton, QTabWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QComboBox, QMainWindow, QTabWidget, QToolButton, QVBoxLayout, QWidget
 
 import matchmove_helpers
 import page_nukedash
@@ -104,6 +104,11 @@ class FakeMenu:
         self.separator_count += 1
         return None
 
+    def clear(self):
+        self.actions.clear()
+        self.submenus.clear()
+        self.separator_count = 0
+
     def exec(self, pos):
         self.exec_pos = pos
 
@@ -135,14 +140,20 @@ class TimelineMatchmoveHarness(QMainWindow):
     _first_shot_dir_for_job = page_nukedash.page_nukedash._first_shot_dir_for_job
     _infer_vfx_root_from_shot_dir = page_nukedash.page_nukedash._infer_vfx_root_from_shot_dir
     _job_uses_timeline_directories = page_nukedash.page_nukedash._job_uses_timeline_directories
+    _resolve_job_assets_dir = page_nukedash.page_nukedash._resolve_job_assets_dir
     _resolve_timeline_assets_dir = page_nukedash.page_nukedash._resolve_timeline_assets_dir
     _resolved_timeline_matchmove_dir = page_nukedash.page_nukedash._resolved_timeline_matchmove_dir
     _discover_timeline_matchmove_candidates = page_nukedash.page_nukedash._discover_timeline_matchmove_candidates
     _apply_timeline_payload = page_nukedash.page_nukedash._apply_timeline_payload
     _open_timeline_matchmove_project = page_nukedash.page_nukedash._open_timeline_matchmove_project
+    _set_timeline_matchmove_state = page_nukedash.page_nukedash._set_timeline_matchmove_state
+    _refresh_timeline_matchmove_state = page_nukedash.page_nukedash._refresh_timeline_matchmove_state
+    _populate_timeline_assets_menu = page_nukedash.page_nukedash._populate_timeline_assets_menu
+    _on_timeline_assets_menu_about_to_show = page_nukedash.page_nukedash._on_timeline_assets_menu_about_to_show
     _show_timeline_assets_matchmove_menu = page_nukedash.page_nukedash._show_timeline_assets_matchmove_menu
-    _on_timeline_assets_context_menu = page_nukedash.page_nukedash._on_timeline_assets_context_menu
     _create_timeline_matchmove_project = page_nukedash.page_nukedash._create_timeline_matchmove_project
+    _set_assets_button_state = page_nukedash.page_nukedash._set_assets_button_state
+    _update_assets_action_buttons = page_nukedash.page_nukedash._update_assets_action_buttons
     _open_assets_directory = page_nukedash.page_nukedash._open_assets_directory
     _on_open_timeline_assets_clicked = page_nukedash.page_nukedash._on_open_timeline_assets_clicked
 
@@ -153,7 +164,8 @@ class TimelineMatchmoveHarness(QMainWindow):
         self.setCentralWidget(central)
 
         self.comboBox_jobs = QComboBox(central)
-        self.btn_open_timeline_assets = QPushButton("Timeline Assets", central)
+        self.btn_open_timeline_assets = QToolButton(central)
+        self.btn_open_timeline_assets.setText("Timeline Assets")
         self.timelines_tabs = QTabWidget(central)
 
         layout.addWidget(self.comboBox_jobs)
@@ -164,6 +176,15 @@ class TimelineMatchmoveHarness(QMainWindow):
         self._jobs_by_id = {job_data["id"]: job_data}
         self._active_job_id = job_data["id"]
         self._worker = SimpleNamespace(api=FakeApi())
+
+        self._timeline_assets_menu = page_nukedash.QMenu(self)
+        self._timeline_assets_menu.aboutToShow.connect(
+            self._on_timeline_assets_menu_about_to_show
+        )
+        self.btn_open_timeline_assets.setMenu(self._timeline_assets_menu)
+        self.btn_open_timeline_assets.setPopupMode(
+            QToolButton.ToolButtonPopupMode.InstantPopup
+        )
 
         self.comboBox_jobs.addItem(job_data.get("title", "Job"), job_data["id"])
         for timeline in job_data.get("timelines", []) or []:
@@ -272,6 +293,78 @@ class TimelineMatchmoveTests(unittest.TestCase):
             )
             self.assertTrue((shot_root.parent / "Timeline_Assets").is_dir())
 
+    def test_timeline_assets_control_is_an_instant_popup_tool_button(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "PROJECT" / "VFX" / "Edit_A" / "sho001"
+            shot_root.mkdir(parents=True)
+            harness = TimelineMatchmoveHarness(self._make_job_data([shot_root]))
+
+            self.assertIsInstance(harness.btn_open_timeline_assets, QToolButton)
+            self.assertEqual(
+                harness.btn_open_timeline_assets.popupMode(),
+                QToolButton.ToolButtonPopupMode.InstantPopup,
+            )
+
+    def test_timeline_assets_menu_first_action_opens_assets_directory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "PROJECT" / "VFX" / "Edit_A" / "sho001"
+            shot_root.mkdir(parents=True)
+            harness = TimelineMatchmoveHarness(self._make_job_data([shot_root]))
+            menu = FakeMenu()
+
+            with mock.patch.object(widgets, "list_matchmove_projects", return_value=[]), \
+                mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[]):
+                harness._populate_timeline_assets_menu(menu)
+
+            self.assertEqual(menu.actions[0].text, "Open Timeline Assets in File Browser")
+            self.assertEqual(menu.separator_count, 1)
+            menu.actions[0].triggered.fire()
+            self.assertEqual(
+                harness.filesIO.opened_paths[-1],
+                shot_root.parent / "Timeline_Assets",
+            )
+
+    def test_timeline_matchmove_indicator_tracks_configured_project_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "PROJECT" / "VFX" / "Edit_A" / "sho001"
+            configured_dir = Path(tmpdir) / "shared" / "timeline_matchmove"
+            work_dir = configured_dir / "work"
+            shot_root.mkdir(parents=True)
+            work_dir.mkdir(parents=True)
+            job_data = self._make_job_data([shot_root])
+            job_data["timelines"][0]["matchmove_path"] = str(configured_dir)
+            harness = TimelineMatchmoveHarness(job_data)
+            harness._update_assets_action_buttons()
+
+            self.assertEqual(harness.btn_open_timeline_assets.text(), "Timeline Assets")
+            self.assertEqual(
+                harness.btn_open_timeline_assets.property("has_matchmove"),
+                "false",
+            )
+
+            outside_project = configured_dir / "Edit_A_matchmove_v001.3de"
+            outside_project.write_text("")
+            harness._refresh_timeline_matchmove_state()
+            self.assertEqual(harness.btn_open_timeline_assets.text(), "Timeline Assets")
+
+            project = work_dir / "Edit_A_matchmove_v002.3de"
+            project.write_text("")
+            harness._refresh_timeline_matchmove_state()
+            self.assertEqual(
+                harness.btn_open_timeline_assets.text(),
+                "Timeline Assets · 3DE",
+            )
+            self.assertEqual(
+                harness.btn_open_timeline_assets.property("has_matchmove"),
+                "true",
+            )
+            self.assertIn("1 timeline matchmove project", harness.btn_open_timeline_assets.toolTip())
+            self.assertIn(str(configured_dir), harness.btn_open_timeline_assets.toolTip())
+
+            project.unlink()
+            harness._refresh_timeline_matchmove_state()
+            self.assertEqual(harness.btn_open_timeline_assets.text(), "Timeline Assets")
+
     def test_timeline_assets_menu_lists_existing_projects_under_matchmove_submenu(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "PROJECT" / "VFX" / "Edit_A" / "sho001"
@@ -283,8 +376,7 @@ class TimelineMatchmoveTests(unittest.TestCase):
             (work_dir / "Edit_A_matchmove_v003.3de").write_text("")
 
             FakeMenu.instances = []
-            with mock.patch.object(page_nukedash, "QMenu", FakeMenu), \
-                mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[]):
+            with mock.patch.object(page_nukedash, "QMenu", FakeMenu):
                 shown = harness._show_timeline_assets_matchmove_menu(QPoint(10, 20))
 
             self.assertTrue(shown)
@@ -297,30 +389,31 @@ class TimelineMatchmoveTests(unittest.TestCase):
                     "Open Edit_A_matchmove_v001.3de",
                 ],
             )
-            self.assertEqual(submenu.actions[-1].text, "No valid EXR precomp folders found")
-            self.assertFalse(submenu.actions[-1].enabled)
+            self.assertEqual(submenu.actions[-1].text, "Create New 3DE Project")
+            self.assertTrue(submenu.actions[-1].enabled)
 
-    def test_timeline_assets_menu_includes_create_action_when_candidates_exist(self):
+    def test_timeline_assets_menu_defers_candidate_discovery_until_create(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "PROJECT" / "VFX" / "Edit_A" / "sho001"
             shot_root.mkdir(parents=True)
             harness = TimelineMatchmoveHarness(self._make_job_data([shot_root]))
-            sequence_info = self._make_sequence_info(shot_root / "renders" / "precomp" / "plateA")
 
             FakeMenu.instances = []
             with mock.patch.object(page_nukedash, "QMenu", FakeMenu), \
                 mock.patch.object(widgets, "list_matchmove_projects", return_value=[]), \
-                mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[sequence_info]), \
+                mock.patch.object(harness, "_discover_timeline_matchmove_candidates") as discover, \
                 mock.patch.object(harness, "_create_timeline_matchmove_project") as create_project:
                 shown = harness._show_timeline_assets_matchmove_menu(QPoint(3, 4))
                 submenu = FakeMenu.instances[0].submenus[0][1]
                 self.assertEqual(submenu.actions[0].text, "Create New 3DE Project")
+                discover.assert_not_called()
                 submenu.actions[0].triggered.fire()
 
             self.assertTrue(shown)
-            create_project.assert_called_once()
+            create_project.assert_called_once_with()
 
     def test_discover_timeline_matchmove_candidates_scans_all_shots_and_excludes_previews(self):
+        print("____________test discover")
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root_a = Path(tmpdir) / "PROJECT" / "VFX" / "Edit_A" / "sho001"
             shot_root_b = Path(tmpdir) / "PROJECT" / "VFX" / "Edit_A" / "sho002"
@@ -352,8 +445,12 @@ class TimelineMatchmoveTests(unittest.TestCase):
             )
             fake_headless_result = SimpleNamespace(runtime_script_path="/tmp/runtime.py", status_path="/tmp/status.json")
 
+            def create_project_file(request, _log_callback):
+                Path(request.project_path).touch()
+                return fake_headless_result
+
             with mock.patch.object(page_nukedash, "TimelineMatchmoveDialog", AcceptedTimelineDialog), \
-                mock.patch.object(widgets, "run_headless_3de", return_value=fake_headless_result) as run_headless, \
+                mock.patch.object(widgets, "run_headless_3de", side_effect=create_project_file) as run_headless, \
                 mock.patch.object(widgets, "cleanup_headless_artifacts") as cleanup, \
                 mock.patch.object(widgets, "open_3de_project", return_value=["run_3DE4", "-open", "dummy"]) as open_project, \
                 mock.patch.object(page_nukedash.QMessageBox, "information") as information:
@@ -373,6 +470,10 @@ class TimelineMatchmoveTests(unittest.TestCase):
             open_project.assert_called_once()
             cleanup.assert_called_once_with(fake_headless_result)
             information.assert_called_once()
+            self.assertEqual(
+                harness.btn_open_timeline_assets.text(),
+                "Timeline Assets · 3DE",
+            )
 
     def test_create_timeline_matchmove_project_reports_patch_warning_after_success(self):
         with tempfile.TemporaryDirectory() as tmpdir:

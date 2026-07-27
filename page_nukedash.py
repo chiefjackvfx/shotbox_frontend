@@ -27,6 +27,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QMessageBox,
     QFileDialog,
+    QToolButton,
 )
 
 import widgets
@@ -304,10 +305,16 @@ class page_nukedash(QMainWindow):
         self._shot_card_api = http_help.DjangoAPI()
 
         if hasattr(self, "btn_open_timeline_assets") and self.btn_open_timeline_assets:
-            self.btn_open_timeline_assets.clicked.connect(self._on_open_timeline_assets_clicked)
-            self.btn_open_timeline_assets.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-            self.btn_open_timeline_assets.customContextMenuRequested.connect(
-                self._on_timeline_assets_context_menu
+            self._timeline_assets_menu = QMenu(self)
+            self._timeline_assets_menu.aboutToShow.connect(
+                self._on_timeline_assets_menu_about_to_show
+            )
+            self.btn_open_timeline_assets.setMenu(self._timeline_assets_menu)
+            self.btn_open_timeline_assets.setPopupMode(
+                QToolButton.ToolButtonPopupMode.InstantPopup
+            )
+            self.btn_open_timeline_assets.setToolButtonStyle(
+                Qt.ToolButtonStyle.ToolButtonTextOnly
             )
         if hasattr(self, "btn_open_job_assets") and self.btn_open_job_assets:
             self.btn_open_job_assets.clicked.connect(self._on_open_job_assets_clicked)
@@ -569,6 +576,13 @@ class page_nukedash(QMainWindow):
                         return
 
     def _poll_visible_shot_card_file_state_batch(self) -> None:
+        timeline_matchmove_refresher = getattr(
+            self,
+            "_refresh_timeline_matchmove_state",
+            None,
+        )
+        if callable(timeline_matchmove_refresher):
+            timeline_matchmove_refresher()
         self._reset_shot_file_poll_targets()
         targets = getattr(self, "_shot_file_poll_targets", [])
         if not targets:
@@ -1307,16 +1321,69 @@ class page_nukedash(QMainWindow):
                 f"Could not open the 3DE project.\n\n{project_path}\n\n{exc}",
             )
 
-    def _show_timeline_assets_matchmove_menu(self, global_pos) -> bool:
+    def _set_timeline_matchmove_state(
+        self,
+        existing_projects,
+        matchmove_dir: Path | None,
+    ) -> None:
+        button = getattr(self, "btn_open_timeline_assets", None)
+        if button is None:
+            return
+
+        projects = list(existing_projects or [])
+        has_matchmove = bool(projects)
+        widgets._set_dynamic_property(
+            button,
+            "has_matchmove",
+            "true" if has_matchmove else "false",
+        )
+        button.setText("Timeline Assets · 3DE" if has_matchmove else "Timeline Assets")
+
+        if has_matchmove:
+            project_label = "project" if len(projects) == 1 else "projects"
+            button.setToolTip(
+                f"{len(projects)} timeline matchmove {project_label}\n"
+                f"{matchmove_dir}\nClick for asset options"
+            )
+        elif button.isEnabled():
+            folder_path = str(button.property("folder_path") or "").strip()
+            tooltip = "Open timeline assets and matchmove options"
+            if folder_path:
+                tooltip = f"{tooltip}\n{folder_path}"
+            button.setToolTip(tooltip)
+
+    def _refresh_timeline_matchmove_state(self):
+        button = getattr(self, "btn_open_timeline_assets", None)
+        existing_projects = []
+        matchmove_dir = None
+        if button is not None and button.isEnabled():
+            try:
+                matchmove_dir = self._resolved_timeline_matchmove_dir()
+                if matchmove_dir is not None:
+                    existing_projects = widgets.list_matchmove_projects(str(matchmove_dir))
+            except Exception:
+                existing_projects = []
+        self._set_timeline_matchmove_state(existing_projects, matchmove_dir)
+        return existing_projects
+
+    def _populate_timeline_assets_menu(self, menu: QMenu) -> bool:
         timeline_data = self._active_timeline_data()
         if not isinstance(timeline_data, dict):
             return False
+
+        menu.clear()
+        open_assets = menu.addAction("Open Timeline Assets in File Browser")
+        open_assets.triggered.connect(self._on_open_timeline_assets_clicked)
+        menu.addSeparator()
 
         try:
             try:
                 widgets._load_matchmove_helpers()
             except Exception as exc:
+                self._set_timeline_matchmove_state([], None)
                 widgets._show_matchmove_unavailable(self, exc)
+                unavailable = menu.addAction("Matchmove unavailable")
+                unavailable.setEnabled(False)
                 return True
 
             matchmove_dir = self._resolved_timeline_matchmove_dir()
@@ -1324,9 +1391,8 @@ class page_nukedash(QMainWindow):
                 return False
 
             existing_projects = widgets.list_matchmove_projects(str(matchmove_dir))
-            candidates = self._discover_timeline_matchmove_candidates(timeline_data)
+            self._set_timeline_matchmove_state(existing_projects, matchmove_dir)
 
-            menu = QMenu(self)
             matchmove_menu = menu.addMenu("Matchmove")
             for project_path in existing_projects:
                 action = matchmove_menu.addAction(f"Open {project_path.name}")
@@ -1337,18 +1403,14 @@ class page_nukedash(QMainWindow):
             if existing_projects:
                 matchmove_menu.addSeparator()
 
-            if candidates:
-                create_action = matchmove_menu.addAction("Create New 3DE Project")
-                create_action.triggered.connect(
-                    lambda checked=False, items=list(candidates): self._create_timeline_matchmove_project(items)
-                )
-            else:
-                empty_action = matchmove_menu.addAction("No valid EXR precomp folders found")
-                empty_action.setEnabled(False)
+            create_action = matchmove_menu.addAction("Create New 3DE Project")
+            create_action.triggered.connect(
+                lambda checked=False: self._create_timeline_matchmove_project()
+            )
 
-            menu.exec(global_pos)
             return True
         except Exception as exc:
+            self._set_timeline_matchmove_state([], None)
             QMessageBox.critical(
                 self,
                 "Timeline Assets Menu Error",
@@ -1356,16 +1418,23 @@ class page_nukedash(QMainWindow):
             )
             return True
 
-    def _on_timeline_assets_context_menu(self, pos) -> None:
+    def _on_timeline_assets_menu_about_to_show(self) -> None:
         try:
-            global_pos = self.btn_open_timeline_assets.mapToGlobal(pos)
-            self._show_timeline_assets_matchmove_menu(global_pos)
+            self._populate_timeline_assets_menu(self._timeline_assets_menu)
         except Exception as exc:
             QMessageBox.critical(
                 self,
                 "Timeline Assets Menu Error",
                 f"Opening the Timeline Assets matchmove menu failed.\n\n{exc}",
             )
+
+    def _show_timeline_assets_matchmove_menu(self, global_pos) -> bool:
+        """Show the Timeline Assets menu at an explicit position for compatibility."""
+        menu = QMenu(self)
+        shown = self._populate_timeline_assets_menu(menu)
+        if shown:
+            menu.exec(global_pos)
+        return shown
 
     def _create_timeline_matchmove_project(
         self,
@@ -1511,6 +1580,7 @@ class page_nukedash(QMainWindow):
             self._set_assets_button_state(
                 "btn_open_job_assets", "Job Assets", None, loading=True
             )
+            self._set_timeline_matchmove_state([], None)
             return
 
         self._set_assets_button_state(
@@ -1523,6 +1593,7 @@ class page_nukedash(QMainWindow):
             "Job Assets",
             self._resolve_job_assets_dir(),
         )
+        self._refresh_timeline_matchmove_state()
 
     def _open_assets_directory(self, folder_path: Path | None, folder_label: str) -> None:
         if folder_path is None:

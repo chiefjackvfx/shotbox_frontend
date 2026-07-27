@@ -83,6 +83,51 @@ QPushButton:disabled {
     color: #6B7280;
 }
 
+QToolButton#btn_open_timeline_assets {
+    background-color: #2F3542;
+    color: #D4D4D4;
+    border: 2px solid #404754;
+    border-radius: 2px;
+    padding: 6px 24px 6px 12px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+QToolButton#btn_open_timeline_assets:hover {
+    background-color: #FF6B35;
+    border-color: #FF6B35;
+    color: #FFFFFF;
+}
+
+QToolButton#btn_open_timeline_assets:pressed {
+    background-color: #D85A28;
+    border-color: #D85A28;
+}
+
+QToolButton#btn_open_timeline_assets:disabled {
+    background-color: #252931;
+    border-color: #2F3542;
+    color: #6B7280;
+}
+
+QToolButton#btn_open_timeline_assets[has_matchmove="true"] {
+    background-color: #2F4237;
+    border-color: #678542;
+    color: #DDF1CB;
+}
+
+QToolButton#btn_open_timeline_assets[has_matchmove="true"]:hover,
+QToolButton#btn_open_timeline_assets[has_matchmove="true"]:pressed {
+    background-color: #3A5243;
+    border-color: #8FB267;
+}
+
+QToolButton#btn_open_timeline_assets::menu-indicator {
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    right: 6px;
+}
+
 /* Flat Buttons */
 QPushButton[flat="true"] {
     background-color: transparent;

@@ -13,7 +13,7 @@ PYQT_FRONTEND_DIR = Path(__file__).resolve().parents[1]
 if str(PYQT_FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(PYQT_FRONTEND_DIR))
 
-from PyQt6.QtWidgets import QApplication, QComboBox, QMainWindow, QPushButton, QTabWidget, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QComboBox, QMainWindow, QPushButton, QTabWidget, QToolButton, QVBoxLayout, QWidget
 
 import page_nukedash
 
@@ -45,6 +45,9 @@ class AssetsHarness(QMainWindow):
     _job_uses_timeline_directories = page_nukedash.page_nukedash._job_uses_timeline_directories
     _resolve_job_assets_dir = page_nukedash.page_nukedash._resolve_job_assets_dir
     _resolve_timeline_assets_dir = page_nukedash.page_nukedash._resolve_timeline_assets_dir
+    _resolved_timeline_matchmove_dir = page_nukedash.page_nukedash._resolved_timeline_matchmove_dir
+    _set_timeline_matchmove_state = page_nukedash.page_nukedash._set_timeline_matchmove_state
+    _refresh_timeline_matchmove_state = page_nukedash.page_nukedash._refresh_timeline_matchmove_state
     _set_assets_button_state = page_nukedash.page_nukedash._set_assets_button_state
     _update_assets_action_buttons = page_nukedash.page_nukedash._update_assets_action_buttons
     _open_assets_directory = page_nukedash.page_nukedash._open_assets_directory
@@ -59,7 +62,8 @@ class AssetsHarness(QMainWindow):
         self.setCentralWidget(central)
 
         self.comboBox_jobs = QComboBox(central)
-        self.btn_open_timeline_assets = QPushButton("Timeline Assets", central)
+        self.btn_open_timeline_assets = QToolButton(central)
+        self.btn_open_timeline_assets.setText("Timeline Assets")
         self.btn_open_job_assets = QPushButton("Job Assets", central)
         self.timelines_tabs = QTabWidget(central)
 
@@ -94,10 +98,22 @@ class NukeDashAssetActionsTests(unittest.TestCase):
     def test_basic_ui_includes_asset_buttons_row(self):
         tree = ET.parse(PYQT_FRONTEND_DIR / "basic.ui")
         widget_names = {element.get("name") for element in tree.iter() if element.get("name")}
+        timeline_button = next(
+            element
+            for element in tree.iter("widget")
+            if element.get("name") == "btn_open_timeline_assets"
+        )
+        job_button = next(
+            element
+            for element in tree.iter("widget")
+            if element.get("name") == "btn_open_job_assets"
+        )
 
         self.assertIn("assets_actions_row", widget_names)
         self.assertIn("btn_open_timeline_assets", widget_names)
         self.assertIn("btn_open_job_assets", widget_names)
+        self.assertEqual(timeline_button.get("class"), "QToolButton")
+        self.assertEqual(job_button.get("class"), "QPushButton")
 
     def test_resolves_job_and_timeline_assets_from_active_timeline_shot(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -177,6 +193,51 @@ class NukeDashAssetActionsTests(unittest.TestCase):
             self.assertEqual(
                 harness.btn_open_job_assets.property("folder_path"),
                 str(base_root / "Job_Assets"),
+            )
+
+    def test_timeline_matchmove_state_updates_when_switching_timelines(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base_root = Path(temp_dir) / "PROJECT" / "VFX"
+            edit_a_shot = base_root / "Edit_A" / "SHOT010"
+            edit_b_shot = base_root / "Edit_B" / "SHOT020"
+            edit_a_shot.mkdir(parents=True)
+            edit_b_shot.mkdir(parents=True)
+            work_dir = base_root / "Edit_A" / "Timeline_Assets" / "matchmove" / "work"
+            work_dir.mkdir(parents=True)
+            (work_dir / "Edit_A_matchmove_v001.3de").write_text("")
+            job_data = {
+                "id": 1,
+                "title": "PROJECT",
+                "timelines": [
+                    {
+                        "id": 10,
+                        "title": "Edit_A",
+                        "shots": [{"id": 100, "base_path": str(edit_a_shot)}],
+                    },
+                    {
+                        "id": 11,
+                        "title": "Edit_B",
+                        "shots": [{"id": 101, "base_path": str(edit_b_shot)}],
+                    },
+                ],
+            }
+            harness = AssetsHarness(job_data, current_timeline_index=0)
+
+            harness._update_assets_action_buttons()
+            self.assertEqual(
+                harness.btn_open_timeline_assets.text(),
+                "Timeline Assets · 3DE",
+            )
+
+            harness.timelines_tabs.setCurrentIndex(1)
+            harness._update_assets_action_buttons()
+            self.assertEqual(harness.btn_open_timeline_assets.text(), "Timeline Assets")
+
+            harness._update_assets_action_buttons(loading=True)
+            self.assertFalse(harness.btn_open_timeline_assets.isEnabled())
+            self.assertEqual(
+                harness.btn_open_timeline_assets.property("has_matchmove"),
+                "false",
             )
 
     def test_open_handlers_create_and_open_asset_directories(self):
