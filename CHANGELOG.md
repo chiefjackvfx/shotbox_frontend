@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 3.2.0 - 2026-07-27
+
+### Changed
+
+- changed the way you star a 3de project and make it more clear to see when a shot or job has a 3de project
+
 ## 3.1.0 - 2026-07-13
 
 ### Added
