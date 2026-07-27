@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 3.3.0 - 2026-07-27
+
+### Added
+
+- server path remapping, thanks adobe
+
 ## 3.2.0 - 2026-07-27
 
 ### Changed
