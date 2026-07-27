@@ -84,6 +84,21 @@ SINGLE_SHOT_VIDEO_EXTENSIONS = {
     ".mov", ".mp4", ".mxf", ".avi", ".mkv", ".r3d", ".braw", ".arx"
 }
 SINGLE_SHOT_VIDEO_FILTER = "Video Files (*.mov *.mp4 *.mxf *.avi *.mkv *.r3d *.braw *.arx);;All Files (*)"
+PROJECTS_UNC_PREFIX = "//192.168.10.20/projects/PROJECTS/"
+PROJECTS_DRIVE_PREFIX = "Z:/PROJECTS/"
+
+
+def remap_projects_unc_path(path: str) -> str:
+    """Return the canonical drive path for the projects UNC share."""
+    if not path:
+        return path
+
+    normalized_path = path.replace("\\", "/")
+    if normalized_path.casefold().startswith(PROJECTS_UNC_PREFIX.casefold()):
+        suffix = normalized_path[len(PROJECTS_UNC_PREFIX):]
+        return PROJECTS_DRIVE_PREFIX + suffix
+
+    return path
 
 
 # =============================================================================
@@ -384,8 +399,12 @@ class XMLTimelineParser:
     def _normalize_filepath(self, pathurl: str) -> str:
         """Normalize file path from XML URL format."""
         filepath = urllib.parse.unquote(pathurl)
-        
-        if filepath.startswith("file://localhost"):
+
+        projects_file_url_prefix = f"file:{PROJECTS_UNC_PREFIX}"
+        if filepath.casefold().startswith(projects_file_url_prefix.casefold()):
+            # Remove only the URL scheme so the leading UNC double slash remains.
+            filepath = filepath[5:]
+        elif filepath.startswith("file://localhost"):
             filepath = filepath[17:]
         elif filepath.startswith("file:///Volumes/projects/PROJECTS"):
             filepath = "Z:/PROJECTS" + filepath.split("file:///Volumes/projects/PROJECTS")[1]
@@ -395,8 +414,9 @@ class XMLTimelineParser:
         # Handle Linux path conversion
         if platform.system() == "Linux" and filepath.startswith("Z:/PROJECTS"):
             filepath = "/Volumes/projects/PROJECTS" + filepath.split("Z:/PROJECTS")[1]
-        
-        return filepath
+
+        # Keep this rule last so this UNC source remains canonical on every OS.
+        return remap_projects_unc_path(filepath)
     
     def _link_clips_to_shots(self, handles: int) -> List[ParsedShot]:
         """Link clips from V2-V5 to V1 clips based on matching start frames."""
@@ -2312,12 +2332,14 @@ class SingleShotCreationDialog(QDialog):
             self.selected_output_directory_path = selected_directory
 
     def _validate_and_accept(self) -> None:
-        output_directory_path = self.output_directory_path_line_edit.text().strip()
+        output_directory_path = remap_projects_unc_path(
+            self.output_directory_path_line_edit.text().strip()
+        )
         shot_name = self.shot_name_line_edit.text().strip()
         ordered_clip_paths: List[str] = []
 
         for slot in self.clip_slots:
-            clip_path = slot.path_line_edit.text().strip()
+            clip_path = remap_projects_unc_path(slot.path_line_edit.text().strip())
             if not clip_path:
                 continue
             if not self._supported_video_file(clip_path):

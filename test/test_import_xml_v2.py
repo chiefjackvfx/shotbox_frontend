@@ -230,6 +230,41 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
         self.assertEqual(shot.clips[1].duration, 8)
         self.assertEqual(shot.clips[2].duration, 15)
 
+    def test_projects_unc_path_remapping(self):
+        self.assertEqual(
+            module.remap_projects_unc_path(
+                "//192.168.10.20/projects/PROJECTS/Job/plates/primary.mov"
+            ),
+            "Z:/PROJECTS/Job/plates/primary.mov",
+        )
+        self.assertEqual(
+            module.remap_projects_unc_path(
+                r"\\192.168.10.20\projects\PROJECTS\Job\plates\primary.mov"
+            ),
+            "Z:/PROJECTS/Job/plates/primary.mov",
+        )
+        self.assertEqual(
+            module.remap_projects_unc_path(
+                "//192.168.10.20/Projects/projects/Job/plates/primary.mov"
+            ),
+            "Z:/PROJECTS/Job/plates/primary.mov",
+        )
+        unrelated_path = "//192.168.10.21/projects/PROJECTS/Job/primary.mov"
+        self.assertEqual(module.remap_projects_unc_path(unrelated_path), unrelated_path)
+
+    def test_xml_parser_remaps_projects_unc_file_url_on_linux(self):
+        parser = module.XMLTimelineParser()
+
+        with mock.patch.object(module.platform, "system", return_value="Linux"):
+            filepath = parser._normalize_filepath(
+                "file://192.168.10.20/projects/PROJECTS/Job/plates/primary%20plate.mov"
+            )
+
+        self.assertEqual(
+            filepath,
+            "Z:/PROJECTS/Job/plates/primary plate.mov",
+        )
+
     def test_xml_parser_keeps_xml_duration_as_cut_length(self):
         parser = module.XMLTimelineParser()
         clip_elem = ET.fromstring(
@@ -412,6 +447,39 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
                 dialog.close()
                 dialog.deleteLater()
                 self.app.processEvents()
+
+    def test_single_shot_dialog_remaps_clip_and_output_paths_before_accepting(self):
+        dialog = module.SingleShotCreationDialog(add_to_db=False)
+        unc_clip_path = "//192.168.10.20/projects/PROJECTS/Job/plates/primary.mov"
+        unc_output_path = "//192.168.10.20/projects/PROJECTS/Job/VFX/timeline_A"
+        mapped_clip_path = "Z:/PROJECTS/Job/plates/primary.mov"
+        mapped_output_path = "Z:/PROJECTS/Job/VFX/timeline_A"
+
+        try:
+            dialog.clip_slots[0].path_line_edit.setText(unc_clip_path)
+            dialog.output_directory_path_line_edit.setText(unc_output_path)
+            dialog.shot_name_line_edit.setText("sho010")
+
+            with (
+                mock.patch.object(
+                    module.os.path,
+                    "isfile",
+                    side_effect=lambda path: path == mapped_clip_path,
+                ),
+                mock.patch.object(
+                    module.os.path,
+                    "isdir",
+                    side_effect=lambda path: path == mapped_output_path,
+                ),
+            ):
+                dialog._validate_and_accept()
+
+            self.assertEqual(dialog.selected_clip_file_paths, [mapped_clip_path])
+            self.assertEqual(dialog.selected_output_directory_path, mapped_output_path)
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+            self.app.processEvents()
 
     def test_xml_import_page_skip_activity_checkbox_tracks_add_to_db(self):
         page = module.XMLImportPage()
