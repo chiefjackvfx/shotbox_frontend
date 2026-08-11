@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 3.3.1 - 2026-08-11
+
+### Added
+
+- path mapping for projects B
+
 ## 3.3.0 - 2026-07-27
 
 ### Added
