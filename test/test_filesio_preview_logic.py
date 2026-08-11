@@ -5,6 +5,7 @@ import sys
 import tempfile
 from pathlib import Path
 import unittest
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -16,6 +17,17 @@ import filesIO
 
 
 class FilesIOPreviewLogicTests(unittest.TestCase):
+    def test_convert_path_delegates_to_shared_mapper(self):
+        with mock.patch.object(
+            filesIO.path_mapping,
+            "convert_path",
+            return_value="/mapped/path",
+        ) as convert_path:
+            result = filesIO.Folders().convert_path("X:/Projects B/Job")
+
+        self.assertEqual(result, "/mapped/path")
+        convert_path.assert_called_once_with("X:/Projects B/Job")
+
     def test_dvr_bin_name_uses_provided_shot_name(self):
         bin_name = filesIO.Folders()._resolve_dvr_bin_name(
             "/show/renders/comp/old001_v001.mov",

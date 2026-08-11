@@ -15,7 +15,6 @@ import sys
 import re
 import datetime
 import shutil
-import platform
 import subprocess
 import getpass
 import urllib.parse
@@ -36,6 +35,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QColor, QPixmap
 
 import create_nk
+import path_mapping
 
 # Optional imports
 try:
@@ -406,17 +406,16 @@ class XMLTimelineParser:
             filepath = filepath[5:]
         elif filepath.startswith("file://localhost"):
             filepath = filepath[17:]
-        elif filepath.startswith("file:///Volumes/projects/PROJECTS"):
-            filepath = "Z:/PROJECTS" + filepath.split("file:///Volumes/projects/PROJECTS")[1]
         elif filepath.startswith("file://"):
             filepath = filepath[7:]
-        
-        # Handle Linux path conversion
-        if platform.system() == "Linux" and filepath.startswith("Z:/PROJECTS"):
-            filepath = "/Volumes/projects/PROJECTS" + filepath.split("Z:/PROJECTS")[1]
 
-        # Keep this rule last so this UNC source remains canonical on every OS.
-        return remap_projects_unc_path(filepath)
+        # Standard Windows file URLs use file:///X:/..., leaving one URL-only
+        # leading slash after the scheme is removed.
+        if re.match(r"^/[A-Za-z]:/", filepath):
+            filepath = filepath[1:]
+
+        canonical_path = remap_projects_unc_path(filepath)
+        return path_mapping.convert_path(canonical_path)
     
     def _link_clips_to_shots(self, handles: int) -> List[ParsedShot]:
         """Link clips from V2-V5 to V1 clips based on matching start frames."""
@@ -2332,14 +2331,16 @@ class SingleShotCreationDialog(QDialog):
             self.selected_output_directory_path = selected_directory
 
     def _validate_and_accept(self) -> None:
-        output_directory_path = remap_projects_unc_path(
-            self.output_directory_path_line_edit.text().strip()
+        output_directory_path = path_mapping.convert_path(
+            remap_projects_unc_path(self.output_directory_path_line_edit.text().strip())
         )
         shot_name = self.shot_name_line_edit.text().strip()
         ordered_clip_paths: List[str] = []
 
         for slot in self.clip_slots:
-            clip_path = remap_projects_unc_path(slot.path_line_edit.text().strip())
+            clip_path = path_mapping.convert_path(
+                remap_projects_unc_path(slot.path_line_edit.text().strip())
+            )
             if not clip_path:
                 continue
             if not self._supported_video_file(clip_path):

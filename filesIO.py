@@ -4,6 +4,7 @@ import re
 import platform  # System and platform identification
 import os
 import subprocess
+import path_mapping
 try:
     import DaVinciResolveScript as dvr_script  # DaVinci Resolve scripting API
 except:pass
@@ -419,46 +420,7 @@ class Folders:
 
     def convert_path(self, file_path: str) -> str:
         """Convert between Linux/macOS and Windows project paths."""
-        system = platform.system()
-        file_path = str(file_path) if file_path is not None else ""
-        if not file_path:
-            return file_path
-
-        def _normalize_slashes(path: str) -> str:
-            return path.replace("\\", "/")
-
-        def _pick_existing_root(candidates: list[str]) -> str:
-            for candidate in candidates:
-                try:
-                    if os.path.exists(candidate):
-                        return candidate
-                except Exception:
-                    continue
-            return candidates[0] if candidates else ""
-
-        normalized = _normalize_slashes(file_path)
-
-        linux_roots = ["/mnt/projects/PROJECTS", "/Volumes/projects/PROJECTS"]
-        windows_roots = ["Z:/PROJECTS"]
-
-        if system == "Windows":
-            for root in linux_roots:
-                if normalized.startswith(root):
-                    win_root = _pick_existing_root(windows_roots)
-                    suffix = normalized[len(root):]
-                    return os.path.normpath(win_root + suffix)
-            return file_path
-
-        if system in ("Linux", "Darwin"):
-            posix_roots = ["/Volumes/projects/PROJECTS"] if system == "Darwin" else linux_roots
-            for root in windows_roots:
-                if normalized.lower().startswith(root.lower()):
-                    posix_root = _pick_existing_root(posix_roots)
-                    suffix = normalized[len(root):]
-                    return os.path.normpath(posix_root + suffix)
-            return file_path
-
-        return file_path
+        return path_mapping.convert_path(file_path)
     def openFileLocation(self, file):
         file = self.convert_path(file)
         if os.path.isfile(file):
