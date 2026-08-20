@@ -711,6 +711,10 @@ class _PreviewTemplateEditor:
 
 def map_input_colorspace(colourspace: str) -> str:
     """Map user-facing colorspace to an OCIO colorspace name."""
+    requested_colourspace = str(colourspace or "").strip()
+    if not requested_colourspace:
+        return 'Utility - sRGB - Texture'
+
     colorspace_map = {
         'sRGB': 'Utility - sRGB - Texture',
         'Rec.709': 'Utility - Rec.709 - Camera',
@@ -726,7 +730,7 @@ def map_input_colorspace(colourspace: str) -> str:
         'Sony S-Log3': 'Input - Sony - S-Log3 - S-Gamut3.Cine',
         'S-Log3': 'Input - Sony - S-Log3 - S-Gamut3.Cine',
     }
-    return colorspace_map.get(colourspace, 'Utility - sRGB - Texture')
+    return colorspace_map.get(requested_colourspace, requested_colourspace)
 
 
 def build_precomp_exr_output_path(

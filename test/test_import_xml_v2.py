@@ -477,6 +477,46 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
                 dialog.deleteLater()
                 self.app.processEvents()
 
+    def test_all_dropdown_input_transforms_are_preserved_for_nuke(self):
+        for colourspace in module.COLOURSPACE_LIST:
+            with self.subTest(colourspace=colourspace):
+                self.assertEqual(
+                    module.create_nk.map_input_colorspace(colourspace),
+                    colourspace,
+                )
+
+    def test_xml_import_all_passes_selected_input_transform_to_worker(self):
+        selected_colourspace = "Input - Canon - Curve - Canon-Log3"
+        page = module.XMLImportPage()
+        page.shots = [mock.Mock()]
+        page.parser.project_root = "/projects/Project_A"
+        page.parser.edit_name = "timeline_A"
+        page.colourspaceComboBox.setCurrentText(selected_colourspace)
+
+        fake_worker = mock.Mock()
+        fake_thread = mock.Mock()
+        fake_dialog = mock.Mock()
+
+        try:
+            with (
+                mock.patch.object(page, "_apply_generated_shot_names"),
+                mock.patch.object(page, "_on_show_table"),
+                mock.patch.object(module, "LoadingDialog", return_value=fake_dialog),
+                mock.patch.object(module, "ImportWorker", return_value=fake_worker) as worker_class,
+                mock.patch.object(module, "QThread", return_value=fake_thread),
+            ):
+                page._on_import_all()
+
+            self.assertEqual(
+                worker_class.call_args.kwargs["colourspace"],
+                selected_colourspace,
+            )
+            fake_thread.start.assert_called_once_with()
+        finally:
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
     def test_single_shot_dialog_remaps_clip_and_output_paths_before_accepting(self):
         dialog = module.SingleShotCreationDialog(add_to_db=False)
         unc_clip_path = "//192.168.10.20/projects/PROJECTS/Job/plates/primary.mov"

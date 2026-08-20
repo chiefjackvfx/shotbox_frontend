@@ -407,6 +407,7 @@ class CreateNkTests(unittest.TestCase):
             template = root / "template_current.nk"
             template.write_text("# template", encoding="utf-8")
             request = self._request(root, template)
+            request.colourspace = "Input - Canon - Curve - Canon-Log3"
             nuke = _FakeNuke(include_text10=True, include_text12=True)
 
             module._TemplateEditor(nuke).edit(request)
