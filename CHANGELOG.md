@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 3.3.2 - 2026-08-20
+
+### Fixed
+
+- fixed clour spacce when making nk scripts from xml will now use colour spcae selected, again
+
 ## 3.3.1 - 2026-08-11
 
 ### Added
