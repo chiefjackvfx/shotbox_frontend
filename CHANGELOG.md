@@ -2,6 +2,14 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 3.3.3 - 2026-09-02
+
+### Changed
+
+- added sRGB Encoded Rec.709 (sRGB)
+- changed to referance from one list  presets
+- default is   Input - ARRI - V4 LogC (EI800) - Wide Gamut4
+
 ## 3.3.2 - 2026-08-20
 
 ### Fixed
