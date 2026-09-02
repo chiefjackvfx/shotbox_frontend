@@ -41,7 +41,7 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 Root {
  inputs 0
  name /home/gambit/Nextcloud/01_projects/shotbox/shotbox_frontend/preview_template_v002.nk
- project_directory "\[python \{nuke.script_directory()\}]"
+ project_directory /home/rockybtw/Documents/projects/LNER_TEST/VFX/60s_cut_7/sho010/scripts
  frame 1001
  first_frame 1001
  last_frame 1100
@@ -103,6 +103,16 @@ Group {
   ypos 300
  }
 end_group
+Viewer {
+ inputs 0
+ frame_range 1001-1100
+ fps 25
+ viewerProcess "ACES 2.0 - SDR 100 nits (Rec.709) (sRGB - Display)"
+ monitorOutNDISenderName "NukeX - preview_template_v002 - Viewer1"
+ name Viewer1
+ xpos 206
+ ypos 447
+}
 Read {
  inputs 0
  file_type exr
@@ -110,8 +120,8 @@ Read {
  colorspace "ARRI LogC3 (EI800)"
  name Read1
  label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
- xpos 280
- ypos 28
+ xpos 303
+ ypos 72
 }
 Reformat {
  format "1920 1080 0 0 1920 1080 1 HD_1080"
@@ -193,7 +203,7 @@ Group {
   xpos -728
   ypos -1049
  }
-set N11f42fc0 [stack 0]
+set N12585bd0 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -214,7 +224,7 @@ set N11f42fc0 [stack 0]
   xpos -1089
   ypos -1047
  }
-set N11e0ff70 [stack 0]
+set N11be22b0 [stack 0]
  Dot {
   name Dot13
   xpos -1808
@@ -235,7 +245,7 @@ set N11e0ff70 [stack 0]
   xpos -1840
   ypos -576
  }
-set N11fb4400 [stack 0]
+set N11a50e70 [stack 0]
  AddTimeCode {
   frame {{"\[value startfr]"}}
   useFrame true
@@ -243,7 +253,7 @@ set N11fb4400 [stack 0]
   xpos -1840
   ypos -410
  }
-set N13e3b0a0 [stack 0]
+set N11a49e10 [stack 0]
  Dot {
   name Dot14
   xpos -2527
@@ -254,7 +264,7 @@ set N13e3b0a0 [stack 0]
   xpos -2527
   ypos 793
  }
-set N120d87a0 [stack 0]
+set N11b394e0 [stack 0]
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -299,7 +309,7 @@ set N120d87a0 [stack 0]
   xpos -2380
   ypos 864
  }
-push $N120d87a0
+push $N11b394e0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -344,7 +354,7 @@ push $N120d87a0
   xpos -2380
   ypos 784
  }
-push $N120d87a0
+push $N11b394e0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -396,25 +406,25 @@ push $N120d87a0
   xpos -2200
   ypos 790
  }
-push $N11fb4400
+push $N11a50e70
  Dot {
   name Dot3
   xpos -1987
   ypos -567
  }
-set N12956010 [stack 0]
+set N11a56a60 [stack 0]
  Dot {
   name Dot6
   xpos -2168
   ypos -567
  }
-set N1295c700 [stack 0]
+set N13a326a0 [stack 0]
  Dot {
   name Dot7
   xpos -2347
   ypos -567
  }
-set N1270b290 [stack 0]
+set N12584f50 [stack 0]
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -427,25 +437,25 @@ set N1270b290 [stack 0]
   xpos -2740
   ypos -575
  }
-set N12711e20 [stack 0]
+set N13b478b0 [stack 0]
  Dot {
   name Dot8
   xpos -2888
   ypos -567
  }
-set N141f7000 [stack 0]
+set N11ac7300 [stack 0]
  Dot {
   name Dot9
   xpos -3067
   ypos -567
  }
-set N141fd7d0 [stack 0]
+set N13abad20 [stack 0]
  Dot {
   name Dot10
   xpos -3247
   ypos -567
  }
-set N122f1600 [stack 0]
+set N13d40b50 [stack 0]
  Dot {
   name Dot11
   xpos -3428
@@ -495,7 +505,7 @@ set N122f1600 [stack 0]
   xpos -3460
   ypos 624
  }
-push $N122f1600
+push $N13d40b50
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -539,7 +549,7 @@ push $N122f1600
   xpos -3280
   ypos 544
  }
-push $N141fd7d0
+push $N13abad20
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -582,7 +592,7 @@ push $N141fd7d0
   xpos -3100
   ypos 464
  }
-push $N141f7000
+push $N11ac7300
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -626,7 +636,7 @@ push $N141f7000
   xpos -2920
   ypos 384
  }
-push $N12711e20
+push $N13b478b0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -671,7 +681,7 @@ push $N12711e20
   xpos -2740
   ypos 304
  }
-push $N1270b290
+push $N12584f50
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -715,7 +725,7 @@ push $N1270b290
   xpos -2381
   ypos 224
  }
-push $N1295c700
+push $N13a326a0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -757,14 +767,14 @@ push $N1295c700
   xpos -2200
   ypos 144
  }
-push $N12956010
+push $N11a56a60
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
   font_height_toolbar 100
   message "\[frame]"
   old_message {
-   {49 49 48 48}
+   {49 48 48 49}
   }
   old_expression_markers {
    {0 3}
@@ -802,14 +812,14 @@ push $N12956010
   xpos -2021
   ypos 64
  }
-push $N13e3b0a0
+push $N11a49e10
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
   font_height_toolbar 100
   message "\[timecode]"
   old_message {
-   {48 49 58 48 48 58 48 51 58 50 52}
+   {48 49 58 48 48 58 48 48 58 48 48}
   }
   old_expression_markers {
    {0 10}
@@ -847,7 +857,7 @@ push $N13e3b0a0
   xpos -1840
   ypos -16
  }
-push $N11e0ff70
+push $N11be22b0
  NoOp {
   name utility
   xpos -1120
@@ -858,7 +868,7 @@ push $N11e0ff70
   addUserKnob {7 addres l "add res" R -500 500}
   addres {{parent.slateextend*2}}
  }
-set N129e5db0 [stack 0]
+set N11ee57e0 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -886,7 +896,7 @@ set N129e5db0 [stack 0]
   xpos -1480
   ypos -734
  }
-push $N129e5db0
+push $N11ee57e0
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -899,7 +909,7 @@ push $N129e5db0
   xpos -1120
   ypos -736
  }
-set N129d8790 [stack 0]
+set N139d6ae0 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -932,8 +942,8 @@ set N129d8790 [stack 0]
   xpos -1447
   ypos -487
  }
-set N12768640 [stack 0]
-push $N12768640
+set N13a12580 [stack 0]
+push $N13a12580
  Dilate {
   size {{parent.linewidth}}
   name Dilate1
@@ -952,7 +962,7 @@ push $N12768640
   xpos -1448
   ypos -247
  }
-push $N129d8790
+push $N139d6ae0
  Merge2 {
   inputs 2
   name Merge5
@@ -1066,7 +1076,7 @@ push $N129d8790
   xpos -1120
   ypos 1189
  }
-push $N11f42fc0
+push $N12585bd0
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -1098,7 +1108,7 @@ push $N11f42fc0
   xpos -2082
   ypos 826
  }
-push $N13e3b0a0
+push $N11a49e10
  NoOp {
   name readtime
   xpos -2740
@@ -1144,20 +1154,11 @@ Write {
  colorspace "sRGB Encoded Rec.709 (sRGB)"
  create_directories true
  checkHashOnRead false
- version 2
  ocioColorspace ACEScg
  display "sRGB - Display"
  view "ACES 2.0 - SDR 100 nits (Rec.709)"
  name WriteCompMP4
- xpos 304
+ selected true
+ xpos 303
  ypos 483
-}
-Viewer {
- inputs 0
- frame_range 1001-1100
- fps 25
- monitorOutNDISenderName "NukeX - preview_template_v002 - Viewer1"
- name Viewer1
- xpos 206
- ypos 447
 }

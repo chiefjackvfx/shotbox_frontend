@@ -49,6 +49,7 @@ from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
 from flow_layout import FlowLayout
 from colourspace_defaults import COLOURSPACE_LIST
+from quick_view import QuickViewMedia
 
 if TYPE_CHECKING:
     import matchmove_helpers
@@ -234,6 +235,7 @@ def _create_shot_card(
     task_style: str = "card",
     api=None,
     folders=None,
+    quick_view_controller=None,
 ):
     kwargs = {"task_style": task_style}
     init_params = inspect.signature(ShotCard.__init__).parameters
@@ -243,6 +245,8 @@ def _create_shot_card(
         kwargs["api"] = api
     if folders is not None and "folders" in init_params:
         kwargs["folders"] = folders
+    if quick_view_controller is not None and "quick_view_controller" in init_params:
+        kwargs["quick_view_controller"] = quick_view_controller
     return ShotCard(shot_data, **kwargs)
 
 
@@ -1231,10 +1235,19 @@ class ShotCard(QWidget):
         "None": "#333333"       # Default/no color
     }
     
-    def __init__(self, data=None, parent=None, task_style="card", api=None, folders=None):
+    def __init__(
+        self,
+        data=None,
+        parent=None,
+        task_style="card",
+        api=None,
+        folders=None,
+        quick_view_controller=None,
+    ):
         super().__init__(parent)
         data = data or {}
         self.data = data
+        self._quick_view_controller = quick_view_controller
         
         # Use Python UI setup instead of uic.loadUi
         setup_shot_card_ui(self)
@@ -1267,7 +1280,16 @@ class ShotCard(QWidget):
         self._video_player = None
         self._video_widget = None
         self._audio_output = None
+        self._preview_stack = None
+        self._thumb_container = None
+        self._thumbnail_hover_target = None
+        self._thumbnail_hovered = False
+        self._quick_view_active = False
+        self._quick_view_resume_position = 0
         self._setup_video_preview_stack()
+        self.label_thumbnail.setToolTip(
+            "Hover to preview video · Press Space for Quick View"
+        )
         
         self._shot_id = data.get("id")
         self.shot_dir = data.get("base_path")
@@ -2806,6 +2828,8 @@ class ShotCard(QWidget):
     def _setup_video_preview_stack(self):
         """Set up stacked widget for thumbnail/video switching on hover."""
         if not HAS_MULTIMEDIA:
+            self._thumbnail_hover_target = self.label_thumbnail
+            self._thumbnail_hover_target.installEventFilter(self)
             return
             
         # Get the parent of the thumbnail label
@@ -2873,7 +2897,8 @@ class ShotCard(QWidget):
         self._preview_indicator.hide()
         
         # Install event filter for hover detection
-        self._preview_stack.installEventFilter(self)
+        self._thumbnail_hover_target = self._preview_stack
+        self._thumbnail_hover_target.installEventFilter(self)
     
     def _position_preview_indicator(self):
         """Position the preview indicator at bottom-left of thumbnail."""
@@ -2885,18 +2910,23 @@ class ShotCard(QWidget):
     
     def eventFilter(self, obj, event):
         """Handle hover events for video preview."""
-        if not HAS_MULTIMEDIA:
-            return super().eventFilter(obj, event)
-            
-        if hasattr(self, '_preview_stack') and obj == self._preview_stack:
+        if obj is getattr(self, "_thumbnail_hover_target", None):
             if event.type() == QEvent.Type.Enter:
+                self._thumbnail_hovered = True
+                if self._quick_view_controller is not None:
+                    self._quick_view_controller.set_hovered_card(self)
                 self._on_preview_hover_enter()
             elif event.type() == QEvent.Type.Leave:
+                self._thumbnail_hovered = False
+                if self._quick_view_controller is not None:
+                    self._quick_view_controller.clear_hovered_card(self)
                 self._on_preview_hover_leave()
         return super().eventFilter(obj, event)
     
     def _on_preview_hover_enter(self):
         """Start video playback on hover."""
+        if self._quick_view_active:
+            return
         if not self._has_preview or not self._preview_video_path:
             return
         if not HAS_MULTIMEDIA or not self._video_player:
@@ -2905,6 +2935,9 @@ class ShotCard(QWidget):
         try:
             # Set video source and play
             self._video_player.setSource(QUrl.fromLocalFile(self._preview_video_path))
+            if self._quick_view_resume_position:
+                self._video_player.setPosition(self._quick_view_resume_position)
+                self._quick_view_resume_position = 0
             self._preview_stack.setCurrentIndex(1)  # Show video
             self._video_player.play()
         except Exception as e:
@@ -2916,10 +2949,71 @@ class ShotCard(QWidget):
             return
             
         try:
-            self._video_player.stop()
+            if self._quick_view_active:
+                self._video_player.pause()
+            else:
+                self._video_player.stop()
             self._preview_stack.setCurrentIndex(0)  # Show thumbnail
         except Exception as e:
             pass  # Silent fail
+
+    def quick_view_media(self) -> QuickViewMedia:
+        """Return a detached media snapshot suitable for the Quick View popup."""
+        video_path = None
+        if self._preview_video_path and Path(self._preview_video_path).is_file():
+            video_path = str(self._preview_video_path)
+
+        thumbnail = None
+        if self._thumb_orig is not None and not self._thumb_orig.isNull():
+            thumbnail = QPixmap(self._thumb_orig)
+        else:
+            current_pixmap = self.label_thumbnail.pixmap()
+            if current_pixmap is not None and not current_pixmap.isNull():
+                thumbnail = QPixmap(current_pixmap)
+
+        thumbnail_url = str(self._current_thumbnail_url or "")
+        thumbnail_name = Path(QUrl(thumbnail_url).path()).name if thumbnail_url else ""
+        filename = Path(video_path).name if video_path else (thumbnail_name or "Thumbnail")
+        return QuickViewMedia(
+            title=str((self.data or {}).get("title") or "Untitled Shot"),
+            filename=filename,
+            video_path=video_path,
+            thumbnail=thumbnail,
+        )
+
+    def begin_quick_view(self) -> int:
+        """Pause inline playback and return its current timestamp."""
+        self._quick_view_active = True
+        position = 0
+        if HAS_MULTIMEDIA and self._video_player is not None:
+            try:
+                position = max(0, int(self._video_player.position()))
+                self._video_player.pause()
+                if self._preview_stack is not None:
+                    self._preview_stack.setCurrentIndex(0)
+            except (RuntimeError, TypeError, ValueError):
+                position = 0
+        return position
+
+    def end_quick_view(self, position_ms: int, *, resume: bool = False) -> None:
+        """Return popup playback state to the inline hover preview."""
+        self._quick_view_active = False
+        self._quick_view_resume_position = max(0, int(position_ms or 0))
+
+        def resume_if_still_hovered():
+            target = getattr(self, "_thumbnail_hover_target", None)
+            physically_hovered = bool(target is not None and target.underMouse())
+            should_resume = bool(resume and self._thumbnail_hovered) or physically_hovered
+            if not should_resume or self._quick_view_active:
+                self._quick_view_resume_position = 0
+                return
+            self._thumbnail_hovered = True
+            controller = getattr(self, "_quick_view_controller", None)
+            if controller is not None:
+                controller.set_hovered_card(self)
+            self._on_preview_hover_enter()
+
+        QTimer.singleShot(0, resume_if_still_hovered)
     
     def _setup_preview_polling(self):
         """Poll for preview videos and update API when new one found."""
@@ -3071,6 +3165,14 @@ class ShotCard(QWidget):
         
     def closeEvent(self, event):
         """Stop polling timers when widget is closed."""
+        quick_view_controller = getattr(self, "_quick_view_controller", None)
+        if quick_view_controller is not None:
+            try:
+                quick_view_controller.clear_hovered_card(self)
+                if quick_view_controller.active_card() is self:
+                    quick_view_controller.dismiss()
+            except (AttributeError, RuntimeError):
+                pass
         if hasattr(self, '_nk_poll_timer'):
             self._nk_poll_timer.stop()
         if hasattr(self, '_nk_tooltip_timer'):
@@ -3719,6 +3821,7 @@ class TimelineFrame(QWidget):
         api=None,
         folders=None,
         desired_order: list[str] | None = None,
+        quick_view_controller=None,
     ):
         super().__init__()
         timeline = timeline or {}
@@ -3730,6 +3833,7 @@ class TimelineFrame(QWidget):
         self._nuke_open_handler = nuke_open_handler
         self._api = api
         self._folders = folders
+        self._quick_view_controller = quick_view_controller
         self.setObjectName(f"timeline-{timeline.get('id')}")
 
         self.frame = QFrame()
@@ -3807,6 +3911,7 @@ class TimelineFrame(QWidget):
                     task_style=self._task_style,
                     api=self._api,
                     folders=self._folders,
+                    quick_view_controller=self._quick_view_controller,
                 )
                 card.setObjectName(name)
                 if self._nuke_open_handler is not None:

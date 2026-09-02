@@ -450,7 +450,7 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
             clip_path = root / "primary.mov"
             clip_path.write_bytes(b"clip")
 
-            default_colourspace = module.COLOURSPACE_LIST[0]
+            default_colourspace = module.DEFAULT_COLOURSPACE
             selected_colourspace = (
                 module.COLOURSPACE_LIST[1]
                 if len(module.COLOURSPACE_LIST) > 1

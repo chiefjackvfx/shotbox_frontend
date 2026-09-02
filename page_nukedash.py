@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 
 from PyQt6 import QtWidgets, uic
-from PyQt6.QtCore import QObject, QThread, QTimer, pyqtSignal, pyqtSlot, Qt
+from PyQt6.QtCore import QEvent, QObject, QThread, QTimer, pyqtSignal, pyqtSlot, Qt
 from PyQt6.QtGui import QStandardItemModel, QStandardItem
 from PyQt6.QtWidgets import (
     QMainWindow,
@@ -39,6 +39,7 @@ import nukedash_excel_export
 from nuke_lock_utils import display_owner_name, parse_lock_info
 from settings import get_settings_manager
 from timeline_matchmove_dialog import TimelineMatchmoveCandidate, TimelineMatchmoveDialog
+from quick_view import QuickViewController
 
 
 # Get the directory where this script is located (for cross-platform path handling)
@@ -303,6 +304,13 @@ class page_nukedash(QMainWindow):
         self.comboBox_jobs.currentIndexChanged.connect(self._on_job_selected)
         self.filesIO = filesIO.Folders()
         self._shot_card_api = http_help.DjangoAPI()
+        self._quick_view_controller = QuickViewController(
+            self,
+            cards_provider=lambda: self._iter_timeline_shot_cards(visible_only=True),
+        )
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
 
         if hasattr(self, "btn_open_timeline_assets") and self.btn_open_timeline_assets:
             self._timeline_assets_menu = QMenu(self)
@@ -528,6 +536,46 @@ class page_nukedash(QMainWindow):
                 if vbar:
                     vbar.valueChanged.connect(self._on_scroll_activity)
 
+    def eventFilter(self, watched, event):
+        """Open Quick View on Space without stealing typing shortcuts."""
+        controller = getattr(self, "_quick_view_controller", None)
+        if (
+            controller is not None
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() == Qt.Key.Key_Space
+        ):
+            if event.isAutoRepeat():
+                return False
+            if controller.is_open:
+                return bool(controller.toggle())
+            if not self._quick_view_shortcut_available():
+                return False
+            return bool(controller.toggle())
+        return super().eventFilter(watched, event)
+
+    def _quick_view_shortcut_available(self) -> bool:
+        if not self.isVisible():
+            return False
+        top_level = self.window()
+        if top_level is not None and not top_level.isActiveWindow():
+            return False
+
+        app = QtWidgets.QApplication.instance()
+        focus_widget = app.focusWidget() if app is not None else None
+        return not self._quick_view_focus_blocks_shortcut(focus_widget)
+
+    @staticmethod
+    def _quick_view_focus_blocks_shortcut(focus_widget) -> bool:
+        if isinstance(
+            focus_widget,
+            (QtWidgets.QLineEdit, QtWidgets.QTextEdit, QtWidgets.QPlainTextEdit),
+        ):
+            return True
+        if isinstance(focus_widget, QtWidgets.QComboBox):
+            if focus_widget.isEditable() or focus_widget.view().isVisible():
+                return True
+        return False
+
     def _iter_timeline_shot_cards(
         self,
         timeline_widget: QWidget | None = None,
@@ -545,7 +593,7 @@ class page_nukedash(QMainWindow):
             card = item.widget() if item else None
             if card is None or not hasattr(card, "data"):
                 continue
-            if visible_only and not card.isVisible():
+            if visible_only and card.isHidden():
                 continue
             cards.append(card)
         return cards
@@ -3219,6 +3267,11 @@ class page_nukedash(QMainWindow):
                         w._nuke_open_handler = self._handle_nuke_open_request
                         w._api = self._shot_card_api
                         w._folders = self.filesIO
+                        w._quick_view_controller = getattr(
+                            self,
+                            "_quick_view_controller",
+                            None,
+                        )
                         w.setObjectName(n)
 
                         # Set up the basic layout structure
@@ -3305,6 +3358,11 @@ class page_nukedash(QMainWindow):
                                     task_style=self._task_style,
                                     api=self._shot_card_api,
                                     folders=self.filesIO,
+                                    quick_view_controller=getattr(
+                                        self,
+                                        "_quick_view_controller",
+                                        None,
+                                    ),
                                 )
                             card.setObjectName(shot_name)
                             if hasattr(card, "set_task_render_state"):
@@ -3513,6 +3571,11 @@ class page_nukedash(QMainWindow):
                     api=self._shot_card_api,
                     folders=self.filesIO,
                     desired_order=desired_order,
+                    quick_view_controller=getattr(
+                        self,
+                        "_quick_view_controller",
+                        None,
+                    ),
                 )
                 w.setObjectName(name)
                 if hasattr(w, "shots_layout"):

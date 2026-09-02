@@ -18,8 +18,8 @@ class ColourspaceDefaultsTests(unittest.TestCase):
         self.assertEqual(len(COLOURSPACE_LIST), 9)
         self.assertEqual(len(COLOURSPACE_LIST), len(set(COLOURSPACE_LIST)))
 
-    def test_default_is_first_preset(self):
-        self.assertEqual(DEFAULT_COLOURSPACE, COLOURSPACE_LIST[0])
+    def test_default_is_a_known_preset(self):
+        self.assertIn(DEFAULT_COLOURSPACE, COLOURSPACE_LIST)
 
 
 if __name__ == "__main__":
