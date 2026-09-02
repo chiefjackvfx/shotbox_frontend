@@ -36,6 +36,7 @@ from PyQt6.QtGui import QFont, QColor, QPixmap
 
 import create_nk
 import path_mapping
+from colourspace_defaults import COLOURSPACE_LIST, DEFAULT_COLOURSPACE
 
 # Optional imports
 try:
@@ -58,18 +59,6 @@ except ImportError:
 # =============================================================================
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
-COLOURSPACE_LIST = [
-    "Input - ARRI - V3 LogC (EI800) - Wide Gamut",
-    "Input - ARRI - V4 LogC (EI800) - Wide Gamut4",
-    "Input - Sony - Linear - Venice S-Gamut3.Cine",
-    "Input - Sony - S-Log3 - Venice S-Gamut3.Cine",
-    "Input - Canon - Curve - Canon-Log3",
-    "Input - RED - REDLog3G10 - REDWideGamutRGB",
-    "color_picking",
-    "Output - Rec.709",
-    "ACES - ACEScg"
-]
 
 DEFAULT_TASKS = ["Comp", "Roto", "Paint", "Track"]
 SHOT_TITLE_MAX_LENGTH = 50
@@ -453,7 +442,7 @@ class NukeScriptGenerator:
     
     def __init__(
         self,
-        colourspace: str = COLOURSPACE_LIST[0],
+        colourspace: str = DEFAULT_COLOURSPACE,
         local_work: bool = False,
         nuke_path: Optional[str] = None,
     ):
@@ -1111,7 +1100,7 @@ class XMLImportPage(QWidget):
         # Settings
         self.shot_prefix = "sho"
         self.shot_padding = 3
-        self.colourspace = COLOURSPACE_LIST[0]
+        self.colourspace = DEFAULT_COLOURSPACE
         self.handles = 25
         self.local_work = False
         self.add_to_db = True

@@ -29,6 +29,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QPropertyAnimation, QThread, pyqtSignal, QUrl
 
+from colourspace_defaults import COLOURSPACE_LIST, DEFAULT_COLOURSPACE
+
 # Third-Party Library Imports
 try:
     import cv2
@@ -220,18 +222,8 @@ class ConfigureMixin(UIToolsMixin):
         self.shoName = "sho"
         self.notePaths = []
 
-        self.colourspaceList = [
-            "Input - ARRI - V3 LogC (EI800) - Wide Gamut",
-            "Input - ARRI - V4 LogC (EI800) - Wide Gamut4",
-            "Input - Sony - Linear - Venice S-Gamut3.Cine",
-            "Input - Sony - S-Log3 - Venice S-Gamut3.Cine",
-            "Input - Canon - Curve - Canon-Log3",
-            "Input - RED - REDLog3G10 - REDWideGamutRGB",
-            "color_picking",
-            "Output - Rec.709",
-            "ACES - ACEScg"
-        ]
-        self.colourspace = self.colourspaceList[0]
+        self.colourspaceList = COLOURSPACE_LIST
+        self.colourspace = DEFAULT_COLOURSPACE
         self.arriLUT = "Arri Alexa LogC to Rec709.cube"
 
         # Find projects

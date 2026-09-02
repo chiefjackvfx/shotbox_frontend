@@ -16,9 +16,18 @@ if str(FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(FRONTEND_DIR))
 
 import page_xmlTools as module
+from colourspace_defaults import COLOURSPACE_LIST, DEFAULT_COLOURSPACE
 
 
 class PageXmlToolsTests(unittest.TestCase):
+    def test_defaults_use_shared_colourspace_presets(self):
+        config = module.ConfigureMixin.__new__(module.ConfigureMixin)
+        with mock.patch.object(module.os.path, "isdir", return_value=False):
+            config.defineDefaults()
+
+        self.assertIs(config.colourspaceList, COLOURSPACE_LIST)
+        self.assertEqual(config.colourspace, DEFAULT_COLOURSPACE)
+
     def test_resolve_xml_clip_duration_keeps_xml_cut_length(self):
         config = module.ConfigureMixin.__new__(module.ConfigureMixin)
 

@@ -18,6 +18,7 @@ if str(FRONTEND_DIR) not in sys.path:
 from PyQt6.QtWidgets import QApplication
 
 import import_xml_v2 as module
+from colourspace_defaults import COLOURSPACE_LIST, DEFAULT_COLOURSPACE
 
 
 class ImportXmlV2GeneratorTests(unittest.TestCase):
@@ -461,6 +462,15 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
                 colourspace=default_colourspace,
             )
             try:
+                self.assertIs(module.COLOURSPACE_LIST, COLOURSPACE_LIST)
+                self.assertEqual(default_colourspace, DEFAULT_COLOURSPACE)
+                self.assertEqual(
+                    [
+                        dialog.colourspace_combo_box.itemText(index)
+                        for index in range(dialog.colourspace_combo_box.count())
+                    ],
+                    list(COLOURSPACE_LIST),
+                )
                 self.assertEqual(dialog.colourspace_combo_box.currentText(), default_colourspace)
 
                 dialog._add_clip_paths([str(clip_path)], start_index=0)

@@ -19,6 +19,7 @@ from PyQt6.QtCore import QPoint
 from PyQt6.QtWidgets import QApplication, QDialog, QToolButton
 
 import widgets
+from colourspace_defaults import COLOURSPACE_LIST
 from matchmove_helpers import SequenceInfo
 
 
@@ -64,9 +65,17 @@ class FakeAction:
         self.text = text
         self.triggered = FakeSignal()
         self.enabled = True
+        self.checkable = False
+        self.checked = False
 
     def setEnabled(self, enabled: bool):
         self.enabled = bool(enabled)
+
+    def setCheckable(self, checkable: bool):
+        self.checkable = bool(checkable)
+
+    def setChecked(self, checked: bool):
+        self.checked = bool(checked)
 
 
 class FakeMenu:
@@ -155,6 +164,24 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             if action.text == text:
                 return action
         raise AssertionError(f"Action not found: {text}")
+
+    def test_colourspace_context_menu_uses_shared_presets(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            card, _fake_folders = self._make_card(
+                tmpdir,
+                data_overrides={"colourspace": COLOURSPACE_LIST[0]},
+            )
+
+            FakeMenu.instances = []
+            with mock.patch.object(widgets, "QMenu", FakeMenu):
+                card._on_colourspace_context_menu(QPoint(1, 2))
+
+            menu = FakeMenu.instances[0]
+            self.assertEqual(
+                [action.text for action in menu.actions],
+                list(COLOURSPACE_LIST),
+            )
+            self.assertTrue(menu.actions[0].checked)
 
     def test_open_shot_assets_uses_shot_assets_directory(self):
         with tempfile.TemporaryDirectory() as tmpdir:

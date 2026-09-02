@@ -48,23 +48,13 @@ from nuke_lock_utils import parse_lock_info
 from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
 from flow_layout import FlowLayout
+from colourspace_defaults import COLOURSPACE_LIST
 
 if TYPE_CHECKING:
     import matchmove_helpers
 
 # Get the directory where this script is located (for cross-platform path handling)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-COLOURSPACE_PRESETS = [
-    "Input - ARRI - V3 LogC (EI800) - Wide Gamut",
-    "Input - ARRI - V4 LogC (EI800) - Wide Gamut4",
-    "Input - Sony - Linear - Venice S-Gamut3.Cine",
-    "Input - Sony - S-Log3 - Venice S-Gamut3.Cine",
-    "Input - Canon - Curve - Canon-Log3",
-    "Input - RED - REDLog3G10 - REDWideGamutRGB",
-    "color_picking",
-    "Output - Rec.709",
-    "ACES - ACEScg",
-]
 
 # Import the UI setup functions (replaces uic.loadUi)
 from shot_card import setup_shot_card_ui
@@ -1470,7 +1460,7 @@ class ShotCard(QWidget):
             return
         menu = QMenu(self)
         current = (self.data or {}).get("colourspace")
-        for preset in COLOURSPACE_PRESETS:
+        for preset in COLOURSPACE_LIST:
             action = menu.addAction(preset)
             action.setCheckable(True)
             if current == preset:
