@@ -278,6 +278,79 @@ class QuickViewTests(unittest.TestCase):
             self.assertTrue(popup.navigate_version(1))
             self.assertEqual(popup._version_index, 1)
 
+    @unittest.skipUnless(quick_view.HAS_MULTIMEDIA, "Qt multimedia is unavailable")
+    def test_version_navigation_preserves_position_and_playback_state(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            previous_video = Path(tmpdir) / "sho010_v001.mp4"
+            current_video = Path(tmpdir) / "sho010_v002.mp4"
+            previous_video.write_bytes(b"previous")
+            current_video.write_bytes(b"current")
+
+            for playing in (False, True):
+                with self.subTest(playing=playing):
+                    with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+                        popup = quick_view.QuickViewPopup()
+                    self.addCleanup(popup.close)
+                    popup.video_widget = QLabel()
+                    popup.media_stack.addWidget(popup.video_widget)
+                    player = FakePlayer(position=2_000)
+                    if playing:
+                        player.state = quick_view.QMediaPlayer.PlaybackState.PlayingState
+                    popup.player = player
+                    popup._is_video = True
+                    popup._version_entries = (
+                        quick_view.QuickViewEntry(
+                            filename=previous_video.name,
+                            video_path=str(previous_video),
+                        ),
+                        quick_view.QuickViewEntry(
+                            filename=current_video.name,
+                            video_path=str(current_video),
+                        ),
+                    )
+                    popup._version_index = 1
+
+                    with mock.patch.object(quick_view, "HAS_MULTIMEDIA", True):
+                        self.assertTrue(popup.navigate_version(-1))
+
+                    self.assertEqual(popup._version_index, 0)
+                    self.assertEqual(player.position(), 2_000)
+                    self.assertEqual(player.source.toLocalFile(), str(previous_video))
+                    self.assertEqual(player.play_calls, 1 if playing else 0)
+                    self.assertEqual(player.pause_calls, 0 if playing else 1)
+
+    def test_pending_version_position_survives_zero_duration_signal(self):
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.addCleanup(popup.close)
+        popup.player = FakePlayer(position=0, duration=0)
+        popup._pending_position_ms = 2_000
+
+        popup._on_duration_changed(0)
+        self.assertEqual(popup._pending_position_ms, 2_000)
+        self.assertEqual(popup.player.position(), 0)
+
+        popup._on_duration_changed(8_000)
+        self.assertEqual(popup._pending_position_ms, 2_000)
+        self.assertEqual(popup.player.position(), 2_000)
+
+        popup.player.current_duration = 8_000
+        popup._waiting_for_media_load = True
+        popup._saw_loading_media = False
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", True):
+            popup._on_media_status_changed(
+                quick_view.QMediaPlayer.MediaStatus.LoadedMedia
+            )
+            self.assertEqual(popup._pending_position_ms, 2_000)
+            popup._on_media_status_changed(
+                quick_view.QMediaPlayer.MediaStatus.LoadingMedia
+            )
+            popup._on_media_status_changed(
+                quick_view.QMediaPlayer.MediaStatus.LoadedMedia
+            )
+        self.assertEqual(popup._pending_position_ms, 0)
+        self.assertEqual(popup.player.position(), 2_000)
+
     def test_popup_resize_grip_resizes_and_size_survives_navigation(self):
         pixmap = QPixmap(64, 36)
         pixmap.fill(Qt.GlobalColor.blue)

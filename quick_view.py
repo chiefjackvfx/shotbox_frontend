@@ -360,6 +360,8 @@ class QuickViewPopup(QWidget):
         self._media: QuickViewMedia | None = None
         self._original_thumbnail: QPixmap | None = None
         self._pending_position_ms = 0
+        self._waiting_for_media_load = False
+        self._saw_loading_media = False
         self._slider_dragging = False
         self._resume_after_scrub = False
         self._is_video = False
@@ -368,6 +370,8 @@ class QuickViewPopup(QWidget):
         self._version_index = -1
         self._version_positions: dict[str, int] = {}
         self._default_video_key: str | None = None
+        self._version_position_ms = 0
+        self._version_playing = True
         self._reverse_playing = False
         self._reverse_timer = QTimer(self)
         self._reverse_timer.setTimerType(Qt.TimerType.PreciseTimer)
@@ -666,6 +670,8 @@ class QuickViewPopup(QWidget):
         self._version_entries = media.entries()
         self._version_positions = {}
         self._version_index = -1
+        self._version_position_ms = max(0, int(position_ms))
+        self._version_playing = True
         self.title_label.setText(media.title or "Untitled Shot")
 
         requested_video = str(media.video_path or "")
@@ -686,7 +692,11 @@ class QuickViewPopup(QWidget):
         )
         if self._default_video_key is not None:
             self._version_positions[self._default_video_key] = max(0, int(position_ms))
-        self._show_version(initial_index)
+        self._show_version(
+            initial_index,
+            position_ms=self._version_position_ms,
+            autoplay=self._version_playing,
+        )
 
         if not continuing_session:
             self._position_on_screen(screen)
@@ -703,11 +713,28 @@ class QuickViewPopup(QWidget):
         target = self._version_index + direction
         if target < 0 or target >= len(self._version_entries):
             return False
+        if self._is_video and self.player is not None:
+            self._version_position_ms = max(0, int(self.player.position()))
+            self._version_playing = bool(
+                self._reverse_playing
+                or self.player.playbackState()
+                == QMediaPlayer.PlaybackState.PlayingState
+            )
         self._remember_current_version_position()
-        self._show_version(target)
+        self._show_version(
+            target,
+            position_ms=self._version_position_ms,
+            autoplay=self._version_playing,
+        )
         return True
 
-    def _show_version(self, index: int) -> None:
+    def _show_version(
+        self,
+        index: int,
+        *,
+        position_ms: int | None = None,
+        autoplay: bool | None = None,
+    ) -> None:
         if not self._version_entries:
             self._version_index = -1
             self.filename_label.setText("No preview available")
@@ -740,14 +767,24 @@ class QuickViewPopup(QWidget):
         else:
             self.filename_label.setToolTip("Original thumbnail")
 
-        self._pending_position_ms = self._version_positions.get(entry.key, 0)
+        self._pending_position_ms = max(
+            0,
+            int(
+                self._version_positions.get(entry.key, 0)
+                if position_ms is None
+                else position_ms
+            ),
+        )
         if (
             entry.video_path
             and HAS_MULTIMEDIA
             and self.player is not None
             and Path(entry.video_path).is_file()
         ):
-            self._show_video(entry.video_path)
+            self._show_video(
+                entry.video_path,
+                autoplay=True if autoplay is None else bool(autoplay),
+            )
         else:
             self._pending_position_ms = 0
             self._show_thumbnail()
@@ -769,16 +806,16 @@ class QuickViewPopup(QWidget):
             and 0 <= self._version_index < len(self._version_entries)
         ):
             entry = self._version_entries[self._version_index]
-            self._version_positions[entry.key] = max(0, int(self.player.position()))
+            position = max(0, int(self.player.position()))
+            self._version_positions[entry.key] = position
+            self._version_position_ms = position
 
     def handoff_position(self) -> int:
-        """Return the position belonging to the card's normal/latest preview."""
+        """Return the shared comparison position to the card preview."""
         self._remember_current_version_position()
-        if self._default_video_key is None:
-            return 0
-        return max(0, int(self._version_positions.get(self._default_video_key, 0)))
+        return max(0, int(self._version_position_ms))
 
-    def _show_video(self, video_path: str) -> None:
+    def _show_video(self, video_path: str, *, autoplay: bool = True) -> None:
         self._stop_reverse_timer()
         self._is_video = True
         self._slider_dragging = False
@@ -793,16 +830,25 @@ class QuickViewPopup(QWidget):
         self.position_slider.setValue(0)
         self.time_label.setText("00:00 / 00:00")
         self.media_stack.setCurrentWidget(self.video_widget)
+        self._waiting_for_media_load = True
+        self._saw_loading_media = False
         self.player.setSource(QUrl.fromLocalFile(video_path))
         if self._pending_position_ms:
             self.player.setPosition(self._pending_position_ms)
-        self.player.play()
+        if autoplay:
+            self.player.play()
+        else:
+            self.player.pause()
+            self.play_button.setText("▶")
+            self.play_button.setToolTip("Play (L forward · J reverse)")
 
     def _show_thumbnail(self, unavailable_text: str | None = None) -> None:
         self._stop_reverse_timer()
         self._is_video = False
         self._slider_dragging = False
         self._resume_after_scrub = False
+        self._waiting_for_media_load = False
+        self._saw_loading_media = False
         if self.player is not None:
             self.player.stop()
             self.player.setSource(QUrl())
@@ -966,9 +1012,8 @@ class QuickViewPopup(QWidget):
 
     def _on_duration_changed(self, duration: int) -> None:
         self.position_slider.setRange(0, max(0, int(duration)))
-        if self._pending_position_ms:
+        if self._pending_position_ms and duration > 0:
             self.player.setPosition(min(self._pending_position_ms, max(0, int(duration))))
-            self._pending_position_ms = 0
         position = self.player.position() if self.player is not None else 0
         self.time_label.setText(
             f"{self._format_time(position)} / {self._format_time(duration)}"
@@ -988,6 +1033,26 @@ class QuickViewPopup(QWidget):
     def _on_media_status_changed(self, status) -> None:
         if not HAS_MULTIMEDIA or self.player is None:
             return
+        if (
+            self._waiting_for_media_load
+            and status == QMediaPlayer.MediaStatus.LoadingMedia
+        ):
+            self._saw_loading_media = True
+        if status in (
+            QMediaPlayer.MediaStatus.LoadedMedia,
+            QMediaPlayer.MediaStatus.BufferedMedia,
+        ):
+            duration = max(0, int(self.player.duration()))
+            source_is_ready = bool(
+                not self._waiting_for_media_load or self._saw_loading_media
+            )
+            if self._pending_position_ms and duration > 0 and source_is_ready:
+                target = min(self._pending_position_ms, duration)
+                self.player.setPosition(target)
+                self.position_slider.setValue(target)
+                self._pending_position_ms = 0
+                self._waiting_for_media_load = False
+                self._saw_loading_media = False
         if status in (
             QMediaPlayer.MediaStatus.InvalidMedia,
             QMediaPlayer.MediaStatus.NoMedia,
