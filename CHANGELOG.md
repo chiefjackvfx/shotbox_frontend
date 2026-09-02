@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 4.1.0 - 2026-09-02
+
+### Changed
+
+- quick view hold frame when paused and version is changed
+
 ## 4.0.0 - 2026-09-02
 
 ### Added
