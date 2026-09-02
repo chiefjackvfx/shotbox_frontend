@@ -2,6 +2,22 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 4.0.0 - 2026-09-02
+
+### Added
+
+- add Quick View previews to NukeDash thumbnails
+- - open Quick View with Space while hovering a thumbnail
+- - support video playback with still-image fallback
+- - add responsive scrubbing, seeking, mute and looping
+- - add scroll-to-zoom, drag-to-pan and centre-based resizing
+- - navigate shots with Left/Right
+- - navigate preview versions with Up/Down
+- - keep the original thumbnail at the top of the version stack
+- - add J/K/L reverse, stop and forward playback
+- - add comma/period single-frame stepping
+- - preserve playback positions between inline and popup previews
+
 ## 3.3.3 - 2026-09-02
 
 ### Changed
