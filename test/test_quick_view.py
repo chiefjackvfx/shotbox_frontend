@@ -97,6 +97,7 @@ class FakePlayer:
         self.pause_calls = 0
         self.play_calls = 0
         self.source = None
+        self.state = quick_view.QMediaPlayer.PlaybackState.PausedState
 
     def position(self):
         return self.current_position
@@ -106,9 +107,14 @@ class FakePlayer:
 
     def pause(self):
         self.pause_calls += 1
+        self.state = quick_view.QMediaPlayer.PlaybackState.PausedState
 
     def play(self):
         self.play_calls += 1
+        self.state = quick_view.QMediaPlayer.PlaybackState.PlayingState
+
+    def playbackState(self):
+        return self.state
 
     def stop(self):
         self.current_position = 0
@@ -234,6 +240,80 @@ class QuickViewTests(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(dismissed, [True])
 
+    def test_up_down_navigates_thumbnail_then_preview_versions(self):
+        pixmap = QPixmap(64, 36)
+        pixmap.fill(Qt.GlobalColor.blue)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            first_video = Path(tmpdir) / "sho010_v001.mp4"
+            latest_video = Path(tmpdir) / "sho010_v002.mp4"
+            first_video.write_bytes(b"first")
+            latest_video.write_bytes(b"latest")
+            media = quick_view.QuickViewMedia(
+                "sho010",
+                latest_video.name,
+                video_path=str(latest_video),
+                thumbnail=pixmap,
+                thumbnail_filename="sho010_thumb.jpg",
+                video_versions=(str(first_video), str(latest_video)),
+            )
+            with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+                popup = quick_view.QuickViewPopup()
+            self.addCleanup(popup.close)
+
+            popup.show_media(media, screen=self.app.primaryScreen())
+            self.app.processEvents()
+
+            self.assertEqual(
+                [entry.filename for entry in popup._version_entries],
+                ["sho010_thumb.jpg", "sho010_v001.mp4", "sho010_v002.mp4"],
+            )
+            self.assertEqual(popup._version_index, 2)
+            self.assertFalse(popup.version_down_button.isEnabled())
+            popup.version_up_button.click()
+            self.assertEqual(popup._version_index, 1)
+            self.assertTrue(popup.navigate_version(-1))
+            self.assertEqual(popup._version_index, 0)
+            self.assertEqual(popup.filename_label.toolTip(), "Original thumbnail")
+            self.assertFalse(popup.navigate_version(-1))
+            self.assertTrue(popup.navigate_version(1))
+            self.assertEqual(popup._version_index, 1)
+
+    def test_popup_resize_grip_resizes_and_size_survives_navigation(self):
+        pixmap = QPixmap(64, 36)
+        pixmap.fill(Qt.GlobalColor.blue)
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.addCleanup(popup.close)
+        first = quick_view.QuickViewMedia("sho010", "one.jpg", thumbnail=pixmap)
+        second = quick_view.QuickViewMedia("sho020", "two.jpg", thumbnail=pixmap)
+        popup.show_media(first, screen=self.app.primaryScreen())
+        self.app.processEvents()
+        initial_size = popup.size()
+        initial_center = popup.geometry().center()
+
+        QTest.mousePress(
+            popup.resize_grip,
+            Qt.MouseButton.LeftButton,
+            pos=QPoint(10, 10),
+        )
+        QTest.mouseMove(popup.resize_grip, QPoint(90, 70))
+        QTest.mouseRelease(
+            popup.resize_grip,
+            Qt.MouseButton.LeftButton,
+            pos=QPoint(90, 70),
+        )
+        self.app.processEvents()
+        resized = popup.size()
+
+        self.assertGreater(resized.width(), initial_size.width())
+        self.assertGreater(resized.height(), initial_size.height())
+        resized_center = popup.geometry().center()
+        self.assertLessEqual(abs(resized_center.x() - initial_center.x()), 1)
+        self.assertLessEqual(abs(resized_center.y() - initial_center.y()), 1)
+        popup.show_media(second, screen=self.app.primaryScreen())
+        self.app.processEvents()
+        self.assertEqual(popup.size(), resized)
+
     def test_shot_card_registers_hover_for_still_quick_view(self):
         card = widgets.ShotCard.__new__(widgets.ShotCard)
         QWidget.__init__(card)
@@ -281,6 +361,33 @@ class QuickViewTests(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(card._quick_view_resume_position, 0)
         self.assertEqual(card._video_player.play_calls, 1)
+
+    def test_shot_card_payload_includes_all_filesystem_preview_versions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_dir = Path(tmpdir)
+            preview_dir = shot_dir / "renders" / "precomp" / "previews"
+            preview_dir.mkdir(parents=True)
+            first = preview_dir / "sho010_v001.mp4"
+            latest = preview_dir / "sho010_v002.mp4"
+            first.write_bytes(b"first")
+            latest.write_bytes(b"latest")
+
+            card = widgets.ShotCard.__new__(widgets.ShotCard)
+            QWidget.__init__(card)
+            card._preview_video_path = str(latest)
+            card._thumb_orig = QPixmap(64, 36)
+            card._thumb_orig.fill(Qt.GlobalColor.darkGray)
+            card.label_thumbnail = QLabel(card)
+            card._current_thumbnail_url = str(shot_dir / "sho010_thumb.jpg")
+            card.filesIO = widgets.filesIO.Folders()
+            card.shot_dir = str(shot_dir)
+            card.data = {"title": "sho010"}
+
+            media = card.quick_view_media()
+
+            self.assertEqual(media.video_path, str(latest))
+            self.assertEqual(media.video_versions, (str(first), str(latest)))
+            self.assertEqual(media.thumbnail_filename, "sho010_thumb.jpg")
 
     def test_nukedash_space_handler_toggles_and_ignores_auto_repeat(self):
         page = page_nukedash.page_nukedash.__new__(page_nukedash.page_nukedash)
@@ -355,6 +462,82 @@ class QuickViewTests(unittest.TestCase):
 
         self.assertEqual(popup.player.position(), 7_500)
         self.assertEqual(popup.time_label.text(), "00:07 / 00:20")
+
+    def test_jkl_and_frame_step_shortcuts_control_video_transport(self):
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.addCleanup(popup.close)
+        popup.player = FakePlayer(position=1_000, duration=2_000)
+        popup._is_video = True
+        popup.position_slider.setRange(0, 2_000)
+
+        popup._forward_shortcut.activated.emit()
+        self.assertEqual(popup.player.play_calls, 1)
+        self.assertEqual(
+            popup.player.playbackState(),
+            quick_view.QMediaPlayer.PlaybackState.PlayingState,
+        )
+
+        popup._stop_shortcut.activated.emit()
+        self.assertEqual(
+            popup.player.playbackState(),
+            quick_view.QMediaPlayer.PlaybackState.PausedState,
+        )
+
+        popup._previous_frame_shortcut.activated.emit()
+        self.assertEqual(popup.player.position(), 960)
+        popup._next_frame_shortcut.activated.emit()
+        self.assertEqual(popup.player.position(), 1_000)
+
+        popup._reverse_shortcut.activated.emit()
+        self.assertTrue(popup._reverse_timer.isActive())
+        self.assertEqual(popup.player.position(), 960)
+        popup._stop_shortcut.activated.emit()
+        self.assertFalse(popup._reverse_timer.isActive())
+
+    def test_media_view_zooms_and_resets_around_pointer(self):
+        view = quick_view.PanZoomViewport()
+        self.addCleanup(view.close)
+        content = QLabel("preview")
+        view.setWidget(content)
+        view.resize(300, 200)
+        view.show()
+        self.app.processEvents()
+        fitted_size = content.size()
+
+        view.set_zoom(2.0, QPoint(225, 100))
+        self.app.processEvents()
+
+        self.assertEqual(view.zoom_factor, 2.0)
+        self.assertEqual(content.width(), fitted_size.width() * 2)
+        self.assertEqual(content.height(), fitted_size.height() * 2)
+        self.assertGreater(view.horizontalScrollBar().value(), 0)
+
+        horizontal = view.horizontalScrollBar()
+        vertical = view.verticalScrollBar()
+        horizontal.setValue(horizontal.maximum() // 2)
+        vertical.setValue(vertical.maximum() // 2)
+        before_pan = (horizontal.value(), vertical.value())
+        QTest.mousePress(
+            content,
+            Qt.MouseButton.LeftButton,
+            pos=QPoint(150, 100),
+        )
+        QTest.mouseMove(content, QPoint(180, 120))
+        QTest.mouseRelease(
+            content,
+            Qt.MouseButton.LeftButton,
+            pos=QPoint(180, 120),
+        )
+        self.assertLess(horizontal.value(), before_pan[0])
+        self.assertLess(vertical.value(), before_pan[1])
+
+        view.reset_zoom()
+        self.app.processEvents()
+        self.assertEqual(view.zoom_factor, 1.0)
+        self.assertEqual(content.size(), view.viewport().size())
+        self.assertEqual(view.horizontalScrollBar().value(), 0)
+        self.assertEqual(view.verticalScrollBar().value(), 0)
 
 
 if __name__ == "__main__":

@@ -220,7 +220,9 @@ class Folders:
 
     def latest_preview(self, folder):
         """Find the highest version preview video in renders/precomp/previews."""
-        previews_dir = self._shot_dir_path(folder) / "renders" / "precomp" / "previews"
+        previews_dir = (
+            self._shot_dir_path(folder) / "renders" / "precomp" / "previews"
+        )
 
         if not previews_dir.exists():
             return None, None
@@ -246,6 +248,36 @@ class Folders:
             return None, None
         except:
             return None, None
+
+    def preview_versions(self, folder) -> tuple[str, ...]:
+        """Return every versioned preview, ordered oldest to newest."""
+        previews_dir = (
+            self._shot_dir_path(folder) / "renders" / "precomp" / "previews"
+        )
+        if not previews_dir.exists():
+            return ()
+
+        candidates = []
+        for file in previews_dir.glob("*.mp4"):
+            version = self._preview_version_from_name(file.name)
+            if version is None:
+                continue
+            try:
+                modified_time = file.stat().st_mtime
+            except Exception:
+                modified_time = 0.0
+            candidates.append(
+                (
+                    version,
+                    modified_time,
+                    not self._is_legacy_preview_name(file.name),
+                    file.name.lower(),
+                    file,
+                )
+            )
+
+        candidates.sort(key=lambda item: item[:-1])
+        return tuple(str(item[-1]) for item in candidates)
 
     def _preview_version_from_name(self, file_name: str):
         match = re.search(r"_v(\d+)(?:_preview)?\.mp4$", file_name, re.IGNORECASE)

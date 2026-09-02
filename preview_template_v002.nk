@@ -31,8 +31,9 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
     <window x="0" y="0" w="2560" h="1415" screen="1">
         <splitter orientation="2">
             <split size="1415"/>
-            <dock id="" activePageId="Viewer.1">
+            <dock id="" activePageId="uk.co.thefoundry.scripteditor.1">
                 <page id="Viewer.1"/>
+                <page id="uk.co.thefoundry.scripteditor.1"/>
             </dock>
         </splitter>
     </window>
@@ -40,9 +41,17 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 }
 Root {
  inputs 0
+ gsv  {
+  __default__ {
+  }
+  __panel__ {
+   tab {Main}
+  }
+ 
+}
  name /home/gambit/Nextcloud/01_projects/shotbox/shotbox_frontend/preview_template_v002.nk
  project_directory "\[python \{nuke.script_directory()\}]"
- frame 1001
+ frame 1016
  first_frame 1001
  last_frame 1100
  lock_range true
@@ -1154,6 +1163,7 @@ Write {
 }
 Viewer {
  inputs 0
+ frame 1016
  frame_range 1001-1100
  fps 25
  monitorOutNDISenderName "NukeX - preview_template_v002 - Viewer1"

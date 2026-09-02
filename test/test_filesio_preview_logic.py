@@ -140,6 +140,25 @@ class FilesIOPreviewLogicTests(unittest.TestCase):
             self.assertEqual(preview_path, str(newer_preview))
             self.assertEqual(preview_name, newer_preview.name)
 
+    def test_preview_versions_are_ordered_oldest_to_newest(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_dir = Path(tmpdir)
+            preview_dir = shot_dir / "renders" / "precomp" / "previews"
+            preview_dir.mkdir(parents=True)
+            version_three = preview_dir / "sho010_v003.mp4"
+            version_one = preview_dir / "sho010_v001.mp4"
+            version_two = preview_dir / "sho010_v002.mp4"
+            ignored = preview_dir / "unversioned.mp4"
+            for path in (version_three, version_one, version_two, ignored):
+                path.write_bytes(b"preview")
+
+            versions = filesIO.Folders().preview_versions(str(shot_dir))
+
+            self.assertEqual(
+                versions,
+                (str(version_one), str(version_two), str(version_three)),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

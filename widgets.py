@@ -2963,6 +2963,13 @@ class ShotCard(QWidget):
         if self._preview_video_path and Path(self._preview_video_path).is_file():
             video_path = str(self._preview_video_path)
 
+        try:
+            video_versions = tuple(self.filesIO.preview_versions(self.shot_dir))
+        except (AttributeError, OSError, TypeError):
+            video_versions = ()
+        if video_path and video_path not in video_versions:
+            video_versions = (*video_versions, video_path)
+
         thumbnail = None
         if self._thumb_orig is not None and not self._thumb_orig.isNull():
             thumbnail = QPixmap(self._thumb_orig)
@@ -2979,6 +2986,8 @@ class ShotCard(QWidget):
             filename=filename,
             video_path=video_path,
             thumbnail=thumbnail,
+            thumbnail_filename=thumbnail_name or "Original thumbnail",
+            video_versions=video_versions,
         )
 
     def begin_quick_view(self) -> int:
