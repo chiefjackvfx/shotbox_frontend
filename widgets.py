@@ -1500,7 +1500,7 @@ class ShotCard(QWidget):
             else:
                 self.data["colourspace"] = colourspace
                 if hasattr(self, "label_colourspace"):
-                    self.label_colourspace.setText(f"Colourspace: ...{colourspace[-8:-5]}...")
+                    self.label_colourspace.setText(f"Colourspace: ...{colourspace}...")
         except Exception:
             pass
 
@@ -2362,7 +2362,7 @@ class ShotCard(QWidget):
         # Update colourspace label
         if hasattr(self, 'label_colourspace'):
             colourspace = data.get("colourspace", "—")
-            self.label_colourspace.setText(f"Colourspace.: {colourspace[8:-12] if colourspace else '—'}")
+            self.label_colourspace.setText(f"Colourspace.: {colourspace   if colourspace else '—'}")
 
         # Update original clip label
         if hasattr(self, 'label_original_clip'):

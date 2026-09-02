@@ -5,7 +5,7 @@ from __future__ import annotations
 
 COLOURSPACE_LIST: tuple[str, ...] = (
     "Input - ARRI - V3 LogC (EI800) - Wide Gamut",
-    "Input - ARRI - V4 LogC (EI800) - Wide Gamut4",
+    "ARRI LogC4",
     "Input - Sony - Linear - Venice S-Gamut3.Cine",
     "Input - Sony - S-Log3 - Venice S-Gamut3.Cine",
     "Input - Canon - Curve - Canon-Log3",

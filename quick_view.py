@@ -8,7 +8,7 @@ from typing import Callable, Iterable
 import weakref
 
 from PyQt6.QtCore import QEvent, QObject, Qt, QUrl, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QPixmap, QShortcut
+from PyQt6.QtGui import QKeySequence, QMouseEvent, QPixmap, QShortcut
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -50,6 +50,53 @@ class QuickViewMedia:
         return bool(has_video or has_still)
 
 
+class SeekSlider(QSlider):
+    """A slider that seeks directly on click and while dragging."""
+
+    def _position_value(self, event: QMouseEvent) -> int:
+        if self.orientation() == Qt.Orientation.Horizontal:
+            pixel = round(event.position().x())
+            span = self.width()
+        else:
+            pixel = round(event.position().y())
+            span = self.height()
+        pixel = min(max(0, pixel), max(1, span))
+        return self.style().sliderValueFromPosition(
+            self.minimum(),
+            self.maximum(),
+            pixel,
+            max(1, span),
+            self.invertedAppearance(),
+        )
+
+    def _move_to_event(self, event: QMouseEvent) -> None:
+        value = self._position_value(event)
+        self.setSliderPosition(value)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
+            return
+        self.setSliderDown(True)
+        self._move_to_event(event)
+        event.accept()
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if not self.isSliderDown():
+            super().mouseMoveEvent(event)
+            return
+        self._move_to_event(event)
+        event.accept()
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or not self.isSliderDown():
+            super().mouseReleaseEvent(event)
+            return
+        self._move_to_event(event)
+        self.setSliderDown(False)
+        event.accept()
+
+
 class QuickViewPopup(QWidget):
     """Frameless, modeless media popup with lightweight playback controls."""
 
@@ -70,6 +117,7 @@ class QuickViewPopup(QWidget):
         self._original_thumbnail: QPixmap | None = None
         self._pending_position_ms = 0
         self._slider_dragging = False
+        self._resume_after_scrub = False
         self._is_video = False
         self._session_visible = False
 
@@ -141,9 +189,10 @@ class QuickViewPopup(QWidget):
         self.play_button.clicked.connect(self._toggle_playback)
         controls_layout.addWidget(self.play_button)
 
-        self.position_slider = QSlider(Qt.Orientation.Horizontal)
+        self.position_slider = SeekSlider(Qt.Orientation.Horizontal)
         self.position_slider.setRange(0, 0)
         self.position_slider.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.position_slider.setToolTip("Click or drag to seek")
         self.position_slider.sliderPressed.connect(self._on_slider_pressed)
         self.position_slider.sliderReleased.connect(self._on_slider_released)
         self.position_slider.sliderMoved.connect(self._on_slider_moved)
@@ -294,6 +343,8 @@ class QuickViewPopup(QWidget):
 
     def _show_video(self, video_path: str) -> None:
         self._is_video = True
+        self._slider_dragging = False
+        self._resume_after_scrub = False
         if self.audio_output is not None:
             self.audio_output.setVolume(0.5)
             self.audio_output.setMuted(False)
@@ -311,6 +362,8 @@ class QuickViewPopup(QWidget):
 
     def _show_thumbnail(self, unavailable_text: str | None = None) -> None:
         self._is_video = False
+        self._slider_dragging = False
+        self._resume_after_scrub = False
         if self.player is not None:
             self.player.stop()
             self.player.setSource(QUrl())
@@ -361,21 +414,35 @@ class QuickViewPopup(QWidget):
 
     def _on_slider_pressed(self) -> None:
         self._slider_dragging = True
+        self._resume_after_scrub = bool(
+            HAS_MULTIMEDIA
+            and self.player is not None
+            and self.player.playbackState()
+            == QMediaPlayer.PlaybackState.PlayingState
+        )
+        if self._resume_after_scrub:
+            self.player.pause()
 
     def _on_slider_released(self) -> None:
-        self._slider_dragging = False
         if self.player is not None:
             self.player.setPosition(self.position_slider.value())
+        self._slider_dragging = False
+        if self._resume_after_scrub and self.player is not None:
+            self.player.play()
+        self._resume_after_scrub = False
 
     def _on_slider_moved(self, position: int) -> None:
         duration = self.player.duration() if self.player is not None else 0
         self.time_label.setText(
             f"{self._format_time(position)} / {self._format_time(duration)}"
         )
+        if self.player is not None:
+            self.player.setPosition(max(0, int(position)))
 
     def _on_position_changed(self, position: int) -> None:
-        if not self._slider_dragging:
-            self.position_slider.setValue(max(0, int(position)))
+        if self._slider_dragging:
+            return
+        self.position_slider.setValue(max(0, int(position)))
         duration = self.player.duration() if self.player is not None else 0
         self.time_label.setText(
             f"{self._format_time(position)} / {self._format_time(duration)}"

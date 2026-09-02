@@ -313,7 +313,7 @@ class PreviewPathLogicTests(unittest.TestCase):
             self.assertEqual(Path(sequence_path).name, "sho010_v001_####.exr")
             self.assertEqual((first, last), (1001, 1002))
 
-    def test_resolve_preview_input_colourspace_uses_render_media_type(self):
+    def test_resolve_preview_input_colourspace_uses_selected_shot_colourspace(self):
         self.assertEqual(
             module.resolve_preview_input_colourspace(
                 source_type="render",
@@ -321,7 +321,7 @@ class PreviewPathLogicTests(unittest.TestCase):
                 input_path="/tmp/render.####.exr",
                 requested_colourspace="AlexaV3LogC",
             ),
-            "ACES - ACEScg",
+            "AlexaV3LogC",
         )
         self.assertEqual(
             module.resolve_preview_input_colourspace(
@@ -330,7 +330,7 @@ class PreviewPathLogicTests(unittest.TestCase):
                 input_path="/tmp/render.mov",
                 requested_colourspace="AlexaV3LogC",
             ),
-            "sRGB",
+            "AlexaV3LogC",
         )
         self.assertEqual(
             module.resolve_preview_input_colourspace(
@@ -340,6 +340,26 @@ class PreviewPathLogicTests(unittest.TestCase):
                 requested_colourspace="AlexaV3LogC",
             ),
             "AlexaV3LogC",
+        )
+
+    def test_resolve_preview_input_colourspace_infers_when_shot_has_no_selection(self):
+        self.assertEqual(
+            module.resolve_preview_input_colourspace(
+                source_type="render",
+                media_type="exr",
+                input_path="/tmp/render.####.exr",
+                requested_colourspace=None,
+            ),
+            "ACES - ACEScg",
+        )
+        self.assertEqual(
+            module.resolve_preview_input_colourspace(
+                source_type="render",
+                media_type="mov",
+                input_path="/tmp/render.mov",
+                requested_colourspace="",
+            ),
+            "sRGB",
         )
 
     def test_generate_preview_with_overwrite_removes_legacy_version_match(self):
@@ -436,7 +456,7 @@ class PreviewTemplateEditorTests(unittest.TestCase):
             shot_name="sho010",
             project="ProjectA",
             artist="Jack",
-            colourspace="ACES - ACEScg",
+            colourspace="Input - ARRI - V4 LogC (EI800) - Wide Gamut4",
             fps=25,
             quality="high",
         )
@@ -449,7 +469,10 @@ class PreviewTemplateEditorTests(unittest.TestCase):
             nuke.root()["OCIO_config"].value(),
             module.PreviewConfig.OCIO_CONFIG_NAME,
         )
-        self.assertEqual(nuke.toNode("Read1")["colorspace"].value(), "ACES - ACEScg")
+        self.assertEqual(
+            nuke.toNode("Read1")["colorspace"].value(),
+            "Input - ARRI - V4 LogC (EI800) - Wide Gamut4",
+        )
         self.assertEqual(nuke.toNode("WriteCompMP4")["mov64_quality"].value(), "High")
 
 

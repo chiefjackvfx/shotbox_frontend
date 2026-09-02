@@ -14,8 +14,9 @@ FRONTEND_DIR = Path(__file__).resolve().parents[1]
 if str(FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(FRONTEND_DIR))
 
-from PyQt6.QtCore import QEvent, QObject, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, QPoint, Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -90,14 +91,18 @@ class FakeCard(QObject):
 
 
 class FakePlayer:
-    def __init__(self, position=0):
+    def __init__(self, position=0, duration=10_000):
         self.current_position = position
+        self.current_duration = duration
         self.pause_calls = 0
         self.play_calls = 0
         self.source = None
 
     def position(self):
         return self.current_position
+
+    def duration(self):
+        return self.current_duration
 
     def pause(self):
         self.pause_calls += 1
@@ -316,6 +321,40 @@ class QuickViewTests(unittest.TestCase):
     def test_time_format_supports_minutes_and_hours(self):
         self.assertEqual(quick_view.QuickViewPopup._format_time(65_000), "01:05")
         self.assertEqual(quick_view.QuickViewPopup._format_time(3_665_000), "1:01:05")
+
+    def test_seek_slider_clicks_jump_directly_to_pointer_position(self):
+        slider = quick_view.SeekSlider(Qt.Orientation.Horizontal)
+        self.addCleanup(slider.close)
+        slider.setRange(0, 1_000)
+        slider.resize(200, 24)
+        slider.show()
+        self.app.processEvents()
+        moved_values = []
+        slider.sliderMoved.connect(moved_values.append)
+
+        QTest.mouseClick(
+            slider,
+            Qt.MouseButton.LeftButton,
+            pos=QPoint(150, 12),
+        )
+
+        self.assertGreaterEqual(slider.value(), 740)
+        self.assertLessEqual(slider.value(), 760)
+        self.assertEqual(len(moved_values), 1)
+
+    def test_dragging_seek_bar_seeks_immediately_and_keeps_dragged_time(self):
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.addCleanup(popup.close)
+        popup.player = FakePlayer(position=1_000, duration=20_000)
+        popup.position_slider.setRange(0, 20_000)
+        popup._slider_dragging = True
+
+        popup._on_slider_moved(7_500)
+        popup._on_position_changed(1_100)
+
+        self.assertEqual(popup.player.position(), 7_500)
+        self.assertEqual(popup.time_label.text(), "00:07 / 00:20")
 
 
 if __name__ == "__main__":

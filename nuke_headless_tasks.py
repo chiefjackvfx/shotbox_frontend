@@ -352,18 +352,22 @@ def resolve_preview_input_colourspace(
     source_type: Optional[str] = None,
     media_type: Optional[str] = None,
     input_path: str = "",
-    requested_colourspace: str = "sRGB",
+    requested_colourspace: Optional[str] = None,
 ) -> str:
-    """Resolve the read-node input transform for preview generation."""
+    """Resolve the read transform, preferring the shot's selected colourspace."""
     normalized_path = str(input_path or "").lower()
     normalized_media_type = str(media_type or "").lower()
     normalized_source_type = str(source_type or "").lower()
+    selected_colourspace = str(requested_colourspace or "").strip()
+
+    if selected_colourspace:
+        return selected_colourspace
 
     if normalized_media_type == "exr" or normalized_path.endswith(".exr"):
         return "ACES - ACEScg"
     if normalized_source_type == "render" and (normalized_media_type == "mov" or normalized_path.endswith(".mov")):
         return "sRGB"
-    return requested_colourspace or "sRGB"
+    return "sRGB"
 
 
 def _normalize_plate_name(plate_name: Optional[str]) -> Optional[str]:
