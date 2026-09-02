@@ -39,6 +39,7 @@ import subprocess
 import shutil
 import glob
 import platform
+import re
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Callable, Tuple, List
@@ -97,6 +98,30 @@ class PreviewConfig:
 
     # Nuke 17 / OCIO v2.4 studio config used across generated scripts and headless renders
     OCIO_CONFIG_NAME = "fn-nuke_studio-config-v3.0.0_aces-v2.0_ocio-v2.4"
+
+
+PREVIEW_PROGRESS_PREFIX = "SHOTBOX_PREVIEW_PROGRESS"
+
+
+def format_preview_progress(current: int, total: int) -> str:
+    """Format a stable machine-readable preview render progress line."""
+    safe_total = max(1, int(total))
+    safe_current = min(safe_total, max(0, int(current)))
+    return f"{PREVIEW_PROGRESS_PREFIX} {safe_current}/{safe_total}"
+
+
+def parse_preview_progress(line: str) -> Optional[Tuple[int, int]]:
+    """Extract ``(completed_frames, total_frames)`` from Nuke output."""
+    match = re.search(
+        rf"{re.escape(PREVIEW_PROGRESS_PREFIX)}\s+(\d+)\s*/\s*(\d+)",
+        str(line or ""),
+    )
+    if not match:
+        return None
+    current, total = (int(value) for value in match.groups())
+    if total <= 0:
+        return None
+    return min(total, max(0, current)), total
 
 
 def _extract_nuke_from_dir(candidate_dir: str) -> Optional[str]:
@@ -652,7 +677,40 @@ class _PreviewTemplateEditor:
         finally:
             slate_group.end()
 
-        self.nuke.execute(write, vfx_first, vfx_last)
+        total_frames = vfx_last - vfx_first + 1
+
+        def report_frame_progress():
+            try:
+                this_node = self.nuke.thisNode()
+                if this_node is not write:
+                    return
+            except Exception:
+                pass
+            try:
+                rendered_frame = int(self.nuke.frame())
+            except Exception:
+                return
+            completed = rendered_frame - vfx_first + 1
+            print(format_preview_progress(completed, total_frames), flush=True)
+
+        add_after_frame = getattr(self.nuke, "addAfterFrameRender", None)
+        remove_after_frame = getattr(self.nuke, "removeAfterFrameRender", None)
+        progress_callback_registered = False
+        if callable(add_after_frame):
+            try:
+                add_after_frame(report_frame_progress, nodeClass="Write")
+                progress_callback_registered = True
+            except Exception:
+                progress_callback_registered = False
+
+        try:
+            self.nuke.execute(write, vfx_first, vfx_last)
+        finally:
+            if progress_callback_registered and callable(remove_after_frame):
+                try:
+                    remove_after_frame(report_frame_progress, nodeClass="Write")
+                except Exception:
+                    pass
         return vfx_first, vfx_last
 
     def _required_node(self, name: str):

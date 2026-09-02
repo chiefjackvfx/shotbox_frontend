@@ -3305,6 +3305,7 @@ class ShotCard(QWidget):
                 PreviewGenerator,
                 build_preview_output_path,
                 extract_version_from_path,
+                parse_preview_progress,
                 resolve_preview_input_colourspace,
             )
             from settings import get_settings_manager
@@ -3425,11 +3426,23 @@ class ShotCard(QWidget):
         progress.setWindowTitle("Make Preview")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
         progress.show()
         
         # Output callback for debug logging
         def on_output(line):
             print(line)
+            frame_progress = parse_preview_progress(line)
+            if frame_progress is not None:
+                current_frame, total_frames = frame_progress
+                percentage = round((current_frame / total_frames) * 100)
+                progress.setRange(0, total_frames)
+                progress.setValue(current_frame)
+                progress.setLabelText(
+                    f"Generating preview for {preview_target_label}...\n\n"
+                    f"{percentage}% — frame {current_frame} of {total_frames}"
+                )
             QApplication.processEvents()
         
         # Cancellation check callback

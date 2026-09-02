@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import sys
 import tempfile
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 import re
 import unittest
@@ -186,6 +188,35 @@ class _FakeNuke:
         self.executed = (node.name(), first, last)
 
 
+class _ProgressFakeNuke(_FakeNuke):
+    def __init__(self, media_ranges):
+        super().__init__(media_ranges)
+        self._after_frame_callbacks = []
+        self._current_frame = 0
+        self._current_node = None
+
+    def addAfterFrameRender(self, callback, nodeClass="Write"):
+        self._after_frame_callbacks.append((callback, nodeClass))
+
+    def removeAfterFrameRender(self, callback, nodeClass="Write"):
+        self._after_frame_callbacks.remove((callback, nodeClass))
+
+    def frame(self):
+        return self._current_frame
+
+    def thisNode(self):
+        return self._current_node
+
+    def execute(self, node, first, last):
+        super().execute(node, first, last)
+        self._current_node = node
+        for frame in range(first, last + 1):
+            self._current_frame = frame
+            for callback, _node_class in list(self._after_frame_callbacks):
+                callback()
+        self._current_node = None
+
+
 class FindNukeExecutableTests(unittest.TestCase):
     def test_custom_directory_returns_nuke_binary_inside_directory(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -212,6 +243,17 @@ class FindNukeExecutableTests(unittest.TestCase):
 
 
 class PreviewPathLogicTests(unittest.TestCase):
+    def test_preview_progress_marker_round_trips(self):
+        marker = module.format_preview_progress(12, 48)
+
+        self.assertEqual(marker, "SHOTBOX_PREVIEW_PROGRESS 12/48")
+        self.assertEqual(module.parse_preview_progress(marker), (12, 48))
+        self.assertEqual(
+            module.parse_preview_progress(f"Nuke: {marker}"),
+            (12, 48),
+        )
+        self.assertIsNone(module.parse_preview_progress("Rendering frame 12"))
+
     def test_build_preview_output_path_uses_v001_and_detects_legacy_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_dir = Path(tmpdir)
@@ -389,6 +431,32 @@ class PreviewPathLogicTests(unittest.TestCase):
 
 
 class PreviewTemplateEditorTests(unittest.TestCase):
+    def test_template_editor_emits_progress_after_each_rendered_frame(self):
+        template = module.get_preview_template_path()
+        nuke = _ProgressFakeNuke({"/tmp/clip.mov": (1, 3)})
+        output = StringIO()
+
+        with redirect_stdout(output):
+            module._PreviewTemplateEditor(nuke).render(
+                template_path=str(template),
+                input_path="/tmp/clip.mov",
+                output_path="/tmp/sho010_v001.mp4",
+                shot_name="sho010",
+                project="ProjectA",
+                artist="Jack",
+                colourspace="sRGB",
+                fps=25,
+                quality="medium",
+            )
+
+        progress = [
+            module.parse_preview_progress(line)
+            for line in output.getvalue().splitlines()
+            if module.parse_preview_progress(line) is not None
+        ]
+        self.assertEqual(progress, [(1, 3), (2, 3), (3, 3)])
+        self.assertEqual(nuke._after_frame_callbacks, [])
+
     def test_template_editor_updates_template_for_mov_input(self):
         template = module.get_preview_template_path()
         media_ranges = {"/tmp/clip.mov": (1, 24)}
