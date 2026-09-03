@@ -143,6 +143,26 @@ class PreviewTaskCollectionTests(unittest.TestCase):
             self.assertEqual(tasks[0]["version"], 5)
             self.assertEqual(tasks[0]["source_path"], str(sequence_path))
 
+    def test_batch_preview_progress_combines_completed_mp4s_and_current_frames(self):
+        value, maximum = page_nukedash._batch_preview_progress_value(
+            task_index=1,
+            task_count=4,
+            current_frame=25,
+            total_frames=100,
+        )
+
+        self.assertEqual(maximum, 4000)
+        self.assertEqual(value, 1250)
+
+        completed_value, completed_maximum = (
+            page_nukedash._batch_preview_progress_value(
+                task_index=4,
+                task_count=4,
+            )
+        )
+        self.assertEqual(completed_maximum, 4000)
+        self.assertEqual(completed_value, 4000)
+
 
 if __name__ == "__main__":
     unittest.main()

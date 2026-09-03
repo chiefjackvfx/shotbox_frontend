@@ -191,6 +191,35 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             page.deleteLater()
             self.app.processEvents()
 
+    def test_quick_view_screen_percentage_loads_and_saves(self):
+        manager = InMemorySettingsManager({"quick_view_screen_percentage": 55})
+
+        with mock.patch.object(settings.SettingsPage, "_load_django_users", lambda self: None), \
+            mock.patch.object(settings.SettingsPage, "_refresh_update_panel", lambda self: None), \
+            mock.patch.object(settings.QMessageBox, "information", lambda *args, **kwargs: None):
+            page = settings.SettingsPage(settings_manager=manager)
+
+        try:
+            self.assertEqual(page.quick_view_size_spin.value(), 55)
+            self.assertEqual(page.quick_view_size_spin.minimum(), 25)
+            self.assertEqual(page.quick_view_size_spin.maximum(), 100)
+
+            page.quick_view_size_spin.setValue(45)
+            emitted = []
+            page.settings_changed.connect(
+                lambda key, value: emitted.append((key, value))
+            )
+
+            with mock.patch.object(settings.QMessageBox, "information", lambda *args, **kwargs: None):
+                page._save_all_settings()
+
+            self.assertEqual(manager.get("quick_view_screen_percentage"), 45)
+            self.assertIn(("quick_view_screen_percentage", 45), emitted)
+        finally:
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
     def test_nukedash_task_style_combo_loads_and_saves(self):
         manager = InMemorySettingsManager({"nukedash_task_style": "checklist"})
 

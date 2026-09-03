@@ -2362,14 +2362,20 @@ class ShotCard(QWidget):
         # Update colourspace label
         if hasattr(self, 'label_colourspace'):
             colourspace = data.get("colourspace", "—")
-            self.label_colourspace.setText(f"Colourspace.: {colourspace   if colourspace else '—'}")
+            self.label_colourspace.setText(f"IDT: {colourspace   if colourspace else '—'}")
 
         # Update original clip label
         if hasattr(self, 'label_original_clip'):
             self._original_clip_entries = self._resolve_original_clip_entries(data)
-            self.label_original_clip.setText("Clips")
-
             primary_clip = self._primary_original_clip_entry()
+            if primary_clip:
+                clip_name = primary_clip["clip_name"]
+                clip_label = (
+                    f"{clip_name[6:20]}..." if len(clip_name) > 20 else clip_name
+                )
+            else:
+                clip_label = "Clips"
+            self.label_original_clip.setText(clip_label)
             self.label_original_clip.setProperty("clip_path", primary_clip["clip_path"] if primary_clip else None)
 
             if self._original_clip_entries:

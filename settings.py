@@ -94,6 +94,7 @@ DEFAULT_SETTINGS = {
     "preview_thumbnail_size": "Medium",  # NoThumb/Tiny/Small/Medium/Large
     "card_spacing": 8,  # px between shot cards
     "row_height": 0,  # px, 0 = auto
+    "quick_view_screen_percentage": 70,
     
     # Auto-refresh settings
     "auto_refresh_enabled": True,
@@ -539,6 +540,15 @@ class SettingsPage(QWidget):
         self.row_height_spin.setToolTip("0 = auto")
         density_layout.addRow("Row Height:", self.row_height_spin)
 
+        self.quick_view_size_spin = NoScrollSpinBox()
+        self.quick_view_size_spin.setRange(25, 100)
+        self.quick_view_size_spin.setSingleStep(5)
+        self.quick_view_size_spin.setSuffix(" %")
+        self.quick_view_size_spin.setToolTip(
+            "Percentage of the available screen used when Quick View opens"
+        )
+        density_layout.addRow("Quick View Size:", self.quick_view_size_spin)
+
         container_layout.addWidget(density_group)
         
         # === Window Section ===
@@ -883,6 +893,9 @@ class SettingsPage(QWidget):
             self.nukedash_task_style_combo.setCurrentIndex(idx)
         self.card_spacing_spin.setValue(self._settings.get("card_spacing", 8))
         self.row_height_spin.setValue(self._settings.get("row_height", 0))
+        self.quick_view_size_spin.setValue(
+            self._settings.get("quick_view_screen_percentage", 70)
+        )
         
         # Window
         self.remember_size_check.setChecked(self._settings.get("remember_window_size", True))
@@ -1032,6 +1045,11 @@ class SettingsPage(QWidget):
         )
         self._settings.set("card_spacing", self.card_spacing_spin.value(), save=False)
         self._settings.set("row_height", self.row_height_spin.value(), save=False)
+        self._settings.set(
+            "quick_view_screen_percentage",
+            self.quick_view_size_spin.value(),
+            save=False,
+        )
         
         # Window
         self._settings.set("remember_window_size", self.remember_size_check.isChecked(), save=False)
@@ -1121,6 +1139,10 @@ class SettingsPage(QWidget):
             )
             self.settings_changed.emit("card_spacing", self.card_spacing_spin.value())
             self.settings_changed.emit("row_height", self.row_height_spin.value())
+            self.settings_changed.emit(
+                "quick_view_screen_percentage",
+                self.quick_view_size_spin.value(),
+            )
 
             # Startup settings
             self.settings_changed.emit("startup_tab", self.startup_tab_combo.currentData())

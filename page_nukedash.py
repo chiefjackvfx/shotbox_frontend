@@ -236,6 +236,28 @@ def _sig(obj) -> str:
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()
 
 
+_BATCH_PREVIEW_PROGRESS_STEPS = 1000
+
+
+def _batch_preview_progress_value(
+    task_index: int,
+    task_count: int,
+    current_frame: int = 0,
+    total_frames: int = 0,
+) -> tuple[int, int]:
+    """Return a smooth aggregate progress value for a batch preview render."""
+    safe_count = max(1, int(task_count))
+    safe_index = min(safe_count, max(0, int(task_index)))
+    frame_fraction = 0.0
+    if total_frames > 0:
+        frame_fraction = min(1.0, max(0.0, current_frame / total_frames))
+    value = round(
+        (safe_index + frame_fraction) * _BATCH_PREVIEW_PROGRESS_STEPS
+    )
+    maximum = safe_count * _BATCH_PREVIEW_PROGRESS_STEPS
+    return min(maximum, value), maximum
+
+
 class ApiWorker(QObject):
     data_ready = pyqtSignal(list)
     error = pyqtSignal(str)
@@ -307,6 +329,10 @@ class page_nukedash(QMainWindow):
         self._quick_view_controller = QuickViewController(
             self,
             cards_provider=lambda: self._iter_timeline_shot_cards(visible_only=True),
+            screen_percentage=get_settings_manager().get(
+                "quick_view_screen_percentage",
+                70,
+            ),
         )
         app = QtWidgets.QApplication.instance()
         if app is not None:
@@ -537,7 +563,7 @@ class page_nukedash(QMainWindow):
                     vbar.valueChanged.connect(self._on_scroll_activity)
 
     def eventFilter(self, watched, event):
-        """Open Quick View on Space without stealing typing shortcuts."""
+        """Handle the Space shortcuts without stealing typing input."""
         controller = getattr(self, "_quick_view_controller", None)
         if (
             controller is not None
@@ -550,8 +576,28 @@ class page_nukedash(QMainWindow):
                 return bool(controller.toggle())
             if not self._quick_view_shortcut_available():
                 return False
+            if self._open_hovered_render_in_default_app():
+                return True
             return bool(controller.toggle())
         return super().eventFilter(watched, event)
+
+    def _open_hovered_render_in_default_app(self) -> bool:
+        """Open the render belonging to the hovered Conform/Push2DVR button."""
+        for card in self._iter_timeline_shot_cards(visible_only=True):
+            button = getattr(card, "btn_latest_render", None)
+            if button is None or not button.underMouse():
+                continue
+
+            render_path = button.property("file_path")
+            if not render_path or str(render_path).lower() == "none":
+                return False
+
+            folders = getattr(card, "filesIO", None)
+            if folders is None or not hasattr(folders, "open_file"):
+                return False
+            folders.open_file(str(render_path))
+            return True
+        return False
 
     def _quick_view_shortcut_available(self) -> bool:
         if not self.isVisible():
@@ -2747,6 +2793,11 @@ class page_nukedash(QMainWindow):
         if self._compact_view_enabled:
             self._apply_compact_view_state()
 
+    def set_quick_view_screen_percentage(self, percentage: int) -> None:
+        controller = getattr(self, "_quick_view_controller", None)
+        if controller is not None:
+            controller.set_screen_percentage(percentage)
+
     def apply_task_style(self, style: str) -> None:
         self._task_style = _normalize_task_style(style)
         tabs = getattr(self, "timelines_tabs", None)
@@ -2788,6 +2839,7 @@ class page_nukedash(QMainWindow):
         try:
             from nuke_headless_tasks import (
                 PreviewGenerator,
+                parse_preview_progress,
                 preview_input_exists,
                 resolve_preview_input_colourspace,
             )
@@ -2858,12 +2910,22 @@ class page_nukedash(QMainWindow):
             return
         
         # Create progress dialog
+        _, batch_progress_maximum = _batch_preview_progress_value(
+            0,
+            len(preview_tasks),
+        )
         progress = QProgressDialog(
-            "Generating previews...", "Cancel", 0, len(preview_tasks), self
+            "Generating MP4 previews...",
+            "Cancel",
+            0,
+            batch_progress_maximum,
+            self,
         )
         progress.setWindowTitle("Make All Previews")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
         progress.show()
         
         # Process each task
@@ -2886,11 +2948,21 @@ class page_nukedash(QMainWindow):
             source_type = task["source_type"]
             plate_name = task.get("plate_name")
             media_type = task.get("media_type")
+            preview_target_label = (
+                f"{shot_name} {plate_name} v{version:03d}"
+                if plate_name
+                else f"{shot_name} v{version:03d}"
+            )
             
             # Update progress
-            progress.setValue(i)
+            task_start_value, _ = _batch_preview_progress_value(
+                i,
+                len(preview_tasks),
+            )
+            progress.setValue(task_start_value)
             progress.setLabelText(
-                f"Processing {shot_name} ({source_type})...\n\n"
+                f"Creating MP4 {i + 1} of {len(preview_tasks)}: "
+                f"{preview_target_label}\n\n"
                 f"Completed: {completed} | Failed: {failed} | Skipped: {skipped}"
             )
             QApplication.processEvents()
@@ -2905,6 +2977,9 @@ class page_nukedash(QMainWindow):
             if not preview_input_exists(local_source):
                 skipped += 1
                 print(f"[SKIP] {shot_name}: Source not found - {local_source}")
+                progress.setValue(
+                    _batch_preview_progress_value(i + 1, len(preview_tasks))[0]
+                )
                 continue
             
             # Get shot metadata
@@ -2920,6 +2995,35 @@ class page_nukedash(QMainWindow):
             def check_cancelled():
                 QApplication.processEvents()
                 return progress.wasCanceled()
+
+            def on_output(line):
+                print(line)
+                frame_progress = parse_preview_progress(line)
+                if frame_progress is not None:
+                    current_frame, total_frames = frame_progress
+                    progress_value, progress_maximum = _batch_preview_progress_value(
+                        i,
+                        len(preview_tasks),
+                        current_frame,
+                        total_frames,
+                    )
+                    current_percentage = round(
+                        (current_frame / total_frames) * 100
+                    )
+                    overall_percentage = round(
+                        (progress_value / progress_maximum) * 100
+                    )
+                    progress.setValue(progress_value)
+                    progress.setLabelText(
+                        f"Creating MP4 {i + 1} of {len(preview_tasks)}: "
+                        f"{preview_target_label}\n\n"
+                        f"Overall {overall_percentage}% — current MP4 "
+                        f"{current_percentage}% "
+                        f"(frame {current_frame} of {total_frames})\n"
+                        f"Completed: {completed} | Failed: {failed} | "
+                        f"Skipped: {skipped}"
+                    )
+                QApplication.processEvents()
             
             # Generate the preview (with overwrite)
             render_fn = generator.generate_preview_with_overwrite if overwrite_enabled else generator.generate_preview
@@ -2934,12 +3038,17 @@ class page_nukedash(QMainWindow):
                 quality=preview_quality,
                 version=version,
                 plate_name=plate_name,
-                on_output=lambda line: print(line),
+                on_output=on_output,
                 check_cancelled=check_cancelled,
             )
             
             if progress.wasCanceled():
                 break
+
+            progress.setValue(
+                _batch_preview_progress_value(i + 1, len(preview_tasks))[0]
+            )
+            QApplication.processEvents()
             
             if result.error == "FILE_EXISTS" and not overwrite_enabled:
                 skipped += 1
@@ -2961,6 +3070,8 @@ class page_nukedash(QMainWindow):
                     for line in result.output_lines[-20:]:
                         print(line)
         
+        if not progress.wasCanceled():
+            progress.setValue(batch_progress_maximum)
         progress.close()
         
         # Show summary

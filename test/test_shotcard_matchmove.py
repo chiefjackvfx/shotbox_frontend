@@ -396,17 +396,20 @@ class ShotCardMatchmoveTests(unittest.TestCase):
 
             self.assertEqual(card._resolve_preview_project_name(), "ProjectB")
 
-    def test_original_clip_label_always_shows_clips(self):
+    def test_original_clip_label_shows_clip_filename(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
             shot_root.mkdir(parents=True)
-            original_clip = shot_root / "plates" / "V1.mov"
+            original_clip = shot_root / "plates" / "very_long_clip_name_v001.mov"
             card, _fake_folders = self._make_card(
                 str(shot_root),
                 data_overrides={"original_clip": str(original_clip)},
             )
 
-            self.assertEqual(card.label_original_clip.text(), "Clips")
+            self.assertEqual(
+                card.label_original_clip.text(),
+                f"{original_clip.name[:10]}...",
+            )
 
     def test_original_clip_menu_shows_disabled_state_without_clips(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -451,6 +454,8 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                     "original_clips": [str(clip_a), str(clip_b)],
                 },
             )
+
+            self.assertEqual(card.label_original_clip.text(), clip_a.name[:15])
 
             menu = FakeMenu()
             with mock.patch.object(card, "_copy_to_clipboard") as copy_to_clipboard, \

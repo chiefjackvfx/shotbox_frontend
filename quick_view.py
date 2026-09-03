@@ -149,12 +149,13 @@ class PanZoomViewport(QScrollArea):
     """A frameless media viewport with pointer-centred zoom and drag panning."""
 
     zoomChanged = pyqtSignal(float)
-    MIN_ZOOM = 1.0
+    MIN_ZOOM = 0.25
+    FIT_ZOOM = 1.0
     MAX_ZOOM = 8.0
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._zoom = self.MIN_ZOOM
+        self._zoom = self.FIT_ZOOM
         self._drag_origin: QPoint | None = None
         self._drag_scroll_origin = QPoint()
         self.setWidgetResizable(False)
@@ -180,7 +181,7 @@ class PanZoomViewport(QScrollArea):
             widget.installEventFilter(self)
 
     def reset_zoom(self) -> None:
-        self.set_zoom(self.MIN_ZOOM)
+        self.set_zoom(self.FIT_ZOOM)
 
     def set_zoom(self, zoom: float, anchor: QPoint | None = None) -> None:
         widget = self.widget()
@@ -188,7 +189,7 @@ class PanZoomViewport(QScrollArea):
             return
         new_zoom = min(self.MAX_ZOOM, max(self.MIN_ZOOM, float(zoom)))
         if abs(new_zoom - self._zoom) < 0.001:
-            if new_zoom == self.MIN_ZOOM:
+            if new_zoom == self.FIT_ZOOM:
                 self.horizontalScrollBar().setValue(0)
                 self.verticalScrollBar().setValue(0)
             return
@@ -241,7 +242,7 @@ class PanZoomViewport(QScrollArea):
     def _handle_mouse_press(self, event: QMouseEvent) -> bool:
         if (
             event.button() != Qt.MouseButton.LeftButton
-            or self._zoom <= self.MIN_ZOOM
+            or self._zoom <= self.FIT_ZOOM
         ):
             return False
         self._drag_origin = event.globalPosition().toPoint()
@@ -273,7 +274,7 @@ class PanZoomViewport(QScrollArea):
     def _update_cursor(self) -> None:
         cursor = (
             Qt.CursorShape.OpenHandCursor
-            if self._zoom > self.MIN_ZOOM
+            if self._zoom > self.FIT_ZOOM
             else Qt.CursorShape.ArrowCursor
         )
         self.viewport().setCursor(cursor)
@@ -345,8 +346,10 @@ class QuickViewPopup(QWidget):
 
     dismissed = pyqtSignal()
     navigation_requested = pyqtSignal(int)
+    MIN_SCREEN_PERCENTAGE = 25
+    MAX_SCREEN_PERCENTAGE = 100
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, screen_percentage: int = 70):
         super().__init__(
             parent,
             Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint,
@@ -356,6 +359,7 @@ class QuickViewPopup(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMinimumSize(480, 320)
+        self._screen_percentage = self._clamp_screen_percentage(screen_percentage)
 
         self._media: QuickViewMedia | None = None
         self._original_thumbnail: QPixmap | None = None
@@ -382,6 +386,18 @@ class QuickViewPopup(QWidget):
         self._build_shortcuts()
         self._apply_style()
 
+    @classmethod
+    def _clamp_screen_percentage(cls, percentage: int) -> int:
+        try:
+            value = int(percentage)
+        except (TypeError, ValueError):
+            value = 70
+        return min(cls.MAX_SCREEN_PERCENTAGE, max(cls.MIN_SCREEN_PERCENTAGE, value))
+
+    def set_screen_percentage(self, percentage: int) -> None:
+        """Set the size used the next time Quick View opens."""
+        self._screen_percentage = self._clamp_screen_percentage(percentage)
+
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(1, 1, 1, 1)
@@ -403,23 +419,28 @@ class QuickViewPopup(QWidget):
         self.title_label.setObjectName("quick_view_title")
         self.filename_label = QLabel("")
         self.filename_label.setObjectName("quick_view_filename")
+        self.shortcut_label = QLabel(
+            "←/→ Shot  ·  ↑/↓ Ver  ·  J/K/L  ·  ,/. Frame  ·  "
+            "Scroll to zoom  ·  Double-click to reset  ·  Space/Esc"
+        )
+        self.shortcut_label.setObjectName("quick_view_shortcuts")
+        self.shortcut_label.setWordWrap(False)
+        self.shortcut_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.shortcut_label.setToolTip(
+            "Left/Right: previous/next shot\n"
+            "Up/Down: previous/next preview version\n"
+            "J/K/L: reverse/stop/forward\n"
+            "Comma/Period: previous/next frame\n"
+            "Scroll: zoom in/out\n"
+            "Double-click: reset zoom to fit\n"
+            "Space/Escape: close Quick View"
+        )
         title_column.addWidget(self.title_label)
         title_column.addWidget(self.filename_label)
         header.addLayout(title_column, 1)
-
-        self.version_up_button = QPushButton("↑")
-        self.version_up_button.setObjectName("quick_view_version_up")
-        self.version_up_button.setFixedSize(30, 30)
-        self.version_up_button.setToolTip("Previous preview version (Up)")
-        self.version_up_button.clicked.connect(lambda: self.navigate_version(-1))
-        header.addWidget(self.version_up_button)
-
-        self.version_down_button = QPushButton("↓")
-        self.version_down_button.setObjectName("quick_view_version_down")
-        self.version_down_button.setFixedSize(30, 30)
-        self.version_down_button.setToolTip("Next preview version (Down)")
-        self.version_down_button.clicked.connect(lambda: self.navigate_version(1))
-        header.addWidget(self.version_down_button)
+        header.addWidget(self.shortcut_label)
 
         self.close_button = QPushButton("×")
         self.close_button.setObjectName("quick_view_close")
@@ -612,6 +633,10 @@ class QuickViewPopup(QWidget):
                 color: #aeb3bb;
                 font-size: 11px;
             }
+            QLabel#quick_view_shortcuts {
+                color: #777d86;
+                font-size: 10px;
+            }
             QStackedWidget#quick_view_media, QLabel#quick_view_image {
                 background-color: #08090a;
                 color: #8f949b;
@@ -630,22 +655,15 @@ class QuickViewPopup(QWidget):
                 background-color: transparent;
             }
             QPushButton#quick_view_close, QPushButton#quick_view_play,
-            QPushButton#quick_view_mute, QPushButton#quick_view_version_up,
-            QPushButton#quick_view_version_down {
+            QPushButton#quick_view_mute {
                 background-color: #30343a;
                 color: #f2f3f5;
                 border: 1px solid #4a4f57;
                 border-radius: 5px;
             }
             QPushButton#quick_view_close:hover, QPushButton#quick_view_play:hover,
-            QPushButton#quick_view_mute:hover, QPushButton#quick_view_version_up:hover,
-            QPushButton#quick_view_version_down:hover {
+            QPushButton#quick_view_mute:hover {
                 background-color: #454b54;
-            }
-            QPushButton#quick_view_version_up:disabled,
-            QPushButton#quick_view_version_down:disabled {
-                color: #6b7078;
-                background-color: #24272b;
             }
             QSlider::groove:horizontal {
                 height: 5px;
@@ -740,7 +758,6 @@ class QuickViewPopup(QWidget):
             self.filename_label.setText("No preview available")
             self._pending_position_ms = 0
             self._show_thumbnail()
-            self._update_version_buttons()
             return
 
         self._version_index = min(max(0, int(index)), len(self._version_entries) - 1)
@@ -788,16 +805,6 @@ class QuickViewPopup(QWidget):
         else:
             self._pending_position_ms = 0
             self._show_thumbnail()
-        self._update_version_buttons()
-
-    def _update_version_buttons(self) -> None:
-        has_stack = len(self._version_entries) > 1
-        self.version_up_button.setVisible(has_stack)
-        self.version_down_button.setVisible(has_stack)
-        self.version_up_button.setEnabled(has_stack and self._version_index > 0)
-        self.version_down_button.setEnabled(
-            has_stack and self._version_index < len(self._version_entries) - 1
-        )
 
     def _remember_current_version_position(self) -> None:
         if (
@@ -868,8 +875,15 @@ class QuickViewPopup(QWidget):
         if screen is None:
             return
         available = screen.availableGeometry()
-        width = min(1280, max(1, int(available.width() * 0.70)))
-        height = min(800, max(1, int(available.height() * 0.70)))
+        scale = self._screen_percentage / 100.0
+        width = min(
+            available.width(),
+            max(self.minimumWidth(), round(available.width() * scale)),
+        )
+        height = min(
+            available.height(),
+            max(self.minimumHeight(), round(available.height() * scale)),
+        )
         self.resize(width, height)
         self.move(
             available.x() + (available.width() - width) // 2,
@@ -1122,12 +1136,19 @@ class QuickViewController(QObject):
         parent=None,
         cards_provider: Callable[[], Iterable[object]] | None = None,
         popup_factory: Callable[[], QuickViewPopup] | None = None,
+        screen_percentage: int = 70,
     ):
         super().__init__(parent)
         self._cards_provider = cards_provider or (lambda: ())
         popup_parent = parent if isinstance(parent, QWidget) else None
+        self._screen_percentage = QuickViewPopup._clamp_screen_percentage(
+            screen_percentage
+        )
         self._popup_factory = popup_factory or (
-            lambda: QuickViewPopup(parent=popup_parent)
+            lambda: QuickViewPopup(
+                parent=popup_parent,
+                screen_percentage=self._screen_percentage,
+            )
         )
         self._popup: QuickViewPopup | None = None
         self._hovered_ref: weakref.ReferenceType | None = None
@@ -1137,6 +1158,11 @@ class QuickViewController(QObject):
         self._touched: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
         self._tracked_card_ids: set[int] = set()
         self._closing = False
+
+    def set_screen_percentage(self, percentage: int) -> None:
+        self._screen_percentage = QuickViewPopup._clamp_screen_percentage(percentage)
+        if self._popup is not None:
+            self._popup.set_screen_percentage(self._screen_percentage)
 
     @property
     def is_open(self) -> bool:

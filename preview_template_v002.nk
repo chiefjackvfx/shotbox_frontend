@@ -12,10 +12,11 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
             <split size="1897" stretch="1"/>
             <splitter orientation="2">
                 <split size="1349"/>
-                <dock id="" activePageId="DAG.1" focus="true">
+                <dock id="" activePageId="DAG.1">
                     <page id="DAG.1"/>
                     <page id="Curve Editor.1"/>
                     <page id="DopeSheet.1"/>
+                    <page id="DAG.2"/>
                 </dock>
             </splitter>
             <split size="615"/>
@@ -31,9 +32,8 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
     <window x="0" y="0" w="2560" h="1415" screen="1">
         <splitter orientation="2">
             <split size="1415"/>
-            <dock id="" activePageId="uk.co.thefoundry.scripteditor.1">
+            <dock id="" activePageId="Viewer.1">
                 <page id="Viewer.1"/>
-                <page id="uk.co.thefoundry.scripteditor.1"/>
             </dock>
         </splitter>
     </window>
@@ -41,14 +41,6 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 }
 Root {
  inputs 0
- gsv  {
-  __default__ {
-  }
-  __panel__ {
-   tab {Main}
-  }
- 
-}
  name /home/gambit/Nextcloud/01_projects/shotbox/shotbox_frontend/preview_template_v002.nk
  project_directory "\[python \{nuke.script_directory()\}]"
  frame 1016
@@ -143,7 +135,7 @@ Group {
  tile_color 0xefb500ff
  note_font "Verdana Bold Italic"
  xpos 303
- ypos 267
+ ypos 265
  show_group_view true
  addUserKnob {20 settings t "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
  addUserKnob {26 text l "" +STARTLINE T "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
@@ -181,8 +173,9 @@ Group {
  addUserKnob {1 artisttext l "" -STARTLINE}
  artisttext artist
  addUserKnob {6 comment +STARTLINE}
+ comment true
  addUserKnob {1 commenttext l "" -STARTLINE}
- commenttext "add comment here"
+ commenttext "Automatic Shotbox Preview"
  addUserKnob {26 Font l "<b><span style=\"color:#ffaf24\">Font</span>"}
  addUserKnob {3 fontsize1 l "font size" t "\nControls all fonts at once"}
  fontsize1 3
@@ -202,7 +195,7 @@ Group {
   xpos -728
   ypos -1049
  }
-set N11f42fc0 [stack 0]
+set N12523ba0 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -223,7 +216,7 @@ set N11f42fc0 [stack 0]
   xpos -1089
   ypos -1047
  }
-set N11e0ff70 [stack 0]
+set N12511870 [stack 0]
  Dot {
   name Dot13
   xpos -1808
@@ -244,7 +237,7 @@ set N11e0ff70 [stack 0]
   xpos -1840
   ypos -576
  }
-set N11fb4400 [stack 0]
+set N126592f0 [stack 0]
  AddTimeCode {
   frame {{"\[value startfr]"}}
   useFrame true
@@ -252,7 +245,7 @@ set N11fb4400 [stack 0]
   xpos -1840
   ypos -410
  }
-set N13e3b0a0 [stack 0]
+set N143d2ae0 [stack 0]
  Dot {
   name Dot14
   xpos -2527
@@ -263,7 +256,7 @@ set N13e3b0a0 [stack 0]
   xpos -2527
   ypos 793
  }
-set N120d87a0 [stack 0]
+set N143fe320 [stack 0]
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -308,7 +301,7 @@ set N120d87a0 [stack 0]
   xpos -2380
   ypos 864
  }
-push $N120d87a0
+push $N143fe320
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -353,7 +346,7 @@ push $N120d87a0
   xpos -2380
   ypos 784
  }
-push $N120d87a0
+push $N143fe320
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -405,25 +398,25 @@ push $N120d87a0
   xpos -2200
   ypos 790
  }
-push $N11fb4400
+push $N126592f0
  Dot {
   name Dot3
   xpos -1987
   ypos -567
  }
-set N12956010 [stack 0]
+set N100f1d80 [stack 0]
  Dot {
   name Dot6
   xpos -2168
   ypos -567
  }
-set N1295c700 [stack 0]
+set N1487f000 [stack 0]
  Dot {
   name Dot7
   xpos -2347
   ypos -567
  }
-set N1270b290 [stack 0]
+set N18c76de0 [stack 0]
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -436,25 +429,25 @@ set N1270b290 [stack 0]
   xpos -2740
   ypos -575
  }
-set N12711e20 [stack 0]
+set N18c14c20 [stack 0]
  Dot {
   name Dot8
   xpos -2888
   ypos -567
  }
-set N141f7000 [stack 0]
+set N146b17f0 [stack 0]
  Dot {
   name Dot9
   xpos -3067
   ypos -567
  }
-set N141fd7d0 [stack 0]
+set N123cc140 [stack 0]
  Dot {
   name Dot10
   xpos -3247
   ypos -567
  }
-set N122f1600 [stack 0]
+set N14629ca0 [stack 0]
  Dot {
   name Dot11
   xpos -3428
@@ -480,7 +473,7 @@ set N122f1600 [stack 0]
   cursor_position 36
   font {{ Courier : Regular : Courier.pfa : 0 }}
   global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
+  scale {1 1}
   cursor_initialised true
   autofit_bbox false
   initial_cursor_position {
@@ -491,7 +484,6 @@ set N122f1600 [stack 0]
    imported:
    0
    selected:
-   0
    items:
    "root transform/"
   }
@@ -504,7 +496,7 @@ set N122f1600 [stack 0]
   xpos -3460
   ypos 624
  }
-push $N122f1600
+push $N14629ca0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -516,15 +508,16 @@ push $N122f1600
   old_expression_markers {
    {3 8}
   }
-  box {{parent.utility.inres.u/2} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u} {parent.utility.inres.v+(utility.addres)}}
+  box {{parent.xedgedistance x1016 0} 0 {parent.utility.inres.u/2.7} {abs(parent.utility.addres/2)}}
+  xjustify right
   yjustify center
   transforms {
    {0 2}
   }
-  cursor_position 3
+  cursor_position 54
   font {{ Courier : Regular : Courier.pfa : 0 }}
   global_font_scale {{(parent.fontsize1*0.07)}}
-  center {960 540}
+  scale {1 1}
   cursor_initialised true
   autofit_bbox false
   initial_cursor_position {
@@ -535,7 +528,6 @@ push $N122f1600
    imported:
    0
    selected:
-   0
    items:
    "root transform/"
   }
@@ -548,7 +540,7 @@ push $N122f1600
   xpos -3280
   ypos 544
  }
-push $N141fd7d0
+push $N123cc140
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -567,7 +559,7 @@ push $N141fd7d0
   }
   font {{ Courier : Regular : Courier.pfa : 0 }}
   global_font_scale {{(parent.fontsize1*0.07) x1000 1.375}}
-  center {960 540}
+  scale {1 1}
   cursor_initialised true
   autofit_bbox false
   initial_cursor_position {
@@ -578,7 +570,6 @@ push $N141fd7d0
    imported:
    0
    selected:
-   0
    items:
    "root transform/"
   }
@@ -588,10 +579,10 @@ push $N141fd7d0
   name Text7
   label "comp name"
   note_font "Verdana Bold"
-  xpos -3100
+  xpos -3101
   ypos 464
  }
-push $N141f7000
+push $N146b17f0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -603,15 +594,15 @@ push $N141f7000
   old_expression_markers {
    {0 6}
   }
-  box {0 {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u/2} {parent.utility.inres.v+(utility.addres)}}
+  box {0 {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u} {parent.utility.inres.v+(utility.addres)}}
   xjustify center
   yjustify center
   transforms {
    {0 2}
   }
   font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.12)}}
-  center {960 540}
+  global_font_scale {{(parent.fontsize1*0.07)}}
+  scale {1 1}
   cursor_initialised true
   autofit_bbox false
   initial_cursor_position {
@@ -622,7 +613,6 @@ push $N141f7000
    imported:
    0
    selected:
-   0
    items:
    "root transform/"
   }
@@ -632,10 +622,10 @@ push $N141f7000
   name Text6
   label project
   note_font "Verdana Bold"
-  xpos -2920
+  xpos -2922
   ypos 384
  }
-push $N12711e20
+push $N18c14c20
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -680,17 +670,17 @@ push $N12711e20
   xpos -2740
   ypos 304
  }
-push $N1270b290
+push $N18c76de0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
   font_height_toolbar 100
   message "\[value \[python nuke.thisGroup().name()].commenttext]"
   old_message {
-   {97 100 100 32 99 111 109 109 101 110 116 32 104 101 114 101}
+   {65 117 116 111 109 97 116 105 99 32 83 104 111 116 98 111 120 32 80 114 101 118 105 101 119}
   }
   old_expression_markers {
-   {0 15}
+   {0 24}
   }
   box {{parent.xedgedistance x1000 0} 0 {parent.utility.inres.u/2.7} {abs(parent.utility.addres/2)}}
   yjustify center
@@ -700,7 +690,7 @@ push $N1270b290
   cursor_position 52
   font {{ Courier : Regular : Courier.pfa : 0 }}
   global_font_scale {{(parent.fontsize1*((commentsize)*0.01))+0.1}}
-  center {960 540}
+  scale {1 1}
   cursor_initialised true
   autofit_bbox false
   initial_cursor_position {
@@ -711,7 +701,6 @@ push $N1270b290
    imported:
    0
    selected:
-   0
    items:
    "root transform/"
   }
@@ -724,7 +713,7 @@ push $N1270b290
   xpos -2381
   ypos 224
  }
-push $N1295c700
+push $N1487f000
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -766,14 +755,14 @@ push $N1295c700
   xpos -2200
   ypos 144
  }
-push $N12956010
+push $N100f1d80
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
   font_height_toolbar 100
   message "\[frame]"
   old_message {
-   {49 49 48 48}
+   {49 48 48 49}
   }
   old_expression_markers {
    {0 3}
@@ -811,14 +800,14 @@ push $N12956010
   xpos -2021
   ypos 64
  }
-push $N13e3b0a0
+push $N143d2ae0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
   font_height_toolbar 100
   message "\[timecode]"
   old_message {
-   {48 49 58 48 48 58 48 51 58 50 52}
+   {48 49 58 48 48 58 48 48 58 48 48}
   }
   old_expression_markers {
    {0 10}
@@ -856,7 +845,7 @@ push $N13e3b0a0
   xpos -1840
   ypos -16
  }
-push $N11e0ff70
+push $N12511870
  NoOp {
   name utility
   xpos -1120
@@ -867,7 +856,7 @@ push $N11e0ff70
   addUserKnob {7 addres l "add res" R -500 500}
   addres {{parent.slateextend*2}}
  }
-set N129e5db0 [stack 0]
+set N18ebb0d0 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -895,7 +884,7 @@ set N129e5db0 [stack 0]
   xpos -1480
   ypos -734
  }
-push $N129e5db0
+push $N18ebb0d0
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -908,7 +897,7 @@ push $N129e5db0
   xpos -1120
   ypos -736
  }
-set N129d8790 [stack 0]
+set N122c8270 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -941,8 +930,8 @@ set N129d8790 [stack 0]
   xpos -1447
   ypos -487
  }
-set N12768640 [stack 0]
-push $N12768640
+set N106611b0 [stack 0]
+push $N106611b0
  Dilate {
   size {{parent.linewidth}}
   name Dilate1
@@ -961,7 +950,7 @@ push $N12768640
   xpos -1448
   ypos -247
  }
-push $N129d8790
+push $N122c8270
  Merge2 {
   inputs 2
   name Merge5
@@ -1075,7 +1064,7 @@ push $N129d8790
   xpos -1120
   ypos 1189
  }
-push $N11f42fc0
+push $N12523ba0
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -1107,7 +1096,7 @@ push $N11f42fc0
   xpos -2082
   ypos 826
  }
-push $N13e3b0a0
+push $N143d2ae0
  NoOp {
   name readtime
   xpos -2740
@@ -1123,6 +1112,7 @@ push $N13e3b0a0
   tc1 00:00:02:12
  }
 end_group
+set N18ea5310 [stack 0]
 OCIODisplay {
  colorspace scene_linear
  display "sRGB - Display"
@@ -1161,9 +1151,8 @@ Write {
  xpos 304
  ypos 483
 }
+push $N18ea5310
 Viewer {
- inputs 0
- frame 1016
  frame_range 1001-1100
  fps 25
  monitorOutNDISenderName "NukeX - preview_template_v002 - Viewer1"

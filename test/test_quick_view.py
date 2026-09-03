@@ -4,6 +4,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 import unittest
 
@@ -14,7 +15,7 @@ FRONTEND_DIR = Path(__file__).resolve().parents[1]
 if str(FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(FRONTEND_DIR))
 
-from PyQt6.QtCore import QEvent, QObject, QPoint, Qt, pyqtSignal
+from PyQt6.QtCore import QEvent, QObject, QPoint, QRect, Qt, pyqtSignal
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
@@ -232,6 +233,12 @@ class QuickViewTests(unittest.TestCase):
 
         self.assertEqual(popup.title_label.text(), "sho010")
         self.assertEqual(popup.filename_label.text(), "thumb.jpg")
+        self.assertIn("←/→ Shot", popup.shortcut_label.text())
+        self.assertIn("↑/↓ Ver", popup.shortcut_label.text())
+        self.assertIn("J/K/L", popup.shortcut_label.text())
+        self.assertIn("Scroll to zoom", popup.shortcut_label.text())
+        self.assertIn("Double-click to reset", popup.shortcut_label.text())
+        self.assertIn("Space/Esc", popup.shortcut_label.text())
         self.assertTrue(popup.controls.isHidden())
         self.assertFalse(popup.image_label.pixmap().isNull())
         dismissed = []
@@ -268,8 +275,7 @@ class QuickViewTests(unittest.TestCase):
                 ["sho010_thumb.jpg", "sho010_v001.mp4", "sho010_v002.mp4"],
             )
             self.assertEqual(popup._version_index, 2)
-            self.assertFalse(popup.version_down_button.isEnabled())
-            popup.version_up_button.click()
+            self.assertTrue(popup.navigate_version(-1))
             self.assertEqual(popup._version_index, 1)
             self.assertTrue(popup.navigate_version(-1))
             self.assertEqual(popup._version_index, 0)
@@ -387,6 +393,27 @@ class QuickViewTests(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(popup.size(), resized)
 
+    def test_popup_uses_configured_percentage_of_available_screen(self):
+        class FakeScreen:
+            @staticmethod
+            def availableGeometry():
+                return QRect(100, 50, 2000, 1000)
+
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup(screen_percentage=50)
+        self.addCleanup(popup.close)
+
+        popup._position_on_screen(FakeScreen())
+
+        self.assertEqual(popup.width(), 1000)
+        self.assertEqual(popup.height(), 500)
+        self.assertEqual(popup.geometry().center(), QRect(100, 50, 2000, 1000).center())
+
+        popup.set_screen_percentage(10)
+        self.assertEqual(popup._screen_percentage, 25)
+        popup.set_screen_percentage(120)
+        self.assertEqual(popup._screen_percentage, 100)
+
     def test_shot_card_registers_hover_for_still_quick_view(self):
         card = widgets.ShotCard.__new__(widgets.ShotCard)
         QWidget.__init__(card)
@@ -470,6 +497,7 @@ class QuickViewTests(unittest.TestCase):
         controller.toggle.return_value = True
         page._quick_view_controller = controller
         page._quick_view_shortcut_available = mock.Mock(return_value=True)
+        page._open_hovered_render_in_default_app = mock.Mock(return_value=False)
 
         self.assertTrue(page.eventFilter(page, FakeKeyEvent()))
         controller.toggle.assert_called_once_with()
@@ -477,6 +505,34 @@ class QuickViewTests(unittest.TestCase):
         controller.toggle.reset_mock()
         self.assertFalse(page.eventFilter(page, FakeKeyEvent(auto_repeat=True)))
         controller.toggle.assert_not_called()
+
+    def test_nukedash_space_opens_hovered_render_instead_of_quick_view(self):
+        page = page_nukedash.page_nukedash.__new__(page_nukedash.page_nukedash)
+        QWidget.__init__(page)
+        controller = mock.Mock()
+        controller.is_open = False
+        page._quick_view_controller = controller
+        page._quick_view_shortcut_available = mock.Mock(return_value=True)
+        page._open_hovered_render_in_default_app = mock.Mock(return_value=True)
+
+        self.assertTrue(page.eventFilter(page, FakeKeyEvent()))
+
+        page._open_hovered_render_in_default_app.assert_called_once_with()
+        controller.toggle.assert_not_called()
+
+    def test_hovered_render_opens_with_card_default_file_handler(self):
+        page = page_nukedash.page_nukedash.__new__(page_nukedash.page_nukedash)
+        QWidget.__init__(page)
+        button = mock.Mock()
+        button.underMouse.return_value = True
+        button.property.return_value = "/show/shot/render_v003.mov"
+        folders = mock.Mock()
+        card = SimpleNamespace(btn_latest_render=button, filesIO=folders)
+        page._iter_timeline_shot_cards = mock.Mock(return_value=[card])
+
+        self.assertTrue(page._open_hovered_render_in_default_app())
+
+        folders.open_file.assert_called_once_with("/show/shot/render_v003.mov")
 
     def test_text_entry_widgets_block_nukedash_space_shortcut(self):
         blockers = [
@@ -611,6 +667,18 @@ class QuickViewTests(unittest.TestCase):
         self.assertEqual(content.size(), view.viewport().size())
         self.assertEqual(view.horizontalScrollBar().value(), 0)
         self.assertEqual(view.verticalScrollBar().value(), 0)
+
+        view.set_zoom(0.5)
+        self.app.processEvents()
+        self.assertEqual(view.zoom_factor, 0.5)
+        self.assertEqual(content.width(), round(view.viewport().width() * 0.5))
+        self.assertEqual(content.height(), round(view.viewport().height() * 0.5))
+
+        view.set_zoom(0.1)
+        self.assertEqual(view.zoom_factor, 0.25)
+
+        view.reset_zoom()
+        self.assertEqual(view.zoom_factor, 1.0)
 
 
 if __name__ == "__main__":

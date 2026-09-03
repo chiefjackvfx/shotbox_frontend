@@ -763,6 +763,10 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'page_nukedash'):
                 self.page_nukedash.apply_ui_density_settings(row_height=value)
 
+        elif key == "quick_view_screen_percentage":
+            if hasattr(self, "page_nukedash"):
+                self.page_nukedash.set_quick_view_screen_percentage(value)
+
         elif key == "shots_layout_mode":
             if hasattr(self, "page_nukedash") and hasattr(self.page_nukedash, "apply_shots_layout_mode"):
                 self.page_nukedash.apply_shots_layout_mode(value)
