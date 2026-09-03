@@ -2,6 +2,13 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 4.1.1 - 2026-09-03
+
+### Changed
+
+- press space on the export to open in default viewer
+- small changes to ui
+
 ## 4.1.0 - 2026-09-02
 
 ### Changed
