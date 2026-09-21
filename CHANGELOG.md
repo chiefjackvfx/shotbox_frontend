@@ -2,6 +2,12 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 4.2.1 - 2026-09-21
+
+### Fixed
+
+- bump test
+
 ## 4.2.0 - 2026-09-21
 
 ### Added
