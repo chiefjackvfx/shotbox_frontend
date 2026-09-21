@@ -435,6 +435,35 @@ class QuickViewTests(unittest.TestCase):
         self.assertFalse(card._thumbnail_hovered)
         controller.clear_hovered_card.assert_called_once_with(card)
 
+    def test_hover_leave_releases_preview_file(self):
+        card = widgets.ShotCard.__new__(widgets.ShotCard)
+        QWidget.__init__(card)
+        card._video_player = FakePlayer(position=2100)
+        card._preview_stack = FakeStack()
+        card._quick_view_active = False
+        with mock.patch.object(widgets, "HAS_MULTIMEDIA", True):
+            card._on_preview_hover_leave()
+        self.assertTrue(card._video_player.source.isEmpty())
+        self.assertEqual(card._preview_stack.index, 0)
+
+    def test_popup_hide_releases_file_and_preserves_handoff_position(self):
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        player = FakePlayer(position=4200)
+        popup.player = player
+        popup._is_video = True
+        popup._version_index = 0
+        popup._version_entries = [SimpleNamespace(key="preview")]
+        popup._session_visible = True
+        handoff_positions = []
+        popup.dismissed.connect(lambda: handoff_positions.append(popup.handoff_position()))
+        from PyQt6.QtGui import QHideEvent
+        popup.hideEvent(QHideEvent())
+        self.assertTrue(player.source.isEmpty())
+        self.assertEqual(handoff_positions, [4200])
+        self.assertEqual(popup.handoff_position(), 4200)
+        popup.deleteLater()
+
     def test_shot_card_handoff_releases_file_and_resumes_at_popup_position(self):
         card = widgets.ShotCard.__new__(widgets.ShotCard)
         QWidget.__init__(card)
