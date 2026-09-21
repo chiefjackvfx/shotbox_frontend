@@ -16,6 +16,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QTabWidget, QSizePolicy
 
 import app_update
+from app_version import APP_VERSION
 import http_help
 import filesIO
 from duration_updater import DurationUpdaterPage
@@ -210,6 +211,12 @@ class MainWindow(QMainWindow):
         self.page_settings.server_url_changed.connect(self._on_server_url_changed)
         
         self.setCentralWidget(self.tabs)
+        self.version_label = QtWidgets.QLabel(f"ShotBox v{APP_VERSION}", self)
+        self.version_label.setStyleSheet("color: #9CA3AF;")
+        self.version_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        self.version_label.setContentsMargins(0, 0, 6, 0)
+        self.statusBar().setSizeGripEnabled(False)
+        self.statusBar().addPermanentWidget(self.version_label)
         self._relax_minimum_sizes()
         
         self._shown_once = False
