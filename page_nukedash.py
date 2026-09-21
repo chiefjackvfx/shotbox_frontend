@@ -294,6 +294,15 @@ def _normalize_task_style(style: str) -> str:
     return "checklist" if str(style).lower() == "checklist" else "card"
 
 
+def _nukedash_combo_jobs(jobs: list[dict], active_job_id=None) -> list[dict]:
+    """Return visible jobs plus a hidden job that is already active."""
+    return [
+        job
+        for job in jobs
+        if not bool(job.get("hidden", False)) or job.get("id") == active_job_id
+    ]
+
+
 class page_nukedash(QMainWindow):
     jobs_data_updated = pyqtSignal(list)
     active_job_changed = pyqtSignal(dict)
@@ -3177,23 +3186,41 @@ class page_nukedash(QMainWindow):
             self._populate_filter_dropdowns()
 
         # --- populate comboBox_jobs ---
+        combo_jobs = _nukedash_combo_jobs(jobs, self._active_job_id)
+
         # Save the currently selected job ID before clearing
         previously_selected_job_id = self.comboBox_jobs.currentData()
         
         self.comboBox_jobs.blockSignals(True)  # avoid triggering anything while updating
         self.comboBox_jobs.clear()
 
-        for job in jobs:
+        hidden_combo_indexes = []
+        for job in combo_jobs:
             job_id = job.get("id")
             title = job.get("title", f"Untitled Job {job_id}")
+            if job.get("hidden", False):
+                title = f"{title} (Hidden)"
             self.comboBox_jobs.addItem(title, job_id)
+            if job.get("hidden", False):
+                hidden_combo_indexes.append(self.comboBox_jobs.count() - 1)
 
-        # Restore the previously selected job if it still exists
-        if previously_selected_job_id is not None:
-            for i in range(self.comboBox_jobs.count()):
-                if self.comboBox_jobs.itemData(i) == previously_selected_job_id:
-                    self.comboBox_jobs.setCurrentIndex(i)
-                    break
+        # The active job is authoritative. This also keeps a job selected when
+        # an admin hides it while the application is already displaying it.
+        selection_job_id = self._active_job_id
+        if self.comboBox_jobs.findData(selection_job_id) < 0:
+            selection_job_id = previously_selected_job_id
+        selection_index = self.comboBox_jobs.findData(selection_job_id)
+        if selection_index >= 0:
+            self.comboBox_jobs.setCurrentIndex(selection_index)
+
+        # A hidden active job remains visible for context, but cannot be chosen
+        # again after the user switches to another job.
+        combo_model = self.comboBox_jobs.model()
+        for index in hidden_combo_indexes:
+            item = combo_model.item(index)
+            if item is not None:
+                item.setEnabled(False)
+                item.setToolTip("This job is hidden in Django admin")
         
         self.comboBox_jobs.blockSignals(False)
         
@@ -3204,6 +3231,12 @@ class page_nukedash(QMainWindow):
             if job_id is None:
                 continue
             by_id[job_id] = job
+
+        selectable_by_id = {
+            job.get("id"): job
+            for job in combo_jobs
+            if job.get("id") is not None and not bool(job.get("hidden", False))
+        }
         
         # AUTO-SELECT JOB ON INITIAL LOAD
         # Try to restore last session first, otherwise select first job
@@ -3214,9 +3247,9 @@ class page_nukedash(QMainWindow):
             # Check if we should restore last session
             if not self._session_restored and self._settings_manager.get("remember_last_session", True):
                 last_job_id = self._settings_manager.get("last_job_id")
-                if last_job_id is not None and last_job_id in by_id:
+                if last_job_id is not None and last_job_id in selectable_by_id:
                     target_job_id = last_job_id
-                    target_job = by_id[last_job_id]
+                    target_job = selectable_by_id[last_job_id]
                     # Store timeline/scroll to restore after job loads
                     self._pending_scroll_restore = {
                         "timeline_index": self._settings_manager.get("last_timeline_index", 0),
@@ -3227,7 +3260,7 @@ class page_nukedash(QMainWindow):
             # Fall back to first job if no session to restore
             if target_job is None:
                 target_job_id = self.comboBox_jobs.itemData(0)
-                target_job = by_id.get(target_job_id)
+                target_job = selectable_by_id.get(target_job_id)
                 self._session_restored = True  # Mark as restored even if just using first job
             
             if target_job:
@@ -3270,6 +3303,25 @@ class page_nukedash(QMainWindow):
         if callable(updater):
             updater()
         self._finish_timed_load_after_data()
+
+    def _remove_retained_hidden_job_options(self, selected_job_id):
+        self.comboBox_jobs.blockSignals(True)
+        try:
+            for combo_index in reversed(range(self.comboBox_jobs.count())):
+                combo_job_id = self.comboBox_jobs.itemData(combo_index)
+                combo_job = self._jobs_by_id.get(combo_job_id)
+                if (
+                    combo_job_id != selected_job_id
+                    and combo_job
+                    and combo_job.get("hidden", False)
+                ):
+                    self.comboBox_jobs.removeItem(combo_index)
+
+            selected_index = self.comboBox_jobs.findData(selected_job_id)
+            if selected_index >= 0:
+                self.comboBox_jobs.setCurrentIndex(selected_index)
+        finally:
+            self.comboBox_jobs.blockSignals(False)
         
     def _on_job_selected(self, index):
         if index < 0:
@@ -3277,6 +3329,18 @@ class page_nukedash(QMainWindow):
         job_id = self.comboBox_jobs.itemData(index)
         job = self._jobs_by_id.get(job_id)
         if job:
+            if job.get("hidden", False) and job_id != self._active_job_id:
+                active_index = self.comboBox_jobs.findData(self._active_job_id)
+                if active_index >= 0:
+                    self.comboBox_jobs.blockSignals(True)
+                    self.comboBox_jobs.setCurrentIndex(active_index)
+                    self.comboBox_jobs.blockSignals(False)
+                return
+
+            # Once the user leaves a retained hidden job, remove it from the
+            # selector immediately so it cannot be selected again.
+            self._remove_retained_hidden_job_options(job_id)
+
             is_explicit_switch = not (
                 self._initial_load and self._load_timing_context == "startup"
             )

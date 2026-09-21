@@ -206,6 +206,9 @@ class TimingHarness(QMainWindow):
     refresh_clicked = page_nukedash.page_nukedash.refresh_clicked
     _on_error = page_nukedash.page_nukedash._on_error
     _on_data = page_nukedash.page_nukedash._on_data
+    _remove_retained_hidden_job_options = (
+        page_nukedash.page_nukedash._remove_retained_hidden_job_options
+    )
     _on_job_load_complete = page_nukedash.page_nukedash._on_job_load_complete
     _on_timeline_tab_changed = page_nukedash.page_nukedash._on_timeline_tab_changed
 
@@ -280,6 +283,9 @@ class TimingHarness(QMainWindow):
         return
 
     def _load_timeline_if_needed(self, index):
+        return
+
+    def _do_activate_pending_job(self):
         return
 
 
@@ -575,6 +581,18 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
             window.deleteLater()
             self.app.processEvents()
 
+    def test_toolbox_tab_is_always_immediately_before_settings(self):
+        window = build_main_window(startup_tab=0)
+        try:
+            tab_titles = [window.tabs.tabText(i) for i in range(window.tabs.count())]
+            self.assertTrue(hasattr(window, "page_toolbox"))
+            self.assertEqual(tab_titles[-2:], ["Toolbox", "⚙ Settings"])
+            self.assertIs(window.tabs.widget(window.tabs.count() - 2), window.page_toolbox)
+        finally:
+            window.close()
+            window.deleteLater()
+            self.app.processEvents()
+
     def test_startup_tab_review_mapping_falls_back_to_tasks_when_review_is_disabled(self):
         window = build_main_window(startup_tab=1)
         try:
@@ -705,6 +723,69 @@ class NukeDashLoadTimingTests(unittest.TestCase):
 
         self.assertEqual(self.harness._worker.fetch_calls, 1)
         self.assertEqual(self.harness.label_loaded_time.text(), "Loaded in: 12.3s")
+
+    def test_hidden_jobs_are_excluded_only_from_nukedash_combo(self):
+        jobs = [
+            {"id": 1, "title": "Visible Job", "hidden": False, "timelines": []},
+            {"id": 2, "title": "Hidden Job", "hidden": True, "timelines": []},
+        ]
+
+        self.harness._on_data(jobs)
+
+        self.assertEqual(self.harness.comboBox_jobs.count(), 1)
+        self.assertEqual(self.harness.comboBox_jobs.itemData(0), 1)
+        self.assertEqual(set(self.harness._jobs_by_id), {1, 2})
+        self.assertEqual(self.harness.jobs_data_updated.emitted[-1][0], jobs)
+
+    def test_active_hidden_job_is_retained_disabled_until_switch(self):
+        jobs = [
+            {"id": 1, "title": "Visible Job", "hidden": False, "timelines": []},
+            {"id": 2, "title": "Hidden Job", "hidden": True, "timelines": []},
+        ]
+        self.harness._active_job_id = 2
+
+        self.harness._on_data(jobs)
+
+        hidden_index = self.harness.comboBox_jobs.findData(2)
+        self.assertGreaterEqual(hidden_index, 0)
+        self.assertEqual(self.harness.comboBox_jobs.currentData(), 2)
+        self.assertEqual(self.harness.comboBox_jobs.itemText(hidden_index), "Hidden Job (Hidden)")
+        self.assertFalse(self.harness.comboBox_jobs.model().item(hidden_index).isEnabled())
+
+        self.harness._remove_retained_hidden_job_options(selected_job_id=1)
+
+        self.assertEqual(self.harness.comboBox_jobs.count(), 1)
+        self.assertEqual(self.harness.comboBox_jobs.currentData(), 1)
+        self.assertEqual(self.harness.comboBox_jobs.findData(2), -1)
+
+    def test_hidden_saved_job_is_not_restored_on_startup(self):
+        jobs = [
+            {"id": 1, "title": "Visible Job", "hidden": False, "timelines": []},
+            {"id": 2, "title": "Hidden Job", "hidden": True, "timelines": []},
+        ]
+        self.harness._active_job_id = None
+        self.harness._settings_manager = FakeSettingsManager(
+            extra_settings={"remember_last_session": True, "last_job_id": 2}
+        )
+
+        with mock.patch.object(page_nukedash.QTimer, "singleShot"):
+            self.harness._on_data(jobs)
+
+        self.assertEqual(self.harness.comboBox_jobs.count(), 1)
+        self.assertEqual(self.harness.comboBox_jobs.currentData(), 1)
+        self.assertEqual(self.harness._pending_job["id"], 1)
+
+    def test_startup_with_only_hidden_jobs_leaves_combo_empty(self):
+        jobs = [
+            {"id": 2, "title": "Hidden Job", "hidden": True, "timelines": []},
+        ]
+        self.harness._active_job_id = None
+
+        self.harness._on_data(jobs)
+
+        self.assertEqual(self.harness.comboBox_jobs.count(), 0)
+        self.assertEqual(set(self.harness._jobs_by_id), {2})
+        self.assertEqual(self.harness.jobs_data_updated.emitted[-1][0], jobs)
 
     def test_job_switch_path_updates_label_after_job_load_complete(self):
         with mock.patch.object(page_nukedash.time, "perf_counter", side_effect=[5.0, 8.24]):

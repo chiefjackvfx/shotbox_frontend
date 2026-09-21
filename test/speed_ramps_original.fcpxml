@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE fcpxml>
+<fcpxml version="1.9">
+    <resources>
+        <format id="r0" name="FFVideoFormat1080p25" frameDuration="1/25s" width="1920" height="1080"/>
+        <format id="r1" name="FFVideoFormatRateUndefined" frameDuration="1/25s" width="4608" height="3164"/>
+        <asset format="r1" id="r2" name="A_0002C006_260715_174128_a1D5X.mxf" hasVideo="1" duration="1026/25s" start="8824/5s">
+            <media-rep src="file:///Volumes/expansion_a/Live_Raw/C2236_Cirio_Pickup/Main/ALEXA35_Card_2/A_0002_1D5X/A_0002C006_260715_174128_a1D5X.mxf" kind="original-media"/>
+        </asset>
+        <asset format="r1" id="r3" name="cirio110_v017_[1001-1402].exr" hasVideo="1" duration="402/25s" start="44664/25s">
+            <media-rep src="file:///Volumes/projects/PROJECTS/C2236_Cirio/VFX/GrownforGreatness_30s/cirio110/renders/comp/cirio110_v017/cirio110_v017_[1001-1402].exr" kind="original-media"/>
+        </asset>
+    </resources>
+    <library>
+        <event name="Timeline 10 (Resolve)">
+            <project name="Timeline 10 (Resolve)">
+                <sequence format="r0" tcStart="3600/1s" duration="376/25s" tcFormat="NDF">
+                    <spine>
+                        <asset-clip format="r1" offset="3600/1s" ref="r2" name="A_0002C006_260715_174128_a1D5X.mxf" duration="63/25s" enabled="1" tcFormat="NDF" start="44242/25s">
+                            <timeMap frameSampling="floor">
+                                <timept interp="smooth2" time="8824/5s" value="8824/5s"/>
+                                <timept outTime="239227/666000s" interp="smooth2" time="44261/25s" value="143090357/79920s" inTime="506159/1998000s"/>
+                                <timept outTime="4/15s" interp="smooth2" time="8854/5s" value="1790675399/999000s" inTime="239227/666000s"/>
+                                <timept outTime="106027/666000s" interp="smooth2" time="8858/5s" value="143789987/79920s" inTime="4/15s"/>
+                                <timept outTime="587143/666000s" interp="smooth2" time="44294/25s" value="899108641/499500s" inTime="106559/1998000s"/>
+                                <timept interp="smooth2" time="44322/25s" value="1803953927/999000s"/>
+                            </timeMap>
+                            <adjust-transform position="0 0" anchor="0 0" scale="1 1"/>
+                            <asset-clip format="r1" offset="44242/25s" ref="r3" name="cirio110_v017_[1001-1402].exr" duration="376/25s" enabled="1" tcFormat="NDF" start="44674/25s" lane="1">
+                                <adjust-transform position="0 0" anchor="0 0" scale="1 1"/>
+                                <metadata>
+                                    <md key="com.apple.proapps.studio.reel" value="cirio110_v017_[1001-1402]"/>
+                                </metadata>
+                            </asset-clip>
+                            <metadata>
+                                <md key="com.apple.proapps.studio.reel" value="A_0002C006_260715_174128_a1D5X"/>
+                            </metadata>
+                        </asset-clip>
+                        <gap offset="90063/25s" name="Gap" duration="313/25s" start="3600/1s"/>
+                    </spine>
+                </sequence>
+            </project>
+        </event>
+    </library>
+</fcpxml>

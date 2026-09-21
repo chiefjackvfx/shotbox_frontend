@@ -325,10 +325,12 @@ class SettingsPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         
         # Scroll area for settings
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.settings_scroll_area = QScrollArea()
+        self.settings_scroll_area.setWidgetResizable(True)
+        self.settings_scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self.settings_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
         
         # Container widget for scroll content
         container = QWidget()
@@ -674,8 +676,8 @@ class SettingsPage(QWidget):
         container_layout.addWidget(notif_group)
 
         # === App Updates Section ===
-        updates_group = self._create_group_box("App Updates")
-        updates_layout = QFormLayout(updates_group)
+        self.updates_group = self._create_group_box("App Updates")
+        updates_layout = QFormLayout(self.updates_group)
 
         self.current_version_label = QLabel("Unknown")
         self.current_version_label.setWordWrap(True)
@@ -721,7 +723,7 @@ class SettingsPage(QWidget):
         update_buttons_layout.addStretch()
         updates_layout.addRow("", update_buttons_layout)
 
-        container_layout.addWidget(updates_group)
+        container_layout.addWidget(self.updates_group)
         
         # === Action Buttons ===
         buttons_layout = QHBoxLayout()
@@ -741,8 +743,8 @@ class SettingsPage(QWidget):
         container_layout.addStretch()
         
         # Set up scroll area
-        scroll.setWidget(container)
-        main_layout.addWidget(scroll)
+        self.settings_scroll_area.setWidget(container)
+        main_layout.addWidget(self.settings_scroll_area)
     
     def _create_group_box(self, title: str) -> QGroupBox:
         """Create a group box that inherits styling from the active QSS theme."""
@@ -1285,7 +1287,8 @@ class SettingsPage(QWidget):
         self.check_updates_btn.setEnabled(can_check)
         self.apply_update_btn.setEnabled(can_update)
 
-    def _apply_update_status(self, status: app_update.UpdateStatus) -> None:
+    def apply_update_status(self, status: app_update.UpdateStatus) -> None:
+        """Display an update status produced by a manual or automatic check."""
         self.current_version_label.setText(status.current_display)
 
         if status.current_branch:
@@ -1298,9 +1301,22 @@ class SettingsPage(QWidget):
         self.update_changelog_label.setText(status.changelog_preview)
         self._set_update_buttons_enabled(status.can_check, status.can_update)
 
+    def _apply_update_status(self, status: app_update.UpdateStatus) -> None:
+        """Backward-compatible internal alias for update-status display."""
+        self.apply_update_status(status)
+
+    def set_update_check_in_progress(self) -> None:
+        """Show the automatic checker state and prevent overlapping checks."""
+        self.update_status_label.setText("Checking for updates...")
+        self._set_update_buttons_enabled(False, False)
+
+    def focus_update_section(self) -> None:
+        """Scroll the Settings page to the app-update controls."""
+        self.settings_scroll_area.ensureWidgetVisible(self.updates_group)
+
     def _refresh_update_panel(self) -> None:
         status = app_update.inspect_install()
-        self._apply_update_status(status)
+        self.apply_update_status(status)
 
     def _on_check_for_updates(self) -> None:
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -1308,7 +1324,7 @@ class SettingsPage(QWidget):
             status = app_update.check_for_updates()
         finally:
             QApplication.restoreOverrideCursor()
-        self._apply_update_status(status)
+        self.apply_update_status(status)
 
     def _on_update_and_restart(self) -> None:
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -1317,36 +1333,49 @@ class SettingsPage(QWidget):
         finally:
             QApplication.restoreOverrideCursor()
 
-        self._apply_update_status(status)
+        self.launch_update_and_restart(status, confirm=True)
+
+    def launch_update_and_restart(
+        self,
+        status: app_update.UpdateStatus,
+        *,
+        parent=None,
+        confirm: bool = True,
+    ) -> bool:
+        """Launch an available update, optionally asking for confirmation first."""
+        self.apply_update_status(status)
+        dialog_parent = parent or self
 
         if not status.can_update:
-            QMessageBox.warning(self, "Update Blocked", status.status_message)
-            return
+            QMessageBox.warning(dialog_parent, "Update Blocked", status.status_message)
+            return False
 
         remote_display = status.remote_display or "the latest published version"
-        reply = QMessageBox.question(
-            self,
-            "Update ShotBox",
-            f"Update to {remote_display} and restart ShotBox now?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
+        if confirm:
+            reply = QMessageBox.question(
+                dialog_parent,
+                "Update ShotBox",
+                f"Update to {remote_display} and restart ShotBox now?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return False
 
         ok, error_message = app_update.launch_update_script(os.getpid())
         if not ok:
             QMessageBox.critical(
-                self,
+                dialog_parent,
                 "Update Failed",
                 f"Could not launch the updater script.\n\n{error_message}",
             )
-            return
+            return False
 
         self.update_status_label.setText("Updater launched. ShotBox will now close.")
         app = QApplication.instance()
         if app:
             app.quit()
+        return True
     
     def get_settings_manager(self) -> SettingsManager:
         """Get the settings manager instance."""

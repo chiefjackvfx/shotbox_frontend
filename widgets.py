@@ -1875,6 +1875,7 @@ class ShotCard(QWidget):
             if hasattr(self, "_video_player") and self._video_player:
                 try:
                     self._video_player.stop()
+                    self._video_player.setSource(QUrl())
                 except Exception:
                     pass
             return
@@ -2871,7 +2872,7 @@ class ShotCard(QWidget):
         )
         
         # Create media player
-        self._video_player = QMediaPlayer()
+        self._video_player = QMediaPlayer(self)
         self._audio_output = QAudioOutput()
         self._audio_output.setVolume(0.5)
         self._video_player.setAudioOutput(self._audio_output)
@@ -2955,10 +2956,10 @@ class ShotCard(QWidget):
             return
             
         try:
-            if self._quick_view_active:
-                self._video_player.pause()
-            else:
-                self._video_player.stop()
+            # stop() alone keeps the file open, causing SMB delete-on-close
+            # files (.__smb*) when a preview is overwritten.
+            self._video_player.stop()
+            self._video_player.setSource(QUrl())
             self._preview_stack.setCurrentIndex(0)  # Show thumbnail
         except Exception as e:
             pass  # Silent fail
@@ -2997,13 +2998,14 @@ class ShotCard(QWidget):
         )
 
     def begin_quick_view(self) -> int:
-        """Pause inline playback and return its current timestamp."""
+        """Release inline playback and return its current timestamp."""
         self._quick_view_active = True
         position = 0
         if HAS_MULTIMEDIA and self._video_player is not None:
             try:
                 position = max(0, int(self._video_player.position()))
-                self._video_player.pause()
+                self._video_player.stop()
+                self._video_player.setSource(QUrl())
                 if self._preview_stack is not None:
                     self._preview_stack.setCurrentIndex(0)
             except (RuntimeError, TypeError, ValueError):
@@ -3201,6 +3203,7 @@ class ShotCard(QWidget):
         # Clean up video player
         if hasattr(self, '_video_player') and self._video_player:
             self._video_player.stop()
+            self._video_player.setSource(QUrl())
         super().closeEvent(event)
         
     

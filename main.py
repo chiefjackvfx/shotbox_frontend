@@ -11,13 +11,16 @@ import importlib
 from pathlib import Path
 
 from PyQt6 import QtWidgets
-from PyQt6.QtCore import QTimer, Qt, qInstallMessageHandler
+from PyQt6.QtCore import QProcess, QTimer, Qt, qInstallMessageHandler
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QMainWindow, QTabWidget, QSizePolicy
+from PyQt6.QtWidgets import QMainWindow, QMessageBox, QTabWidget, QSizePolicy
+
+import app_update
 import http_help
 import filesIO
 from duration_updater import DurationUpdaterPage
 from settings import SettingsPage, get_settings_manager
+from toolbox_page import ToolboxPage
 from page_nukedash import page_nukedash
 from nuke_headless_tasks import PreviewConfig
 import widgets as widgets_module  # For updating BASE_URL
@@ -37,6 +40,43 @@ def _load_optional_class(enabled: bool, module_name: str, class_name: str):
     return getattr(module, class_name, None)
 
 
+def _show_automatic_update_dialog(parent, status: app_update.UpdateStatus) -> str:
+    """Show the startup update prompt and return the selected action."""
+    dialog = QMessageBox(parent)
+    dialog.setIcon(QMessageBox.Icon.Information)
+    dialog.setWindowTitle("ShotBox Update Available")
+    dialog.setText(
+        "A ShotBox update is available.\n\n"
+        f"Installed: {status.current_display}\n"
+        f"Latest: {status.remote_display or 'origin/main'}"
+    )
+
+    details = [status.status_message]
+    if status.changelog_preview:
+        details.extend(("", "What's new:", status.changelog_preview))
+    dialog.setInformativeText("\n".join(details))
+
+    if status.can_update:
+        action_button = dialog.addButton(
+            "Update Now", QMessageBox.ButtonRole.AcceptRole
+        )
+        action_name = "update"
+    else:
+        action_button = dialog.addButton(
+            "Open Settings", QMessageBox.ButtonRole.ActionRole
+        )
+        action_name = "settings"
+
+    remind_button = dialog.addButton(
+        "Remind Later", QMessageBox.ButtonRole.RejectRole
+    )
+    dialog.setDefaultButton(remind_button)
+    dialog.setEscapeButton(remind_button)
+    dialog.exec()
+
+    if dialog.clickedButton() is action_button:
+        return action_name
+    return "later"
 
 
 # Get the directory where this script is located (for cross-platform path handling)
@@ -157,7 +197,10 @@ class MainWindow(QMainWindow):
         if activity_page_class is not None:
             self.page_activity = activity_page_class()
             self.tabs.addTab(self.page_activity, '📋 Activity')
-        
+
+        self.page_toolbox = ToolboxPage()
+        self.tabs.addTab(self.page_toolbox, 'Toolbox')
+
         # Settings page (keep at the end)
         self.page_settings = SettingsPage(self._settings_manager)
         self.tabs.addTab(self.page_settings, '⚙ Settings')
@@ -189,6 +232,11 @@ class MainWindow(QMainWindow):
             self._wire_activity_page()
         self._apply_startup_tab()
 
+        self._automatic_update_check_started = False
+        self._automatic_update_check_finished = False
+        self._automatic_update_process = None
+        self._automatic_update_initial_status = None
+
     def _relax_minimum_sizes(self):
         """Allow the main window to shrink below child size hints."""
         self.setMinimumSize(0, 0)
@@ -197,6 +245,7 @@ class MainWindow(QMainWindow):
 
         pages = [
             self.page_nukedash,
+            self.page_toolbox,
             self.page_settings,
         ]
         if hasattr(self, "page_assignment_board"):
@@ -824,6 +873,110 @@ class MainWindow(QMainWindow):
     def _on_server_url_changed(self, url: str):
         """Handle server URL change."""
         self._update_server_url(url)
+
+    def _start_automatic_update_check(self) -> None:
+        """Fetch origin/main asynchronously once during this app launch."""
+        if self._automatic_update_check_started:
+            return
+        self._automatic_update_check_started = True
+
+        status = app_update.inspect_install()
+        self._automatic_update_initial_status = status
+        if not status.can_check:
+            self._complete_automatic_update_check(status)
+            return
+
+        self.page_settings.set_update_check_in_progress()
+        process = QProcess(self)
+        process.setWorkingDirectory(str(app_update.REPO_ROOT))
+        process.finished.connect(self._on_automatic_update_fetch_finished)
+        process.errorOccurred.connect(self._on_automatic_update_fetch_error)
+        self._automatic_update_process = process
+        process.start(
+            "git",
+            ["fetch", app_update.UPDATE_REMOTE, app_update.UPDATE_BRANCH],
+        )
+
+    def _on_automatic_update_fetch_finished(
+        self,
+        exit_code: int,
+        _exit_status: QProcess.ExitStatus,
+    ) -> None:
+        if self._automatic_update_check_finished:
+            return
+
+        process = self._automatic_update_process
+        if exit_code == 0:
+            status = app_update.check_for_updates(fetch_remote=False)
+        else:
+            error_message = "Failed to fetch updates from GitHub."
+            if process is not None:
+                stderr = bytes(process.readAllStandardError()).decode(
+                    errors="replace"
+                ).strip()
+                if stderr:
+                    error_message = stderr
+            status = self._automatic_update_failure_status(error_message)
+        self._complete_automatic_update_check(status)
+
+    def _on_automatic_update_fetch_error(
+        self, _process_error: QProcess.ProcessError
+    ) -> None:
+        if self._automatic_update_check_finished:
+            return
+        process = self._automatic_update_process
+        error_message = (
+            process.errorString()
+            if process is not None
+            else "Could not start the automatic update check."
+        )
+        self._complete_automatic_update_check(
+            self._automatic_update_failure_status(error_message)
+        )
+
+    def _automatic_update_failure_status(
+        self, error_message: str
+    ) -> app_update.UpdateStatus:
+        status = self._automatic_update_initial_status or app_update.inspect_install()
+        status.status_message = error_message or "Failed to fetch updates from GitHub."
+        status.changelog_preview = "Could not load remote changelog."
+        status.has_update = False
+        status.can_update = False
+        return status
+
+    def _complete_automatic_update_check(
+        self, status: app_update.UpdateStatus
+    ) -> None:
+        if self._automatic_update_check_finished:
+            return
+        self._automatic_update_check_finished = True
+        self.page_settings.apply_update_status(status)
+
+        process = self._automatic_update_process
+        if process is not None:
+            process.deleteLater()
+            self._automatic_update_process = None
+
+        if status.has_update and self.isVisible():
+            QTimer.singleShot(
+                0,
+                lambda checked_status=status: self._prompt_for_automatic_update(
+                    checked_status
+                ),
+            )
+
+    def _prompt_for_automatic_update(self, status: app_update.UpdateStatus) -> None:
+        if not self.isVisible():
+            return
+
+        action = _show_automatic_update_dialog(self, status)
+        if action == "update":
+            self.page_settings.launch_update_and_restart(
+                status, parent=self, confirm=False
+            )
+        elif action == "settings":
+            self.tabs.setCurrentWidget(self.page_settings)
+            QTimer.singleShot(0, self.page_settings.focus_update_section)
     
     def showEvent(self, event):
         """Show loading dialog when main window appears."""
@@ -831,6 +984,7 @@ class MainWindow(QMainWindow):
         # Only show on first appearance
         if not self._shown_once:
             self._shown_once = True
+            QTimer.singleShot(250, self._start_automatic_update_check)
             # Show the loading dialog centered on the main window after it's visible
             show_loading = self._settings_manager.get("show_startup_loading_dialog", True)
             if show_loading and hasattr(self.page_nukedash, '_initial_load') and self.page_nukedash._initial_load:
@@ -872,6 +1026,15 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Persist UI state and stop worker threads when closing the application."""
+        process = getattr(self, "_automatic_update_process", None)
+        if process is not None and process.state() != QProcess.ProcessState.NotRunning:
+            self._automatic_update_check_finished = True
+            process.blockSignals(True)
+            process.terminate()
+            if not process.waitForFinished(500):
+                process.kill()
+                process.waitForFinished(500)
+
         # Save session state (job, timeline, scroll) before closing
         if hasattr(self, 'page_nukedash') and hasattr(self.page_nukedash, '_save_session_state'):
             try:

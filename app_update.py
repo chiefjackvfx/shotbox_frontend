@@ -217,9 +217,10 @@ def inspect_install() -> UpdateStatus:
         status_message="Ready to check for updates.",
     )
 
-    if current_branch and current_branch != UPDATE_BRANCH:
+    if current_branch != UPDATE_BRANCH:
+        branch_display = current_branch or "detached HEAD"
         status.status_message = (
-            f"Current branch is '{current_branch}'. Published self-updates only support '{UPDATE_BRANCH}'."
+            f"Current branch is '{branch_display}'. Published self-updates only support '{UPDATE_BRANCH}'."
         )
         status.changelog_preview = "Switch to main for self-update support."
         return status
@@ -230,18 +231,20 @@ def inspect_install() -> UpdateStatus:
     return status
 
 
-def check_for_updates() -> UpdateStatus:
+def check_for_updates(fetch_remote: bool = True) -> UpdateStatus:
+    """Check the published branch, optionally using an already-fetched remote."""
     status = inspect_install()
     if not status.can_check:
         return status
 
-    fetch_result = _run_git("fetch", UPDATE_REMOTE, UPDATE_BRANCH, check=False)
-    if fetch_result.returncode != 0:
-        status.status_message = (
-            fetch_result.stderr.strip() or "Failed to fetch updates from GitHub."
-        )
-        status.changelog_preview = "Could not load remote changelog."
-        return status
+    if fetch_remote:
+        fetch_result = _run_git("fetch", UPDATE_REMOTE, UPDATE_BRANCH, check=False)
+        if fetch_result.returncode != 0:
+            status.status_message = (
+                fetch_result.stderr.strip() or "Failed to fetch updates from GitHub."
+            )
+            status.changelog_preview = "Could not load remote changelog."
+            return status
 
     remote_ref = f"{UPDATE_REMOTE}/{UPDATE_BRANCH}"
     remote_commit = _get_remote_commit(remote_ref)
@@ -260,9 +263,12 @@ def check_for_updates() -> UpdateStatus:
 
     ahead, behind = _get_ahead_behind(remote_ref)
 
-    if status.current_branch and status.current_branch != UPDATE_BRANCH:
+    if status.current_branch != UPDATE_BRANCH:
+        if behind > 0:
+            status.has_update = True
+        branch_display = status.current_branch or "detached HEAD"
         status.status_message = (
-            f"Remote publish info loaded, but this checkout is on '{status.current_branch}', not '{UPDATE_BRANCH}'."
+            f"Update information loaded, but this checkout is on '{branch_display}', not '{UPDATE_BRANCH}'."
         )
         return status
 
@@ -286,6 +292,7 @@ def check_for_updates() -> UpdateStatus:
         status.status_message = "This checkout is ahead of origin/main. No published update will be applied."
         return status
 
+    status.has_update = behind > 0
     status.status_message = (
         "This checkout has diverged from origin/main. Resolve branch differences manually before updating."
     )

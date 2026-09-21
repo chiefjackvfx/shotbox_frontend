@@ -1121,8 +1121,12 @@ class QuickViewPopup(QWidget):
         should_emit = self._session_visible
         self._session_visible = False
         self._stop_reverse_timer()
+        self._remember_current_version_position()
+        self._is_video = False
         if self.player is not None:
-            self.player.pause()
+            # Preserve the handoff position above before releasing the file.
+            self.player.stop()
+            self.player.setSource(QUrl())
         super().hideEvent(event)
         if should_emit:
             self.dismissed.emit()

@@ -56,6 +56,116 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def _make_settings_page(self):
+        with (
+            mock.patch.object(
+                settings.SettingsPage, "_load_django_users", lambda self: None
+            ),
+            mock.patch.object(
+                settings.SettingsPage, "_refresh_update_panel", lambda self: None
+            ),
+        ):
+            return settings.SettingsPage(
+                settings_manager=InMemorySettingsManager()
+            )
+
+    def _update_status(self, *, can_update=True):
+        return settings.app_update.UpdateStatus(
+            supported=True,
+            can_check=True,
+            can_update=can_update,
+            has_update=True,
+            is_dirty=not can_update,
+            branch="main",
+            current_branch="main",
+            current_version="1.0.0",
+            current_commit="current",
+            current_display="1.0.0 (current)",
+            status_message="Update available.",
+            remote_version="2.0.0",
+            remote_commit="remote",
+            remote_display="2.0.0 (remote)",
+            changelog_preview="2.0.0\n- Automatic updates",
+        )
+
+    def test_confirmed_update_launches_without_second_question(self):
+        page = self._make_settings_page()
+        fake_app = mock.Mock()
+        try:
+            with (
+                mock.patch.object(
+                    settings.app_update,
+                    "launch_update_script",
+                    return_value=(True, ""),
+                ) as launch,
+                mock.patch.object(settings.os, "getpid", return_value=1234),
+                mock.patch.object(settings.QMessageBox, "question") as question,
+                mock.patch.object(
+                    settings.QApplication, "instance", return_value=fake_app
+                ),
+            ):
+                launched = page.launch_update_and_restart(
+                    self._update_status(), parent=page, confirm=False
+                )
+
+            self.assertTrue(launched)
+            launch.assert_called_once_with(1234)
+            question.assert_not_called()
+            fake_app.quit.assert_called_once_with()
+        finally:
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
+    def test_update_launch_failure_keeps_app_open_and_reports_error(self):
+        page = self._make_settings_page()
+        fake_app = mock.Mock()
+        try:
+            with (
+                mock.patch.object(
+                    settings.app_update,
+                    "launch_update_script",
+                    return_value=(False, "updater missing"),
+                ),
+                mock.patch.object(settings.QMessageBox, "critical") as critical,
+                mock.patch.object(
+                    settings.QApplication, "instance", return_value=fake_app
+                ),
+            ):
+                launched = page.launch_update_and_restart(
+                    self._update_status(), parent=page, confirm=False
+                )
+
+            self.assertFalse(launched)
+            critical.assert_called_once()
+            fake_app.quit.assert_not_called()
+        finally:
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
+    def test_manual_update_control_keeps_confirmation_step(self):
+        page = self._make_settings_page()
+        status = self._update_status()
+        try:
+            with (
+                mock.patch.object(
+                    settings.app_update, "check_for_updates", return_value=status
+                ),
+                mock.patch.object(
+                    page, "launch_update_and_restart", return_value=False
+                ) as launch,
+                mock.patch.object(settings.QApplication, "setOverrideCursor"),
+                mock.patch.object(settings.QApplication, "restoreOverrideCursor"),
+            ):
+                page._on_update_and_restart()
+
+            launch.assert_called_once_with(status, confirm=True)
+        finally:
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
     def test_normalize_changelog_markdown_trims_trailing_blank_blocks(self):
         changelog = """# Changelog
 

@@ -435,7 +435,7 @@ class QuickViewTests(unittest.TestCase):
         self.assertFalse(card._thumbnail_hovered)
         controller.clear_hovered_card.assert_called_once_with(card)
 
-    def test_shot_card_handoff_pauses_and_resumes_at_popup_position(self):
+    def test_shot_card_handoff_releases_file_and_resumes_at_popup_position(self):
         card = widgets.ShotCard.__new__(widgets.ShotCard)
         QWidget.__init__(card)
         card._video_player = FakePlayer(position=2100)
@@ -448,7 +448,7 @@ class QuickViewTests(unittest.TestCase):
 
         with mock.patch.object(widgets, "HAS_MULTIMEDIA", True):
             self.assertEqual(card.begin_quick_view(), 2100)
-            self.assertEqual(card._video_player.pause_calls, 1)
+            self.assertTrue(card._video_player.source.isEmpty())
             card.end_quick_view(7300, resume=True)
             self.app.processEvents()
 

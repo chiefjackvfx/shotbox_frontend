@@ -12,11 +12,10 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
             <split size="1897" stretch="1"/>
             <splitter orientation="2">
                 <split size="1349"/>
-                <dock id="" activePageId="DAG.1">
+                <dock id="" activePageId="DAG.1" focus="true">
                     <page id="DAG.1"/>
                     <page id="Curve Editor.1"/>
                     <page id="DopeSheet.1"/>
-                    <page id="DAG.2"/>
                 </dock>
             </splitter>
             <split size="615"/>
@@ -195,7 +194,7 @@ Group {
   xpos -728
   ypos -1049
  }
-set N12523ba0 [stack 0]
+set N11b678a0 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -216,7 +215,7 @@ set N12523ba0 [stack 0]
   xpos -1089
   ypos -1047
  }
-set N12511870 [stack 0]
+set N11aa75d0 [stack 0]
  Dot {
   name Dot13
   xpos -1808
@@ -237,7 +236,7 @@ set N12511870 [stack 0]
   xpos -1840
   ypos -576
  }
-set N126592f0 [stack 0]
+set N11c37470 [stack 0]
  AddTimeCode {
   frame {{"\[value startfr]"}}
   useFrame true
@@ -245,7 +244,7 @@ set N126592f0 [stack 0]
   xpos -1840
   ypos -410
  }
-set N143d2ae0 [stack 0]
+set N11b36370 [stack 0]
  Dot {
   name Dot14
   xpos -2527
@@ -256,7 +255,7 @@ set N143d2ae0 [stack 0]
   xpos -2527
   ypos 793
  }
-set N143fe320 [stack 0]
+set N11b983c0 [stack 0]
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -301,7 +300,7 @@ set N143fe320 [stack 0]
   xpos -2380
   ypos 864
  }
-push $N143fe320
+push $N11b983c0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -346,7 +345,7 @@ push $N143fe320
   xpos -2380
   ypos 784
  }
-push $N143fe320
+push $N11b983c0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -398,25 +397,25 @@ push $N143fe320
   xpos -2200
   ypos 790
  }
-push $N126592f0
+push $N11c37470
  Dot {
   name Dot3
   xpos -1987
   ypos -567
  }
-set N100f1d80 [stack 0]
+set N11b70320 [stack 0]
  Dot {
   name Dot6
   xpos -2168
   ypos -567
  }
-set N1487f000 [stack 0]
+set Nfa070b0 [stack 0]
  Dot {
   name Dot7
   xpos -2347
   ypos -567
  }
-set N18c76de0 [stack 0]
+set Nf9fe8e0 [stack 0]
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -429,25 +428,25 @@ set N18c76de0 [stack 0]
   xpos -2740
   ypos -575
  }
-set N18c14c20 [stack 0]
+set N11c03990 [stack 0]
  Dot {
   name Dot8
   xpos -2888
   ypos -567
  }
-set N146b17f0 [stack 0]
+set N11c58eb0 [stack 0]
  Dot {
   name Dot9
   xpos -3067
   ypos -567
  }
-set N123cc140 [stack 0]
+set N11c5f5f0 [stack 0]
  Dot {
   name Dot10
   xpos -3247
   ypos -567
  }
-set N14629ca0 [stack 0]
+set N11c66140 [stack 0]
  Dot {
   name Dot11
   xpos -3428
@@ -496,7 +495,7 @@ set N14629ca0 [stack 0]
   xpos -3460
   ypos 624
  }
-push $N14629ca0
+push $N11c66140
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -540,7 +539,7 @@ push $N14629ca0
   xpos -3280
   ypos 544
  }
-push $N123cc140
+push $N11c5f5f0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -582,7 +581,7 @@ push $N123cc140
   xpos -3101
   ypos 464
  }
-push $N146b17f0
+push $N11c58eb0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -625,14 +624,14 @@ push $N146b17f0
   xpos -2922
   ypos 384
  }
-push $N18c14c20
+push $N11c03990
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
   font_height_toolbar 100
   message "\[date %d/%m/%y]"
   old_message {
-   {48 50 47 48 57 47 50 54}
+   {50 49 47 48 57 47 50 54}
   }
   old_expression_markers {
    {0 7}
@@ -670,7 +669,7 @@ push $N18c14c20
   xpos -2740
   ypos 304
  }
-push $N18c76de0
+push $Nf9fe8e0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -713,7 +712,7 @@ push $N18c76de0
   xpos -2381
   ypos 224
  }
-push $N1487f000
+push $Nfa070b0
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -755,7 +754,7 @@ push $N1487f000
   xpos -2200
   ypos 144
  }
-push $N100f1d80
+push $N11b70320
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -800,7 +799,7 @@ push $N100f1d80
   xpos -2021
   ypos 64
  }
-push $N143d2ae0
+push $N11b36370
  Text2 {
   font_size_toolbar 100
   font_width_toolbar 100
@@ -845,7 +844,7 @@ push $N143d2ae0
   xpos -1840
   ypos -16
  }
-push $N12511870
+push $N11aa75d0
  NoOp {
   name utility
   xpos -1120
@@ -856,7 +855,7 @@ push $N12511870
   addUserKnob {7 addres l "add res" R -500 500}
   addres {{parent.slateextend*2}}
  }
-set N18ebb0d0 [stack 0]
+set N11de4c10 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -884,7 +883,7 @@ set N18ebb0d0 [stack 0]
   xpos -1480
   ypos -734
  }
-push $N18ebb0d0
+push $N11de4c10
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -897,7 +896,7 @@ push $N18ebb0d0
   xpos -1120
   ypos -736
  }
-set N122c8270 [stack 0]
+set N11e1a700 [stack 0]
  Shuffle2 {
   fromInput1 {
    {0}
@@ -930,8 +929,8 @@ set N122c8270 [stack 0]
   xpos -1447
   ypos -487
  }
-set N106611b0 [stack 0]
-push $N106611b0
+set N11e56a70 [stack 0]
+push $N11e56a70
  Dilate {
   size {{parent.linewidth}}
   name Dilate1
@@ -950,7 +949,7 @@ push $N106611b0
   xpos -1448
   ypos -247
  }
-push $N122c8270
+push $N11e1a700
  Merge2 {
   inputs 2
   name Merge5
@@ -1064,7 +1063,7 @@ push $N122c8270
   xpos -1120
   ypos 1189
  }
-push $N12523ba0
+push $N11b678a0
  Reformat {
   type "to box"
   box_width {{parent.utility.inres.u}}
@@ -1096,7 +1095,7 @@ push $N12523ba0
   xpos -2082
   ypos 826
  }
-push $N143d2ae0
+push $N11b36370
  NoOp {
   name readtime
   xpos -2740
@@ -1112,12 +1111,22 @@ push $N143d2ae0
   tc1 00:00:02:12
  }
 end_group
-set N18ea5310 [stack 0]
+set N11b0ead0 [stack 0]
+Viewer {
+ frame_range 1001-1100
+ fps 25
+ monitorOutNDISenderName "NukeX - preview_template_v002 - Viewer1"
+ name Viewer1
+ xpos 206
+ ypos 447
+}
+push $N11b0ead0
 OCIODisplay {
  colorspace scene_linear
  display "sRGB - Display"
- view Un-tone-mapped
+ view "ACES 2.0 - SDR 100 nits (Rec.709)"
  name OCIODisplay1
+ selected true
  xpos 298
  ypos 399
 }
@@ -1150,13 +1159,4 @@ Write {
  name WriteCompMP4
  xpos 304
  ypos 483
-}
-push $N18ea5310
-Viewer {
- frame_range 1001-1100
- fps 25
- monitorOutNDISenderName "NukeX - preview_template_v002 - Viewer1"
- name Viewer1
- xpos 206
- ypos 447
 }
