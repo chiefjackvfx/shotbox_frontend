@@ -2,6 +2,17 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 4.2.0 - 2026-09-21
+
+### Added
+
+- auto updater
+- toolbox for extra pipeline tools and stuff
+
+### Changed
+
+- old jobs dont show any more ctrl by django admin page hide tage
+
 ## 4.1.1 - 2026-09-03
 
 ### Changed
