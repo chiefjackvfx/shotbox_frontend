@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGridLayout, QGroupBox,
     QLabel, QLineEdit, QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox, 
     QPushButton, QScrollArea, QFrame, QSizePolicy, QMessageBox, QFileDialog,
     QButtonGroup, QRadioButton, QApplication, QTextBrowser
@@ -26,6 +26,7 @@ from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QIcon, QWheelEvent
 
 import app_update
+import plugins_install
 from app_version import UPDATE_BRANCH
 
 
@@ -334,6 +335,7 @@ class SettingsPage(QWidget):
         
         # Container widget for scroll content
         container = QWidget()
+        container.setMaximumWidth(1600)
         container_layout = QVBoxLayout(container)
         container_layout.setSpacing(16)
         container_layout.setContentsMargins(20, 20, 20, 20)
@@ -344,6 +346,8 @@ class SettingsPage(QWidget):
         title_font.setPointSize(18)
         title_font.setBold(True)
         title.setFont(title_font)
+        title.setObjectName("settings_title")
+        title.setStyleSheet("font-size: 22px; font-weight: bold;")
         container_layout.addWidget(title)
         
         # Settings file info
@@ -363,7 +367,7 @@ class SettingsPage(QWidget):
         django_user_layout.addWidget(self.django_user_combo)
         
         self.refresh_users_btn = QPushButton("↻")
-        self.refresh_users_btn.setFixedWidth(30)
+        self.refresh_users_btn.setFixedWidth(40)
         self.refresh_users_btn.setToolTip("Refresh user list from server")
         django_user_layout.addWidget(self.refresh_users_btn)
         django_user_layout.addStretch()
@@ -382,13 +386,13 @@ class SettingsPage(QWidget):
         
         # Connection test button
         self.test_connection_btn = QPushButton("Test Connection")
-        self.test_connection_btn.setFixedWidth(120)
+        self.test_connection_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         server_layout.addRow("", self.test_connection_btn)
         
         container_layout.addWidget(server_group)
         
         # === Polling Section ===
-        polling_group = self._create_group_box("Polling & Refresh")
+        polling_group = self._create_group_box("Polling && Refresh")
         polling_layout = QFormLayout(polling_group)
         
         # Polling interval (in seconds)
@@ -446,7 +450,6 @@ class SettingsPage(QWidget):
         self.nuke_exe_browse_btn = QPushButton("Browse")
         self.nuke_exe_browse_btn.setFixedWidth(80)
         nuke_path_layout.addWidget(self.nuke_exe_browse_btn)
-        nuke_path_layout.addStretch()
         preview_layout.addRow("Nuke Executable:", nuke_path_layout)
 
         self.threede_exe_path_edit = QLineEdit()
@@ -458,10 +461,24 @@ class SettingsPage(QWidget):
         self.threede_exe_browse_btn = QPushButton("Browse")
         self.threede_exe_browse_btn.setFixedWidth(80)
         three_de_path_layout.addWidget(self.threede_exe_browse_btn)
-        three_de_path_layout.addStretch()
         preview_layout.addRow("3DE Executable:", three_de_path_layout)
 
         container_layout.addWidget(preview_group)
+
+        plugins_group = self._create_group_box("Plugins")
+        plugins_layout = QFormLayout(plugins_group)
+        self.plugins_destination_label = QLabel()
+        self.plugins_destination_label.setWordWrap(True)
+        self.plugins_scripts_label = QLabel()
+        self.plugins_scripts_label.setWordWrap(True)
+        self.plugins_status_label = QLabel()
+        self.plugins_status_label.setWordWrap(True)
+        self.install_3de_plugins_btn = QPushButton("Install / Update 3DE Plugins")
+        plugins_layout.addRow("3DE destination:", self.plugins_destination_label)
+        plugins_layout.addRow("Bundled scripts:", self.plugins_scripts_label)
+        plugins_layout.addRow("", self.install_3de_plugins_btn)
+        plugins_layout.addRow("", self.plugins_status_label)
+        container_layout.addWidget(plugins_group)
         
         # === Debug Modes Section ===
         debug_group = self._create_group_box("Debug Modes")
@@ -508,19 +525,15 @@ class SettingsPage(QWidget):
         container_layout.addWidget(appearance_group)
 
         # === Shots Layout Section ===
-        layout_group = self._create_group_box("Shots Layout")
-        layout_layout = QFormLayout(layout_group)
+        layout_layout = appearance_layout
 
         self.shots_layout_combo = NoScrollComboBox()
         self.shots_layout_combo.addItem("List", "list")
         self.shots_layout_combo.addItem("Grid", "grid")
-        layout_layout.addRow("Layout Mode:", self.shots_layout_combo)
-
-        container_layout.addWidget(layout_group)
+        layout_layout.addRow("Shots Layout:", self.shots_layout_combo)
 
         # === UI Density Section ===
-        density_group = self._create_group_box("UI Density")
-        density_layout = QFormLayout(density_group)
+        density_layout = appearance_layout
 
         self.preview_size_combo = NoScrollComboBox()
         self.preview_size_combo.addItems(["NoThumb", "Tiny", "Small", "Medium", "Large"])
@@ -551,25 +564,22 @@ class SettingsPage(QWidget):
         )
         density_layout.addRow("Quick View Size:", self.quick_view_size_spin)
 
-        container_layout.addWidget(density_group)
         
         # === Window Section ===
-        window_group = self._create_group_box("Window")
-        window_layout = QFormLayout(window_group)
+        window_layout = appearance_layout
         
-        self.remember_size_check = QCheckBox("Remember Window Size & Position")
+        self.remember_size_check = QCheckBox("Remember Window Size && Position")
         window_layout.addRow("", self.remember_size_check)
         
         self.always_on_top_check = QCheckBox("Always on Top")
         window_layout.addRow("", self.always_on_top_check)
         
-        container_layout.addWidget(window_group)
         
         # === Session Restore Section ===
         session_group = self._create_group_box("Session Restore")
         session_layout = QVBoxLayout(session_group)
         
-        self.remember_session_check = QCheckBox("Auto-load Last Project, Timeline & Scroll Position")
+        self.remember_session_check = QCheckBox("Auto-load Last Project, Timeline && Scroll Position")
         self.remember_session_check.setToolTip(
             "When enabled, ShotBox will restore your last selected project, "
             "timeline tab, and scroll position when you restart the application."
@@ -706,7 +716,7 @@ class SettingsPage(QWidget):
 
         self.change_log_view = QTextBrowser()
         self.change_log_view.setReadOnly(True)
-        self.change_log_view.setMinimumHeight(400)
+        self.change_log_view.setMinimumHeight(240)
         self.change_log_view.setPlaceholderText("No changelog loaded.")
         self.change_log_view.setOpenExternalLinks(False)
         updates_layout.addRow("", self.change_log_view)
@@ -737,14 +747,91 @@ class SettingsPage(QWidget):
         self.save_button.setObjectName("save_button")
         buttons_layout.addWidget(self.save_button)
         
-        container_layout.addLayout(buttons_layout)
-        
-        # Add stretch at the end
+        # Group related settings into independent columns, avoiding stretched
+        # controls and blank grid rows when neighbouring sections differ in size.
+        self._settings_columns_layout = QGridLayout()
+        self._settings_columns_layout.setContentsMargins(0, 0, 0, 0)
+        self._settings_columns_layout.setSpacing(24)
+        self._settings_columns = []
+        for groups in (
+            (system_group, server_group, polling_group, preview_group, plugins_group, self.updates_group),
+            (appearance_group, startup_group, session_group, notif_group, debug_group),
+        ):
+            column = QWidget()
+            column_layout = QVBoxLayout(column)
+            column_layout.setContentsMargins(0, 0, 0, 0)
+            column_layout.setSpacing(16)
+            for group in groups:
+                container_layout.removeWidget(group)
+                column_layout.addWidget(group)
+                group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+            column_layout.addStretch()
+            self._settings_columns.append(column)
+        container_layout.addLayout(self._settings_columns_layout)
         container_layout.addStretch()
+        self._settings_wide = None
+        self._update_settings_columns()
+
+        # Use the same label alignment and spacing throughout the page.
+        for form in container.findChildren(QFormLayout):
+            form.setContentsMargins(16, 18, 16, 16)
+            form.setHorizontalSpacing(16)
+            form.setVerticalSpacing(10)
+            form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                if item and isinstance(item.widget(), QLabel):
+                    item.widget().setFixedWidth(172)
+                    item.widget().setWordWrap(True)
+        for spin in container.findChildren(QSpinBox):
+            spin.setFixedWidth(120)
+            spin.setMinimumHeight(28)
+        for combo in container.findChildren(QComboBox):
+            if combo is not self.change_log_combo:
+                combo.setFixedWidth(240)
+        for row_layout in (django_user_layout, nuke_path_layout, three_de_path_layout, update_buttons_layout):
+            row_layout.setSpacing(8)
+        for group in (session_group, notif_group, debug_group):
+            group.layout().setContentsMargins(16, 18, 16, 16)
+            group.layout().setSpacing(10)
+        notif_form.setContentsMargins(0, 8, 0, 0)
+        self.install_3de_plugins_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
         
         # Set up scroll area
         self.settings_scroll_area.setWidget(container)
+        self.settings_scroll_area.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignTop)
         main_layout.addWidget(self.settings_scroll_area)
+
+        # Keep save/reset accessible regardless of scroll position.
+        footer = QWidget()
+        footer.setMaximumWidth(1600)
+        footer.setLayout(buttons_layout)
+        buttons_layout.setContentsMargins(20, 12, 20, 12)
+        footer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        footer_row = QHBoxLayout()
+        footer_row.setContentsMargins(0, 0, 0, 0)
+        footer_row.addWidget(footer)
+        main_layout.addLayout(footer_row)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._update_settings_columns()
+
+    def _update_settings_columns(self):
+        if not hasattr(self, "_settings_columns"):
+            return
+        wide = self.width() >= 1250
+        if wide == self._settings_wide:
+            return
+        self._settings_wide = wide
+        for column in self._settings_columns:
+            self._settings_columns_layout.removeWidget(column)
+        for index, column in enumerate(self._settings_columns):
+            self._settings_columns_layout.addWidget(column, 0 if wide else index, index if wide else 0)
+        self._settings_columns_layout.setColumnStretch(0, 1)
+        self._settings_columns_layout.setColumnStretch(1, 1 if wide else 0)
     
     def _create_group_box(self, title: str) -> QGroupBox:
         """Create a group box that inherits styling from the active QSS theme."""
@@ -860,6 +947,7 @@ class SettingsPage(QWidget):
         self.preview_overwrite_check.setChecked(self._settings.get("preview_overwrite", False))
         self.nuke_exe_path_edit.setText(self._settings.get("nuke_exe_path", ""))
         self.threede_exe_path_edit.setText(self._settings.get("threede_exe_path", ""))
+        self._refresh_plugins_panel()
         
         # Debug modes
         self.debug_general_check.setChecked(self._settings.get("debug_modes.general", False))
@@ -976,6 +1064,8 @@ class SettingsPage(QWidget):
         # Browse Nuke executable
         self.nuke_exe_browse_btn.clicked.connect(self._on_browse_nuke_exe)
         self.threede_exe_browse_btn.clicked.connect(self._on_browse_threede_exe)
+        self.threede_exe_path_edit.textChanged.connect(self._refresh_plugins_panel)
+        self.install_3de_plugins_btn.clicked.connect(self._on_install_3de_plugins)
 
         # Update controls
         self.check_updates_btn.clicked.connect(self._on_check_for_updates)
@@ -1235,6 +1325,51 @@ class SettingsPage(QWidget):
         )
         if path:
             self.nuke_exe_path_edit.setText(path)
+
+    def _refresh_plugins_panel(self):
+        self.plugins_status_label.clear()
+        self.install_3de_plugins_btn.setEnabled(False)
+        try:
+            scripts = plugins_install.bundled_scripts()
+            self.plugins_scripts_label.setText(", ".join(path.name for path in scripts))
+        except (OSError, ValueError) as exc:
+            self.plugins_scripts_label.setText(str(exc))
+            self.plugins_destination_label.setText("Unavailable")
+            return
+        try:
+            destination = plugins_install.resolve_destination(self.threede_exe_path_edit.text())
+        except (OSError, ValueError) as exc:
+            self.plugins_destination_label.setText(str(exc))
+            return
+        self.plugins_destination_label.setText(str(destination))
+        self.install_3de_plugins_btn.setEnabled(True)
+
+    def _on_install_3de_plugins(self):
+        self.install_3de_plugins_btn.setEnabled(False)
+        try:
+            result = plugins_install.install_3de_plugins(self.threede_exe_path_edit.text())
+        except (OSError, ValueError) as exc:
+            message = f"Could not install 3DE plugins: {exc}"
+            failed = True
+        else:
+            message = (
+                f"Installed: {len(result.installed)}; updated: {len(result.updated)}; "
+                f"unchanged: {len(result.unchanged)}.\nDestination: {result.destination}"
+            )
+            failed = bool(result.failures)
+            if failed:
+                message += "\nFailed:\n" + "\n".join(
+                    f"{name}: {reason}" for name, reason in result.failures.items()
+                )
+            if not failed or result.installed or result.updated:
+                message += "\nRestart 3DE to load the updated plugins."
+        finally:
+            self._refresh_plugins_panel()
+        self.plugins_status_label.setText(message)
+        if failed:
+            QMessageBox.warning(self, "3DE Plugin Installation", message)
+        else:
+            QMessageBox.information(self, "3DE Plugin Installation", message)
 
     def _on_browse_threede_exe(self):
         """Browse for 3DE executable path."""

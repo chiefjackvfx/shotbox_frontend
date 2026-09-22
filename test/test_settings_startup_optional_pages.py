@@ -4,6 +4,7 @@ import copy
 import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -87,6 +88,70 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             remote_display="2.0.0 (remote)",
             changelog_preview="2.0.0\n- Automatic updates",
         )
+
+    def test_plugin_panel_tracks_unsaved_executable_and_installs(self):
+        page = self._make_settings_page()
+        self.addCleanup(page.close)
+        self.assertFalse(page.install_3de_plugins_btn.isEnabled())
+        self.assertIn("3D_Cones.py", page.plugins_scripts_label.text())
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            executable = root / "bin" / "3DE4"
+            executable.parent.mkdir()
+            executable.touch()
+            destination = root / "sys_data" / "py_scripts"
+            destination.mkdir(parents=True)
+            page.threede_exe_path_edit.setText(str(executable))
+            self.assertTrue(page.install_3de_plugins_btn.isEnabled())
+            self.assertEqual(page.plugins_destination_label.text(), str(destination))
+            self.assertEqual(page._settings.get("threede_exe_path"), "")
+            install = settings.plugins_install.install_3de_plugins
+            def checked_install(value):
+                self.assertFalse(page.install_3de_plugins_btn.isEnabled())
+                return install(value)
+            with mock.patch.object(settings.plugins_install, "install_3de_plugins", side_effect=checked_install), mock.patch.object(settings.QMessageBox, "information") as information:
+                page.install_3de_plugins_btn.click()
+                information.assert_called_once()
+            self.assertTrue((destination / "shotbox_publish.py").is_file())
+            self.assertTrue((destination / "3D_Cones.py").is_file())
+            self.assertFalse((destination / "tests").exists())
+            self.assertIn("Restart 3DE", page.plugins_status_label.text())
+            self.assertTrue(page.install_3de_plugins_btn.isEnabled())
+            with mock.patch.object(settings.QMessageBox, "information"):
+                page.install_3de_plugins_btn.click()
+            self.assertIn("unchanged: 4", page.plugins_status_label.text())
+            page._load_current_values()
+            self.assertFalse(page.install_3de_plugins_btn.isEnabled())
+            self.assertEqual(page.plugins_status_label.text(), "")
+
+    def test_plugin_panel_reports_partial_success_and_errors(self):
+        page = self._make_settings_page()
+        self.addCleanup(page.close)
+        with mock.patch.object(settings.plugins_install, "resolve_destination", return_value=Path("/fake/scripts")):
+            page.threede_exe_path_edit.setText("/fake/3DE4")
+            result = settings.plugins_install.InstallResult(
+                Path("/fake/scripts"), installed=["one.py"], failures={"two.py": "access denied"}
+            )
+            with mock.patch.object(settings.plugins_install, "install_3de_plugins", return_value=result), mock.patch.object(settings.QMessageBox, "warning") as warning:
+                page.install_3de_plugins_btn.click()
+                warning.assert_called_once()
+            self.assertIn("Installed: 1", page.plugins_status_label.text())
+            self.assertIn("two.py: access denied", page.plugins_status_label.text())
+            self.assertTrue(page.install_3de_plugins_btn.isEnabled())
+            with mock.patch.object(settings.plugins_install, "install_3de_plugins", side_effect=PermissionError("read-only")), mock.patch.object(settings.QMessageBox, "warning"):
+                page.install_3de_plugins_btn.click()
+            self.assertIn("read-only", page.plugins_status_label.text())
+            self.assertTrue(page.install_3de_plugins_btn.isEnabled())
+        page.threede_exe_path_edit.setText("/missing/3DE4")
+        self.assertFalse(page.install_3de_plugins_btn.isEnabled())
+
+    def test_plugin_panel_disables_install_when_bundle_missing(self):
+        page = self._make_settings_page()
+        self.addCleanup(page.close)
+        with mock.patch.object(settings.plugins_install, "bundled_scripts", side_effect=FileNotFoundError("bundle missing")):
+            page._refresh_plugins_panel()
+        self.assertFalse(page.install_3de_plugins_btn.isEnabled())
+        self.assertIn("bundle missing", page.plugins_scripts_label.text())
 
     def test_confirmed_update_launches_without_second_question(self):
         page = self._make_settings_page()
