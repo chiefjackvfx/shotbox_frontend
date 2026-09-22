@@ -2,6 +2,16 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## 4.3.0 - 2026-09-22
+
+### Added
+
+- plugins for 3de updater
+
+### Changed
+
+- better settings layout
+
 ## 4.2.2 - 2026-09-21
 
 ### Added
