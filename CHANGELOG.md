@@ -6,24 +6,15 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-09-24T10:32:15+01:00] Settings save automatically, including when leaving or quitting.
-- [2026-09-24T10:22:38+01:00] Added editable pending notes to release manager.
-- [2026-09-24T10:22:38+01:00] Added reusable timestamped changelog skill and project instructions.
-
 ### Changed
-
-- [2026-09-24T10:41:28+01:00] Limited changelog notes to ten words, excluding timestamps.
-- [2026-09-24T10:41:28+01:00] Removed timestamps from release-manager fields, previews, and published notes.
-- [2026-09-24T10:41:28+01:00] Tested timestamp removal while preserving pending notes and historical releases.
-- [2026-09-24T10:32:15+01:00] Tested settings autosave, shutdown, resets, retries, and notifications.
-- [2026-09-24T10:22:38+01:00] Releases convert pending notes and reset the Unreleased section.
-- [2026-09-24T10:22:38+01:00] Tested pending releases, editing, rollback, tagging failures, and previews.
 
 ### Fixed
 
-- [2026-09-24T10:32:15+01:00] Preserved linked users and skipped unchanged settings during autosave.
-- [2026-09-24T10:22:38+01:00] Protected concurrent changelog edits and restored failed release changes.
-- [2026-09-24T10:22:38+01:00] Update previews show numbered releases instead of pending notes.
+## 4.3.1 - 2026-09-24
+
+### Added
+
+- Settings save automatically, including when leaving or quitting.
 
 ## 4.3.0 - 2026-09-22
 
