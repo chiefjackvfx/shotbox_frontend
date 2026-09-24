@@ -6,21 +6,24 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-09-24T10:32:15+01:00] Settings now save automatically after a short pause and when leaving the page or quitting, with quiet save status and manual retry on failure.
-- [2026-09-24T10:22:38+01:00] Added editable pending changelog notes to the release manager, with automatic prefill and a Load pending notes button.
-- [2026-09-24T10:22:38+01:00] Added a reusable personal Codex changelog skill and project instructions to record completed development work with timestamps before manual releases.
+- [2026-09-24T10:32:15+01:00] Settings save automatically, including when leaving or quitting.
+- [2026-09-24T10:22:38+01:00] Added editable pending notes to release manager.
+- [2026-09-24T10:22:38+01:00] Added reusable timestamped changelog skill and project instructions.
 
 ### Changed
 
-- [2026-09-24T10:32:15+01:00] Added settings autosave tests covering persistence, edit batching, shutdown, reset, failure retry, and live-update notifications.
-- [2026-09-24T10:22:38+01:00] Release creation now converts reviewed pending notes into a numbered release while retaining their timestamps and leaving an empty Unreleased section.
-- [2026-09-24T10:22:38+01:00] Added automated coverage for pending-note parsing, editable loading, release conversion, rollback, tag failures, and update previews.
+- [2026-09-24T10:41:28+01:00] Limited changelog notes to ten words, excluding timestamps.
+- [2026-09-24T10:41:28+01:00] Removed timestamps from release-manager fields, previews, and published notes.
+- [2026-09-24T10:41:28+01:00] Tested timestamp removal while preserving pending notes and historical releases.
+- [2026-09-24T10:32:15+01:00] Tested settings autosave, shutdown, resets, retries, and notifications.
+- [2026-09-24T10:22:38+01:00] Releases convert pending notes and reset the Unreleased section.
+- [2026-09-24T10:22:38+01:00] Tested pending releases, editing, rollback, tagging failures, and previews.
 
 ### Fixed
 
-- [2026-09-24T10:32:15+01:00] Preserved linked user selections during user-list refreshes and avoided reapplying unchanged settings during automatic saves.
-- [2026-09-24T10:22:38+01:00] Prevented releases from overwriting changelog edits made since loading, and restored release files and Git staging state when preparation or committing fails.
-- [2026-09-24T10:22:38+01:00] Update previews now show the latest numbered release instead of pending changelog notes.
+- [2026-09-24T10:32:15+01:00] Preserved linked users and skipped unchanged settings during autosave.
+- [2026-09-24T10:22:38+01:00] Protected concurrent changelog edits and restored failed release changes.
+- [2026-09-24T10:22:38+01:00] Update previews show numbered releases instead of pending notes.
 
 ## 4.3.0 - 2026-09-22
 

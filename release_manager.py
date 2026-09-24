@@ -87,6 +87,17 @@ def bump_version(version: str, bump_kind: str) -> str:
     raise ValueError(f"Unsupported bump kind: {bump_kind!r}")
 
 
+PENDING_TIMESTAMP_RE = re.compile(
+    r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?"
+    r"(?:Z|[+-]\d{2}:\d{2})\]\s*"
+)
+
+
+def release_note_text(note: str) -> str:
+    """Remove pending-note metadata without touching other bracketed text."""
+    return PENDING_TIMESTAMP_RE.sub("", note.strip())
+
+
 def normalize_note_lines(text: str) -> list[str]:
     return [line.strip() for line in (text or "").splitlines() if line.strip()]
 
@@ -99,9 +110,9 @@ def build_changelog_entry(
     fixed_notes: list[str],
 ) -> str:
     sections = [
-        ("Added", added_notes),
-        ("Changed", changed_notes),
-        ("Fixed", fixed_notes),
+        ("Added", [text for note in added_notes if (text := release_note_text(note))]),
+        ("Changed", [text for note in changed_notes if (text := release_note_text(note))]),
+        ("Fixed", [text for note in fixed_notes if (text := release_note_text(note))]),
     ]
 
     if not any(sections_notes for _, sections_notes in sections):
@@ -681,7 +692,10 @@ class ReleaseManagerWindow(QWidget):
             QMessageBox.warning(self, "Pending Notes Unavailable", str(exc))
             return
         self._loaded_changelog = source
-        self._loaded_notes = tuple("\n".join(notes[name]) for name in NOTE_SECTIONS)
+        self._loaded_notes = tuple(
+            "\n".join(release_note_text(note) for note in notes[name])
+            for name in NOTE_SECTIONS
+        )
         for widget, text in zip(widgets, self._loaded_notes):
             widget.setPlainText(text)
         self._update_draft_preview()

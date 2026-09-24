@@ -23,7 +23,7 @@ def result(*, code=0, stdout="", stderr=""):
 
 
 class PendingCoreTests(unittest.TestCase):
-    def test_parse_and_finalize_preserve_timestamps_and_history(self):
+    def test_pending_keeps_timestamps_but_release_omits_them(self):
         notes = rm.parse_pending_notes(SOURCE)
         self.assertEqual(notes["Added"], [f"{STAMP} New feature"])
         self.assertEqual(notes["Changed"], [])
@@ -31,9 +31,18 @@ class PendingCoreTests(unittest.TestCase):
             "added_notes": notes["Added"], "changed_notes": [], "fixed_notes": notes["Fixed"]})
         final = rm.finalize_pending_release(SOURCE, entry)
         self.assertTrue(final.endswith(HISTORY))
-        self.assertEqual(final.count(f"{STAMP} New feature"), 1)
+        self.assertNotIn(STAMP, final)
+        self.assertIn("- New feature", final)
         self.assertEqual(rm.parse_pending_notes(final), dict.fromkeys(rm.NOTE_SECTIONS, []))
         self.assertLess(final.index("## Unreleased"), final.index("## 1.1.0"))
+
+    def test_timestamp_stripping_preserves_other_bracketed_notes(self):
+        self.assertEqual(rm.release_note_text("[Windows] Fixed installer"), "[Windows] Fixed installer")
+        draft = rm.build_release_draft("1.0.0", "patch", "2026-09-24",
+                                      "", "", f"{STAMP} Fixed installer")
+        self.assertNotIn(STAMP, draft.changelog_entry)
+        self.assertIn("- Fixed installer", draft.changelog_entry)
+        self.assertIn("## 1.0.1 - 2026-09-24", draft.changelog_entry)
 
     def test_legacy_and_empty_pending(self):
         self.assertFalse(any(rm.parse_pending_notes(HISTORY).values()))
@@ -135,29 +144,32 @@ class PendingWindowTests(unittest.TestCase):
         self.addCleanup(self.window.close)
 
     def test_prefill_and_reload_protect_edits(self):
-        self.assertEqual(self.window.added_notes.toPlainText(), f"{STAMP} New feature")
+        self.assertEqual(self.window.added_notes.toPlainText(), "New feature")
         self.assertIsNone(self.window.selected_bump)
+        self.assertEqual(self.changelog.read_text(), SOURCE)
+        self.window._select_bump("minor", True)
+        self.assertNotIn(STAMP, self.window.preview_box.toPlainText())
         self.window.added_notes.setPlainText("Manual edit")
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.No):
             self.window.load_pending_notes()
         self.assertEqual(self.window.added_notes.toPlainText(), "Manual edit")
         with patch.object(QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes):
             self.window.load_pending_notes()
-        self.assertEqual(self.window.added_notes.toPlainText(), f"{STAMP} New feature")
+        self.assertEqual(self.window.added_notes.toPlainText(), "New feature")
 
     def test_windows_line_endings_are_kept_in_loaded_snapshot(self):
         raw = SOURCE.replace("\n", "\r\n").encode("utf-8")
         self.changelog.write_bytes(raw)
         self.window.load_pending_notes()
         self.assertEqual(self.window._loaded_changelog.encode("utf-8"), raw)
-        self.assertEqual(self.window.fixed_notes.toPlainText(), f"{STAMP} Bug fix")
+        self.assertEqual(self.window.fixed_notes.toPlainText(), "Bug fix")
 
     def test_malformed_reload_preserves_edited_notes(self):
         self.changelog.write_text(SOURCE.replace("### Added", "### Unknown"))
         with patch.object(QMessageBox, "warning") as warning:
             self.window.load_pending_notes()
         warning.assert_called_once()
-        self.assertEqual(self.window.added_notes.toPlainText(), f"{STAMP} New feature")
+        self.assertEqual(self.window.added_notes.toPlainText(), "New feature")
         self.assertEqual(self.window._loaded_changelog, SOURCE)
 
     def test_tag_failure_keeps_committed_release(self):
