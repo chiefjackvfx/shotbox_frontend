@@ -45,7 +45,8 @@ def parse_version_from_source(source: str) -> Optional[str]:
 
 
 def parse_latest_changelog_preview(changelog_text: str) -> str:
-    match = _CHANGELOG_ENTRY_RE.search(changelog_text or "")
+    match = next((entry for entry in _CHANGELOG_ENTRY_RE.finditer(changelog_text or "")
+                  if re.match(r"^\[?v?\d+\.\d+\.\d+(?:\]|\s|$)", entry.group(1))), None)
     if not match:
         return "No changelog entries found."
 

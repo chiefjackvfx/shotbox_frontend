@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QScrollArea, QFrame, QSizePolicy, QMessageBox, QFileDialog,
     QButtonGroup, QRadioButton, QApplication, QTextBrowser
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer, QSignalBlocker
 from PyQt6.QtGui import QFont, QIcon, QWheelEvent
 
 import app_update
@@ -87,6 +87,7 @@ DEFAULT_SETTINGS = {
     "preview_overwrite": False,
     "nuke_exe_path": "",
     "threede_exe_path": "",
+    "houdini_user_pref_dir": "",
     
     # UI density settings
     "shots_layout_mode": "list",  # list/grid
@@ -312,13 +313,23 @@ class SettingsPage(QWidget):
         
         # Cache for Django users
         self._django_users = []
-        
+        self._autosave_pending = False
+        self._unsaved_setting_keys = set()
+        self._automatic_save = False
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setSingleShot(True)
+        self._autosave_timer.setInterval(500)
+        self._autosave_timer.timeout.connect(self._flush_autosave)
+
         self._setup_ui()
         self._load_django_users()
         self._load_current_values()
         self._connect_signals()
         self._refresh_update_panel()
-    
+        app = QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._flush_autosave)
+
     def _setup_ui(self):
         """Build the settings UI."""
         # Main layout with scroll area
@@ -478,6 +489,26 @@ class SettingsPage(QWidget):
         plugins_layout.addRow("Bundled scripts:", self.plugins_scripts_label)
         plugins_layout.addRow("", self.install_3de_plugins_btn)
         plugins_layout.addRow("", self.plugins_status_label)
+        self.houdini_pref_combo = NoScrollComboBox()
+        self.houdini_pref_combo.setEditable(True)
+        self.houdini_pref_combo.addItem("")
+        self.houdini_pref_combo.addItems(plugins_install.houdini_preferences_candidates())
+        self.houdini_pref_combo.lineEdit().setPlaceholderText("Select Houdini user preferences folder")
+        houdini_path_row = QHBoxLayout()
+        houdini_path_row.setSpacing(8)
+        houdini_path_row.addWidget(self.houdini_pref_combo, 1)
+        self.houdini_pref_browse_btn = QPushButton("Browse")
+        houdini_path_row.addWidget(self.houdini_pref_browse_btn)
+        self.houdini_destination_label = QLabel()
+        self.houdini_destination_label.setWordWrap(True)
+        self.houdini_status_label = QLabel()
+        self.houdini_status_label.setWordWrap(True)
+        self.install_houdini_plugin_btn = QPushButton("Install / Update Houdini Plugin")
+        self.install_houdini_plugin_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        plugins_layout.addRow("Houdini preferences:", houdini_path_row)
+        plugins_layout.addRow("Destination:", self.houdini_destination_label)
+        plugins_layout.addRow("", self.install_houdini_plugin_btn)
+        plugins_layout.addRow("", self.houdini_status_label)
         container_layout.addWidget(plugins_group)
         
         # === Debug Modes Section ===
@@ -737,6 +768,9 @@ class SettingsPage(QWidget):
         
         # === Action Buttons ===
         buttons_layout = QHBoxLayout()
+        self.save_status_label = QLabel("Changes save automatically. Startup options apply next launch.")
+        self.save_status_label.setWordWrap(True)
+        buttons_layout.addWidget(self.save_status_label)
         buttons_layout.addStretch()
         
         self.reset_button = QPushButton("Reset to Defaults")
@@ -789,7 +823,7 @@ class SettingsPage(QWidget):
             spin.setFixedWidth(120)
             spin.setMinimumHeight(28)
         for combo in container.findChildren(QComboBox):
-            if combo is not self.change_log_combo:
+            if combo not in (self.change_log_combo, self.houdini_pref_combo):
                 combo.setFixedWidth(240)
         for row_layout in (django_user_layout, nuke_path_layout, three_de_path_layout, update_buttons_layout):
             row_layout.setSpacing(8)
@@ -898,6 +932,8 @@ class SettingsPage(QWidget):
     
     def _populate_user_combo(self):
         """Populate Django user dropdown."""
+        blocker = QSignalBlocker(self.django_user_combo)
+        selected_user = self._settings.get("django_username")
         self.django_user_combo.clear()
         self.django_user_combo.addItem("(Not linked)", None)
         
@@ -911,15 +947,21 @@ class SettingsPage(QWidget):
                 display = f"{username} ({first_name})"
             
             self.django_user_combo.addItem(display, user_id)
+
+        index = self.django_user_combo.findData(selected_user)
+        if index < 0 and selected_user is not None:
+            self.django_user_combo.addItem(f"User {selected_user} (unavailable)", selected_user)
+            index = self.django_user_combo.count() - 1
+        self.django_user_combo.setCurrentIndex(max(0, index))
     
     def _load_current_values(self):
         """Load current settings values into UI widgets."""
+        blockers = [QSignalBlocker(widget) for widget in self._settings_controls()]
         # Django user
         django_user_id = self._settings.get("django_username")
-        if django_user_id is not None:
-            index = self.django_user_combo.findData(django_user_id)
-            if index >= 0:
-                self.django_user_combo.setCurrentIndex(index)
+        index = self.django_user_combo.findData(django_user_id)
+        if index >= 0:
+            self.django_user_combo.setCurrentIndex(index)
         
         # Server
         self.server_url_edit.setText(self._settings.get("server_url", ""))
@@ -948,6 +990,8 @@ class SettingsPage(QWidget):
         self.nuke_exe_path_edit.setText(self._settings.get("nuke_exe_path", ""))
         self.threede_exe_path_edit.setText(self._settings.get("threede_exe_path", ""))
         self._refresh_plugins_panel()
+        self.houdini_pref_combo.setCurrentText(self._settings.get("houdini_user_pref_dir", ""))
+        self._refresh_houdini_plugin_panel()
         
         # Debug modes
         self.debug_general_check.setChecked(self._settings.get("debug_modes.general", False))
@@ -1047,10 +1091,54 @@ class SettingsPage(QWidget):
         if idx >= 0:
             self.notif_size_combo.setCurrentIndex(idx)
     
+    def _settings_controls(self):
+        # Named form controls only: exclude the read-only changelog selector and
+        # child editors inside spin boxes/combos, whose parent already signals.
+        return [widget for widget in vars(self).values()
+                if isinstance(widget, (QLineEdit, QSpinBox, QDoubleSpinBox,
+                                       QCheckBox, QRadioButton, QComboBox))
+                and widget is not self.change_log_combo]
+
+    def _schedule_autosave(self, *_):
+        self._autosave_pending = True
+        self.save_status_label.setText("Unsaved changes…")
+        self._autosave_timer.start()
+
+    def _flush_autosave(self):
+        if self._autosave_pending:
+            self._save_all_settings(automatic=True)
+
+    def hideEvent(self, event):
+        self._flush_autosave()
+        super().hideEvent(event)
+
+    def closeEvent(self, event):
+        self._flush_autosave()
+        super().closeEvent(event)
+
+    def _set_pending_setting(self, key, value, save=False):
+        if self._settings.get(key) != value:
+            self._unsaved_setting_keys.add(key)
+        self._settings.set(key, value, save=save)
+
+    def _emit_saved_setting(self, key, value):
+        if not self._automatic_save or key in self._unsaved_setting_keys:
+            self.settings_changed.emit(key, value)
+
     def _connect_signals(self):
         """Connect UI signals to handlers."""
         # Save button
         self.save_button.clicked.connect(self._save_all_settings)
+        for widget in self._settings_controls():
+            if isinstance(widget, QLineEdit):
+                widget.textChanged.connect(self._schedule_autosave)
+            elif isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                widget.valueChanged.connect(self._schedule_autosave)
+            elif isinstance(widget, QComboBox):
+                signal = widget.currentTextChanged if widget.isEditable() else widget.currentIndexChanged
+                signal.connect(self._schedule_autosave)
+            else:
+                widget.toggled.connect(self._schedule_autosave)
         
         # Reset button
         self.reset_button.clicked.connect(self._reset_to_defaults)
@@ -1066,128 +1154,134 @@ class SettingsPage(QWidget):
         self.threede_exe_browse_btn.clicked.connect(self._on_browse_threede_exe)
         self.threede_exe_path_edit.textChanged.connect(self._refresh_plugins_panel)
         self.install_3de_plugins_btn.clicked.connect(self._on_install_3de_plugins)
+        self.houdini_pref_combo.currentTextChanged.connect(self._refresh_houdini_plugin_panel)
+        self.houdini_pref_browse_btn.clicked.connect(self._on_browse_houdini_preferences)
+        self.install_houdini_plugin_btn.clicked.connect(self._on_install_houdini_plugin)
 
         # Update controls
         self.check_updates_btn.clicked.connect(self._on_check_for_updates)
         self.apply_update_btn.clicked.connect(self._on_update_and_restart)
         self.change_log_combo.currentIndexChanged.connect(self._update_change_log_view)
     
-    def _save_all_settings(self):
-        """Save all settings from UI to file."""
+    def _save_all_settings(self, checked=False, *, automatic=False):
+        """Save the form; automatic saves report status without modal dialogs."""
+        self._autosave_timer.stop()
+        self._automatic_save = automatic
         # Django username
-        self._settings.set("django_username", self.django_user_combo.currentData(), save=False)
+        self._set_pending_setting("django_username", self.django_user_combo.currentData(), save=False)
         
         # Server
-        self._settings.set("server_url", self.server_url_edit.text().strip(), save=False)
+        self._set_pending_setting("server_url", self.server_url_edit.text().strip(), save=False)
         
         # Polling (stored in seconds)
-        self._settings.set("polling_interval", self.polling_interval_spin.value(), save=False)
-        self._settings.set("auto_refresh_enabled", self.auto_refresh_check.isChecked(), save=False)
-        self._settings.set("auto_refresh_interval", self.auto_refresh_interval_spin.value(), save=False)
-        self._settings.set(
+        self._set_pending_setting("polling_interval", self.polling_interval_spin.value(), save=False)
+        self._set_pending_setting("auto_refresh_enabled", self.auto_refresh_check.isChecked(), save=False)
+        self._set_pending_setting("auto_refresh_interval", self.auto_refresh_interval_spin.value(), save=False)
+        self._set_pending_setting(
             "activity_auto_refresh", self.activity_auto_refresh_check.isChecked(), save=False
         )
-        self._settings.set(
+        self._set_pending_setting(
             "activity_refresh_interval",
             self.activity_refresh_interval_spin.value(),
             save=False,
         )
 
         # Preview Generation
-        self._settings.set("preview_quality", self.preview_quality_combo.currentText(), save=False)
-        self._settings.set("preview_output_subdir", self.preview_output_subdir_edit.text().strip(), save=False)
-        self._settings.set("preview_overwrite", self.preview_overwrite_check.isChecked(), save=False)
-        self._settings.set("nuke_exe_path", self.nuke_exe_path_edit.text().strip(), save=False)
-        self._settings.set("threede_exe_path", self.threede_exe_path_edit.text().strip(), save=False)
+        self._set_pending_setting("preview_quality", self.preview_quality_combo.currentText(), save=False)
+        self._set_pending_setting("preview_output_subdir", self.preview_output_subdir_edit.text().strip(), save=False)
+        self._set_pending_setting("preview_overwrite", self.preview_overwrite_check.isChecked(), save=False)
+        self._set_pending_setting("nuke_exe_path", self.nuke_exe_path_edit.text().strip(), save=False)
+        self._set_pending_setting("threede_exe_path", self.threede_exe_path_edit.text().strip(), save=False)
+        self._set_pending_setting("houdini_user_pref_dir", self.houdini_pref_combo.currentText().strip(), save=False)
         
         # Debug modes
-        self._settings.set("debug_modes.general", self.debug_general_check.isChecked(), save=False)
-        self._settings.set("debug_modes.api_calls", self.debug_api_check.isChecked(), save=False)
-        self._settings.set("debug_modes.ui_updates", self.debug_ui_check.isChecked(), save=False)
-        self._settings.set(
+        self._set_pending_setting("debug_modes.general", self.debug_general_check.isChecked(), save=False)
+        self._set_pending_setting("debug_modes.api_calls", self.debug_api_check.isChecked(), save=False)
+        self._set_pending_setting("debug_modes.ui_updates", self.debug_ui_check.isChecked(), save=False)
+        self._set_pending_setting(
             "debug_modes.notifications", self.debug_notifications_check.isChecked(), save=False
         )
-        self._settings.set(
+        self._set_pending_setting(
             "debug_modes.project_load_profiler",
             self.debug_project_load_profiler_check.isChecked(),
             save=False,
         )
-        self._settings.set(
+        self._set_pending_setting(
             "debug_modes.suppress_qt_multimedia_warnings",
             self.debug_qt_multimedia_check.isChecked(),
             save=False,
         )
         
         # Appearance
-        self._settings.set("theme_file", "dark_v01.qss", save=False)
+        self._set_pending_setting("theme_file", "dark_v01.qss", save=False)
 
         # Shots layout
-        self._settings.set(
+        self._set_pending_setting(
             "shots_layout_mode",
             self.shots_layout_combo.currentData() or "list",
             save=False
         )
 
         # UI Density
-        self._settings.set("preview_thumbnail_size", self.preview_size_combo.currentText(), save=False)
-        self._settings.set(
+        self._set_pending_setting("preview_thumbnail_size", self.preview_size_combo.currentText(), save=False)
+        self._set_pending_setting(
             "nukedash_task_style",
             self.nukedash_task_style_combo.currentData() or "checklist",
             save=False,
         )
-        self._settings.set("card_spacing", self.card_spacing_spin.value(), save=False)
-        self._settings.set("row_height", self.row_height_spin.value(), save=False)
-        self._settings.set(
+        self._set_pending_setting("card_spacing", self.card_spacing_spin.value(), save=False)
+        self._set_pending_setting("row_height", self.row_height_spin.value(), save=False)
+        self._set_pending_setting(
             "quick_view_screen_percentage",
             self.quick_view_size_spin.value(),
             save=False,
         )
         
         # Window
-        self._settings.set("remember_window_size", self.remember_size_check.isChecked(), save=False)
-        self._settings.set("always_on_top", self.always_on_top_check.isChecked(), save=False)
+        self._set_pending_setting("remember_window_size", self.remember_size_check.isChecked(), save=False)
+        self._set_pending_setting("always_on_top", self.always_on_top_check.isChecked(), save=False)
         
         # Session Restore
-        self._settings.set("remember_last_session", self.remember_session_check.isChecked(), save=False)
+        self._set_pending_setting("remember_last_session", self.remember_session_check.isChecked(), save=False)
 
         # Startup
-        self._settings.set("startup_tab", self.startup_tab_combo.currentData(), save=False)
-        self._settings.set("show_startup_loading_dialog", self.show_startup_loading_check.isChecked(), save=False)
-        self._settings.set("enable_assignment_board", self.enable_assignment_board_check.isChecked(), save=False)
-        self._settings.set("enable_review_page", self.enable_review_page_check.isChecked(), save=False)
-        self._settings.set("enable_activity_page", self.enable_activity_page_check.isChecked(), save=False)
-        self._settings.set("enable_import_page", self.enable_import_page_check.isChecked(), save=False)
-        self._settings.set("enable_xml_import_page", self.enable_xml_import_page_check.isChecked(), save=False)
+        self._set_pending_setting("startup_tab", self.startup_tab_combo.currentData(), save=False)
+        self._set_pending_setting("show_startup_loading_dialog", self.show_startup_loading_check.isChecked(), save=False)
+        self._set_pending_setting("enable_assignment_board", self.enable_assignment_board_check.isChecked(), save=False)
+        self._set_pending_setting("enable_review_page", self.enable_review_page_check.isChecked(), save=False)
+        self._set_pending_setting("enable_activity_page", self.enable_activity_page_check.isChecked(), save=False)
+        self._set_pending_setting("enable_import_page", self.enable_import_page_check.isChecked(), save=False)
+        self._set_pending_setting("enable_xml_import_page", self.enable_xml_import_page_check.isChecked(), save=False)
         
         # Notifications
         if self.notif_off_radio.isChecked():
-            self._settings.set("notifications", "off", save=False)
+            self._set_pending_setting("notifications", "off", save=False)
         elif self.notif_silent_radio.isChecked():
-            self._settings.set("notifications", "silent", save=False)
+            self._set_pending_setting("notifications", "silent", save=False)
         else:
-            self._settings.set("notifications", "on", save=False)
+            self._set_pending_setting("notifications", "on", save=False)
 
-        self._settings.set(
+        self._set_pending_setting(
             "notifications_do_not_disturb",
             self.notif_dnd_check.isChecked(),
             save=False
         )
-        self._settings.set(
+        self._set_pending_setting(
             "notifications_animations",
             self.notif_animations_check.isChecked(),
             save=False
         )
-        self._settings.set(
+        self._set_pending_setting(
             "notifications_subtle",
             self.notif_subtle_check.isChecked(),
             save=False
         )
-        self._settings.set(
+        self._set_pending_setting(
             "notifications_lifetime",
             self.notif_lifetime_spin.value(),
             save=False
         )
-        self._settings.set(
+        self._set_pending_setting(
             "notifications_size",
             self.notif_size_combo.currentText().lower(),
             save=False
@@ -1195,63 +1289,65 @@ class SettingsPage(QWidget):
         
         # Now save to file
         if self._settings.save():
-            QMessageBox.information(
-                self,
-                "Settings Saved",
-                "Your settings have been saved successfully.\n\n"
-                "Startup page toggles apply on the next app launch."
-            )
+            self._autosave_pending = False
+            self.save_status_label.setText("Settings saved. Startup options apply next launch.")
+            if not automatic:
+                QMessageBox.information(
+                    self, "Settings Saved",
+                    "Your settings have been saved successfully.\n\n"
+                    "Startup page toggles apply on the next app launch."
+                )
             # Emit signals for settings that can be applied immediately
-            self.settings_changed.emit("auto_refresh_enabled", self.auto_refresh_check.isChecked())
-            self.settings_changed.emit("polling_interval", self._settings.get_polling_interval_ms())
-            self.settings_changed.emit("always_on_top", self.always_on_top_check.isChecked())
-            self.settings_changed.emit(
+            self._emit_saved_setting("auto_refresh_enabled", self.auto_refresh_check.isChecked())
+            self._emit_saved_setting("polling_interval", self._settings.get_polling_interval_ms())
+            self._emit_saved_setting("always_on_top", self.always_on_top_check.isChecked())
+            self._emit_saved_setting(
                 "activity_auto_refresh", self.activity_auto_refresh_check.isChecked()
             )
-            self.settings_changed.emit(
+            self._emit_saved_setting(
                 "activity_refresh_interval", self.activity_refresh_interval_spin.value()
             )
 
             # Preview generation settings
-            self.settings_changed.emit("preview_quality", self.preview_quality_combo.currentText())
-            self.settings_changed.emit("preview_output_subdir", self.preview_output_subdir_edit.text().strip())
-            self.settings_changed.emit("preview_overwrite", self.preview_overwrite_check.isChecked())
-            self.settings_changed.emit("nuke_exe_path", self.nuke_exe_path_edit.text().strip())
-            self.settings_changed.emit("threede_exe_path", self.threede_exe_path_edit.text().strip())
+            self._emit_saved_setting("preview_quality", self.preview_quality_combo.currentText())
+            self._emit_saved_setting("preview_output_subdir", self.preview_output_subdir_edit.text().strip())
+            self._emit_saved_setting("preview_overwrite", self.preview_overwrite_check.isChecked())
+            self._emit_saved_setting("nuke_exe_path", self.nuke_exe_path_edit.text().strip())
+            self._emit_saved_setting("threede_exe_path", self.threede_exe_path_edit.text().strip())
 
             # UI density settings
-            self.settings_changed.emit(
+            self._emit_saved_setting(
                 "shots_layout_mode",
                 self.shots_layout_combo.currentData() or "list"
             )
-            self.settings_changed.emit("preview_thumbnail_size", self.preview_size_combo.currentText())
-            self.settings_changed.emit(
+            self._emit_saved_setting("preview_thumbnail_size", self.preview_size_combo.currentText())
+            self._emit_saved_setting(
                 "nukedash_task_style",
                 self.nukedash_task_style_combo.currentData() or "checklist",
             )
-            self.settings_changed.emit("card_spacing", self.card_spacing_spin.value())
-            self.settings_changed.emit("row_height", self.row_height_spin.value())
-            self.settings_changed.emit(
+            self._emit_saved_setting("card_spacing", self.card_spacing_spin.value())
+            self._emit_saved_setting("row_height", self.row_height_spin.value())
+            self._emit_saved_setting(
                 "quick_view_screen_percentage",
                 self.quick_view_size_spin.value(),
             )
 
             # Startup settings
-            self.settings_changed.emit("startup_tab", self.startup_tab_combo.currentData())
-            self.settings_changed.emit("show_startup_loading_dialog", self.show_startup_loading_check.isChecked())
+            self._emit_saved_setting("startup_tab", self.startup_tab_combo.currentData())
+            self._emit_saved_setting("show_startup_loading_dialog", self.show_startup_loading_check.isChecked())
             
             # All debug modes
-            self.settings_changed.emit("debug_modes.general", self.debug_general_check.isChecked())
-            self.settings_changed.emit("debug_modes.api_calls", self.debug_api_check.isChecked())
-            self.settings_changed.emit("debug_modes.ui_updates", self.debug_ui_check.isChecked())
-            self.settings_changed.emit(
+            self._emit_saved_setting("debug_modes.general", self.debug_general_check.isChecked())
+            self._emit_saved_setting("debug_modes.api_calls", self.debug_api_check.isChecked())
+            self._emit_saved_setting("debug_modes.ui_updates", self.debug_ui_check.isChecked())
+            self._emit_saved_setting(
                 "debug_modes.notifications", self.debug_notifications_check.isChecked()
             )
-            self.settings_changed.emit(
+            self._emit_saved_setting(
                 "debug_modes.project_load_profiler",
                 self.debug_project_load_profiler_check.isChecked(),
             )
-            self.settings_changed.emit(
+            self._emit_saved_setting(
                 "debug_modes.suppress_qt_multimedia_warnings",
                 self.debug_qt_multimedia_check.isChecked(),
             )
@@ -1264,31 +1360,36 @@ class SettingsPage(QWidget):
             else:
                 mode_value = "on"
 
-            self.settings_changed.emit("notifications", mode_value)
-            self.settings_changed.emit(
+            self._emit_saved_setting("notifications", mode_value)
+            self._emit_saved_setting(
                 "notifications_do_not_disturb", self.notif_dnd_check.isChecked()
             )
-            self.settings_changed.emit(
+            self._emit_saved_setting(
                 "notifications_animations", self.notif_animations_check.isChecked()
             )
-            self.settings_changed.emit(
+            self._emit_saved_setting(
                 "notifications_subtle", self.notif_subtle_check.isChecked()
             )
-            self.settings_changed.emit(
+            self._emit_saved_setting(
                 "notifications_lifetime", self.notif_lifetime_spin.value()
             )
-            self.settings_changed.emit(
+            self._emit_saved_setting(
                 "notifications_size", self.notif_size_combo.currentText().lower()
             )
             
             # Emit server URL change signal
-            self.server_url_changed.emit(self.server_url_edit.text().strip())
+            if not automatic or "server_url" in self._unsaved_setting_keys:
+                self.server_url_changed.emit(self.server_url_edit.text().strip())
+            self._unsaved_setting_keys.clear()
         else:
-            QMessageBox.warning(
-                self,
-                "Save Failed",
-                "Failed to save settings. Please check file permissions."
-            )
+            self._autosave_pending = True
+            self.save_status_label.setText("Save failed. Check file permissions, then click Save Settings to retry.")
+            if not automatic:
+                QMessageBox.warning(
+                    self, "Save Failed",
+                    "Failed to save settings. Please check file permissions."
+                )
+        self._automatic_save = False
     
     def _reset_to_defaults(self):
         """Reset all settings to defaults after confirmation."""
@@ -1302,8 +1403,12 @@ class SettingsPage(QWidget):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
+            self._autosave_timer.stop()
+            self._autosave_pending = False
+            self._unsaved_setting_keys.clear()
             self._settings.reset_to_defaults()
             self._load_current_values()
+            self.save_status_label.setText("Defaults restored. Startup options apply next launch.")
             QMessageBox.information(
                 self,
                 "Settings Reset",
@@ -1312,6 +1417,7 @@ class SettingsPage(QWidget):
     
     def _on_refresh_users(self):
         """Refresh Django users list."""
+        self._flush_autosave()
         self._load_django_users()
         QMessageBox.information(self, "Users Refreshed", f"Loaded {len(self._django_users)} users from server.")
 
@@ -1370,6 +1476,40 @@ class SettingsPage(QWidget):
             QMessageBox.warning(self, "3DE Plugin Installation", message)
         else:
             QMessageBox.information(self, "3DE Plugin Installation", message)
+
+    def _refresh_houdini_plugin_panel(self):
+        self.houdini_status_label.clear()
+        self.install_houdini_plugin_btn.setEnabled(False)
+        try:
+            destination = plugins_install.resolve_houdini_preferences(self.houdini_pref_combo.currentText())
+        except (OSError, ValueError) as exc:
+            self.houdini_destination_label.setText(str(exc))
+            return
+        self.houdini_destination_label.setText(str(destination / "shotbox_3de_import"))
+        self.install_houdini_plugin_btn.setEnabled(True)
+
+    def _on_browse_houdini_preferences(self):
+        folder = QFileDialog.getExistingDirectory(self, "Select Houdini User Preferences Folder", self.houdini_pref_combo.currentText())
+        if folder:
+            self.houdini_pref_combo.setCurrentText(folder)
+
+    def _on_install_houdini_plugin(self):
+        self.install_houdini_plugin_btn.setEnabled(False)
+        try:
+            result = plugins_install.install_houdini_plugin(self.houdini_pref_combo.currentText())
+            failed = bool(result.failures)
+            message = f"Installed: {len(result.installed)}; updated: {len(result.updated)}; unchanged: {len(result.unchanged)}."
+            if failed:
+                message += "\nFailed:\n" + "\n".join(f"{name}: {error}" for name, error in result.failures.items())
+            else:
+                message += "\nRestart Houdini and enable the ShotBox shelf if it is not visible."
+        except (OSError, ValueError) as exc:
+            failed = True
+            message = f"Could not install Houdini plugin: {exc}"
+        finally:
+            self._refresh_houdini_plugin_panel()
+        self.houdini_status_label.setText(message)
+        (QMessageBox.warning if failed else QMessageBox.information)(self, "Houdini Plugin Installation", message)
 
     def _on_browse_threede_exe(self):
         """Browse for 3DE executable path."""

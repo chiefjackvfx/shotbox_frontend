@@ -119,7 +119,7 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             self.assertTrue(page.install_3de_plugins_btn.isEnabled())
             with mock.patch.object(settings.QMessageBox, "information"):
                 page.install_3de_plugins_btn.click()
-            self.assertIn("unchanged: 4", page.plugins_status_label.text())
+            self.assertIn(f"unchanged: {len(settings.plugins_install.bundled_scripts())}", page.plugins_status_label.text())
             page._load_current_values()
             self.assertFalse(page.install_3de_plugins_btn.isEnabled())
             self.assertEqual(page.plugins_status_label.text(), "")
@@ -152,6 +152,29 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             page._refresh_plugins_panel()
         self.assertFalse(page.install_3de_plugins_btn.isEnabled())
         self.assertIn("bundle missing", page.plugins_scripts_label.text())
+
+    def test_houdini_plugin_install_and_settings_persistence(self):
+        page = self._make_settings_page()
+        self.addCleanup(page.close)
+        self.assertFalse(page.install_houdini_plugin_btn.isEnabled())
+        with tempfile.TemporaryDirectory() as tmp:
+            page.houdini_pref_combo.setCurrentText(tmp)
+            self.assertTrue(page.install_houdini_plugin_btn.isEnabled())
+            self.assertIn(tmp, page.houdini_destination_label.text())
+            with mock.patch.object(settings.QMessageBox, "information"):
+                page.install_houdini_plugin_btn.click()
+                page._save_all_settings()
+            self.assertEqual(page._settings.get("houdini_user_pref_dir"), tmp)
+            self.assertTrue((Path(tmp) / "packages/shotbox_3de_import.json").is_file())
+            self.assertIn("Restart Houdini", page.houdini_status_label.text())
+            page.houdini_pref_combo.setCurrentText("")
+            page._load_current_values()
+            self.assertEqual(page.houdini_pref_combo.currentText(), tmp)
+            with mock.patch.object(settings.plugins_install, "install_houdini_plugin", side_effect=PermissionError("denied")), mock.patch.object(settings.QMessageBox, "warning") as warning:
+                page.install_houdini_plugin_btn.click()
+                warning.assert_called_once()
+            self.assertIn("denied", page.houdini_status_label.text())
+            self.assertTrue(page.install_houdini_plugin_btn.isEnabled())
 
     def test_confirmed_update_launches_without_second_question(self):
         page = self._make_settings_page()

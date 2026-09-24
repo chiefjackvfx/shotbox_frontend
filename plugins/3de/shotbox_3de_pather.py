@@ -1,12 +1,13 @@
 # 3DE4.script.name:    Path swap
-# 3DE4.script.version: v1.0
+# 3DE4.script.version: v1.3
 # 3DE4.script.gui:     Main Window::ShotBox
-# 3DE4.script.comment: Swap camera, 3D model and texture paths between Windows and Linux mounts.
+# 3DE4.script.comment: Normalize camera, 3D model and texture paths for the current OS.
 
-"""Swap 3DE camera, 3D model and texture paths between Windows and Linux mounts."""
+"""Normalize 3DE camera, 3D model and texture paths for the current OS."""
 
 from __future__ import annotations
 
+import platform
 import re
 from typing import Any
 
@@ -46,20 +47,22 @@ def render_path(path_norm: str, target_style: str) -> str:
 
 
 def swap_root(path: str) -> tuple[str | None, str | None]:
+    """Map either known root to this OS, never toggle based on the input."""
+    system = platform.system()
+    if system not in ("Windows", "Linux", "Darwin"):
+        return None, None
+    target_style = "windows" if system == "Windows" else "linux"
     path_norm = normalize_path(path)
-    path_norm_lower = path_norm.lower()
 
     for win_root, linux_root in ROOT_PAIRS:
-        win_root_norm = normalize_path(win_root).rstrip("/") + "/"
-        linux_root_norm = normalize_path(linux_root).rstrip("/") + "/"
-
-        if path_norm_lower.startswith(win_root_norm.lower()):
-            remainder = path_norm[len(win_root_norm):].lstrip("/")
-            return join_root(linux_root_norm, remainder), "linux"
-
-        if path_norm_lower.startswith(linux_root_norm.lower()):
-            remainder = path_norm[len(linux_root_norm):].lstrip("/")
-            return join_root(win_root_norm, remainder), "windows"
+        target_root = win_root if target_style == "windows" else linux_root
+        for source_root, case_sensitive in ((win_root, False), (linux_root, True)):
+            source_norm = normalize_path(source_root).rstrip("/")
+            comparable_path = path_norm if case_sensitive else path_norm.casefold()
+            comparable_root = source_norm if case_sensitive else source_norm.casefold()
+            if comparable_path == comparable_root or comparable_path.startswith(comparable_root + "/"):
+                remainder = path_norm[len(source_norm):].lstrip("/")
+                return join_root(normalize_path(target_root), remainder), target_style
 
     return None, None
 
@@ -88,17 +91,19 @@ def force_sequence_padding(path_norm: str) -> str:
     return filename
 
 
-def swap_camera_path(path: str) -> str | None:
+def swap_camera_path(path: str, camera_type: str | None = "SEQUENCE") -> str | None:
     swapped_norm, target_style = swap_root(path)
     if swapped_norm is None:
         return None
 
-    swapped_norm = force_sequence_padding(swapped_norm)
+    # Reference cameras point to literal still filenames, including any digits.
+    if camera_type == "SEQUENCE":
+        swapped_norm = force_sequence_padding(swapped_norm)
     return render_path(swapped_norm, target_style)
 
 
 def swap_asset_path(path: str) -> str | None:
-    """Swap the root on a 3D model or texture path. No sequence padding —
+    """Normalize the root on a 3D model or texture path. No sequence padding —
     these are typically single static files, not image sequences."""
     swapped_norm, target_style = swap_root(path)
     if swapped_norm is None:
@@ -125,14 +130,14 @@ def set_model_path(tde4_module: Any, pgroup_id: Any, model_id: Any, path: str) -
 def get_model_texture(tde4_module: Any, pgroup_id: Any, model_id: Any) -> str | None:
     """Read a 3D model's texture filename, or None if this 3DE build doesn't
     expose a texture API."""
-    if hasattr(tde4_module, "get3DModelTexture"):
-        return tde4_module.get3DModelTexture(pgroup_id, model_id)
+    if hasattr(tde4_module, "get3DModelUVTextureMap"):
+        return tde4_module.get3DModelUVTextureMap(pgroup_id, model_id)
     return None
 
 
 def set_model_texture(tde4_module: Any, pgroup_id: Any, model_id: Any, path: str) -> bool:
-    if hasattr(tde4_module, "set3DModelTexture"):
-        tde4_module.set3DModelTexture(pgroup_id, model_id, path)
+    if hasattr(tde4_module, "set3DModelUVTextureMap"):
+        tde4_module.set3DModelUVTextureMap(pgroup_id, model_id, path)
         return True
     return False
 
@@ -178,19 +183,31 @@ def build_summary(
 
 
 def run_path_swap(tde4_module: Any) -> dict[str, Any]:
-    camera_message = "Camera skipped.\nNo active camera found."
+    camera_messages: list[str] = []
     camera_changed = False
     model_updates: list[str] = []
     model_skips: list[str] = []
     texture_updates: list[str] = []
     texture_skips: list[str] = []
 
-    cam_id = tde4_module.getCurrentCamera()
-    if cam_id:
+    if hasattr(tde4_module, "getCameraList"):
+        camera_ids = tde4_module.getCameraList(0) or []
+    else:
+        current_camera = tde4_module.getCurrentCamera()
+        camera_ids = [current_camera] if current_camera else []
+    for cam_id in camera_ids:
+        camera_name = (
+            tde4_module.getCameraName(cam_id)
+            if hasattr(tde4_module, "getCameraName") else str(cam_id)
+        )
+        camera_type = (
+            tde4_module.getCameraType(cam_id)
+            if hasattr(tde4_module, "getCameraType") else None
+        )
         old_camera_path = tde4_module.getCameraPath(cam_id)
 
         if old_camera_path:
-            new_camera_path = swap_camera_path(old_camera_path)
+            new_camera_path = swap_camera_path(old_camera_path, camera_type)
 
             if new_camera_path is not None and new_camera_path != old_camera_path:
                 tde4_module.setCameraPath(cam_id, new_camera_path)
@@ -200,7 +217,7 @@ def run_path_swap(tde4_module: Any) -> dict[str, Any]:
                     new_camera_path,
                 )
             elif new_camera_path == old_camera_path:
-                camera_message = "Camera skipped.\nPath already matches the swapped result."
+                camera_message = "Camera skipped.\nPath already matches the current OS."
             else:
                 camera_message = (
                     "Camera skipped.\nPath does not start with a known Windows/Linux root:\n{}".format(
@@ -208,7 +225,13 @@ def run_path_swap(tde4_module: Any) -> dict[str, Any]:
                     )
                 )
         else:
-            camera_message = "Camera skipped.\nActive camera has no image path set."
+            camera_message = "Camera skipped.\nCamera has no image path set."
+
+        camera_messages.append("{} [{}]\n{}".format(
+            camera_name, camera_type or "unknown type", camera_message
+        ))
+
+    camera_message = "\n\n".join(camera_messages) or "Camera skipped.\nNo cameras found."
 
     for pgroup_id in tde4_module.getPGroupList(0) or []:
         pgroup_name = tde4_module.getPGroupName(pgroup_id)

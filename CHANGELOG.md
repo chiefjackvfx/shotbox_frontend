@@ -2,6 +2,26 @@
 
 All notable frontend publish changes should be documented in this file.
 
+## Unreleased
+
+### Added
+
+- [2026-09-24T10:32:15+01:00] Settings now save automatically after a short pause and when leaving the page or quitting, with quiet save status and manual retry on failure.
+- [2026-09-24T10:22:38+01:00] Added editable pending changelog notes to the release manager, with automatic prefill and a Load pending notes button.
+- [2026-09-24T10:22:38+01:00] Added a reusable personal Codex changelog skill and project instructions to record completed development work with timestamps before manual releases.
+
+### Changed
+
+- [2026-09-24T10:32:15+01:00] Added settings autosave tests covering persistence, edit batching, shutdown, reset, failure retry, and live-update notifications.
+- [2026-09-24T10:22:38+01:00] Release creation now converts reviewed pending notes into a numbered release while retaining their timestamps and leaving an empty Unreleased section.
+- [2026-09-24T10:22:38+01:00] Added automated coverage for pending-note parsing, editable loading, release conversion, rollback, tag failures, and update previews.
+
+### Fixed
+
+- [2026-09-24T10:32:15+01:00] Preserved linked user selections during user-list refreshes and avoided reapplying unchanged settings during automatic saves.
+- [2026-09-24T10:22:38+01:00] Prevented releases from overwriting changelog edits made since loading, and restored release files and Git staging state when preparation or committing fails.
+- [2026-09-24T10:22:38+01:00] Update previews now show the latest numbered release instead of pending changelog notes.
+
 ## 4.3.0 - 2026-09-22
 
 ### Added

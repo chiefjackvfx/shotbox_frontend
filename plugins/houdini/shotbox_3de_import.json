@@ -1,0 +1,7 @@
+{
+  "enable": true,
+  "hpath": "$HOUDINI_USER_PREF_DIR/shotbox_3de_import",
+  "env": [
+    {"var": "PYTHONPATH", "value": "$HOUDINI_USER_PREF_DIR/shotbox_3de_import/python", "method": "prepend"}
+  ]
+}

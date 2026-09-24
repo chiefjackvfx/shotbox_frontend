@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shelfDocument>
+  <toolshelf name="shotbox_3de_import" label="ShotBox">
+    <memberTool name="shotbox_import_3de"/>
+  </toolshelf>
+  <tool name="shotbox_import_3de" label="3DE Import" icon="OBJ_camera">
+    <script scriptType="python"><![CDATA[
+import shotbox_3de_import
+shotbox_3de_import.show_import_menu()
+]]></script>
+  </tool>
+</shelfDocument>

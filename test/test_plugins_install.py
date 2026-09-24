@@ -12,6 +12,57 @@ import plugins_install
 
 
 class PluginInstallTests(unittest.TestCase):
+    def test_houdini_windows_preferences_paths(self):
+        class WindowsPath(PureWindowsPath):
+            def resolve(self):
+                return self
+            def is_dir(self):
+                return True
+        for folder in (r"C:\Users\Artist\Documents\houdini22.0", r"\\server\profiles\Artist Name\houdini21.0"):
+            with mock.patch.object(plugins_install, "Path", WindowsPath), mock.patch.object(
+                plugins_install, "os", types.SimpleNamespace(path=ntpath)
+            ):
+                self.assertEqual(plugins_install.resolve_houdini_preferences(folder), WindowsPath(folder))
+
+    def test_houdini_preference_suggestions(self):
+        (self.root / "houdini22.0").mkdir()
+        (self.root / "Documents" / "houdini21.0").mkdir(parents=True)
+        (self.root / "houdini_launch.log").touch()
+        with mock.patch.object(plugins_install.Path, "home", return_value=self.root), mock.patch.dict(os.environ, {"HOUDINI_USER_PREF_DIR": ""}):
+            candidates = plugins_install.houdini_preferences_candidates()
+        self.assertEqual(set(candidates), {str(self.root / "houdini22.0"), str(self.root / "Documents/houdini21.0")})
+
+    def test_houdini_install_update_and_preserve_unrelated_files(self):
+        self.patch.stop()
+        preferences = self.root / "houdini22.0"
+        preferences.mkdir()
+        (preferences / "houdini.env").write_text("keep")
+        first = plugins_install.install_houdini_plugin(str(preferences))
+        self.assertEqual(len(first.installed), 3)
+        self.assertFalse(first.failures)
+        package = preferences / "packages" / "shotbox_3de_import.json"
+        self.assertIn("$HOUDINI_USER_PREF_DIR/shotbox_3de_import", package.read_text())
+        second = plugins_install.install_houdini_plugin(str(preferences))
+        self.assertEqual(len(second.unchanged), 3)
+        runtime = preferences / "shotbox_3de_import/python/shotbox_3de_import.py"
+        runtime.write_text("old")
+        third = plugins_install.install_houdini_plugin(str(preferences))
+        self.assertEqual(third.updated, ["shotbox_3de_import/python/shotbox_3de_import.py"])
+        self.assertEqual((preferences / "houdini.env").read_text(), "keep")
+
+    def test_houdini_does_not_register_failed_install_and_missing_source(self):
+        with self.assertRaises(FileNotFoundError):
+            plugins_install.install_houdini_plugin(str(self.root))
+        self.patch.stop()
+        with mock.patch.object(plugins_install.os, "replace", side_effect=PermissionError("denied")):
+            result = plugins_install.install_houdini_plugin(str(self.root))
+        self.assertEqual(len(result.failures), 2)
+        self.assertFalse((self.root / "packages/shotbox_3de_import.json").exists())
+        self.assertFalse(list(self.root.rglob(".shotbox-*")))
+        for folder in ("", str(self.root / "missing")):
+            with self.assertRaises((ValueError, FileNotFoundError)):
+                plugins_install.resolve_houdini_preferences(folder)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

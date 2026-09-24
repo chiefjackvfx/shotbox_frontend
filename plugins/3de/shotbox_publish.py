@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import glob
+import tempfile
 import tde4
 
 # ─── Config ──────────────────────────────────────────────────────────────────
@@ -199,11 +200,58 @@ def export_nuke_lens(path, start_frame):
     }, entry_point="main_export_nuke_ld_3de4")
 
 
+def _export_file_state(path):
+    try:
+        stat = os.stat(path)
+        return stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, stat.st_ino
+    except FileNotFoundError:
+        return None
+
+
+def record_houdini_export(path):
+    log = os.path.abspath(os.path.expandvars(os.path.expanduser(
+        os.environ.get("SHOTBOX_HOUDINI_HISTORY") or "~/.export_houdini.log"
+    )))
+    paths = [os.path.abspath(path)]
+    try:
+        with open(log, encoding="utf-8") as stream:
+            for line in stream:
+                entry = line.strip().strip('"').strip("'")
+                if entry and os.path.normcase(entry) not in {os.path.normcase(p) for p in paths}:
+                    paths.append(entry)
+                if len(paths) >= 10:
+                    break
+    except FileNotFoundError:
+        pass
+    os.makedirs(os.path.dirname(log), exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=os.path.dirname(log), delete=False) as stream:
+            temporary = stream.name
+            stream.write("\n".join(paths) + "\n")
+        os.replace(temporary, log)
+        temporary = None
+    finally:
+        if temporary is not None:
+            os.unlink(temporary)
+
+
 def export_houdini(path, start_frame):
-    return silent_exec("export_houdini.py", {
+    before = _export_file_state(path)
+    ok, error = silent_exec("export_houdini.py", {
         "file_browser":     path,
         "startframe_field": str(start_frame),
     })
+    if not ok:
+        return ok, error
+    after = _export_file_state(path)
+    if not after or not after[0] or before == after:
+        return False, "No new nonempty Houdini export was written; history not updated"
+    try:
+        record_houdini_export(path)
+    except (OSError, UnicodeError) as exc:
+        return True, "Export succeeded, but history could not be updated: {}".format(exc)
+    return True, None
 
 
 def export_maya(path, start_frame, shot_base):
@@ -310,6 +358,8 @@ def run_publish(req, paths, start_frame, shot_base):
         ok, err = fn()
         if ok and os.path.exists(paths[key]):
             results.append("{}  OK  ->  {}".format(label, os.path.basename(paths[key])))
+            if err:
+                results.append("{}  WARN  {}".format(label, err))
         elif ok:
             # Script ran but file wasn't created — likely an internal validation fail
             results.append("{}  WARN  file not found after export".format(label))

@@ -134,6 +134,89 @@ def prepend_changelog_entry(changelog_text: str, new_entry: str) -> str:
     return f"{source.rstrip()}\n\n{entry}\n".rstrip() + "\n"
 
 
+NOTE_SECTIONS = ("Added", "Changed", "Fixed")
+EMPTY_PENDING = "## Unreleased\n\n### Added\n\n### Changed\n\n### Fixed\n"
+
+
+def _pending_span(source: str) -> Optional[tuple[int, int]]:
+    headings = list(re.finditer(r"^##[ \t]+([^\r\n]+)[ \t]*\r?$", source, re.MULTILINE))
+    pending = [i for i, match in enumerate(headings)
+               if match.group(1).strip().strip("[]").lower() == "unreleased"]
+    if len(pending) > 1:
+        raise ValueError("Multiple Unreleased sections; combine them before releasing.")
+    if not pending:
+        return None
+    i = pending[0]
+    return headings[i].start(), headings[i + 1].start() if i + 1 < len(headings) else len(source)
+
+
+def parse_pending_notes(source: str) -> dict[str, list[str]]:
+    notes: dict[str, list[str]] = {name: [] for name in NOTE_SECTIONS}
+    span = _pending_span(source)
+    if span is None:
+        return notes
+    section = None
+    seen = set()
+    for line in source[span[0]:span[1]].splitlines()[1:]:
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("### "):
+            section = line[4:].strip()
+            if section not in notes or section in seen:
+                raise ValueError(f"Unsupported or repeated pending section: {section}")
+            seen.add(section)
+        elif section is not None and line.startswith("- ") and line[2:].strip():
+            notes[section].append(line[2:].strip())
+        else:
+            raise ValueError("Pending notes must be single-line bullets under Added, Changed, or Fixed.")
+    return notes
+
+
+def finalize_pending_release(source: str, entry: str) -> str:
+    parse_pending_notes(source)  # Do not discard unrecognized content.
+    span = _pending_span(source)
+    if span is None:
+        return prepend_changelog_entry(source, entry)
+    history = source[:span[0]] + source[span[1]:]
+    return prepend_changelog_entry(history, EMPTY_PENDING + "\n" + entry)
+
+
+def commit_release_files(draft: ReleaseDraft, loaded_source: str, run_git) -> None:
+    """Prepare and commit, restoring working files and the index on failure."""
+    changelog_bytes = CHANGELOG_PATH.read_bytes()
+    if changelog_bytes.decode("utf-8") != loaded_source:
+        raise ValueError("Changelog changed since loading. Load pending notes again before releasing.")
+    version_bytes = VERSION_PATH.read_bytes()
+    if parse_version_from_source(version_bytes.decode("utf-8")) != draft.current_version:
+        raise ValueError("App version changed. Refresh repository status before releasing.")
+    updated_version = replace_app_version_source(version_bytes.decode("utf-8"), draft.next_version)
+    updated_changelog = finalize_pending_release(loaded_source, draft.changelog_entry)
+    result = run_git("rev-parse", "--git-path", "index")
+    if result.returncode:
+        raise ValueError(_command_output(result) or "Cannot locate Git index.")
+    index_path = Path(result.stdout.strip())
+    if not index_path.is_absolute():
+        index_path = REPO_ROOT / index_path
+    index_bytes = index_path.read_bytes() if index_path.exists() else None
+    try:
+        VERSION_PATH.write_text(updated_version, encoding="utf-8")
+        CHANGELOG_PATH.write_text(updated_changelog, encoding="utf-8")
+        for args in (("add", VERSION_PATH.name, CHANGELOG_PATH.name),
+                     ("commit", "-m", draft.commit_message)):
+            result = run_git(*args)
+            if result.returncode:
+                raise ValueError(_command_output(result) or f"git {args[0]} failed.")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        VERSION_PATH.write_bytes(version_bytes)
+        CHANGELOG_PATH.write_bytes(changelog_bytes)
+        if index_bytes is None:
+            index_path.unlink(missing_ok=True)
+        else:
+            index_path.write_bytes(index_bytes)
+        raise
+
+
 def replace_app_version_source(source: str, new_version: str) -> str:
     def _replace(match: re.Match[str]) -> str:
         return f"{match.group(1)}{new_version}{match.group(3)}"
@@ -470,7 +553,10 @@ class ReleaseManagerWindow(QWidget):
         super().__init__()
         self.repo_status = inspect_repo_status(fetch_remote=True)
         self.selected_bump: Optional[str] = None
+        self._loaded_changelog: Optional[str] = None
+        self._loaded_notes = ("", "", "")
         self._build_ui()
+        self.load_pending_notes()
         self._apply_repo_status()
         self._update_draft_preview()
 
@@ -545,6 +631,9 @@ class ReleaseManagerWindow(QWidget):
         notes_layout.addRow("Changed:", self.changed_notes)
         notes_layout.addRow("Fixed:", self.fixed_notes)
         draft_layout.addLayout(notes_layout)
+        self.load_pending_button = QPushButton("Load pending notes")
+        self.load_pending_button.clicked.connect(self.load_pending_notes)
+        draft_layout.addWidget(self.load_pending_button)
         root_layout.addWidget(draft_group)
 
         preview_group = QGroupBox("Generated Preview")
@@ -575,6 +664,27 @@ class ReleaseManagerWindow(QWidget):
         self.log_box.setMaximumBlockCount(800)
         log_layout.addWidget(self.log_box)
         root_layout.addWidget(log_group, 1)
+
+    def load_pending_notes(self) -> None:
+        widgets = (self.added_notes, self.changed_notes, self.fixed_notes)
+        current = tuple(widget.toPlainText() for widget in widgets)
+        if current != self._loaded_notes:
+            answer = QMessageBox.question(
+                self, "Replace Edited Notes", "Replace your edited notes with pending changelog notes?"
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+        try:
+            source = CHANGELOG_PATH.read_bytes().decode("utf-8")
+            notes = parse_pending_notes(source)
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Pending Notes Unavailable", str(exc))
+            return
+        self._loaded_changelog = source
+        self._loaded_notes = tuple("\n".join(notes[name]) for name in NOTE_SECTIONS)
+        for widget, text in zip(widgets, self._loaded_notes):
+            widget.setPlainText(text)
+        self._update_draft_preview()
 
     def _select_bump(self, bump_kind: str, checked: bool) -> None:
         if checked:
@@ -690,33 +800,17 @@ class ReleaseManagerWindow(QWidget):
             return
 
         try:
-            version_source = VERSION_PATH.read_text(encoding="utf-8")
-            changelog_source = CHANGELOG_PATH.read_text(encoding="utf-8")
-            updated_version_source = replace_app_version_source(version_source, draft.next_version)
-            updated_changelog = prepend_changelog_entry(changelog_source, draft.changelog_entry)
-            VERSION_PATH.write_text(updated_version_source, encoding="utf-8")
-            CHANGELOG_PATH.write_text(updated_changelog, encoding="utf-8")
-            self._append_log(f"Updated {VERSION_PATH.name} and {CHANGELOG_PATH.name}")
-        except (OSError, ValueError) as exc:
-            QMessageBox.critical(self, "Release Edit Failed", str(exc))
-            return
-
-        add_result = self._run_logged_git("add", VERSION_PATH.name, CHANGELOG_PATH.name)
-        if add_result.returncode != 0:
-            QMessageBox.critical(self, "Git Add Failed", _command_output(add_result) or "git add failed.")
+            if self._loaded_changelog is None:
+                raise ValueError("Load pending notes successfully before releasing.")
+            commit_release_files(draft, self._loaded_changelog, self._run_logged_git)
+            self._append_log(f"Committed {VERSION_PATH.name} and {CHANGELOG_PATH.name}")
+        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+            QMessageBox.critical(self, "Release Commit Failed", str(exc))
             self.refresh_repo_status()
             return
 
-        commit_result = self._run_logged_git("commit", "-m", draft.commit_message)
-        if commit_result.returncode != 0:
-            QMessageBox.critical(
-                self,
-                "Git Commit Failed",
-                _command_output(commit_result) or "git commit failed.",
-            )
-            self.refresh_repo_status()
-            return
-
+        self._clear_release_form()
+        self.load_pending_notes()
         tag_result = self._run_logged_git("tag", draft.tag_name)
         if tag_result.returncode != 0:
             QMessageBox.warning(
@@ -730,7 +824,6 @@ class ReleaseManagerWindow(QWidget):
             self.refresh_repo_status()
             return
 
-        self._clear_release_form()
         self.refresh_repo_status()
         QMessageBox.information(
             self,
@@ -791,6 +884,7 @@ class ReleaseManagerWindow(QWidget):
         QMessageBox.information(self, "Release Pushed", "Release commit and tag were pushed successfully.")
 
     def _clear_release_form(self) -> None:
+        self._loaded_notes = ("", "", "")
         self.selected_bump = None
         for button in self.bump_buttons.values():
             button.blockSignals(True)
