@@ -6,30 +6,31 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-02T11:55:21+01:00] Added optional staggered grid with responsive shot cards.
-- [2026-10-02T11:55:21+01:00] Added isolated grid layout and compatibility regression tests.
-- [2026-10-02T12:08:31+01:00] Added thumbnail stability and task density regression tests.
-- [2026-10-02T12:24:59+01:00] Covered job loading and long titles in regression tests.
-- [2026-10-02T12:58:34+01:00] Tested compact controls, preview sizes and preserved active edits.
-
 ### Changed
-
-- [2026-10-05T13:01:36+01:00] Sized Nuke buttons to text, giving renders remaining space.
-- [2026-10-05T12:54:09+01:00] Renamed grid and card presentation to v02, preserving preferences.
-- [2026-10-05T11:08:43+01:00] Moved Assets and Precomp onto v02 cards' second action line.
-- [2026-10-02T12:08:31+01:00] Reduced v02 checklist row height and spacing.
-- [2026-10-02T12:24:59+01:00] Separated wrapping shot titles from frame ranges and edit points.
-- [2026-10-02T12:58:34+01:00] Matched approved compact cards with actions beside previews.
-- [2026-10-02T12:58:34+01:00] Restored single-line tasks and compact headers with responsive reflow.
 
 ### Fixed
 
-- [2026-10-05T12:56:24+01:00] Preserved original clip filenames with width-aware middle ellipsis.
-- [2026-10-05T12:50:37+01:00] Kept Nuke and render filenames on single lines.
-- [2026-10-02T11:55:21+01:00] Preserved layout attachment when switching shot views.
-- [2026-10-02T11:55:21+01:00] Cancelled completion flashes when task widgets are removed.
-- [2026-10-02T12:08:31+01:00] Stopped sizing probes shrinking thumbnails and triggering flicker.
-- [2026-10-02T12:24:59+01:00] Applied v02 card presentation during initial job loading.
+## 4.4.0 - 2026-10-05
+
+### Added
+
+- Added optional staggered grid with responsive shot cards.
+
+### Changed
+
+- Sized Nuke buttons to text, giving renders remaining space.
+- Renamed grid and card presentation to v02, preserving preferences.
+- Moved Assets and Precomp onto v02 cards' second action line.
+- Reduced v02 checklist row height and spacing.
+
+### Fixed
+
+- Preserved original clip filenames with width-aware middle ellipsis.
+- Kept Nuke and render filenames on single lines.
+- Preserved layout attachment when switching shot views.
+- Cancelled completion flashes when task widgets are removed.
+- Stopped sizing probes shrinking thumbnails and triggering flicker.
+- Applied v02 card presentation during initial job loading.
 
 ## 4.3.1 - 2026-09-24
 
