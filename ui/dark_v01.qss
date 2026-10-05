@@ -1,7 +1,7 @@
 /* 
 ShotBox Merged Stylesheet
 Base: Original dark theme with orange accents
-Enhanced: Modern Casio-inspired card hover effects and cleaner typography
+Enhanced: Casio-inspired card hover effects and cleaner typography
 Updated: Shot color indicator strip + Task status color coding
 */
 
@@ -1650,4 +1650,79 @@ QPushButton#btn_delete_task[presentation="checklist"][compact="true"] {
     padding: 1px 4px;
     font-size: 7px;
     min-height: 16px;
+}
+
+/* Optional v02 grid. Legacy cards keep their existing rules. */
+QFrame#frame_7[v02="true"] {
+    background-color: #20252C;
+    border: 1px solid #39424E;
+    border-radius: 5px;
+}
+QFrame#frame_7[v02="true"]:hover {
+    border-color: #657386;
+}
+QFrame#frame_tasks[v02="true"] {
+    background-color: transparent;
+    border: none;
+}
+QFrame#frame_metadata[v02="true"] {
+    background-color: transparent;
+    border: none;
+}
+QLabel#label_shot[v02="true"] {
+    color: #F5F7FA;
+    font-size: 16px;
+    letter-spacing: 0px;
+}
+QLabel#label_colourspace[v02="true"],
+QLabel#label_original_clip[v02="true"],
+QLabel#label_notes[v02="true"],
+QLabel#label_last_conform[v02="true"] {
+    color: #B2BCC9;
+    font-size: 11px;
+    border: none;
+    background-color: transparent;
+}
+QPushButton#btn_open_nuke[v02="true"],
+QPushButton#btn_latest_render[v02="true"],
+QToolButton#btn_open_assets[v02="true"],
+QPushButton#btn_open_precomp[v02="true"] {
+    min-height: 20px;
+    padding: 3px 5px;
+    font-size: 10px;
+    border-width: 1px;
+}
+QFrame#task_frame[v02="true"] {
+    border: 1px solid #343E4A;
+    border-radius: 4px;
+}
+QPushButton#btn_status[v02="true"],
+QPushButton#btn_assigned[v02="true"] {
+    font-size: 10px;
+    text-transform: none;
+    letter-spacing: 0px;
+    min-height: 14px;
+    padding: 1px 6px;
+}
+QLineEdit#edit_task_title_inline[presentation="checklist"][v02="true"],
+QLineEdit#edit_task_notes_inline[presentation="checklist"][v02="true"] {
+    min-height: 14px;
+    padding: 1px 6px;
+}
+QPushButton#btn_priority[presentation="checklist"][v02="true"],
+QPushButton#btn_budget_hours[presentation="checklist"][v02="true"] {
+    min-height: 14px;
+    padding: 1px 4px;
+}
+QPushButton#btn_task_title[v02="true"] {
+    font-size: 11px;
+    letter-spacing: 0px;
+    text-align: left;
+}
+QLabel#label_shot[v02="true"][compact="true"] {
+    font-size: 14px;
+}
+QPushButton#btn_status[v02="true"][compact="true"],
+QPushButton#btn_assigned[v02="true"][compact="true"] {
+    font-size: 8px;
 }

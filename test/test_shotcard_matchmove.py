@@ -408,7 +408,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
 
             self.assertEqual(
                 card.label_original_clip.text(),
-                f"{original_clip.name[:10]}...",
+                original_clip.name,
             )
 
     def test_original_clip_menu_shows_disabled_state_without_clips(self):
@@ -455,7 +455,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 },
             )
 
-            self.assertEqual(card.label_original_clip.text(), clip_a.name[:15])
+            self.assertEqual(card.label_original_clip.text(), clip_a.name)
 
             menu = FakeMenu()
             with mock.patch.object(card, "_copy_to_clipboard") as copy_to_clipboard, \

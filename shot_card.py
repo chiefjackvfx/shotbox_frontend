@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton, QToolButton,
     QSizePolicy, QSpacerItem, QVBoxLayout
 )
+from presentation_widgets import FlexibleButton, FlexibleLabel
 
 
 def setup_shot_card_ui(widget):
@@ -104,7 +105,7 @@ def setup_shot_card_ui(widget):
     widget.horizontalLayout_6.setObjectName("horizontalLayout_6")
     widget.horizontalLayout_6.setContentsMargins(0, 0, 0, 0)
     
-    widget.label_shot = QLabel(widget.frame_6)
+    widget.label_shot = FlexibleLabel(widget.frame_6)
     widget.label_shot.setObjectName("label_shot")
     widget.label_shot.setText("Shot name")
     
@@ -195,7 +196,7 @@ def setup_shot_card_ui(widget):
     widget.horizontalLayout_metadata.setContentsMargins(0, 0, 0, 0)
     
     # Colourspace label
-    widget.label_colourspace = QLabel(widget.frame_metadata)
+    widget.label_colourspace = FlexibleLabel(widget.frame_metadata)
     widget.label_colourspace.setObjectName("label_colourspace")
     widget.label_colourspace.setText("Colourspace: —")
     
@@ -206,7 +207,9 @@ def setup_shot_card_ui(widget):
     widget.horizontalLayout_metadata.addItem(widget.horizontalSpacer_meta3)
     
     # Original clip label (right-click for menu)
-    widget.label_original_clip = QLabel(widget.frame_metadata)
+    widget.label_original_clip = FlexibleLabel(widget.frame_metadata)
+    widget.label_original_clip.elide_text = True
+    widget.label_original_clip.elide_mode = Qt.TextElideMode.ElideMiddle
     widget.label_original_clip.setObjectName("label_original_clip")
     widget.label_original_clip.setText("Clips")
     
@@ -228,7 +231,7 @@ def setup_shot_card_ui(widget):
     widget.horizontalLayout_4.setObjectName("horizontalLayout_4")
     widget.horizontalLayout_4.setContentsMargins(0, 0, 2, 0)
     
-    widget.label_notes = QLabel(widget.frame_2)
+    widget.label_notes = FlexibleLabel(widget.frame_2)
     widget.label_notes.setObjectName("label_notes")
     widget.label_notes.setText("Shot Notes.....")
     
@@ -256,7 +259,7 @@ def setup_shot_card_ui(widget):
     widget.horizontalLayout_last_conform.setObjectName("horizontalLayout_last_conform")
     widget.horizontalLayout_last_conform.setContentsMargins(0, 0, 0, 0)
 
-    widget.label_last_conform = QLabel(widget.frame_last_conform)
+    widget.label_last_conform = FlexibleLabel(widget.frame_last_conform)
     widget.label_last_conform.setObjectName("label_last_conform")
     widget.label_last_conform.setText("None")
 
@@ -283,7 +286,9 @@ def setup_shot_card_ui(widget):
     widget.horizontalLayout_3.setObjectName("horizontalLayout_3")
     widget.horizontalLayout_3.setContentsMargins(0, 0, 0, 0)
     
-    widget.btn_open_nuke = QPushButton(widget.shot_btns)
+    widget.btn_open_nuke = FlexibleButton(widget.shot_btns)
+    widget.btn_open_nuke.fit_text = True
+    widget.btn_open_nuke.elide_mode = Qt.TextElideMode.ElideMiddle
     widget.btn_open_nuke.setObjectName("btn_open_nuke")
     widget.btn_open_nuke.setText("Open Nuke")
     
@@ -302,7 +307,8 @@ def setup_shot_card_ui(widget):
     
     widget.horizontalLayout_3.addWidget(widget.btn_open_precomp)
     
-    widget.btn_latest_render = QPushButton(widget.shot_btns)
+    widget.btn_latest_render = FlexibleButton(widget.shot_btns)
+    widget.btn_latest_render.elide_mode = Qt.TextElideMode.ElideMiddle
     widget.btn_latest_render.setObjectName("btn_latest_render")
     widget.btn_latest_render.setText("latest")
 

@@ -70,6 +70,14 @@ def get_settings_file_path() -> str:
     return os.path.join(SCRIPT_DIR, f"{username}_settings.yaml")
 
 
+def normalize_shots_layout_mode(mode: str) -> str:
+    """Resolve supported layout modes and previously saved preferences."""
+    normalized = str(mode).lower()
+    if normalized == "modern_grid":
+        return "v02_grid"
+    return normalized if normalized in {"grid", "v02_grid"} else "list"
+
+
 # Default settings values
 DEFAULT_SETTINGS = {
     # User identification
@@ -90,7 +98,7 @@ DEFAULT_SETTINGS = {
     "houdini_user_pref_dir": "",
     
     # UI density settings
-    "shots_layout_mode": "list",  # list/grid
+    "shots_layout_mode": "list",  # list/grid/v02_grid
     "compact_view_enabled": False,
     "nukedash_task_style": "checklist",  # card/checklist
     "preview_thumbnail_size": "Medium",  # NoThumb/Tiny/Small/Medium/Large
@@ -211,6 +219,9 @@ class SettingsManager:
                         loaded = {}
                     # Merge with defaults (loaded values override defaults)
                     self._settings = self._deep_merge(DEFAULT_SETTINGS.copy(), loaded)
+                    self._settings["shots_layout_mode"] = normalize_shots_layout_mode(
+                        self._settings["shots_layout_mode"]
+                    )
             except Exception as e:
                 print(f"[Settings] Error loading settings: {e}")
                 self._settings = DEFAULT_SETTINGS.copy()
@@ -265,6 +276,8 @@ class SettingsManager:
             value: Value to set
             save: Whether to immediately save to file
         """
+        if key == "shots_layout_mode":
+            value = normalize_shots_layout_mode(value)
         keys = key.split('.')
         target = self._settings
         for k in keys[:-1]:
@@ -560,7 +573,8 @@ class SettingsPage(QWidget):
 
         self.shots_layout_combo = NoScrollComboBox()
         self.shots_layout_combo.addItem("List", "list")
-        self.shots_layout_combo.addItem("Grid", "grid")
+        self.shots_layout_combo.addItem("Grid — Legacy", "grid")
+        self.shots_layout_combo.addItem("Grid — v02", "v02_grid")
         layout_layout.addRow("Shots Layout:", self.shots_layout_combo)
 
         # === UI Density Section ===

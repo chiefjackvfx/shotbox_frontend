@@ -284,8 +284,8 @@ def resolve_effective_shots_layout_mode(
     breakpoint: int = 1200,
 ) -> str:
     """Resolve the active layout mode from preferences plus compact-view state."""
-    normalized = "grid" if str(base_mode).lower() == "grid" else "list"
-    if compact_enabled:
+    normalized = widgets._normalize_layout_mode(base_mode)
+    if compact_enabled and normalized != "v02_grid":
         return "grid"
     return normalized
 
@@ -473,7 +473,7 @@ class page_nukedash(QMainWindow):
         # --- Session Restore Setup ---
         self._settings_manager = get_settings_manager()
         saved_layout_mode = self._settings_manager.get("shots_layout_mode", "list")
-        self._shots_layout_mode = "grid" if str(saved_layout_mode).lower() == "grid" else "list"
+        self._shots_layout_mode = widgets._normalize_layout_mode(saved_layout_mode)
         self._task_style = _normalize_task_style(
             self._settings_manager.get("nukedash_task_style", "checklist")
         )
@@ -2819,8 +2819,8 @@ class page_nukedash(QMainWindow):
         self._apply_filters(force=True)
 
     def apply_shots_layout_mode(self, mode: str):
-        """Switch between list and grid layouts for shot cards."""
-        self._shots_layout_mode = "grid" if str(mode).lower() == "grid" else "list"
+        """Switch between list, legacy grid and v02 grid shot cards."""
+        self._shots_layout_mode = widgets._normalize_layout_mode(mode)
         self._apply_compact_view_state()
 
     def resizeEvent(self, event):
@@ -3524,6 +3524,8 @@ class page_nukedash(QMainWindow):
                                         card_widget.set_nuke_open_handler(self._handle_nuke_open_request)
                                     if hasattr(card_widget, "set_task_style"):
                                         card_widget.set_task_style(self._task_style)
+                                    if hasattr(card_widget, "set_v02_grid"):
+                                        card_widget.set_v02_grid(timeline_widget._layout_mode == "v02_grid")
                                     return
 
                             with self._project_load_profiler.measure_work("shot_card_create"):
@@ -3544,6 +3546,8 @@ class page_nukedash(QMainWindow):
                                 card.set_task_render_state(render_state)
                             card.set_nuke_open_handler(self._handle_nuke_open_request)
                             card.set_compact_mode(self._compact_view_enabled)
+                            if hasattr(card, "set_v02_grid"):
+                                card.set_v02_grid(timeline_widget._layout_mode == "v02_grid")
                             if (
                                 (not self._compact_view_enabled)
                                 and self._row_height

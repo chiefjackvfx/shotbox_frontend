@@ -48,6 +48,9 @@ from nuke_lock_utils import parse_lock_info
 from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
 from flow_layout import FlowLayout
+from masonry_layout import MasonryLayout
+from v02_cards import apply_shot_width, set_shot_presentation, set_task_presentation
+from settings import normalize_shots_layout_mode
 from colourspace_defaults import COLOURSPACE_LIST
 from quick_view import QuickViewMedia
 
@@ -251,9 +254,7 @@ def _create_shot_card(
 
 
 def _normalize_layout_mode(mode: str) -> str:
-    if str(mode).lower() == "grid":
-        return "grid"
-    return "list"
+    return normalize_shots_layout_mode(mode)
 
 
 def _normalize_task_style(style: str) -> str:
@@ -264,7 +265,9 @@ def _normalize_task_style(style: str) -> str:
 
 def _create_shots_layout(mode: str, spacing: int | None = None) -> QLayout:
     layout_mode = _normalize_layout_mode(mode)
-    if layout_mode == "grid":
+    if layout_mode == "v02_grid":
+        layout = MasonryLayout(None, margin=0, h_spacing=10, v_spacing=10)
+    elif layout_mode == "grid":
         layout = FlowLayout(None, margin=0, h_spacing=10, v_spacing=10)
     else:
         layout = QVBoxLayout()
@@ -274,7 +277,7 @@ def _create_shots_layout(mode: str, spacing: int | None = None) -> QLayout:
 
 
 def _set_dynamic_property(widget: QWidget | None, name: str, value) -> None:
-    if widget is None:
+    if widget is None or widget.property(name) == value:
         return
     widget.setProperty(name, value)
     style = widget.style()
@@ -771,7 +774,12 @@ class TaskWidget(QWidget):
         if frame is None:
             return
         _set_dynamic_property(frame, "flash", "true")
-        QTimer.singleShot(180, lambda: _set_dynamic_property(frame, "flash", "false"))
+        # Cancels automatically if a task is removed or its presentation rebuilt.
+        timer = QTimer(frame)
+        timer.setSingleShot(True)
+        timer.timeout.connect(lambda: _set_dynamic_property(frame, "flash", "false"))
+        timer.timeout.connect(timer.deleteLater)
+        timer.start(180)
 
     def _apply_compact_properties(self, enabled: bool) -> None:
         compact_value = "true" if enabled else "false"
@@ -790,6 +798,14 @@ class TaskWidget(QWidget):
             getattr(self, "check_done_task", None),
         ):
             _set_dynamic_property(widget, "compact", compact_value)
+
+    def set_v02_grid(self, enabled: bool, width: int = 600) -> None:
+        if not enabled and not getattr(self, "_v02_grid", False):
+            return
+        self._v02_layout_width = width
+        set_task_presentation(self, bool(enabled), width)
+        if not enabled:
+            self.set_compact_mode(self._compact_mode)
 
     def set_compact_mode(self, enabled: bool) -> None:
         self._compact_mode = bool(enabled)
@@ -952,6 +968,8 @@ class TaskWidget(QWidget):
 
         self._set_done_state_properties(is_done)
         self._refresh_progress_control()
+        if getattr(self, "_v02_grid", False):
+            set_task_presentation(self, True, getattr(self, "_v02_layout_width", 600))
 
     def _on_delete_clicked(self):
         if not self._task_id:
@@ -1853,11 +1871,17 @@ class ShotCard(QWidget):
             self.btn_open_nuke.setToolTip(f"Modified {self._format_time_ago(last_nk_mtime)}")
         else:
             self.btn_open_nuke.setToolTip("No .nk file found")
+        if getattr(self, "_v02_grid", False) and self.btn_open_nuke.property("file_path"):
+            self.btn_open_nuke.setToolTip(
+                f"{self.btn_open_nuke.toolTip()}\n{self.btn_open_nuke.property('file_path')}"
+            )
 
     def _current_thumb_target_width(self) -> int:
         width = max(1, int(getattr(self, "_base_thumb_target_width", self._thumb_target_width)))
         if self._compact_mode:
-            return max(72, int(width * 0.6))
+            width = max(72, int(width * 0.6))
+        if getattr(self, "_v02_grid", False):
+            width = min(width, max(1, getattr(self, "_v02_layout_width", 600) - 40))
         return width
 
     def _thumbnail_display_widget(self):
@@ -1870,6 +1894,8 @@ class ShotCard(QWidget):
         display_widget = self._thumbnail_display_widget()
         if display_widget is not None:
             display_widget.setVisible(self._thumbnails_enabled)
+        if getattr(self, "_v02_grid", False):
+            apply_shot_width(self, getattr(self, "_v02_layout_width", 600))
         if not self._thumbnails_enabled:
             self._thumb_pending_url = None
             if hasattr(self, "_video_player") and self._video_player:
@@ -1957,6 +1983,10 @@ class ShotCard(QWidget):
         if self._compact_mode and last_conform not in (None, "None", ""):
             render_parts.append(f"Last conform: {last_conform}")
         self.btn_latest_render.setToolTip("\n".join(render_parts))
+        if getattr(self, "_v02_grid", False) and self.btn_latest_render.property("file_path"):
+            self.btn_latest_render.setToolTip(
+                f"{self.btn_latest_render.toolTip()}\n{self.btn_latest_render.property('file_path')}"
+            )
 
     def _apply_compact_properties(self, enabled: bool) -> None:
         compact_value = "true" if enabled else "false"
@@ -2176,6 +2206,10 @@ class ShotCard(QWidget):
             with project_load_profiler.measure_installed_work("task_card_create"):
                 task_widget = TaskWidget(task_data, presentation=self._task_widget_presentation())
             task_widget.set_compact_mode(self._compact_mode)
+            task_widget.set_v02_grid(
+                getattr(self, "_v02_grid", False),
+                max(1, getattr(self, "_v02_layout_width", 600) - 36),
+            )
             layout.addWidget(task_widget)
             self._task_widgets_by_id[normalized_id] = task_widget
             created_ids.append(normalized_id)
@@ -2230,6 +2264,10 @@ class ShotCard(QWidget):
             replacement = TaskWidget(task_data, presentation=self._task_widget_presentation())
             replacement.setVisible(is_visible)
             replacement.set_compact_mode(self._compact_mode)
+            replacement.set_v02_grid(
+                getattr(self, "_v02_grid", False),
+                max(1, getattr(self, "_v02_layout_width", 600) - 36),
+            )
             layout.addWidget(replacement)
             self._task_widgets_by_id[task_id] = replacement
         self._reorder_loaded_task_widgets()
@@ -2243,6 +2281,17 @@ class ShotCard(QWidget):
         self._set_task_layout_mode(self._task_style)
         self._rebuild_loaded_task_widgets()
         self.set_compact_mode(self._compact_mode)
+
+    def set_v02_grid(self, enabled: bool) -> None:
+        set_shot_presentation(self, bool(enabled))
+        for task in getattr(self, "_task_widgets_by_id", {}).values():
+            task.set_v02_grid(
+                bool(enabled), max(1, getattr(self, "_v02_layout_width", 600) - 36),
+            )
+
+    def prepare_layout_width(self, width: int) -> None:
+        if getattr(self, "_v02_grid", False) and width != getattr(self, "_v02_layout_width", None):
+            apply_shot_width(self, width)
 
     def set_compact_mode(self, enabled: bool) -> None:
         self._compact_mode = bool(enabled)
@@ -2329,6 +2378,8 @@ class ShotCard(QWidget):
         self._set_render_button_text()
         self._apply_compact_tooltips()
         self._apply_thumb_scale()
+        if getattr(self, "_v02_grid", False):
+            apply_shot_width(self, getattr(self, "_v02_layout_width", 600))
 
     def update_from_data(self, data: dict):
         # Store the latest data
@@ -2370,10 +2421,7 @@ class ShotCard(QWidget):
             self._original_clip_entries = self._resolve_original_clip_entries(data)
             primary_clip = self._primary_original_clip_entry()
             if primary_clip:
-                clip_name = primary_clip["clip_name"]
-                clip_label = (
-                    f"{clip_name[6:20]}..." if len(clip_name) > 20 else clip_name
-                )
+                clip_label = primary_clip["clip_name"]
             else:
                 clip_label = "Clips"
             self.label_original_clip.setText(clip_label)
@@ -3795,12 +3843,16 @@ class ShotCard(QWidget):
         if not self._thumb_orig:
             return
         target_width = self._current_thumb_target_width()
+        signature = (self._thumb_orig.cacheKey(), target_width)
+        if signature == getattr(self, "_thumb_scale_signature", None):
+            return
         pixel_map = self._thumb_orig.scaledToWidth(
             int(target_width),
             Qt.TransformationMode.SmoothTransformation
         )
         self.label_thumbnail.setPixmap(pixel_map)
         self.label_thumbnail.setFixedSize(pixel_map.size())
+        self._thumb_scale_signature = signature
         # Update video preview stack size to match
         self._update_preview_stack_size()
 
@@ -3809,6 +3861,8 @@ class ShotCard(QWidget):
         self._base_thumb_target_width = self._thumb_target_width
         if self._thumbnails_enabled:
             self._apply_thumb_scale()
+        if getattr(self, "_v02_grid", False):
+            apply_shot_width(self, getattr(self, "_v02_layout_width", 600))
 
     def set_thumbnail(self, url: str | None):
         self._current_thumbnail_url = url
@@ -3932,6 +3986,8 @@ class TimelineFrame(QWidget):
                 # Update existing widget data
                 existing[name].update_from_data(shot)
                 existing[name].set_task_style(self._task_style)
+                if hasattr(existing[name], "set_v02_grid"):
+                    existing[name].set_v02_grid(self._layout_mode == "v02_grid")
                 if self._nuke_open_handler is not None:
                     existing[name].set_nuke_open_handler(self._nuke_open_handler)
             else:
@@ -3948,6 +4004,8 @@ class TimelineFrame(QWidget):
                 if self._nuke_open_handler is not None:
                     card.set_nuke_open_handler(self._nuke_open_handler)
                 card.set_compact_mode(self._compact_mode)
+                if hasattr(card, "set_v02_grid"):
+                    card.set_v02_grid(self._layout_mode == "v02_grid")
                 self.shots_layout.addWidget(card)
 
         # Remove any existing spacers (list mode adds one at the end)
@@ -3976,6 +4034,11 @@ class TimelineFrame(QWidget):
         """Switch the shots layout between list and grid, preserving shot cards."""
         new_mode = _normalize_layout_mode(layout_mode)
         if new_mode == self._layout_mode:
+            for index in range(self.shots_layout.count()):
+                item = self.shots_layout.itemAt(index)
+                card = item.widget() if item else None
+                if hasattr(card, "set_v02_grid"):
+                    card.set_v02_grid(new_mode == "v02_grid")
             if card_spacing is not None:
                 self.shots_layout.setSpacing(max(0, int(card_spacing)))
             return
@@ -3992,15 +4055,17 @@ class TimelineFrame(QWidget):
                 item.widget().setParent(self)
 
         frame_layout = self.frame.layout()
-        if frame_layout:
+        if frame_layout is not None:
             frame_layout.removeItem(self.shots_layout)
 
         QWidget().setLayout(self.shots_layout)
         self.shots_layout = _create_shots_layout(new_mode, card_spacing)
-        if frame_layout:
+        if frame_layout is not None:
             frame_layout.addLayout(self.shots_layout)
 
         for widget in existing_widgets:
+            if isinstance(widget, ShotCard):
+                widget.set_v02_grid(new_mode == "v02_grid")
             self.shots_layout.addWidget(widget)
 
         if new_mode == "list":

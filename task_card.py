@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import (
     QFrame, QSizePolicy, QLineEdit, QStackedWidget, QApplication
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from presentation_widgets import FlexibleButton
 
 
 class TaskProgressButton(QPushButton):
@@ -112,7 +113,7 @@ def _setup_task_card_ui(widget):
     top_row.setSpacing(2)
 
     # Task title button (editable)
-    widget.btn_task_title = QPushButton("Task Name", widget.task_frame)
+    widget.btn_task_title = FlexibleButton("Task Name", widget.task_frame)
     widget.btn_task_title.setObjectName("btn_task_title")
     widget.btn_task_title.setFlat(True)
     widget.btn_task_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -139,13 +140,13 @@ def _setup_task_card_ui(widget):
     widget.middle_row = middle_row
     middle_row.setSpacing(4)
 
-    widget.btn_status = QPushButton("Status", widget.task_frame)
+    widget.btn_status = FlexibleButton("Status", widget.task_frame)
     widget.btn_status.setObjectName("btn_status")
     widget.btn_status.setMinimumWidth(70)
     widget.btn_status.setProperty("status", "unassigned")  # used by QSS
     middle_row.addWidget(widget.btn_status)
 
-    widget.btn_assigned = QPushButton("Unassigned", widget.task_frame)
+    widget.btn_assigned = FlexibleButton("Unassigned", widget.task_frame)
     widget.btn_assigned.setObjectName("btn_assigned")
     widget.btn_assigned.setMinimumWidth(70)
     middle_row.addWidget(widget.btn_assigned)
@@ -221,7 +222,7 @@ def _setup_task_checklist_ui(widget):
     widget.title_stack.setObjectName("task_title_stack")
     widget.title_stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
-    widget.btn_task_title = QPushButton("Task Name", widget.title_stack)
+    widget.btn_task_title = FlexibleButton("Task Name", widget.title_stack)
     widget.btn_task_title.setObjectName("btn_task_title")
     widget.btn_task_title.setFlat(True)
     widget.btn_task_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -243,13 +244,13 @@ def _setup_task_checklist_ui(widget):
     widget.edit_notes_inline.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
     layout.addWidget(widget.edit_notes_inline, 2)
 
-    widget.btn_status = QPushButton("Status", widget.task_frame)
+    widget.btn_status = FlexibleButton("Status", widget.task_frame)
     widget.btn_status.setObjectName("btn_status")
     widget.btn_status.setProperty("status", "unassigned")
     widget.btn_status.setMinimumWidth(64)
     layout.addWidget(widget.btn_status)
 
-    widget.btn_assigned = QPushButton("Unassigned", widget.task_frame)
+    widget.btn_assigned = FlexibleButton("Unassigned", widget.task_frame)
     widget.btn_assigned.setObjectName("btn_assigned")
     widget.btn_assigned.setMinimumWidth(70)
     layout.addWidget(widget.btn_assigned)
