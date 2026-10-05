@@ -15,8 +15,8 @@ FRONTEND_DIR = Path(__file__).resolve().parents[1]
 if str(FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(FRONTEND_DIR))
 
-from PyQt6.QtCore import QEvent, QObject, QPoint, QRect, Qt, pyqtSignal
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import QEvent, QObject, QPoint, QRect, Qt, QThread, pyqtSignal
+from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -36,12 +36,21 @@ import widgets
 class FakePopup(QObject):
     dismissed = pyqtSignal()
     navigation_requested = pyqtSignal(int)
+    thumbnail_update_requested = pyqtSignal(QImage)
 
     def __init__(self):
         super().__init__()
         self.visible = False
         self.position = 0
         self.shown = []
+        self.thumbnail_states = []
+        self.thumbnail_updates = []
+
+    def set_thumbnail_upload_state(self, saving, message=""):
+        self.thumbnail_states.append((saving, message))
+
+    def apply_updated_thumbnail(self, image, filename):
+        self.thumbnail_updates.append((image, filename))
 
     def isVisible(self):
         return self.visible
@@ -435,6 +444,173 @@ class QuickViewTests(unittest.TestCase):
         self.assertFalse(card._thumbnail_hovered)
         controller.clear_hovered_card.assert_called_once_with(card)
 
+    @unittest.skipUnless(quick_view.HAS_MULTIMEDIA, "Qt multimedia is unavailable")
+    def test_update_thumbnail_captures_full_video_frame_and_disables_during_upload(self):
+        from PyQt6.QtMultimedia import QVideoFrame, QVideoSink
+
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.assertFalse(popup.update_thumbnail_button.isEnabled())
+        image = QImage(640, 360, QImage.Format.Format_RGB32)
+        image.fill(Qt.GlobalColor.red)
+        sink = QVideoSink()
+        frame = QVideoFrame(image)
+        sink.setVideoFrame(frame)
+        popup.video_widget = SimpleNamespace(videoSink=lambda: sink)
+        popup._is_video = True
+        popup._on_thumbnail_frame_changed(frame)
+        captured = []
+        popup.thumbnail_update_requested.connect(captured.append)
+        popup.update_thumbnail_button.click()
+        self.assertEqual(len(captured), 1)
+        self.assertEqual(captured[0].size(), image.size())
+        self.assertEqual(captured[0].pixelColor(0, 0), image.pixelColor(0, 0))
+
+        popup.set_thumbnail_upload_state(True)
+        self.assertFalse(popup.update_thumbnail_button.isEnabled())
+        popup._request_thumbnail_update()
+        self.assertEqual(len(captured), 1)
+        popup.set_thumbnail_upload_state(False)
+        self.assertTrue(popup.update_thumbnail_button.isEnabled())
+        sink.setVideoFrame(QVideoFrame())
+        popup._request_thumbnail_update()
+        self.assertEqual(len(captured), 1)
+        self.assertIn("No frame available", popup.thumbnail_status_label.text())
+        popup.deleteLater()
+
+    def _thumbnail_upload_fixture(self):
+        popup = FakePopup()
+        card = FakeCard("sho010")
+        card._shot_id = 10
+        card._api = mock.Mock()
+        card._api.upload_shot_thumbnail.return_value = {"thumbnail": "/media/new.png"}
+        card.apply_thumbnail_update = mock.Mock()
+        controller = quick_view.QuickViewController(popup_factory=lambda: popup)
+        self.addCleanup(controller.dismiss)
+        controller.open_card(card)
+        image = QImage(32, 18, QImage.Format.Format_RGB32)
+        image.fill(Qt.GlobalColor.blue)
+        return controller, popup, card, image
+
+    def test_thumbnail_upload_saves_png_refreshes_card_and_cleans_temporary_file(self):
+        controller, popup, card, image = self._thumbnail_upload_fixture()
+        uploaded_paths = []
+
+        def upload(shot_id, path):
+            self.assertEqual(shot_id, 10)
+            self.assertEqual(QImage(path).size(), image.size())
+            uploaded_paths.append(Path(path))
+            return {"thumbnail": "/media/new.png"}
+
+        card._api.upload_shot_thumbnail.side_effect = upload
+        with mock.patch.object(quick_view.QThreadPool, "globalInstance") as pool:
+            popup.thumbnail_update_requested.emit(image)
+            self.assertEqual(popup.thumbnail_states[-1][0], True)
+            popup.thumbnail_update_requested.emit(image)
+            pool.return_value.start.assert_called_once()
+            worker = pool.return_value.start.call_args.args[0]
+            worker.run()
+
+        card.apply_thumbnail_update.assert_called_once()
+        self.assertEqual(card.apply_thumbnail_update.call_args.args[0], "/media/new.png")
+        self.assertFalse(uploaded_paths[0].exists())
+        self.assertEqual(popup.thumbnail_states[-1], (False, "Thumbnail updated."))
+        self.assertEqual(popup.thumbnail_updates[-1][1], "new.png")
+        self.assertEqual(controller._thumbnail_uploads, {})
+
+    def test_failed_thumbnail_upload_preserves_card_and_allows_retry(self):
+        controller, popup, card, image = self._thumbnail_upload_fixture()
+        card._api.upload_shot_thumbnail.side_effect = RuntimeError("Server unavailable")
+        with mock.patch.object(quick_view.QThreadPool, "globalInstance") as pool:
+            popup.thumbnail_update_requested.emit(image)
+            pool.return_value.start.call_args.args[0].run()
+        card.apply_thumbnail_update.assert_not_called()
+        self.assertEqual(popup.thumbnail_updates, [])
+        self.assertEqual(popup.thumbnail_states[-1][0], False)
+        self.assertIn("Server unavailable", popup.thumbnail_states[-1][1])
+        self.assertEqual(controller._thumbnail_uploads, {})
+
+    def test_thumbnail_upload_runs_off_ui_thread_and_applies_result_on_ui_thread(self):
+        controller, popup, card, image = self._thumbnail_upload_fixture()
+        upload_threads = []
+        apply_threads = []
+
+        def upload(shot_id, path):
+            upload_threads.append(QThread.currentThread())
+            return {"thumbnail": "/media/new.png"}
+
+        card._api.upload_shot_thumbnail.side_effect = upload
+        card.apply_thumbnail_update.side_effect = lambda *_: apply_threads.append(QThread.currentThread())
+        popup.thumbnail_update_requested.emit(image)
+        for _ in range(200):
+            if not controller._thumbnail_uploads:
+                break
+            QTest.qWait(10)
+        self.assertEqual(controller._thumbnail_uploads, {})
+        self.assertEqual(len(upload_threads), 1)
+        self.assertIsNot(upload_threads[0], self.app.thread())
+        self.assertEqual(apply_threads, [self.app.thread()])
+
+    def test_thumbnail_upload_completion_does_not_change_another_shot(self):
+        controller, popup, card, image = self._thumbnail_upload_fixture()
+        other = FakeCard("sho020")
+        other._shot_id = 20
+        with mock.patch.object(quick_view.QThreadPool, "globalInstance") as pool:
+            popup.thumbnail_update_requested.emit(image)
+            worker = pool.return_value.start.call_args.args[0]
+            controller.open_card(other)
+            states = list(popup.thumbnail_states)
+            worker.run()
+        card.apply_thumbnail_update.assert_called_once()
+        self.assertIs(controller.active_card(), other)
+        self.assertEqual(popup.thumbnail_states, states)
+        self.assertEqual(popup.thumbnail_updates, [])
+
+    def test_updated_thumbnail_preserves_preview_and_adds_missing_original_entry(self):
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        popup._version_entries = (quick_view.QuickViewEntry("preview.mov", video_path="preview.mov"),)
+        popup._version_index = 0
+        popup._is_video = True
+        popup.player = FakePlayer(position=7300)
+        image = QImage(32, 18, QImage.Format.Format_RGB32)
+        image.fill(Qt.GlobalColor.blue)
+        popup.apply_updated_thumbnail(image, "new.png")
+        self.assertEqual(popup.player.position(), 7300)
+        self.assertTrue(popup._is_video)
+        self.assertEqual(popup._version_index, 1)
+        self.assertEqual(popup._version_entries[0].thumbnail.size(), image.size())
+        self.assertEqual(popup._version_entries[1].video_path, "preview.mov")
+        popup.apply_updated_thumbnail(image, "newer.png")
+        self.assertEqual(len(popup._version_entries), 2)
+        self.assertEqual(popup._version_entries[0].filename, "newer.png")
+        popup.deleteLater()
+
+    def test_shot_card_applies_thumbnail_immediately_and_ignores_old_download(self):
+        card = widgets.ShotCard.__new__(widgets.ShotCard)
+        QWidget.__init__(card)
+        card.data = {"thumbnail": "/media/old.png"}
+        card._api = SimpleNamespace(base_url="http://server:8000/api/")
+        card.label_thumbnail = QLabel(card)
+        card._thumb_orig = None
+        card._thumb_sig = None
+        card._thumbnails_enabled = True
+        card._thumb_target_width = 80
+        card._base_thumb_target_width = 80
+        card._compact_mode = False
+        with mock.patch.object(widgets.ImageLoader, "instance") as loader:
+            card.set_thumbnail("http://server:8000/media/old.png")
+            old_callback = loader.return_value.load.call_args.args[1]
+        image = QImage(160, 90, QImage.Format.Format_RGB32)
+        image.fill(Qt.GlobalColor.blue)
+        card.apply_thumbnail_update("/media/new.png", image)
+        old_callback(QPixmap(10, 10))
+        self.assertEqual(card.data["thumbnail"], "/media/new.png")
+        self.assertEqual(card._current_thumbnail_url, "http://server:8000/media/new.png")
+        self.assertEqual(card._thumb_orig.size(), image.size())
+        self.assertEqual(card.label_thumbnail.pixmap().width(), 80)
+        card.deleteLater()
+
     def test_hover_leave_releases_preview_file(self):
         card = widgets.ShotCard.__new__(widgets.ShotCard)
         QWidget.__init__(card)
@@ -708,6 +884,81 @@ class QuickViewTests(unittest.TestCase):
 
         view.reset_zoom()
         self.assertEqual(view.zoom_factor, 1.0)
+
+    def test_clicking_video_toggles_playback_at_fit_and_zoomed_sizes(self):
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.addCleanup(popup.close)
+        popup.player = FakePlayer()
+        popup._is_video = True
+        video = QLabel("video frame")
+        popup.media_stack.addWidget(video)
+        popup.media_stack.setCurrentWidget(video)
+        popup.media_view.add_interaction_target(video)
+        popup.show()
+        self.app.processEvents()
+
+        for zoom in (1.0, 2.0):
+            with self.subTest(zoom=zoom):
+                popup.media_view.set_zoom(zoom)
+                self.app.processEvents()
+                point = video.mapFrom(popup.media_view.viewport(), popup.media_view.viewport().rect().center())
+                QTest.mouseClick(video, Qt.MouseButton.LeftButton, pos=point)
+                QTest.qWait(self.app.doubleClickInterval() + 100)
+                self.assertEqual(popup.player.playbackState(), quick_view.QMediaPlayer.PlaybackState.PlayingState)
+                QTest.mouseClick(video, Qt.MouseButton.LeftButton, pos=point)
+                QTest.qWait(self.app.doubleClickInterval() + 100)
+                self.assertEqual(popup.player.playbackState(), quick_view.QMediaPlayer.PlaybackState.PausedState)
+        self.assertEqual(popup.player.play_calls, 2)
+        self.assertEqual(popup.player.pause_calls, 2)
+
+    def test_dragging_and_double_clicking_video_do_not_toggle_playback(self):
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.addCleanup(popup.close)
+        popup.player = FakePlayer()
+        popup._is_video = True
+        video = QLabel("video frame")
+        popup.media_stack.addWidget(video)
+        popup.media_stack.setCurrentWidget(video)
+        popup.media_view.add_interaction_target(video)
+        popup.show()
+        self.app.processEvents()
+        popup.media_view.set_zoom(2.0)
+        self.app.processEvents()
+        point = video.mapFrom(popup.media_view.viewport(), QPoint(120, 80))
+        QTest.mousePress(video, Qt.MouseButton.LeftButton, pos=point)
+        QTest.mouseMove(video, point + QPoint(30, 20))
+        QTest.mouseRelease(video, Qt.MouseButton.LeftButton, pos=point + QPoint(30, 20))
+        QTest.qWait(self.app.doubleClickInterval() + 100)
+        self.assertEqual(popup.player.play_calls, 0)
+
+        QTest.mouseClick(video, Qt.MouseButton.LeftButton)
+        QTest.mouseDClick(video, Qt.MouseButton.LeftButton)
+        QTest.mouseRelease(video, Qt.MouseButton.LeftButton)
+        QTest.qWait(self.app.doubleClickInterval() + 100)
+        self.assertEqual(popup.media_view.zoom_factor, 1.0)
+        self.assertEqual(popup.player.play_calls, 0)
+        self.assertEqual(popup.player.pause_calls, 0)
+
+        QTest.mouseClick(video, Qt.MouseButton.RightButton)
+        QTest.qWait(self.app.doubleClickInterval() + 100)
+        self.assertEqual(popup.player.play_calls, 0)
+
+    def test_switching_media_cancels_pending_playback_click(self):
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.addCleanup(popup.close)
+        popup.player = FakePlayer()
+        popup._is_video = True
+        popup.show()
+        self.app.processEvents()
+        QTest.mouseClick(popup.image_label, Qt.MouseButton.LeftButton)
+        self.assertTrue(popup.media_view._click_timer.isActive())
+        popup._show_version(0)
+        popup._is_video = True
+        QTest.qWait(self.app.doubleClickInterval() + 100)
+        self.assertEqual(popup.player.play_calls, 0)
 
 
 if __name__ == "__main__":

@@ -23,11 +23,15 @@ def _response(*, status_code=200, payload=None):
 
 
 class DjangoAPILockOwnerTests(unittest.TestCase):
-    def tearDown(self):
-        http_help.DjangoAPI._current_username = None
-        http_help.DjangoAPI._cached_users = None
-        http_help.DjangoAPI._system_id = None
-        http_help.DjangoAPI._lock_owner_id = None
+    def setUp(self):
+        state = mock.patch.multiple(
+            http_help.DjangoAPI,
+            _default_base_url="http://old-server:8000/api/",
+            _current_username=None, _cached_users=None,
+            _system_id=None, _lock_owner_id=None,
+        )
+        state.start()
+        self.addCleanup(state.stop)
 
     def test_get_lock_owner_id_uses_linked_username_and_machine(self):
         with mock.patch.object(http_help, "local_machine_name", return_value="rogue"):
@@ -59,6 +63,16 @@ class DjangoAPILockOwnerTests(unittest.TestCase):
         api._request.assert_called_once()
         headers = api._request.call_args.kwargs["headers"]
         self.assertEqual(headers["X-ShotBox-System"], "chief@rogue")
+
+    def test_startup_helper_uses_saved_server_before_resolving_user(self):
+        settings = mock.Mock()
+        settings.get.side_effect = {"server_url": "http://saved-server:8000/", "django_username": 1}.get
+        with mock.patch("settings.get_settings_manager", return_value=settings), \
+            mock.patch.object(http_help.DjangoAPI, "get_users", return_value=[{"id": 1, "username": "jack"}]) as users:
+            http_help.setup_activity_tracking_from_settings()
+        users.assert_called_once()
+        self.assertEqual(http_help.DjangoAPI._default_base_url, "http://saved-server:8000/api/")
+        self.assertEqual(http_help.DjangoAPI.get_current_username(), "jack")
 
 
 if __name__ == "__main__":

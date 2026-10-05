@@ -6,9 +6,19 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-05T13:41:44+01:00] Clicking shot thumbnails opens Quick View.
+- [2026-10-05T13:48:41+01:00] Update shot thumbnails from the current Quick View frame.
+- [2026-10-05T13:54:18+01:00] Click Quick View videos to toggle play and pause.
+- [2026-10-05T14:04:55+01:00] Added Thumbs button to refresh all current job thumbnails.
+
 ### Changed
 
+
 ### Fixed
+
+- [2026-10-05T14:02:23+01:00] Resolve activity users after configuring the saved server.
+- [2026-10-05T14:02:23+01:00] Apply activity user changes immediately; clear caches between servers.
+- [2026-10-05T13:38:42+01:00] Enter creates tasks, including after preset and artist clicks.
 
 ## 4.4.0 - 2026-10-05
 

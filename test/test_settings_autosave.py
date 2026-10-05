@@ -81,6 +81,23 @@ class SettingsAutosaveTests(unittest.TestCase):
         self.assertEqual(self.read_saved("server_url"), "http://new-server:8000")
         self.assertFalse(self.page._autosave_timer.isActive())
 
+    def test_saved_identity_is_emitted_after_server_and_unlink_is_emitted(self):
+        self.page._django_users = [{"id": 1, "username": "jack"}]
+        self.page._populate_user_combo()
+        emitted = []
+        self.page.settings_changed.connect(
+            lambda key, value: emitted.append((key, value)) if key == "django_username" else None
+        )
+        self.page.server_url_changed.connect(lambda value: emitted.append(("server_url", value)))
+        self.page.django_user_combo.setCurrentIndex(1)
+        self.page.server_url_edit.setText("http://new-server:8000")
+        self.page._flush_autosave()
+        self.assertEqual(emitted, [("server_url", "http://new-server:8000"), ("django_username", 1)])
+        self.assertEqual(self.read_saved("django_username"), 1)
+        self.page.django_user_combo.setCurrentIndex(0)
+        self.page._flush_autosave()
+        self.assertEqual(emitted[-1], ("django_username", None))
+
     def test_quitting_flushes_pending_changes(self):
         self.page.preview_output_subdir_edit.setText("on-exit")
         self.app.aboutToQuit.emit()

@@ -129,6 +129,10 @@ class DjangoAPI:
     @classmethod
     def set_default_base_url(cls, url: str):
         """Set the default base URL for all new instances."""
+        if url != cls._default_base_url:
+            # User IDs and usernames belong to the server they came from.
+            cls._cached_users = None
+            cls.set_current_username(None)
         cls._default_base_url = url
     
     @classmethod
@@ -676,11 +680,12 @@ def setup_activity_tracking_from_settings():
     try:
         from settings import get_settings_manager
         settings = get_settings_manager()
+        server_url = settings.get("server_url")
+        if server_url:
+            DjangoAPI.set_default_base_url(server_url.rstrip('/') + '/api/')
         user_id = settings.get("django_username")
-        
-        if user_id:
-            DjangoAPI.set_current_user_by_id(user_id)
-        else:
+        DjangoAPI.set_current_user_by_id(user_id)
+        if user_id is None:
             print("[ShotBox] No django_username set in settings, activity will show as 'System'")
     except Exception as e:
         print(f"[ShotBox] Could not set up activity tracking: {e}")

@@ -6,6 +6,7 @@ import random
 import traceback
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urljoin
 
 from PyQt6 import uic
 from PyQt6.QtCore import Qt, QSignalBlocker, QTimer, QUrl, QEvent
@@ -1306,8 +1307,10 @@ class ShotCard(QWidget):
         self._quick_view_resume_position = 0
         self._setup_video_preview_stack()
         self.label_thumbnail.setToolTip(
-            "Hover to preview video · Press Space for Quick View"
+            "Hover to preview video · Click or press Space for Quick View"
         )
+        self._thumbnail_hover_target.setToolTip(self.label_thumbnail.toolTip())
+        self._thumbnail_hover_target.setCursor(Qt.CursorShape.PointingHandCursor)
         
         self._shot_id = data.get("id")
         self.shot_dir = data.get("base_path")
@@ -2954,6 +2957,8 @@ class ShotCard(QWidget):
         # Install event filter for hover detection
         self._thumbnail_hover_target = self._preview_stack
         self._thumbnail_hover_target.installEventFilter(self)
+        self.label_thumbnail.installEventFilter(self)
+        self._video_widget.installEventFilter(self)
     
     def _position_preview_indicator(self):
         """Position the preview indicator at bottom-left of thumbnail."""
@@ -2964,7 +2969,20 @@ class ShotCard(QWidget):
             self._preview_indicator.move(5, y_pos)
     
     def eventFilter(self, obj, event):
-        """Handle hover events for video preview."""
+        """Handle inline preview hover and thumbnail clicks for Quick View."""
+        if (
+            obj in (
+                getattr(self, "_thumbnail_hover_target", None),
+                getattr(self, "label_thumbnail", None),
+                getattr(self, "_video_widget", None),
+            )
+            and event.type() == QEvent.Type.MouseButtonRelease
+            and event.button() == Qt.MouseButton.LeftButton
+            and obj.rect().contains(event.position().toPoint())
+            and self._quick_view_controller is not None
+        ):
+            self._quick_view_controller.open_card(self)
+            return True
         if obj is getattr(self, "_thumbnail_hover_target", None):
             if event.type() == QEvent.Type.Enter:
                 self._thumbnail_hovered = True
@@ -3892,6 +3910,16 @@ class ShotCard(QWidget):
                 return
 
         ImageLoader.instance().load(url, _on_loaded)
+
+    def apply_thumbnail_update(self, thumbnail_path: str, image) -> None:
+        """Apply an uploaded Quick View frame immediately to the shot card."""
+        self.data["thumbnail"] = thumbnail_path
+        url = urljoin(self._api.base_url, thumbnail_path)
+        self._current_thumbnail_url = url
+        self._thumb_pending_url = None
+        self._thumb_orig = QPixmap.fromImage(image)
+        self._thumb_sig = url
+        self._apply_thumb_scale()
 
 class TimelineFrame(QWidget):
     def __init__(

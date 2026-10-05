@@ -18,6 +18,7 @@ if str(PYQT_FRONTEND_DIR) not in sys.path:
 from PyQt6.QtWidgets import QApplication, QComboBox, QLabel, QMainWindow, QTabWidget, QVBoxLayout, QWidget
 
 import filesIO
+import http_help
 import page_nukedash
 import project_load_profiler
 
@@ -175,14 +176,17 @@ def import_main_module():
         return importlib.import_module("main"), fake_modules
 
 
-def build_main_window(startup_tab: int = 0, extra_settings: dict | None = None):
+def build_main_window(startup_tab: int = 0, extra_settings: dict | None = None,
+                      *, apply_initial_settings: bool = False):
     main_module, fake_modules = import_main_module()
     settings_manager = FakeSettingsManager(startup_tab=startup_tab, extra_settings=extra_settings)
     with mock.patch.dict(sys.modules, fake_modules, clear=False), \
         mock.patch.object(main_module, "get_settings_manager", return_value=settings_manager), \
         mock.patch.object(main_module, "page_nukedash", FakeNukeDash), \
         mock.patch.object(main_module, "SettingsPage", FakeSettingsPage), \
-        mock.patch.object(main_module.MainWindow, "_apply_initial_settings", lambda self: None), \
+        mock.patch.object(main_module.MainWindow, "_apply_initial_settings",
+                          main_module.MainWindow._apply_initial_settings
+                          if apply_initial_settings else lambda self: None), \
         mock.patch.object(main_module.MainWindow, "_apply_notification_settings", lambda self: None), \
         mock.patch.object(main_module.MainWindow, "_apply_window_settings", lambda self: None), \
         mock.patch.object(main_module.MainWindow, "_apply_runtime_settings_to_pages", lambda self: None), \
@@ -555,6 +559,68 @@ def build_assignment_refresh_harness(main_module):
             self.page_nukedash = FakePauseableNukeDash()
 
     return AssignmentRefreshHarness()
+
+
+class MainWindowActivityIdentityTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self):
+        state = mock.patch.multiple(
+            http_help.DjangoAPI,
+            _default_base_url="http://old-server:8000/api/",
+            _current_username=None, _cached_users=None, _lock_owner_id=None,
+        )
+        state.start()
+        self.addCleanup(state.stop)
+        self.requests = mock.patch.object(http_help.requests.Session, "request").start()
+        self.addCleanup(mock.patch.stopall)
+        self.requests.return_value.status_code = 200
+        self.requests.return_value.json.return_value = [{"id": 1, "username": "jack", "groups": [1]}]
+
+    def make_window(self, **settings):
+        window = build_main_window(extra_settings=settings, apply_initial_settings=True)
+        self.addCleanup(self.cleanup_window, window)
+        return window
+
+    def cleanup_window(self, window):
+        window.close()
+        window.deleteLater()
+        self.app.processEvents()
+
+    def test_startup_looks_up_user_on_saved_server_and_sends_identity(self):
+        self.make_window(django_username=1, server_url="http://saved-server:8000")
+        self.assertEqual(self.requests.call_args.args[1], "http://saved-server:8000/api/users")
+        api = http_help.DjangoAPI()
+        api.update_task(12, status="done")
+        self.assertEqual(self.requests.call_args.kwargs["headers"]["X-ShotBox-User"], "jack")
+
+    def test_saved_user_change_and_unlink_update_existing_api_requests(self):
+        window = self.make_window(django_username=1)
+        api = http_help.DjangoAPI()
+        http_help.DjangoAPI._cached_users.append({"id": 2, "username": "cronk"})
+        window.page_settings.settings_changed.emit("django_username", 2)
+        api.update_task(12, status="done")
+        self.assertEqual(self.requests.call_args.kwargs["headers"]["X-ShotBox-User"], "cronk")
+        window.page_settings.settings_changed.emit("django_username", None)
+        api.update_task(12, status="in_progress")
+        self.assertNotIn("X-ShotBox-User", self.requests.call_args.kwargs["headers"])
+
+    def test_server_change_resolves_user_again_instead_of_reusing_cached_name(self):
+        window = self.make_window(django_username=1)
+        self.requests.return_value.json.return_value = [{"id": 1, "username": "other_artist", "groups": [1]}]
+        window.page_settings.server_url_changed.emit("http://new-server:8000")
+        self.assertEqual(self.requests.call_args.args[1], "http://new-server:8000/api/users")
+        self.assertEqual(http_help.DjangoAPI.get_current_username(), "other_artist")
+
+    def test_failed_lookup_can_recover_when_user_is_selected_again(self):
+        self.requests.side_effect = http_help.requests.ConnectionError("offline")
+        window = self.make_window(django_username=1)
+        self.assertIsNone(http_help.DjangoAPI.get_current_username())
+        self.requests.side_effect = None
+        window.page_settings.settings_changed.emit("django_username", 1)
+        self.assertEqual(http_help.DjangoAPI.get_current_username(), "jack")
 
 
 class MainWindowAssignmentBoardTests(unittest.TestCase):

@@ -183,6 +183,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QPushButton" name="btn_update_thumbnails">
+               <property name="text">
+                <string>thumbs</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QPushButton" name="btn_export_excel">
                <property name="text">
                 <string>Excel</string>

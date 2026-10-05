@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QKeySequence, QShortcut
 
 import http_help
 from flow_layout import FlowLayout
@@ -82,6 +83,22 @@ class TaskCreateDialog(QDialog):
 
         self._build_ui()
         self._populate_artists()
+        # Keep Enter assigned to Create when a preset or Cancel has focus.
+        for button in self.findChildren(QPushButton):
+            button.setAutoDefault(False)
+        self._create_shortcuts = []
+        for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            shortcut = QShortcut(QKeySequence(key), self)
+            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+            shortcut.setAutoRepeat(False)
+            shortcut.activated.connect(self.accept)
+            self._create_shortcuts.append(shortcut)
+
+    def accept(self) -> None:
+        # Commit any pending numeric edits before the keyboard shortcut closes us.
+        self.budget_spin.interpretText()
+        self.priority_spin.interpretText()
+        super().accept()
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -189,6 +206,7 @@ class TaskCreateDialog(QDialog):
         cancel_btn.clicked.connect(self.reject)
         buttons_row.addWidget(cancel_btn)
         create_btn = QPushButton("Create")
+        create_btn.setDefault(True)
         create_btn.clicked.connect(self.accept)
         buttons_row.addWidget(create_btn)
         layout.addLayout(buttons_row)

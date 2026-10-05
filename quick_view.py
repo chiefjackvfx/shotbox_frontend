@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterable
 import weakref
 
-from PyQt6.QtCore import QEvent, QObject, QPoint, Qt, QTimer, QUrl, pyqtSignal
-from PyQt6.QtGui import QKeySequence, QMouseEvent, QPixmap, QShortcut, QWheelEvent
+from thumbnail_updates import upload_thumbnail_image
+
+from PyQt6.QtCore import (
+    QEvent, QObject, QPoint, QRunnable, Qt, QThreadPool, QTimer, QUrl,
+    pyqtSignal, pyqtSlot,
+)
+from PyQt6.QtGui import QImage, QKeySequence, QMouseEvent, QPixmap, QShortcut, QWheelEvent
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -149,6 +154,7 @@ class PanZoomViewport(QScrollArea):
     """A frameless media viewport with pointer-centred zoom and drag panning."""
 
     zoomChanged = pyqtSignal(float)
+    clicked = pyqtSignal()
     MIN_ZOOM = 0.25
     FIT_ZOOM = 1.0
     MAX_ZOOM = 8.0
@@ -157,6 +163,12 @@ class PanZoomViewport(QScrollArea):
         super().__init__(parent)
         self._zoom = self.FIT_ZOOM
         self._drag_origin: QPoint | None = None
+        self._click_origin: QPoint | None = None
+        self._click_dragged = False
+        self._click_timer = QTimer(self)
+        self._click_timer.setSingleShot(True)
+        self._click_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._click_timer.timeout.connect(self.clicked.emit)
         self._drag_scroll_origin = QPoint()
         self.setWidgetResizable(False)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -164,7 +176,7 @@ class PanZoomViewport(QScrollArea):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setToolTip("Scroll to zoom • Drag to pan • Double-click to reset")
+        self.setToolTip("Click to play/pause • Scroll to zoom • Drag to pan • Double-click to reset")
         self.viewport().installEventFilter(self)
 
     @property
@@ -240,36 +252,54 @@ class PanZoomViewport(QScrollArea):
         return True
 
     def _handle_mouse_press(self, event: QMouseEvent) -> bool:
-        if (
-            event.button() != Qt.MouseButton.LeftButton
-            or self._zoom <= self.FIT_ZOOM
-        ):
+        if event.button() != Qt.MouseButton.LeftButton:
             return False
-        self._drag_origin = event.globalPosition().toPoint()
-        self._drag_scroll_origin = QPoint(
-            self.horizontalScrollBar().value(),
-            self.verticalScrollBar().value(),
-        )
-        self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
+        self._click_origin = event.globalPosition().toPoint()
+        self._click_dragged = False
+        if self._zoom > self.FIT_ZOOM:
+            self._drag_origin = self._click_origin
+            self._drag_scroll_origin = QPoint(
+                self.horizontalScrollBar().value(),
+                self.verticalScrollBar().value(),
+            )
+            self.viewport().setCursor(Qt.CursorShape.ClosedHandCursor)
         event.accept()
         return True
 
     def _handle_mouse_move(self, event: QMouseEvent) -> bool:
-        if self._drag_origin is None:
+        if self._click_origin is None:
             return False
-        delta = event.globalPosition().toPoint() - self._drag_origin
-        self.horizontalScrollBar().setValue(self._drag_scroll_origin.x() - delta.x())
-        self.verticalScrollBar().setValue(self._drag_scroll_origin.y() - delta.y())
+        delta = event.globalPosition().toPoint() - self._click_origin
+        if delta.manhattanLength() >= QApplication.startDragDistance():
+            self._click_dragged = True
+        if self._drag_origin is not None:
+            self.horizontalScrollBar().setValue(self._drag_scroll_origin.x() - delta.x())
+            self.verticalScrollBar().setValue(self._drag_scroll_origin.y() - delta.y())
         event.accept()
         return True
 
     def _handle_mouse_release(self, event: QMouseEvent) -> bool:
-        if self._drag_origin is None or event.button() != Qt.MouseButton.LeftButton:
+        if self._click_origin is None or event.button() != Qt.MouseButton.LeftButton:
             return False
+        delta = event.globalPosition().toPoint() - self._click_origin
+        if (
+            not self._click_dragged
+            and delta.manhattanLength() < QApplication.startDragDistance()
+            and self.viewport().rect().contains(self._viewport_position(event))
+        ):
+            # Wait for a possible double-click, which resets zoom instead.
+            self._click_timer.start(QApplication.doubleClickInterval())
+        self._click_origin = None
         self._drag_origin = None
         self._update_cursor()
         event.accept()
         return True
+
+    def cancel_pending_click(self) -> None:
+        self._click_timer.stop()
+        self._click_origin = None
+        self._drag_origin = None
+        self._update_cursor()
 
     def _update_cursor(self) -> None:
         cursor = (
@@ -291,6 +321,7 @@ class PanZoomViewport(QScrollArea):
             return self._handle_mouse_release(event)
         if event_type == QEvent.Type.MouseButtonDblClick:
             if event.button() == Qt.MouseButton.LeftButton:
+                self.cancel_pending_click()
                 self.reset_zoom()
                 event.accept()
                 return True
@@ -346,6 +377,7 @@ class QuickViewPopup(QWidget):
 
     dismissed = pyqtSignal()
     navigation_requested = pyqtSignal(int)
+    thumbnail_update_requested = pyqtSignal(QImage)
     MIN_SCREEN_PERCENTAGE = 25
     MAX_SCREEN_PERCENTAGE = 100
 
@@ -369,6 +401,8 @@ class QuickViewPopup(QWidget):
         self._slider_dragging = False
         self._resume_after_scrub = False
         self._is_video = False
+        self._thumbnail_frame_ready = False
+        self._thumbnail_upload_pending = False
         self._session_visible = False
         self._version_entries: tuple[QuickViewEntry, ...] = ()
         self._version_index = -1
@@ -433,6 +467,7 @@ class QuickViewPopup(QWidget):
             "Up/Down: previous/next preview version\n"
             "J/K/L: reverse/stop/forward\n"
             "Comma/Period: previous/next frame\n"
+            "Click image: play/pause\n"
             "Scroll: zoom in/out\n"
             "Double-click: reset zoom to fit\n"
             "Space/Escape: close Quick View"
@@ -461,6 +496,7 @@ class QuickViewPopup(QWidget):
         self.media_view.setObjectName("quick_view_media_view")
         self.media_view.setWidget(self.media_stack)
         self.media_view.zoomChanged.connect(lambda _zoom: self._scale_thumbnail())
+        self.media_view.clicked.connect(self._toggle_playback)
 
         self.image_label = QLabel("No preview available")
         self.image_label.setObjectName("quick_view_image")
@@ -511,6 +547,21 @@ class QuickViewPopup(QWidget):
         panel_layout.addWidget(self.controls)
         self.controls.hide()
 
+        thumbnail_row = QHBoxLayout()
+        self.update_thumbnail_button = QPushButton("Update Thumbnail")
+        self.update_thumbnail_button.setObjectName("quick_view_update_thumbnail")
+        self.update_thumbnail_button.setToolTip(
+            "Save the current preview video frame as this shot's thumbnail"
+        )
+        self.update_thumbnail_button.setEnabled(False)
+        self.update_thumbnail_button.clicked.connect(self._request_thumbnail_update)
+        thumbnail_row.addWidget(self.update_thumbnail_button)
+        self.thumbnail_status_label = QLabel("")
+        self.thumbnail_status_label.setObjectName("quick_view_thumbnail_status")
+        self.thumbnail_status_label.setWordWrap(True)
+        thumbnail_row.addWidget(self.thumbnail_status_label, 1)
+        panel_layout.addLayout(thumbnail_row)
+
         self.resize_grip = CenterResizeGrip(self._panel)
         self.resize_grip.setObjectName("quick_view_resize_grip")
         self.resize_grip.setFixedSize(20, 20)
@@ -546,6 +597,62 @@ class QuickViewPopup(QWidget):
         self.player.playbackStateChanged.connect(self._on_playback_state_changed)
         self.player.mediaStatusChanged.connect(self._on_media_status_changed)
         self.player.errorOccurred.connect(self._on_player_error)
+        self.video_widget.videoSink().videoFrameChanged.connect(
+            self._on_thumbnail_frame_changed
+        )
+
+    def _on_thumbnail_frame_changed(self, frame) -> None:
+        self._thumbnail_frame_ready = self._is_video and frame.isValid()
+        self._update_thumbnail_button_state()
+
+    def _update_thumbnail_button_state(self) -> None:
+        self.update_thumbnail_button.setEnabled(
+            self._is_video
+            and self._thumbnail_frame_ready
+            and not self._thumbnail_upload_pending
+        )
+
+    def set_thumbnail_upload_state(self, saving: bool, message: str = "") -> None:
+        self._thumbnail_upload_pending = saving
+        self.update_thumbnail_button.setText(
+            "Updating…" if saving else "Update Thumbnail"
+        )
+        self.thumbnail_status_label.setText(message)
+        self._update_thumbnail_button_state()
+
+    def _request_thumbnail_update(self) -> None:
+        if not self._is_video or self.video_widget is None or self._thumbnail_upload_pending:
+            return
+        try:
+            image = self.video_widget.videoSink().videoFrame().toImage()
+        except (AttributeError, RuntimeError):
+            image = QImage()
+        if image.isNull():
+            self.thumbnail_status_label.setText("No frame available. Seek and try again.")
+            return
+        self.thumbnail_update_requested.emit(image.copy())
+
+    def apply_updated_thumbnail(self, image: QImage, filename: str) -> None:
+        """Refresh the original still without interrupting the current preview."""
+        pixmap = QPixmap.fromImage(image)
+        self._original_thumbnail = pixmap
+        if self._media is not None:
+            self._media = replace(self._media, thumbnail=pixmap, thumbnail_filename=filename)
+        entry = QuickViewEntry(filename=filename, thumbnail=pixmap)
+        entries = list(self._version_entries)
+        if entries and not entries[0].video_path:
+            entries[0] = entry
+        else:
+            entries.insert(0, entry)
+            self._version_index += 1
+        self._version_entries = tuple(entries)
+        current = self._version_entries[self._version_index]
+        suffix = (
+            f"   {self._version_index + 1}/{len(entries)}" if len(entries) > 1 else ""
+        )
+        self.filename_label.setText(f"{current.filename}{suffix}")
+        if not self._is_video:
+            self._scale_thumbnail()
 
     def _build_shortcuts(self) -> None:
         self._close_space = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
@@ -629,7 +736,8 @@ class QuickViewPopup(QWidget):
                 font-size: 16px;
                 font-weight: 600;
             }
-            QLabel#quick_view_filename, QLabel#quick_view_time {
+            QLabel#quick_view_filename, QLabel#quick_view_time,
+            QLabel#quick_view_thumbnail_status {
                 color: #aeb3bb;
                 font-size: 11px;
             }
@@ -655,15 +763,21 @@ class QuickViewPopup(QWidget):
                 background-color: transparent;
             }
             QPushButton#quick_view_close, QPushButton#quick_view_play,
-            QPushButton#quick_view_mute {
+            QPushButton#quick_view_mute, QPushButton#quick_view_update_thumbnail {
                 background-color: #30343a;
                 color: #f2f3f5;
                 border: 1px solid #4a4f57;
                 border-radius: 5px;
             }
             QPushButton#quick_view_close:hover, QPushButton#quick_view_play:hover,
-            QPushButton#quick_view_mute:hover {
+            QPushButton#quick_view_mute:hover, QPushButton#quick_view_update_thumbnail:hover {
                 background-color: #454b54;
+            }
+            QPushButton#quick_view_update_thumbnail {
+                padding: 5px 10px;
+            }
+            QPushButton#quick_view_update_thumbnail:disabled {
+                color: #777d86;
             }
             QSlider::groove:horizontal {
                 height: 5px;
@@ -753,6 +867,7 @@ class QuickViewPopup(QWidget):
         position_ms: int | None = None,
         autoplay: bool | None = None,
     ) -> None:
+        self.media_view.cancel_pending_click()
         if not self._version_entries:
             self._version_index = -1
             self.filename_label.setText("No preview available")
@@ -825,6 +940,8 @@ class QuickViewPopup(QWidget):
     def _show_video(self, video_path: str, *, autoplay: bool = True) -> None:
         self._stop_reverse_timer()
         self._is_video = True
+        self._thumbnail_frame_ready = False
+        self._update_thumbnail_button_state()
         self._slider_dragging = False
         self._resume_after_scrub = False
         if self.audio_output is not None:
@@ -852,6 +969,8 @@ class QuickViewPopup(QWidget):
     def _show_thumbnail(self, unavailable_text: str | None = None) -> None:
         self._stop_reverse_timer()
         self._is_video = False
+        self._thumbnail_frame_ready = False
+        self._update_thumbnail_button_state()
         self._slider_dragging = False
         self._resume_after_scrub = False
         self._waiting_for_media_load = False
@@ -1118,6 +1237,7 @@ class QuickViewPopup(QWidget):
         grip.raise_()
 
     def hideEvent(self, event) -> None:
+        self.media_view.cancel_pending_click()
         should_emit = self._session_visible
         self._session_visible = False
         self._stop_reverse_timer()
@@ -1130,6 +1250,28 @@ class QuickViewPopup(QWidget):
         super().hideEvent(event)
         if should_emit:
             self.dismissed.emit()
+
+
+class _ThumbnailUploadSignals(QObject):
+    finished = pyqtSignal(int, object, str)
+
+
+class _ThumbnailUploadWorker(QRunnable):
+    def __init__(self, api, shot_id: int, image: QImage):
+        super().__init__()
+        self.api = api
+        self.shot_id = shot_id
+        self.image = image.copy()
+        self.signals = _ThumbnailUploadSignals()
+
+    def run(self) -> None:
+        updated = None
+        error = ""
+        try:
+            updated = upload_thumbnail_image(self.api, self.shot_id, self.image)
+        except Exception as exc:
+            error = str(exc) or type(exc).__name__
+        self.signals.finished.emit(self.shot_id, updated, error)
 
 
 class QuickViewController(QObject):
@@ -1162,6 +1304,7 @@ class QuickViewController(QObject):
         self._touched: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
         self._tracked_card_ids: set[int] = set()
         self._closing = False
+        self._thumbnail_uploads: dict[int, tuple[_ThumbnailUploadWorker, weakref.ReferenceType]] = {}
 
     def set_screen_percentage(self, percentage: int) -> None:
         self._screen_percentage = QuickViewPopup._clamp_screen_percentage(percentage)
@@ -1211,6 +1354,9 @@ class QuickViewController(QObject):
         self._active_card_id = id(card)
         screen = self._card_screen(card)
         popup.show_media(media, self._touched[card], screen)
+        popup.set_thumbnail_upload_state(
+            getattr(card, "_shot_id", None) in self._thumbnail_uploads
+        )
         return True
 
     def navigate(self, direction: int) -> bool:
@@ -1241,7 +1387,49 @@ class QuickViewController(QObject):
             self._popup = self._popup_factory()
             self._popup.dismissed.connect(self._on_popup_dismissed)
             self._popup.navigation_requested.connect(self.navigate)
+            self._popup.thumbnail_update_requested.connect(self._upload_thumbnail)
         return self._popup
+
+    @pyqtSlot(QImage)
+    def _upload_thumbnail(self, image: QImage) -> None:
+        card = self.active_card()
+        if card is None or image.isNull():
+            return
+        shot_id = getattr(card, "_shot_id", None)
+        api = getattr(card, "_api", None)
+        if not shot_id or api is None:
+            self._popup.set_thumbnail_upload_state(False, "No shot available to update.")
+            return
+        if shot_id in self._thumbnail_uploads:
+            return
+        worker = _ThumbnailUploadWorker(api, shot_id, image)
+        worker.signals.finished.connect(self._on_thumbnail_uploaded)
+        self._thumbnail_uploads[shot_id] = (worker, weakref.ref(card))
+        self._popup.set_thumbnail_upload_state(True, "Saving current frame…")
+        QThreadPool.globalInstance().start(worker)
+
+    @pyqtSlot(int, object, str)
+    def _on_thumbnail_uploaded(self, shot_id: int, updated, error: str) -> None:
+        job = self._thumbnail_uploads.pop(shot_id, None)
+        if job is None:
+            return
+        worker, card_ref = job
+        card = card_ref()
+        if not error and card is not None:
+            try:
+                card.apply_thumbnail_update(updated["thumbnail"], worker.image)
+            except RuntimeError:
+                # The card can be deleted while the upload is in progress.
+                pass
+        active = self.active_card()
+        if active is None or getattr(active, "_shot_id", None) != shot_id:
+            return
+        if error:
+            self._popup.set_thumbnail_upload_state(False, f"Thumbnail update failed: {error}")
+            return
+        filename = Path(QUrl(updated["thumbnail"]).path()).name
+        self._popup.apply_updated_thumbnail(worker.image, filename)
+        self._popup.set_thumbnail_upload_state(False, "Thumbnail updated.")
 
     def _on_popup_dismissed(self) -> None:
         self._finish_session()

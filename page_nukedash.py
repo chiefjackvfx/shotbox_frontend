@@ -12,11 +12,12 @@ import time
 from pathlib import Path
 
 from PyQt6 import QtWidgets, uic
-from PyQt6.QtCore import QEvent, QObject, QThread, QTimer, pyqtSignal, pyqtSlot, Qt
-from PyQt6.QtGui import QStandardItemModel, QStandardItem
+from PyQt6.QtCore import QEvent, QObject, QThread, QThreadPool, QTimer, pyqtSignal, pyqtSlot, Qt
+from PyQt6.QtGui import QImage, QStandardItemModel, QStandardItem
 from PyQt6.QtWidgets import (
     QMainWindow,
     QProgressBar,
+    QProgressDialog,
     QDialog,
     QMenu,
     QVBoxLayout,
@@ -40,6 +41,7 @@ from nuke_lock_utils import display_owner_name, parse_lock_info
 from settings import get_settings_manager
 from timeline_matchmove_dialog import TimelineMatchmoveCandidate, TimelineMatchmoveDialog
 from quick_view import QuickViewController
+from thumbnail_updates import BatchThumbnailWorker
 
 
 # Get the directory where this script is located (for cross-platform path handling)
@@ -440,6 +442,12 @@ class page_nukedash(QMainWindow):
         #self.btn_make_previews = QPushButton("Make All Previews")
         self.btn_make_previews.setToolTip("Generate previews for all shots with original clips or latest renders")
         self.btn_make_previews.clicked.connect(self._on_make_all_previews_clicked)
+        self._thumbnail_batch_worker = None
+        self._thumbnail_batch_progress = None
+        self.btn_update_thumbnails.setToolTip(
+            "Update all shot thumbnails in this job from the middle frame of each latest MP4 preview"
+        )
+        self.btn_update_thumbnails.clicked.connect(self._on_update_all_thumbnails_clicked)
         if hasattr(self, "btn_export_excel") and self.btn_export_excel:
             self.btn_export_excel.setToolTip("Export the current job timelines to an Excel summary")
             self.btn_export_excel.clicked.connect(self._on_export_excel_clicked)
@@ -2839,6 +2847,89 @@ class page_nukedash(QMainWindow):
         self._loading_dialog.show_loading(parent_window, "Refreshing...")
         self._worker.fetch()
 
+    def _on_update_all_thumbnails_clicked(self):
+        if self._thumbnail_batch_worker is not None:
+            return
+        job = self._active_job_data()
+        if not job:
+            QMessageBox.information(self, "Update Thumbnails", "No job selected.")
+            return
+        try:
+            import av
+        except ImportError:
+            QMessageBox.warning(self, "Update Thumbnails", "PyAV is required to capture preview frames.")
+            return
+        shots = []
+        seen = set()
+        for timeline in job.get("timelines", []) or []:
+            for shot in timeline.get("shots", []) or []:
+                shot_id = shot.get("id")
+                if shot_id and shot_id not in seen:
+                    seen.add(shot_id)
+                    shots.append(shot)
+        if not shots:
+            QMessageBox.information(self, "Update Thumbnails", "This job has no shots.")
+            return
+        progress = QProgressDialog("Updating thumbnails…", "Cancel", 0, len(shots), self)
+        progress.setWindowTitle("Update Thumbnails")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        worker = BatchThumbnailWorker(shots, http_help.DjangoAPI(), filesIO.Folders())
+        worker.signals.progress.connect(self._on_thumbnail_batch_progress)
+        worker.signals.updated.connect(self._on_thumbnail_batch_updated)
+        worker.signals.finished.connect(self._on_thumbnail_batch_finished)
+        progress.canceled.connect(worker.cancel)
+        self._thumbnail_batch_worker = worker
+        self._thumbnail_batch_progress = progress
+        self.btn_update_thumbnails.setEnabled(False)
+        self.btn_make_previews.setEnabled(False)
+        self.set_auto_refresh_paused(True)
+        progress.show()
+        QThreadPool.globalInstance().start(worker)
+
+    @pyqtSlot(int, str)
+    def _on_thumbnail_batch_progress(self, completed: int, message: str) -> None:
+        progress = self._thumbnail_batch_progress
+        if progress is not None and not progress.wasCanceled():
+            progress.setLabelText(message)
+            progress.setValue(completed)
+
+    @pyqtSlot(int, str, QImage)
+    def _on_thumbnail_batch_updated(self, shot_id: int, thumbnail: str, image: QImage) -> None:
+        for job in self._jobs_by_id.values():
+            for timeline in job.get("timelines", []) or []:
+                for shot in timeline.get("shots", []) or []:
+                    if shot.get("id") == shot_id:
+                        shot["thumbnail"] = thumbnail
+        for index in range(self.timelines_tabs.count()):
+            for card in self._iter_timeline_shot_cards(self.timelines_tabs.widget(index)):
+                if card.data.get("id") == shot_id:
+                    card.apply_thumbnail_update(thumbnail, image)
+
+    @pyqtSlot(object)
+    def _on_thumbnail_batch_finished(self, summary: dict) -> None:
+        progress = self._thumbnail_batch_progress
+        self._thumbnail_batch_progress = None
+        self._thumbnail_batch_worker = None
+        if progress is not None:
+            progress.close()
+            progress.deleteLater()
+        self.btn_update_thumbnails.setEnabled(True)
+        self.btn_make_previews.setEnabled(True)
+        self.set_auto_refresh_paused(False)
+        title = "Cancelled." if summary["cancelled"] else "Done."
+        message = (
+            f"{title}\n\nUpdated: {summary['updated']}\nFailed: {summary['failed']}\n"
+            f"Skipped (no preview): {summary['skipped']}"
+        )
+        if summary["remaining"]:
+            message += f"\nRemaining: {summary['remaining']}"
+        if summary["errors"]:
+            message += "\n\n" + "\n".join(summary["errors"][:5])
+        QMessageBox.information(self, "Update Thumbnails", message)
+
     def _on_make_all_previews_clicked(self):
         """Generate previews for all shots that need them in the current job."""
         from PyQt6.QtWidgets import QMessageBox, QProgressDialog, QApplication
@@ -3170,6 +3261,9 @@ class page_nukedash(QMainWindow):
 
     @pyqtSlot(list)
     def _on_data(self, jobs):
+        if getattr(self, "_thumbnail_batch_worker", None) is not None:
+            # Keep an older in-flight refresh from replacing uploaded images.
+            return
         
         # BUGFIX: Defer processing if chunked loading is in progress
         # This prevents duplicate shots from being created by background refresh

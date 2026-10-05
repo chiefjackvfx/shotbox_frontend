@@ -1394,6 +1394,7 @@ class SettingsPage(QWidget):
             # Emit server URL change signal
             if not automatic or "server_url" in self._unsaved_setting_keys:
                 self.server_url_changed.emit(self.server_url_edit.text().strip())
+            self._emit_saved_setting("django_username", self.django_user_combo.currentData())
             self._unsaved_setting_keys.clear()
         else:
             self._autosave_pending = True

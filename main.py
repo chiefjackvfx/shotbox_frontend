@@ -124,9 +124,6 @@ class MainWindow(QMainWindow):
         
         # Initialize settings manager first
         self._settings_manager = get_settings_manager()
-        user_id = self._settings_manager.get("django_username")
-        if user_id:
-            http_help.DjangoAPI.set_current_user_by_id(user_id)
 
         self._enable_assignment_board = bool(
             self._settings_manager.get("enable_assignment_board", ENABLE_ASSIGNMENT_BOARD)
@@ -146,6 +143,9 @@ class MainWindow(QMainWindow):
         
         # Apply settings to modules before creating pages
         self._apply_initial_settings()
+        http_help.DjangoAPI.set_current_user_by_id(
+            self._settings_manager.get("django_username")
+        )
 
         # Notifications
         self._notification_system = NotificationSystem()
@@ -767,7 +767,10 @@ class MainWindow(QMainWindow):
 
     def _on_settings_changed(self, key: str, value):
         """Handle settings changes that need immediate action."""
-        if key == "always_on_top":
+        if key == "django_username":
+            http_help.DjangoAPI.set_current_user_by_id(value)
+
+        elif key == "always_on_top":
             # Toggle always on top - works immediately without restart
             was_visible = self.isVisible()
             if value:
@@ -880,6 +883,9 @@ class MainWindow(QMainWindow):
     def _on_server_url_changed(self, url: str):
         """Handle server URL change."""
         self._update_server_url(url)
+        http_help.DjangoAPI.set_current_user_by_id(
+            self._settings_manager.get("django_username")
+        )
 
     def _start_automatic_update_check(self) -> None:
         """Fetch origin/main asynchronously once during this app launch."""
