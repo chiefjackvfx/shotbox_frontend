@@ -405,6 +405,80 @@ class NukeDashStatusFilterTests(unittest.TestCase):
         self.assertFalse(self._shot_card(102).isVisible())
         self.assertEqual(self.harness.Label_results.text(), "2 results")
 
+    def _search(self, text: str) -> None:
+        self.harness.Search_bar.setText(text)
+        self.harness._apply_filters(force=True)
+        self.app.processEvents()
+
+    def test_search_matches_partial_task_names_case_insensitively(self):
+        self._search("  pAiNt  ")
+
+        self.assertTrue(self._shot_card(101).isVisible())
+        self.assertEqual(self._visible_task_ids(101), [2])
+        self.assertFalse(self._shot_card(102).isVisible())
+        self.assertFalse(self._shot_card(103).isVisible())
+        self.assertEqual(self.harness.Label_results.text(), "1 results")
+
+    def test_task_search_respects_artist_and_status_filters(self):
+        self._search("assigned")
+        self._select_status("assigned")
+        self._set_artist_filter(2)
+
+        self.assertEqual(self._visible_task_ids(101), [2])
+        self.assertEqual(self._visible_task_ids(102), [5])
+        self.assertFalse(self._shot_card(103).isVisible())
+        self.assertEqual(self.harness.Label_results.text(), "2 results")
+
+        self._set_artist_filter(1)
+        self.assertEqual(self.harness.Label_results.text(), "0 results")
+
+        self._set_artist_filter(2)
+        self._clear_status_filter()
+        self._select_status("done")
+        self.assertEqual(self.harness.Label_results.text(), "0 results")
+
+    def test_hidden_task_search_requires_show_hidden_tasks(self):
+        self._search("hidden done")
+        self.assertFalse(self._shot_card(101).isVisible())
+        self.assertEqual(self.harness.Label_results.text(), "0 results")
+
+        self.harness.show_hidden_tasks = True
+        self.harness._apply_filters(force=True)
+        self.app.processEvents()
+
+        self.assertTrue(self._shot_card(101).isVisible())
+        self.assertEqual(self._visible_task_ids(101), [4])
+        self.assertEqual(self.harness.Label_results.text(), "1 results")
+
+    def test_task_search_does_not_reveal_hidden_shots(self):
+        self._shot_card(101).data["hidden"] = True
+        self._search("paint")
+        self.assertFalse(self._shot_card(101).isVisible())
+        self.assertEqual(self.harness.Label_results.text(), "0 results")
+
+    def test_search_still_matches_shot_names_and_notes(self):
+        self._search("shot 102")
+        self.assertTrue(self._shot_card(102).isVisible())
+        self.assertEqual(self.harness.Label_results.text(), "1 results")
+
+        self._shot_card(103).data["notes"] = "Camera reference"
+        self._search("camera")
+        self.assertTrue(self._shot_card(103).isVisible())
+        self.assertEqual(self.harness.Label_results.text(), "1 results")
+
+    def test_task_notes_search_and_clearing_restore_visible_tasks(self):
+        self._shot_card(102).data["tasks"][0]["notes"] = "Camera reference"
+        self._search("camera")
+        self.assertTrue(self._shot_card(102).isVisible())
+        self.assertEqual(self._visible_task_ids(102), [5])
+        self.assertEqual(self.harness.Label_results.text(), "1 results")
+
+        self._search("")
+        self.assertEqual(self._visible_task_ids(101), [1, 2, 3])
+        self.assertEqual(self._visible_task_ids(102), [5])
+        self.assertEqual(self._visible_task_ids(103), [6])
+        self.assertEqual(self.harness.Label_results.text(), "3 results")
+
     def test_multiple_statuses_use_or_semantics_per_task(self):
         self._select_status("done")
         self._select_status("approved")

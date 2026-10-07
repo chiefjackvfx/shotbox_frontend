@@ -50,31 +50,31 @@ class MasonryLayoutTests(unittest.TestCase):
     def place(self, width):
         self.layout.setGeometry(QRect(0, 0, width, 1000))
 
-    def test_equal_widths_fill_available_width_and_pack_shortest_column(self):
-        self.place(1210)
-        self.assertEqual([card.width() for card in self.cards], [601] * 4)
-        self.assertEqual([(card.x(), card.y()) for card in self.cards], [(0, 0), (609, 0), (609, 108), (609, 166)])
-        self.assertEqual(self.layout.heightForWidth(1210), 246)
+    def test_equal_widths_leave_spare_space_and_pack_shortest_column(self):
+        self.place(1450)
+        self.assertEqual([card.width() for card in self.cards], [720] * 4)
+        self.assertEqual([(card.x(), card.y()) for card in self.cards], [(0, 0), (728, 0), (728, 108), (728, 166)])
+        self.assertEqual(self.layout.heightForWidth(1450), 246)
 
     def test_hidden_cards_do_not_leave_space_and_sort_is_deterministic(self):
         self.cards[1].hide()
-        self.place(1210)
+        self.place(1450)
         self.assertEqual(self.cards[2].y(), 0)
         self.assertEqual(self.cards[3].y(), 58)
         widgets._ensure_order(self.layout, ["shot-3", "shot-0", "shot-2", "shot-1"])
-        self.place(1210)
+        self.place(1450)
         self.assertEqual((self.cards[3].x(), self.cards[3].y()), (0, 0))
-        self.assertEqual((self.cards[0].x(), self.cards[0].y()), (609, 0))
+        self.assertEqual((self.cards[0].x(), self.cards[0].y()), (728, 0))
 
     def test_column_breakpoints_spacing_and_minimum_height(self):
-        self.place(1207)
+        self.place(1447)
         self.assertEqual(self.cards[1].x(), 0)
-        self.place(1208)
-        self.assertEqual(self.cards[1].x(), 608)
+        self.place(1448)
+        self.assertEqual(self.cards[1].x(), 728)
         self.cards[0].setMinimumHeight(300)
-        self.assertEqual(self.layout.heightForWidth(1208), 300)
+        self.assertEqual(self.layout.heightForWidth(1448), 300)
         self.layout.setSpacing(20)
-        self.place(1220)
+        self.place(1460)
         self.assertEqual(self.cards[2].y(), 120)
         self.place(320)
         self.assertEqual(self.cards[0].width(), 320)
@@ -82,9 +82,9 @@ class MasonryLayoutTests(unittest.TestCase):
     def test_insert_remove_empty_layout_and_non_divisible_width(self):
         self.layout.insertWidget(0, self.cards[3])
         self.assertIs(self.layout.itemAt(0).widget(), self.cards[3])
-        self.place(1211)
+        self.place(1451)
         self.assertLessEqual(abs(self.cards[3].width() - self.cards[0].width()), 1)
-        self.assertEqual(self.cards[0].geometry().right(), 1210)
+        self.assertEqual(self.cards[0].geometry().right(), 1447)
         for card in self.cards:
             self.layout.removeWidget(card)
         self.assertEqual(self.layout.heightForWidth(100), 0)
@@ -162,7 +162,7 @@ class V02CardTests(unittest.TestCase):
             card._thumb_orig = image
             card._apply_thumb_scale()
 
-    def layout_v02(self, width=1210):
+    def layout_v02(self, width=1450):
         self.timeline.set_layout_mode("v02_grid", 8)
         self.timeline.resize(width + 40, 1000)
         self.timeline.show()
@@ -196,7 +196,7 @@ class V02CardTests(unittest.TestCase):
     def test_real_cards_pack_without_horizontal_overflow_and_reflow_narrowly(self):
         self.layout_v02()
         widths = [card.width() for card in self.cards]
-        self.assertEqual(widths, [601] * 3)
+        self.assertEqual(widths, [720] * 3)
         self.assertEqual(self.cards[2].x(), self.cards[1].x())
         self.assertLess(self.cards[2].y(), self.cards[0].height() + 8)
         card = self.cards[0]
@@ -239,6 +239,54 @@ class V02CardTests(unittest.TestCase):
         self.timeline.set_layout_mode("grid", 8)
         self.app.processEvents()
         self.assertIs(self.timeline.shots_layout.parentWidget(), self.timeline.frame)
+
+    def test_widest_content_sets_shared_width_without_filling_the_row(self):
+        original_style = self.app.styleSheet()
+        self.addCleanup(self.app.setStyleSheet, original_style)
+        self.app.setStyleSheet((Path(__file__).resolve().parents[1] / "ui" / "dark_v01.qss").read_text())
+        self.layout_v02()
+        card = self.cards[0]
+        filename = "winter010_" + "comp_" * 12 + "v002.nk"
+        card._set_nuke_file_state(file_path="/tmp/" + filename, file_name=filename, file_mtime=None)
+        widest = max(candidate.preferred_layout_width() for candidate in self.cards)
+        self.assertGreater(widest, 720)
+        for viewport in (widest * 2 + 108, widest * 3 + 216):
+            self.timeline.shots_layout.setGeometry(QRect(0, 0, viewport, 5000))
+            self.assertEqual([candidate.width() for candidate in self.cards], [widest] * 3)
+            self.assertLess(max(candidate.geometry().right() for candidate in self.cards), viewport - 1)
+        card.hide()
+        self.timeline.shots_layout.setGeometry(QRect(0, 0, viewport, 5000))
+        visible_width = max(candidate.preferred_layout_width() for candidate in self.cards[1:])
+        self.assertLess(visible_width, widest)
+        self.assertEqual([candidate.width() for candidate in self.cards[1:]], [visible_width] * 2)
+        self.cards[2].hide()
+        self.timeline.shots_layout.setGeometry(QRect(0, 0, viewport, 5000))
+        self.assertEqual(self.cards[1].width(), visible_width)
+
+    def test_changed_filename_updates_shared_width_without_window_resize(self):
+        self.timeline.set_layout_mode("v02_grid", 8)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.timeline)
+        scroll.resize(2048, 800)
+        scroll.show()
+        self.addCleanup(scroll.deleteLater)
+        for _ in range(10):
+            self.app.processEvents()
+        card = self.cards[0]
+        original_width = card.width()
+        filename = "comp_" * 8 + "v002.nk"
+        card._set_nuke_file_state(file_path="/tmp/" + filename, file_name=filename, file_mtime=None)
+        for _ in range(10):
+            self.app.processEvents()
+        self.assertGreater(card.width(), original_width)
+        shared_width = max(candidate.preferred_layout_width() for candidate in self.cards)
+        self.assertEqual([candidate.width() for candidate in self.cards], [shared_width] * 3)
+        self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
+        card._set_nuke_file_state(file_path=None, file_name=None, file_mtime=None)
+        for _ in range(10):
+            self.app.processEvents()
+        self.assertEqual([candidate.width() for candidate in self.cards], [original_width] * 3)
 
     def test_height_queries_never_resize_thumbnails_or_rebuild_task_rows(self):
         self.layout_v02()

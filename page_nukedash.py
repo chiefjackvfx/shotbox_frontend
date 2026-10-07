@@ -315,6 +315,10 @@ class page_nukedash(QMainWindow):
         ui_path = os.path.join(SCRIPT_DIR, "basic.ui")
         uic.loadUi(ui_path, self)
 
+        # Reserve room for the job name and the styled dropdown button.
+        self.comboBox_jobs.compact = True
+        self.comboBox_jobs.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
         self._load_timing_context = None
         self._load_timing_started_at = None
         self._set_loaded_time_text("--")
@@ -2480,28 +2484,19 @@ class page_nukedash(QMainWindow):
                     setattr(shot_card, "_pending_task_materialize_ids", pending_task_ids)
                     visible = self._shot_needs_conform(shot_card, data)
                 else:
-                    # Filter 1: Search text
-                    if has_search:
-                        if not self._shot_matches_search(data, search_text):
-                            visible = False
-
-                    visible_task_count = 0
-                    if visible:
-                        visible_task_count = self._apply_task_visibility(
-                            shot_card,
-                            hide_hidden_tasks,
-                            search_text=search_text,
-                            artist_filter=artist_filter,
-                            status_filter_values=status_filter_values,
-                        )
-                        visible_task_ids = getattr(shot_card, "_visible_task_ids", [])
-                        if has_search and not visible_task_count and not self._shot_matches_search(data, search_text):
-                            visible = False
-                        if has_task_filters and visible_task_count == 0:
-                            visible = False
-                    else:
-                        shot_card.set_visible_task_ids([])
-                        setattr(shot_card, "_pending_task_materialize_ids", [])
+                    visible_task_count = self._apply_task_visibility(
+                        shot_card,
+                        hide_hidden_tasks,
+                        search_text=search_text,
+                        artist_filter=artist_filter,
+                        status_filter_values=status_filter_values,
+                    )
+                    visible_task_ids = getattr(shot_card, "_visible_task_ids", [])
+                    # A search can match the shot itself or an eligible task.
+                    if has_search and not visible_task_count and not self._shot_matches_search(data, search_text):
+                        visible = False
+                    if has_task_filters and visible_task_count == 0:
+                        visible = False
                 
                 # Only call setVisible if state actually changed
                 if shot_card.isVisible() != visible:

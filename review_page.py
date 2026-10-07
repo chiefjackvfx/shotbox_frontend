@@ -16,12 +16,13 @@ Structure:
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSizePolicy, QSlider, QSpinBox, QComboBox,
+    QFrame, QSizePolicy, QSlider, QSpinBox, QDoubleSpinBox, QComboBox,
     QScrollArea, QSplitter, QToolButton, QButtonGroup,
     QLineEdit, QTextEdit, QPlainTextEdit,
-    QColorDialog, QSpacerItem, QStackedWidget, QInputDialog, QApplication, QDialog
+    QColorDialog, QSpacerItem, QStackedWidget, QInputDialog, QApplication, QDialog,
+    QAbstractSpinBox, QProgressBar
 )
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, pyqtSlot, QSize, QPoint, QRect, QEvent
+from PyQt6.QtCore import Qt, QTimer, QThreadPool, pyqtSignal, pyqtSlot, QSize, QPoint, QRect, QEvent
 from PyQt6.QtGui import (
     QPainter, QPen, QColor, QBrush, QPixmap, QImage, QRegion,
     QMouseEvent, QPaintEvent, QResizeEvent, QKeySequence, QShortcut
@@ -36,6 +37,13 @@ import http_help
 import filesIO
 from widgets import TaskWidget
 from task_create_dialog import TaskCreateDialog
+from review_icons import review_icon, set_review_button_icon
+from review_media import (EXRSequenceReader, ReviewFrameTask, MovieCacheReader,
+                          discover_renders, movie_display_image)
+from review_ocio import OCIOPanel
+from review_session import ReviewSessionBar, ReviewPresentationWindow
+from presentation_widgets import FlexibleLabel
+from readable_combo_box import ReadableComboBox
 
 
 # =============================================================================
@@ -63,7 +71,7 @@ class AnnotationCanvas(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setMouseTracking(True)
         
@@ -197,6 +205,7 @@ class AnnotationCanvas(QWidget):
     
     def mouseReleaseEvent(self, event: QMouseEvent):
         if event.button() == Qt.MouseButton.LeftButton and self.is_drawing:
+            self.draw_current_point = event.pos()
             self.is_drawing = False
             
             # Create annotation based on mode
@@ -204,6 +213,7 @@ class AnnotationCanvas(QWidget):
                 "type": self.current_mode,
                 "color": QColor(self.current_color),
                 "thickness": self.current_thickness,
+                "canvas_size": QSize(self.size()),
             }
             scope = self.scope_mode
             annotation["scope"] = scope
@@ -285,8 +295,13 @@ class AnnotationCanvas(QWidget):
     def _draw_annotations(self, painter: QPainter):
         """Draw all completed annotations."""
         for annotation in self.annotations:
+            painter.save()
+            original_size = annotation.get("canvas_size", self.size())
+            if original_size.width() > 0 and original_size.height() > 0:
+                painter.scale(self.width() / original_size.width(), self.height() / original_size.height())
             pen = QPen(annotation["color"])
             pen.setWidth(annotation["thickness"])
+            pen.setCosmetic(True)
             painter.setPen(pen)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             
@@ -315,6 +330,7 @@ class AnnotationCanvas(QWidget):
             
             elif annotation_type == self.MODE_TEXT:
                 painter.drawText(data["position"], data["text"])
+            painter.restore()
     
     def _draw_in_progress(self, painter: QPainter):
         """Draw the annotation currently being created."""
@@ -372,11 +388,31 @@ class AnnotationCanvas(QWidget):
 class VideoFrameWidget(QWidget):
     """Widget that paints decoded video frames."""
 
+    clicked = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._frame_image = QImage()
+        self._click_origin = None
         self.setMinimumSize(320, 240)
-        self.setStyleSheet("background-color: #0a0a0a;")
+        self.setToolTip("Click to play/pause when no drawing tool is selected")
+
+    def mousePressEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._click_origin = event.position().toPoint()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if event.button() == Qt.MouseButton.LeftButton and self._click_origin is not None:
+            origin = self._click_origin
+            self._click_origin = None
+            if (event.position().toPoint() - origin).manhattanLength() < QApplication.startDragDistance():
+                self.clicked.emit()
+            event.accept()
+            return
+        super().mouseReleaseEvent(event)
 
     def set_frame_image(self, image: QImage):
         self._frame_image = image
@@ -405,12 +441,8 @@ class VideoFrameWidget(QWidget):
         painter.fillRect(self.rect(), QColor(10, 10, 10))
         if not self._frame_image.isNull():
             target_rect = self.video_rect()
-            scaled = self._frame_image.scaled(
-                target_rect.size(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
-            painter.drawImage(target_rect.topLeft(), scaled)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            painter.drawImage(target_rect, self._frame_image)
         painter.end()
 
 
@@ -434,6 +466,8 @@ class PyAVFrameReader:
         self.stream = next((s for s in self.container.streams if s.type == "video"), None)
         if self.stream is None:
             raise ValueError("No video stream found")
+        # Let FFmpeg distribute high-resolution movie decoding across cores.
+        self.stream.thread_type = "AUTO"
 
         rate = self.stream.average_rate or self.stream.base_rate
         if rate:
@@ -534,13 +568,19 @@ class VideoViewerWidget(QWidget):
     frame_changed = pyqtSignal(int)  # Emits current frame number
     duration_changed = pyqtSignal(int)  # Emits total frames
     playback_state_changed = pyqtSignal(bool)  # Emits is_playing
+    frame_rate_changed = pyqtSignal(float)
     video_loaded = pyqtSignal(str)  # Emits file path when loaded
     error_occurred = pyqtSignal(str)  # Emits error message
+    source_start_changed = pyqtSignal(int)
+    playback_status_changed = pyqtSignal(str)
+    playback_finished = pyqtSignal()
+    cache_progress_changed = pyqtSignal(int, int, object, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(320, 240)
-        self.setStyleSheet("background-color: #1a1a1a;")
+        self.setObjectName("review_video_viewer")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         # Use a stacked layout approach - video at bottom, canvas on top
         # We'll manually position the canvas as an overlay
@@ -555,10 +595,12 @@ class VideoViewerWidget(QWidget):
         # Annotation canvas - overlay on top of video widget
         self.annotation_canvas = AnnotationCanvas(self.video_widget)
         self.annotation_canvas.raise_()  # Ensure it's on top
+        self.video_widget.clicked.connect(self._on_video_clicked)
 
         # PyAV decoder and playback timer
         self.reader = PyAVFrameReader()
         self.play_timer = QTimer(self)
+        self.play_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.play_timer.timeout.connect(self._on_playback_tick)
 
         # Playback state
@@ -573,8 +615,26 @@ class VideoViewerWidget(QWidget):
         self._showing_still = False
         self._frame_cache = {}
         self._cache_order = deque()
-        self._cache_size = 24
-        self._cache_lookback = 8
+        self._cache_size = 100000
+        self._cache_bytes = 0
+        self._cache_byte_limit = 1024 * 1024 * 1024
+        self._cache_reader = None
+        self._cache_plan = []
+        self._cache_frame_bytes = 0
+        self._buffering = False
+        self._cache_errors = {}
+        self._last_cache_progress = None
+        self._ocio_processor = None
+        self._decode_scale = 1
+        self._sequence_reader = None
+        self._decode_generation = 0
+        self._sequence_busy = False
+        self._sequence_target = None
+        self._sequence_tasks = {}
+        self._sequence_worker_limit = 3
+        self.source_start_frame = 0
+        self._sequence_prefetch_failed = set()
+        self._playback_times = deque(maxlen=24)
 
         # In/out points for play range (in frames)
         self.in_point = 0
@@ -602,9 +662,12 @@ class VideoViewerWidget(QWidget):
         super().showEvent(event)
         self._update_canvas_geometry()
 
-    def load_video(self, file_path: str):
-        """Load a video file."""
+    def load_video(self, file_path: str, sequence_path=None, *, start_position_seconds=0.0,
+                   source_start_frame=0):
+        """Load a movie or a native EXR render sequence."""
         import os
+
+        self.clear_media()
 
         if not file_path:
             print("[VideoViewer] No file path provided")
@@ -617,34 +680,195 @@ class VideoViewerWidget(QWidget):
             return
 
         print(f"[VideoViewer] Loading: {file_path}")
-        self.stop()
-        self.reader.close()
         self.current_video_path = file_path
         self._showing_still = False
-        self._frame_cache.clear()
-        self._cache_order.clear()
-
-        # Clear annotations for new video
-        self.annotation_canvas.clear_all_annotations()
 
         try:
-            self.reader.open(file_path)
+            if Path(file_path).suffix.lower() == ".exr":
+                self._sequence_reader = EXRSequenceReader(file_path, fps=self.frame_rate,
+                                                          sequence_path=sequence_path)
+                self.reader = self._sequence_reader
+                self._cache_reader = self.reader
+            else:
+                self.reader = PyAVFrameReader()
+                self.reader.open(file_path)
+                self._cache_reader = MovieCacheReader(file_path, PyAVFrameReader)
         except Exception as exc:
+            self.reader.close()
+            self._sequence_reader = None
+            self._cache_reader = None
+            self.current_video_path = ""
             error_msg = f"Failed to load video: {exc}"
             print(f"[VideoViewer] {error_msg}")
             self.error_occurred.emit(error_msg)
             return
 
         self.frame_rate = self.reader.fps
+        self.source_start_frame = (self.reader.first_frame if self._sequence_reader is not None
+                                   else source_start_frame)
+        self.source_start_changed.emit(self.source_start_frame)
         self.total_frames = max(1, self.reader.total_frames)
         self.duration_ms = self.reader.duration_ms
         self.in_point = 0
         self.out_point = max(0, self.total_frames - 1)
         self._update_playback_interval()
+        self.frame_rate_changed.emit(self.frame_rate)
 
         self.duration_changed.emit(self.total_frames)
         self.video_loaded.emit(file_path)
-        self.seek_to_frame(0)
+        self.seek_to_frame(round(max(0.0, start_position_seconds) * self.frame_rate))
+
+    def clear_media(self):
+        """Invalidate background results before switching shots, sources, or stills."""
+        self.pause()
+        self._scrub_timer.stop()
+        self._scrub_active = False
+        self._decode_generation += 1
+        self._sequence_target = None
+        self._sequence_reader = None
+        if self._cache_reader is not None and self._cache_reader is not self.reader:
+            self._cache_reader.close()
+        self._cache_reader = None
+        self.reader.close()
+        self.total_frames = 0
+        self.current_frame = 0
+        self.current_video_path = ""
+        self._showing_still = False
+        self._frame_cache.clear()
+        self._cache_order.clear()
+        self._cache_bytes = 0
+        self._cache_plan = []
+        self._cache_frame_bytes = 0
+        self._cache_errors.clear()
+        self._sequence_prefetch_failed.clear()
+        self._playback_times.clear()
+        self.source_start_frame = 0
+        self.source_start_changed.emit(0)
+        self.video_widget.set_frame_image(QImage())
+        self.annotation_canvas.clear_all_annotations()
+        self.duration_changed.emit(0)
+        self.frame_changed.emit(0)
+        self.playback_status_changed.emit("No media")
+        self._update_cache_progress()
+
+    def set_ocio_processor(self, processor):
+        """Re-render the current source, invalidating transformed frame caches."""
+        self._ocio_processor = processor
+        self._decode_generation += 1
+        self._frame_cache.clear()
+        self._cache_order.clear()
+        self._cache_bytes = 0
+        self._cache_plan = []
+        self._cache_frame_bytes = 0
+        self._cache_errors.clear()
+        self._sequence_prefetch_failed.clear()
+        if self._is_playing:
+            self._buffering = True
+            self.play_timer.stop()
+        if self.total_frames > 0 and not self._showing_still:
+            self.seek_to_frame(self.current_frame)
+        self._update_cache_progress()
+
+    def _request_sequence_frame(self, index):
+        cached = self._frame_cache.get(index)
+        if cached is not None:
+            self._sequence_target = None
+            self._present_cached_frame(index, cached)
+            return
+        self._sequence_target = index
+        self.playback_status_changed.emit(f"Loading frame {self.source_start_frame + index}…")
+        key = (self._decode_generation, index)
+        if key in self._sequence_tasks or len(self._sequence_tasks) >= self._sequence_worker_limit:
+            return
+        self._start_sequence_task(index)
+
+    def set_decode_scale(self, scale):
+        """Change display resolution without moving the review position."""
+        if scale not in (1, 2, 4, 8) or scale == self._decode_scale:
+            return
+        self._decode_scale = scale
+        self.set_ocio_processor(self._ocio_processor)
+
+    def _start_sequence_task(self, index):
+        self._sequence_busy = True
+        task = ReviewFrameTask(self._decode_generation, index, self._cache_reader,
+                            self._ocio_processor, self._decode_scale)
+        task.signals.finished.connect(self._sequence_frame_ready)
+        self._sequence_tasks[(self._decode_generation, index)] = task
+        QThreadPool.globalInstance().start(task)
+
+    @pyqtSlot(int, int, object, str)
+    def _sequence_frame_ready(self, generation, index, image, error):
+        self._sequence_tasks.pop((generation, index), None)
+        self._sequence_busy = bool(self._sequence_tasks)
+        if generation == self._decode_generation:
+            if error:
+                self._sequence_prefetch_failed.add(index)
+                self._cache_errors[index] = error
+                if self._sequence_target == index or (self._is_playing and index in self._cache_plan):
+                    self._sequence_target = None
+                    self.pause()
+                    self.error_occurred.emit(f"Render frame failed: {error}")
+                    self.frame_changed.emit(self.current_frame)
+            elif index in self._cache_plan or self._sequence_target == index or index == self.current_frame:
+                self._cache_frame(index, image)
+                if self._sequence_target == index:
+                    self._sequence_target = None
+                    self._present_cached_frame(index, image)
+        if self._cache_reader is not None and self._sequence_target is not None:
+            self._request_sequence_frame(self._sequence_target)
+        self._prefetch_sequence()
+        self._update_cache_progress()
+        self._resume_cached_playback()
+        if self.total_frames and not self._showing_still:
+            self._emit_playback_status()
+
+    def _prefetch_sequence(self):
+        """Load the active range/window, including while playback is paused."""
+        if self._cache_reader is None or self._sequence_target is not None or not self.total_frames:
+            return
+        if not self._cache_plan:
+            self._cache_plan = self._make_cache_plan(self.current_frame)
+        pending = {index for generation, index in self._sequence_tasks
+                   if generation == self._decode_generation}
+        protected = set(self._cache_plan)
+        for index in self._cache_plan:
+            if len(self._sequence_tasks) >= self._sequence_worker_limit:
+                break
+            if index in self._frame_cache or index in pending or index in self._sequence_prefetch_failed:
+                continue
+            reserved = len(pending) + 1
+            while (len(self._frame_cache) + reserved > self._cache_size or
+                   self._cache_bytes + reserved * self._cache_frame_bytes > self._cache_byte_limit):
+                old = next((frame for frame in self._cache_order if frame not in protected), None)
+                if old is None:
+                    break
+                self._evict_cache_frame(old)
+            else:
+                self._start_sequence_task(index)
+                pending.add(index)
+                continue
+            # A single oversized frame is still displayable. Otherwise wait for
+            # reservations to finish instead of exceeding the selected RAM budget.
+            if not self._frame_cache and not pending:
+                self._start_sequence_task(index)
+            break
+        self._update_cache_progress()
+
+    def _emit_playback_status(self):
+        ready, total, _, _ = self._last_cache_progress or (0, 0, 0, 0)
+        if self._buffering and self._is_playing:
+            loaded = sum(index in self._frame_cache for index in self._cache_plan)
+            state = f"Loading frames {loaded}/{len(self._cache_plan)}…"
+        else:
+            state = "Playing" if self._is_playing else "Paused"
+            if self._is_playing and len(self._playback_times) > 1:
+                elapsed = self._playback_times[-1] - self._playback_times[0]
+                if elapsed > 0:
+                    state += f" · {(len(self._playback_times) - 1) / elapsed:.1f} fps"
+        if total:
+            state += f" · {ready}/{total} cached"
+        self.playback_status_changed.emit(state)
 
     def is_showing_still(self) -> bool:
         return self._showing_still
@@ -653,46 +877,32 @@ class VideoViewerWidget(QWidget):
         """Display a still image without changing playback state."""
         if image is None or image.isNull():
             return
-        self.pause()
+        self.clear_media()
         self._showing_still = True
         self.video_widget.set_frame_image(image)
         self._update_canvas_geometry()
+        self.playback_status_changed.emit("Thumbnail")
 
     def is_playing(self) -> bool:
         return self._is_playing
 
     def play(self):
-        """Start playback."""
-        if self.total_frames <= 0:
-            return
-        if self.use_play_range and self.current_frame < self.in_point:
-            self.seek_to_frame(self.in_point)
-        self._play_direction = 1
-        if not self._is_playing:
-            self._is_playing = True
-            self._update_playback_interval()
-            self.play_timer.start()
-            self.playback_state_changed.emit(True)
+        """Load frames first, then start forward playback from the cache."""
+        self._start_cached_playback(1)
 
     def play_backward(self):
-        """Start reverse playback."""
-        if self.total_frames <= 0:
-            return
-        if self.use_play_range and self.current_frame > self.out_point:
-            self.seek_to_frame(self.out_point)
-        self._play_direction = -1
-        if not self._is_playing:
-            self._is_playing = True
-            self._update_playback_interval()
-            self.play_timer.start()
-            self.playback_state_changed.emit(True)
+        """Load frames first, then start reverse playback from the cache."""
+        self._start_cached_playback(-1)
 
     def pause(self):
-        """Pause playback."""
+        """Cancel playback intent while allowing frame loading to continue."""
+        self.play_timer.stop()
+        self._buffering = False
         if self._is_playing:
-            self.play_timer.stop()
             self._is_playing = False
             self.playback_state_changed.emit(False)
+            self._playback_times.clear()
+            self._emit_playback_status()
 
     def toggle_playback(self):
         """Toggle between play and pause."""
@@ -700,6 +910,12 @@ class VideoViewerWidget(QWidget):
             self.pause()
         else:
             self.play()
+
+    def _on_video_clicked(self):
+        """Toggle video playback while keeping stills and drawing tools intact."""
+        if self._showing_still or self.annotation_canvas.current_mode != AnnotationCanvas.MODE_NONE:
+            return
+        self.toggle_playback()
 
     def stop(self):
         """Stop playback and return to start."""
@@ -711,14 +927,32 @@ class VideoViewerWidget(QWidget):
         if self.total_frames <= 0:
             return
         frame = max(0, min(frame, self.total_frames - 1))
+        self._cache_plan = self._make_cache_plan(frame)
+        cached = self._frame_cache.get(frame)
+        if cached is not None:
+            self._sequence_target = None
+            self._present_cached_frame(frame, cached)
+            self._resume_cached_playback()
+            return
+        if frame in self._cache_errors:
+            self.pause()
+            self.error_occurred.emit(f"Render frame failed: {self._cache_errors[frame]}")
+            self.frame_changed.emit(self.current_frame)
+            return
+        if self._sequence_reader is not None:
+            self._request_sequence_frame(frame)
+            return
         try:
             decoded_frame, index = self.reader.seek_to_frame(frame)
         except Exception as exc:
             error_msg = f"Frame seek failed: {exc}"
             print(f"[VideoViewer] {error_msg}")
             self.error_occurred.emit(error_msg)
+            self.frame_changed.emit(self.current_frame)
             return
         if decoded_frame is None:
+            self.error_occurred.emit(f"Frame {self.source_start_frame + frame} is unavailable.")
+            self.frame_changed.emit(self.current_frame)
             return
         self._present_frame(decoded_frame, index)
 
@@ -730,55 +964,17 @@ class VideoViewerWidget(QWidget):
         frame = int((position_ms / 1000.0) * self.frame_rate)
         self.seek_to_frame(frame)
 
-    def step_forward(self, frames: int = 1):
-        """Step forward by specified frames."""
-        was_playing = self._is_playing
-        if was_playing:
-            self.pause()
-        if self.total_frames <= 0:
-            return
-        max_frame = self.out_point if self.use_play_range else self.total_frames - 1
-        target_frame = min(self.current_frame + frames, max_frame)
-        cached = self._frame_cache.get(target_frame)
-        if cached is not None:
-            self._present_cached_frame(target_frame, cached)
-            return
-        if frames == 1 and not self._showing_still and self.current_frame < max_frame:
-            try:
-                decoded_frame, index = self.reader.decode_next()
-            except Exception as exc:
-                error_msg = f"Frame decode failed: {exc}"
-                print(f"[VideoViewer] {error_msg}")
-                self.error_occurred.emit(error_msg)
-                return
-            if decoded_frame is not None:
-                if self.use_play_range and index > max_frame:
-                    self.seek_to_frame(max_frame)
-                else:
-                    self._present_frame(decoded_frame, index)
-                return
-        self.seek_to_frame(target_frame)
+    def step_forward(self, frames=1):
+        self.pause()
+        if self.total_frames:
+            high = self.out_point if self.use_play_range else self.total_frames - 1
+            self.seek_to_frame(min(self.current_frame + frames, high))
 
-    def step_backward(self, frames: int = 1):
-        """Step backward by specified frames."""
-        was_playing = self._is_playing
-        if was_playing:
-            self.pause()
-        if self.total_frames <= 0:
-            return
-        min_frame = self.in_point if self.use_play_range else 0
-        target_frame = max(self.current_frame - frames, min_frame)
-        cached = self._frame_cache.get(target_frame)
-        if cached is not None:
-            self._present_cached_frame(target_frame, cached)
-            return
-        if frames == 1 and not self._showing_still and target_frame > min_frame:
-            self._prefetch_backwards(target_frame, min_frame)
-            cached = self._frame_cache.get(target_frame)
-            if cached is not None:
-                self._present_cached_frame(target_frame, cached)
-                return
-        self.seek_to_frame(target_frame)
+    def step_backward(self, frames=1):
+        self.pause()
+        if self.total_frames:
+            low = self.in_point if self.use_play_range else 0
+            self.seek_to_frame(max(self.current_frame - frames, low))
 
     def go_to_start(self):
         """Go to first frame (or in point if using play range)."""
@@ -797,24 +993,27 @@ class VideoViewerWidget(QWidget):
     def set_in_point(self, frame: int):
         """Set the in point for play range."""
         self.in_point = max(0, min(frame, self.out_point))
+        if self.use_play_range:
+            self.preload_frames()
 
     def set_out_point(self, frame: int):
         """Set the out point for play range."""
         self.out_point = min(max(0, self.total_frames - 1), max(frame, self.in_point))
+        if self.use_play_range:
+            self.preload_frames()
 
     def set_play_range_enabled(self, enabled: bool):
         """Enable or disable play range limiting."""
         self.use_play_range = enabled
+        self.preload_frames()
 
     def set_frame_rate(self, fps: float):
-        """Set the frame rate for frame calculations."""
+        """Change playback speed without altering the source's frame count."""
         if fps > 0:
             self.frame_rate = fps
-            if self.duration_ms > 0:
-                self.total_frames = max(1, int((self.duration_ms / 1000.0) * self.frame_rate))
-                self.out_point = max(0, self.total_frames - 1)
-                self.duration_changed.emit(self.total_frames)
+            self.duration_ms = int(self.total_frames * 1000 / fps)
             self._update_playback_interval()
+            self.frame_rate_changed.emit(fps)
 
     def set_volume(self, volume: float):
         """Store volume (audio playback not implemented)."""
@@ -863,86 +1062,32 @@ class VideoViewerWidget(QWidget):
             self.seek_to_frame(self._scrub_target_frame)
 
     def _on_playback_tick(self):
-        """Advance playback by one frame."""
+        """Present cached images only; decoding and OCIO run during loading."""
         if self.total_frames <= 0:
             self.pause()
             return
-
-        if self.use_play_range:
-            if self._play_direction >= 0:
-                if self.current_frame < self.in_point:
-                    self.seek_to_frame(self.in_point)
-                    return
-                if self.current_frame >= self.out_point:
-                    if self.loop_playback:
-                        self.seek_to_frame(self.in_point)
-                    else:
-                        self.pause()
-                    return
-            else:
-                if self.current_frame > self.out_point:
-                    self.seek_to_frame(self.out_point)
-                    return
-                if self.current_frame <= self.in_point:
-                    if self.loop_playback:
-                        self.seek_to_frame(self.out_point)
-                    else:
-                        self.pause()
-                    return
-
-        if self._play_direction >= 0:
-            try:
-                decoded_frame, index = self.reader.decode_next()
-            except Exception as exc:
-                error_msg = f"Frame decode failed: {exc}"
-                print(f"[VideoViewer] {error_msg}")
-                self.error_occurred.emit(error_msg)
-                self.pause()
-                return
-        else:
-            target = self.current_frame - 1
-            if target < 0:
-                if self.loop_playback:
-                    target = self.out_point if self.use_play_range else self.total_frames - 1
-                else:
-                    self.pause()
-                    return
-            try:
-                decoded_frame, index = self.reader.seek_to_frame(target)
-            except Exception as exc:
-                error_msg = f"Frame decode failed: {exc}"
-                print(f"[VideoViewer] {error_msg}")
-                self.error_occurred.emit(error_msg)
-                self.pause()
-                return
-
-        if decoded_frame is None:
-            if self.loop_playback:
-                if self._play_direction >= 0:
-                    start_frame = self.in_point if self.use_play_range else 0
-                    self.seek_to_frame(start_frame)
-                else:
-                    end_frame = self.out_point if self.use_play_range else self.total_frames - 1
-                    self.seek_to_frame(end_frame)
-            else:
-                self.pause()
+        low, high = self._cache_bounds()
+        if not self.loop_playback and self._sequence_target is None and (
+                self.current_frame >= high if self._play_direction >= 0 else self.current_frame <= low):
+            self.pause()
+            self.playback_finished.emit()
             return
-
-        if self.use_play_range:
-            if self._play_direction >= 0 and index > self.out_point:
-                if self.loop_playback:
-                    self.seek_to_frame(self.in_point)
-                else:
-                    self.pause()
-                return
-            if self._play_direction < 0 and index < self.in_point:
-                if self.loop_playback:
-                    self.seek_to_frame(self.out_point)
-                else:
-                    self.pause()
-                return
-
-        self._present_frame(decoded_frame, index)
+        if self._buffering or self._sequence_target is not None:
+            return
+        target = self.current_frame + self._play_direction
+        if target < low or target > high:
+            target = low if self._play_direction >= 0 else high
+        image = self._frame_cache.get(target)
+        if image is None:
+            self._cache_plan = self._make_cache_plan(target)
+            self._buffering = True
+            self.play_timer.stop()
+            self._playback_times.clear()
+            self._prefetch_sequence()
+            self._resume_cached_playback()
+            self._emit_playback_status()
+            return
+        self._present_cached_frame(target, image)
 
     def _present_frame(self, frame, index: int):
         image = self._frame_to_qimage(frame)
@@ -954,6 +1099,9 @@ class VideoViewerWidget(QWidget):
         self.annotation_canvas.set_frame(self.current_frame)
         self.frame_changed.emit(self.current_frame)
         self._cache_frame(index, image)
+        self._record_presented_frame()
+        self._prefetch_sequence()
+        self._resume_cached_playback()
 
     def _present_cached_frame(self, index: int, image: QImage):
         self.video_widget.set_frame_image(image)
@@ -961,18 +1109,114 @@ class VideoViewerWidget(QWidget):
         self.current_frame = index
         self.annotation_canvas.set_frame(self.current_frame)
         self.frame_changed.emit(self.current_frame)
+        self._record_presented_frame()
+        self._prefetch_sequence()
+
+    def _record_presented_frame(self):
+        if self._is_playing:
+            self._playback_times.append(time.monotonic())
+        self._emit_playback_status()
 
     def _frame_to_qimage(self, frame):
         try:
-            array = frame.to_ndarray(format="rgb24")
-        except Exception:
+            return movie_display_image(frame, self._ocio_processor, self._decode_scale)
+        except Exception as exc:
+            self.pause()
+            self.error_occurred.emit(f"Frame conversion failed: {exc}")
             return None
-        if not array.flags["C_CONTIGUOUS"]:
-            array = np.ascontiguousarray(array)
-        height, width, _ = array.shape
-        bytes_per_line = 3 * width
-        image = QImage(array.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
-        return image.copy()
+
+    def _cache_bounds(self):
+        return (self.in_point, self.out_point) if self.use_play_range else (0, self.total_frames - 1)
+
+    def _make_cache_plan(self, anchor):
+        low, high = self._cache_bounds()
+        if high < low:
+            return []
+        capacity = min(self._cache_size, high - low + 1)
+        if self._cache_frame_bytes:
+            capacity = min(capacity, max(1, self._cache_byte_limit // self._cache_frame_bytes))
+        else:
+            capacity = 1
+        anchor = min(high, max(low, anchor))
+        plan = []
+        for offset in range(capacity):
+            index = anchor + offset * self._play_direction
+            if self.loop_playback:
+                index = low + (index - low) % (high - low + 1)
+            elif index < low or index > high:
+                break
+            plan.append(index)
+        return plan
+
+    def _evict_cache_frame(self, index):
+        self._cache_order.remove(index)
+        self._cache_bytes -= self._frame_cache.pop(index).sizeInBytes()
+
+    def _update_cache_progress(self):
+        low, high = self._cache_bounds()
+        ready = sum(low <= index <= high for index in self._frame_cache)
+        progress = (ready, max(0, high - low + 1), self._cache_bytes, self._cache_byte_limit)
+        if progress != self._last_cache_progress:
+            self._last_cache_progress = progress
+            self.cache_progress_changed.emit(*progress)
+
+    def preload_frames(self):
+        """Load the selected range/window without changing the displayed frame."""
+        if not self.total_frames or self._cache_reader is None:
+            return
+        self._cache_plan = self._make_cache_plan(self.current_frame)
+        for index in self._cache_plan:
+            self._sequence_prefetch_failed.discard(index)
+            self._cache_errors.pop(index, None)
+        if self._is_playing:
+            self._buffering = True
+            self.play_timer.stop()
+            self._playback_times.clear()
+        self._prefetch_sequence()
+        self._resume_cached_playback()
+        self._emit_playback_status()
+
+    def set_cache_limit_mb(self, megabytes):
+        self._cache_byte_limit = max(1, int(megabytes)) * 1024 * 1024
+        self._cache_plan = self._make_cache_plan(self.current_frame)
+        while self._cache_bytes > self._cache_byte_limit and len(self._cache_order) > 1:
+            old = next((index for index in self._cache_order if index not in self._cache_plan), self._cache_order[0])
+            self._evict_cache_frame(old)
+        self.preload_frames()
+        self._update_cache_progress()
+
+    def _start_cached_playback(self, direction):
+        if not self.total_frames:
+            return
+        self._play_direction = direction
+        low, high = self._cache_bounds()
+        if self.current_frame < low or self.current_frame > high:
+            self.seek_to_frame(low if direction > 0 else high)
+        if not self._is_playing:
+            self._is_playing = True
+            self.playback_state_changed.emit(True)
+        self._buffering = True
+        self.play_timer.stop()
+        self._playback_times.clear()
+        self._cache_plan = self._make_cache_plan(self.current_frame)
+        self._prefetch_sequence()
+        self._resume_cached_playback()
+        self._emit_playback_status()
+
+    def _resume_cached_playback(self):
+        if not self._is_playing or not self._buffering:
+            return
+        failed = next((index for index in self._cache_plan if index in self._cache_errors), None)
+        if failed is not None:
+            self.pause()
+            self.error_occurred.emit(f"Render frame failed: {self._cache_errors[failed]}")
+            self.frame_changed.emit(self.current_frame)
+            return
+        if self._sequence_target is None and self._cache_plan and all(index in self._frame_cache for index in self._cache_plan):
+            self._buffering = False
+            self._playback_times.clear()
+            self._update_playback_interval()
+            self.play_timer.start()
 
     def _update_playback_interval(self):
         if self.frame_rate > 0:
@@ -986,39 +1230,24 @@ class VideoViewerWidget(QWidget):
         if not self.video_widget:
             return
         target_rect = self.video_widget.video_rect()
-        self.annotation_canvas.setGeometry(target_rect)
-        self.annotation_canvas.raise_()
+        if self.annotation_canvas.geometry() != target_rect:
+            self.annotation_canvas.setGeometry(target_rect)
+            self.annotation_canvas.raise_()
 
-    def _cache_frame(self, index: int, image: QImage):
+    def _cache_frame(self, index, image):
         if index in self._frame_cache:
             return
+        if image.sizeInBytes() > self._cache_frame_bytes:
+            self._cache_frame_bytes = image.sizeInBytes()
+            self._cache_plan = self._make_cache_plan(self._sequence_target if self._sequence_target is not None
+                                                     else self.current_frame)
         self._frame_cache[index] = image
         self._cache_order.append(index)
-        while len(self._cache_order) > self._cache_size:
-            old_index = self._cache_order.popleft()
-            self._frame_cache.pop(old_index, None)
-
-    def _prefetch_backwards(self, target_frame: int, min_frame: int):
-        start_frame = max(min_frame, target_frame - self._cache_lookback + 1)
-        try:
-            decoded_frame, index = self.reader.seek_to_frame(start_frame)
-        except Exception as exc:
-            error_msg = f"Frame decode failed: {exc}"
-            print(f"[VideoViewer] {error_msg}")
-            self.error_occurred.emit(error_msg)
-            return
-        if decoded_frame is None:
-            return
-        image = self._frame_to_qimage(decoded_frame)
-        if image is not None:
-            self._cache_frame(index, image)
-        while index < target_frame:
-            decoded_frame, index = self.reader.decode_next()
-            if decoded_frame is None:
-                break
-            image = self._frame_to_qimage(decoded_frame)
-            if image is not None:
-                self._cache_frame(index, image)
+        self._cache_bytes += image.sizeInBytes()
+        while (len(self._cache_order) > self._cache_size or self._cache_bytes > self._cache_byte_limit) and len(self._cache_order) > 1:
+            old = next((frame for frame in self._cache_order if frame not in self._cache_plan), self._cache_order[0])
+            self._evict_cache_frame(old)
+        self._update_cache_progress()
 
     def capture_annotated_frame(self) -> QImage:
         """Capture the current frame with annotations composited."""
@@ -1059,6 +1288,7 @@ class PlaybackBar(QWidget):
     in_point_changed = pyqtSignal(int)
     out_point_changed = pyqtSignal(int)
     play_range_toggled = pyqtSignal(bool)
+    frame_rate_changed = pyqtSignal(float)
     scrub_started = pyqtSignal()
     scrub_finished = pyqtSignal()
     
@@ -1066,62 +1296,16 @@ class PlaybackBar(QWidget):
         super().__init__(parent)
         self.setFixedHeight(90)
         self.setObjectName("playback_bar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         
         self.total_frames = 100
         self.current_frame = 0
         self.in_point = 0
         self.out_point = 100
         self.is_playing = False
+        self.frame_offset = 0
         
-        self._apply_style()
         self._setup_ui()
-
-    def _apply_style(self):
-        self.setStyleSheet("""
-            #playback_bar {
-                background-color: #2b2b2b;
-            }
-            #playback_bar QPushButton {
-                background-color: #3a3a3a;
-                border: 1px solid #4a4a4a;
-                border-radius: 3px;
-                padding: 2px 6px;
-                font-size: 14px;
-            }
-            #playback_bar QPushButton:hover {
-                background-color: #4a4a4a;
-            }
-            #playback_bar QPushButton:pressed {
-                background-color: #2f2f2f;
-            }
-            #playback_bar QPushButton:checked {
-                background-color: #515151;
-                border-color: #7a7a7a;
-            }
-            #playback_bar QLabel {
-                color: #d0d0d0;
-            }
-            #playback_bar QSpinBox, #playback_bar QComboBox {
-                background-color: #252525;
-                border: 1px solid #444;
-                padding: 2px 4px;
-                border-radius: 2px;
-            }
-            #playback_bar QSlider::groove:horizontal {
-                height: 8px;
-                background: #3a3a3a;
-                border-radius: 4px;
-            }
-            #playback_bar QSlider::handle:horizontal {
-                background: #c07a2e;
-                width: 16px;
-                margin: -5px 0;
-                border-radius: 8px;
-            }
-            #playback_bar QSlider::handle:horizontal:hover {
-                background: #d08a3a;
-            }
-        """)
 
     def _setup_ui(self):
         """Create the playback bar UI."""
@@ -1169,61 +1353,70 @@ class PlaybackBar(QWidget):
         controls_layout.setSpacing(4)
         
         # Play range toggle
-        self.button_play_range = QPushButton("⟷")
+        self.button_play_range = QPushButton()
         self.button_play_range.setFixedSize(36, 32)
         self.button_play_range.setCheckable(True)
         self.button_play_range.setToolTip("Use In/Out Range")
+        set_review_button_icon(self.button_play_range, "range")
         self.button_play_range.toggled.connect(self.play_range_toggled.emit)
         controls_layout.addWidget(self.button_play_range)
         
         controls_layout.addSpacing(10)
         
         # Go to start
-        self.button_go_to_start = QPushButton("⏮")
+        self.button_go_to_start = QPushButton()
         self.button_go_to_start.setFixedSize(36, 32)
         self.button_go_to_start.setToolTip("Go to Start")
+        set_review_button_icon(self.button_go_to_start, "start")
         self.button_go_to_start.clicked.connect(self.go_to_start_clicked.emit)
         controls_layout.addWidget(self.button_go_to_start)
         
         # Step backward 10
-        self.button_step_back_10 = QPushButton("⏪")
+        self.button_step_back_10 = QPushButton()
         self.button_step_back_10.setFixedSize(36, 32)
         self.button_step_back_10.setToolTip("Step Back 10 Frames")
+        set_review_button_icon(self.button_step_back_10, "back_10")
         self.button_step_back_10.clicked.connect(lambda: self.step_backward_clicked.emit(10))
         controls_layout.addWidget(self.button_step_back_10)
         
         # Step backward 1
-        self.button_step_back_1 = QPushButton("◀")
-        self.button_step_back_1.setFixedSize(42, 34)
+        self.button_step_back_1 = QPushButton()
+        self.button_step_back_1.setFixedSize(36, 32)
         self.button_step_back_1.setToolTip("Step Back 1 Frame")
+        set_review_button_icon(self.button_step_back_1, "step_back")
         self.button_step_back_1.clicked.connect(lambda: self.step_backward_clicked.emit(1))
         controls_layout.addWidget(self.button_step_back_1)
         
         # Play/Pause
-        self.button_play_pause = QPushButton("▶")
-        self.button_play_pause.setFixedSize(54, 34)
+        self.button_play_pause = QPushButton()
+        self.button_play_pause.setFixedSize(54, 32)
+        self.button_play_pause.setCheckable(True)
         self.button_play_pause.setToolTip("Play/Pause")
+        set_review_button_icon(self.button_play_pause, "play")
         self.button_play_pause.clicked.connect(self._on_play_pause_clicked)
         controls_layout.addWidget(self.button_play_pause)
         
         # Step forward 1
-        self.button_step_forward_1 = QPushButton("▶")
-        self.button_step_forward_1.setFixedSize(42, 34)
+        self.button_step_forward_1 = QPushButton()
+        self.button_step_forward_1.setFixedSize(36, 32)
         self.button_step_forward_1.setToolTip("Step Forward 1 Frame")
+        set_review_button_icon(self.button_step_forward_1, "step_forward")
         self.button_step_forward_1.clicked.connect(lambda: self.step_forward_clicked.emit(1))
         controls_layout.addWidget(self.button_step_forward_1)
         
         # Step forward 10
-        self.button_step_forward_10 = QPushButton("⏩")
+        self.button_step_forward_10 = QPushButton()
         self.button_step_forward_10.setFixedSize(36, 32)
         self.button_step_forward_10.setToolTip("Step Forward 10 Frames")
+        set_review_button_icon(self.button_step_forward_10, "forward_10")
         self.button_step_forward_10.clicked.connect(lambda: self.step_forward_clicked.emit(10))
         controls_layout.addWidget(self.button_step_forward_10)
         
         # Go to end
-        self.button_go_to_end = QPushButton("⏭")
+        self.button_go_to_end = QPushButton()
         self.button_go_to_end.setFixedSize(36, 32)
         self.button_go_to_end.setToolTip("Go to End")
+        set_review_button_icon(self.button_go_to_end, "end")
         self.button_go_to_end.clicked.connect(self.go_to_end_clicked.emit)
         controls_layout.addWidget(self.button_go_to_end)
         
@@ -1244,6 +1437,22 @@ class PlaybackBar(QWidget):
         self.label_total_frames = QLabel("/ 0")
         self.label_total_frames.setFixedWidth(60)
         controls_layout.addWidget(self.label_total_frames)
+
+        controls_layout.addWidget(QLabel("FPS:"))
+        self.spinbox_fps = QDoubleSpinBox()
+        self.spinbox_fps.setRange(1, 120)
+        self.spinbox_fps.setDecimals(2)
+        self.spinbox_fps.setValue(24)
+        self.spinbox_fps.setFixedWidth(84)
+        self.spinbox_fps.setToolTip("Playback frame rate, including native EXR sequences")
+        self.spinbox_fps.valueChanged.connect(self.frame_rate_changed.emit)
+        controls_layout.addWidget(self.spinbox_fps)
+
+        self.button_loop = QPushButton("Loop")
+        self.button_loop.setCheckable(True)
+        self.button_loop.setChecked(True)
+        self.button_loop.setToolTip("Repeat the shot or selected In/Out range")
+        controls_layout.addWidget(self.button_loop)
         
         controls_layout.addStretch()
         
@@ -1251,14 +1460,27 @@ class PlaybackBar(QWidget):
     
     def set_total_frames(self, total: int):
         """Set the total number of frames."""
-        self.total_frames = max(1, total)
-        self.slider_timeline.setRange(0, self.total_frames - 1)
-        self.spinbox_current_frame.setRange(0, self.total_frames - 1)
-        self.spinbox_in_point.setRange(0, self.total_frames - 1)
-        self.spinbox_out_point.setRange(0, self.total_frames - 1)
-        self.spinbox_out_point.setValue(self.total_frames - 1)
-        self.out_point = self.total_frames - 1
-        self.label_total_frames.setText(f"/ {self.total_frames - 1}")
+        self.total_frames = max(0, total)
+        last = max(0, total - 1)
+        for control in (self.slider_timeline, self.spinbox_current_frame,
+                        self.spinbox_in_point, self.spinbox_out_point):
+            control.blockSignals(True)
+        self.slider_timeline.setRange(0, last)
+        self.slider_timeline.setValue(0)
+        for control in (self.spinbox_current_frame, self.spinbox_in_point, self.spinbox_out_point):
+            control.setRange(self.frame_offset, self.frame_offset + last)
+        self.spinbox_current_frame.setValue(self.frame_offset)
+        self.spinbox_in_point.setValue(self.frame_offset)
+        self.spinbox_out_point.setValue(self.frame_offset + last)
+        self.in_point, self.out_point = 0, last
+        self.label_total_frames.setText(f"/ {self.frame_offset + last}" if total else "/ —")
+        for control in (self.slider_timeline, self.spinbox_current_frame,
+                        self.spinbox_in_point, self.spinbox_out_point):
+            control.blockSignals(False)
+        self.setEnabled(total > 0)
+
+    def set_frame_offset(self, offset):
+        self.frame_offset = offset
     
     def set_current_frame(self, frame: int):
         """Set the current frame (from external source)."""
@@ -1267,16 +1489,24 @@ class PlaybackBar(QWidget):
         self.slider_timeline.setValue(frame)
         self.slider_timeline.blockSignals(False)
         self.spinbox_current_frame.blockSignals(True)
-        self.spinbox_current_frame.setValue(frame)
+        self.spinbox_current_frame.setValue(frame + self.frame_offset)
         self.spinbox_current_frame.blockSignals(False)
     
     def set_playing(self, is_playing: bool):
         """Update play/pause button state."""
         self.is_playing = is_playing
-        self.button_play_pause.setText("⏸" if is_playing else "▶")
+        self.button_play_pause.setIcon(review_icon("pause" if is_playing else "play"))
+        self.button_play_pause.setChecked(is_playing)
+
+    def set_frame_rate(self, fps):
+        blocked = self.spinbox_fps.blockSignals(True)
+        self.spinbox_fps.setValue(fps)
+        self.spinbox_fps.blockSignals(blocked)
     
     def _on_play_pause_clicked(self):
         """Handle play/pause button click."""
+        # The viewer confirms playback; an unloaded video cannot become active.
+        self.button_play_pause.setChecked(self.is_playing)
         if self.is_playing:
             self.pause_clicked.emit()
         else:
@@ -1298,21 +1528,21 @@ class PlaybackBar(QWidget):
     
     def _on_frame_spinbox_changed(self, value: int):
         """Handle frame spinbox change."""
-        self.frame_changed.emit(value)
+        self.frame_changed.emit(value - self.frame_offset)
     
     def _on_in_point_changed(self, value: int):
         """Handle in point change."""
-        self.in_point = value
+        self.in_point = value - self.frame_offset
         if self.in_point > self.out_point:
-            self.spinbox_out_point.setValue(self.in_point)
-        self.in_point_changed.emit(value)
+            self.spinbox_out_point.setValue(value)
+        self.in_point_changed.emit(self.in_point)
     
     def _on_out_point_changed(self, value: int):
         """Handle out point change."""
-        self.out_point = value
+        self.out_point = value - self.frame_offset
         if self.out_point < self.in_point:
-            self.spinbox_in_point.setValue(self.out_point)
-        self.out_point_changed.emit(value)
+            self.spinbox_in_point.setValue(value)
+        self.out_point_changed.emit(self.out_point)
 
 
 # =============================================================================
@@ -1349,12 +1579,15 @@ class AnnotationToolbar(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("review_annotation_toolbar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMinimumHeight(90)
         
         self.current_tool = AnnotationCanvas.MODE_NONE
         self.current_color = self.COLOR_PRESETS[0]
         self.current_thickness = 3
         self.current_scope = AnnotationCanvas.SCOPE_FRAME
+        self.frame_offset = 0
         self.range_start = 0
         self.range_end = 0
         
@@ -1379,51 +1612,57 @@ class AnnotationToolbar(QWidget):
         self.button_group_tools.setExclusive(True)
         
         # Select (no tool)
-        self.button_select = QPushButton("🖱")
-        self.button_select.setFixedSize(36, 36)
+        self.button_select = QPushButton()
+        self.button_select.setFixedSize(36, 32)
         self.button_select.setCheckable(True)
         self.button_select.setChecked(True)
         self.button_select.setToolTip("Select (No Drawing)")
+        set_review_button_icon(self.button_select, "select")
         self.button_group_tools.addButton(self.button_select)
         row_tools.addWidget(self.button_select)
         
         # Circle tool
-        self.button_circle = QPushButton("○")
-        self.button_circle.setFixedSize(36, 36)
+        self.button_circle = QPushButton()
+        self.button_circle.setFixedSize(36, 32)
         self.button_circle.setCheckable(True)
         self.button_circle.setToolTip("Draw Circle")
+        set_review_button_icon(self.button_circle, "circle")
         self.button_group_tools.addButton(self.button_circle)
         row_tools.addWidget(self.button_circle)
         
         # Rectangle tool
-        self.button_rectangle = QPushButton("□")
-        self.button_rectangle.setFixedSize(36, 36)
+        self.button_rectangle = QPushButton()
+        self.button_rectangle.setFixedSize(36, 32)
         self.button_rectangle.setCheckable(True)
         self.button_rectangle.setToolTip("Draw Rectangle")
+        set_review_button_icon(self.button_rectangle, "rectangle")
         self.button_group_tools.addButton(self.button_rectangle)
         row_tools.addWidget(self.button_rectangle)
         
         # Arrow tool
-        self.button_arrow = QPushButton("→")
-        self.button_arrow.setFixedSize(36, 36)
+        self.button_arrow = QPushButton()
+        self.button_arrow.setFixedSize(36, 32)
         self.button_arrow.setCheckable(True)
         self.button_arrow.setToolTip("Draw Arrow")
+        set_review_button_icon(self.button_arrow, "arrow")
         self.button_group_tools.addButton(self.button_arrow)
         row_tools.addWidget(self.button_arrow)
         
         # Freehand tool
-        self.button_freehand = QPushButton("✎")
-        self.button_freehand.setFixedSize(36, 36)
+        self.button_freehand = QPushButton()
+        self.button_freehand.setFixedSize(36, 32)
         self.button_freehand.setCheckable(True)
         self.button_freehand.setToolTip("Freehand Draw")
+        set_review_button_icon(self.button_freehand, "freehand")
         self.button_group_tools.addButton(self.button_freehand)
         row_tools.addWidget(self.button_freehand)
         
         # Text tool
-        self.button_text = QPushButton("T")
-        self.button_text.setFixedSize(36, 36)
+        self.button_text = QPushButton()
+        self.button_text.setFixedSize(36, 32)
         self.button_text.setCheckable(True)
         self.button_text.setToolTip("Add Text")
+        set_review_button_icon(self.button_text, "text")
         self.button_group_tools.addButton(self.button_text)
         row_tools.addWidget(self.button_text)
         
@@ -1449,8 +1688,10 @@ class AnnotationToolbar(QWidget):
             button = QPushButton()
             button.setFixedSize(24, 24)
             button.setCheckable(True)
-            button.setStyleSheet(f"background-color: {color.name()}; border: 2px solid #555;")
+            button.setProperty("review_swatch", "true")
+            button.setStyleSheet(f"QPushButton {{ background-color: {color.name()}; }}")
             button.setToolTip(f"Color: {color.name()}")
+            button.setAccessibleName(button.toolTip())
             if i == 0:
                 button.setChecked(True)
             self.button_group_colors.addButton(button)
@@ -1464,8 +1705,8 @@ class AnnotationToolbar(QWidget):
         self.label_thickness = QLabel("Size:")
         row_options.addWidget(self.label_thickness)
         
-        self.combo_thickness = QComboBox()
-        self.combo_thickness.setFixedWidth(60)
+        self.combo_thickness = ReadableComboBox(compact=True)
+        self.combo_thickness.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         for thickness in self.THICKNESS_PRESETS:
             self.combo_thickness.addItem(f"{thickness}px", thickness)
         self.combo_thickness.setCurrentIndex(1)  # Default to 3px
@@ -1478,8 +1719,8 @@ class AnnotationToolbar(QWidget):
         self.label_scope = QLabel("Scope:")
         row_options.addWidget(self.label_scope)
 
-        self.combo_scope = QComboBox()
-        self.combo_scope.setFixedWidth(90)
+        self.combo_scope = ReadableComboBox(compact=True)
+        self.combo_scope.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self.combo_scope.addItem("Frame", AnnotationCanvas.SCOPE_FRAME)
         self.combo_scope.addItem("Range", AnnotationCanvas.SCOPE_RANGE)
         self.combo_scope.addItem("Full", AnnotationCanvas.SCOPE_FULL)
@@ -1526,15 +1767,17 @@ class AnnotationToolbar(QWidget):
         row_options.addStretch()
         
         # === Save as thumbnail ===
-        self.button_save_thumbnail = QPushButton("📷 Save as Thumbnail")
+        self.button_save_thumbnail = QPushButton("Save as Thumbnail")
         self.button_save_thumbnail.setFixedHeight(30)
         self.button_save_thumbnail.setToolTip("Save Current Frame with Annotations as Shot Thumbnail")
         self.button_save_thumbnail.clicked.connect(self.save_thumbnail_clicked.emit)
         row_options.addWidget(self.button_save_thumbnail)
 
-        self.button_save_annotated_preview = QPushButton("🎞 Save Annotated Preview")
+        self.button_save_annotated_preview = QPushButton("Save Annotated Preview")
         self.button_save_annotated_preview.setFixedHeight(30)
-        self.button_save_annotated_preview.setToolTip("Save Preview with Annotations")
+        self.button_save_annotated_preview.setEnabled(False)
+        self.button_save_annotated_preview.setToolTip(
+            "Annotated movie export is unavailable; use Save as Thumbnail")
         self.button_save_annotated_preview.clicked.connect(self.save_annotated_preview_clicked.emit)
         row_options.addWidget(self.button_save_annotated_preview)
     
@@ -1590,16 +1833,20 @@ class AnnotationToolbar(QWidget):
             widget.setEnabled(is_range)
 
     def set_frame_range_limit(self, total_frames: int):
-        max_frame = max(0, total_frames - 1)
-        self.spin_range_start.setRange(0, max_frame)
-        self.spin_range_end.setRange(0, max_frame)
-        if self.spin_range_end.value() > max_frame:
-            self.spin_range_end.setValue(max_frame)
-        if self.spin_range_start.value() > max_frame:
-            self.spin_range_start.setValue(max_frame)
-        if self.range_end < self.range_start:
-            self.spin_range_end.setValue(self.range_start)
+        max_frame = self.frame_offset + max(0, total_frames - 1)
+        self.spin_range_start.blockSignals(True)
+        self.spin_range_end.blockSignals(True)
+        self.spin_range_start.setRange(self.frame_offset, max_frame)
+        self.spin_range_end.setRange(self.frame_offset, max_frame)
+        self.spin_range_start.setValue(self.frame_offset)
+        self.spin_range_end.setValue(max_frame)
+        self.range_start, self.range_end = self.frame_offset, max_frame
+        self.spin_range_start.blockSignals(False)
+        self.spin_range_end.blockSignals(False)
         self.range_selected.emit(self.range_start, self.range_end)
+
+    def set_frame_offset(self, offset):
+        self.frame_offset = offset
 
 
 # =============================================================================
@@ -1617,6 +1864,8 @@ class TaskListSidebar(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("review_task_sidebar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMinimumWidth(180)
         self.setMaximumWidth(260)
         
@@ -1633,7 +1882,7 @@ class TaskListSidebar(QWidget):
         
         # Header
         self.label_header = QLabel("Tasks")
-        self.label_header.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.label_header.setObjectName("review_task_heading")
         main_layout.addWidget(self.label_header)
         
         # Scroll area for tasks
@@ -1703,6 +1952,8 @@ class ShotNavigationOverlay(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("review_navigation")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         
@@ -1715,50 +1966,20 @@ class ShotNavigationOverlay(QWidget):
         layout.setContentsMargins(10, 0, 10, 0)
         
         # Previous shot button
-        self.button_previous_shot = QPushButton("←")
-        self.button_previous_shot.setFixedSize(50, 50)
-        self.button_previous_shot.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(0, 0, 0, 150);
-                color: white;
-                border: none;
-                border-radius: 25px;
-                font-size: 24px;
-            }
-            QPushButton:hover {
-                background-color: rgba(60, 60, 60, 200);
-            }
-            QPushButton:disabled {
-                background-color: rgba(0, 0, 0, 50);
-                color: #666;
-            }
-        """)
+        self.button_previous_shot = QPushButton()
+        self.button_previous_shot.setFixedSize(40, 36)
         self.button_previous_shot.setToolTip("Previous Shot")
+        set_review_button_icon(self.button_previous_shot, "previous")
         self.button_previous_shot.clicked.connect(self.previous_shot_clicked.emit)
         layout.addWidget(self.button_previous_shot, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         
         layout.addStretch()
         
         # Next shot button
-        self.button_next_shot = QPushButton("→")
-        self.button_next_shot.setFixedSize(50, 50)
-        self.button_next_shot.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(0, 0, 0, 150);
-                color: white;
-                border: none;
-                border-radius: 25px;
-                font-size: 24px;
-            }
-            QPushButton:hover {
-                background-color: rgba(60, 60, 60, 200);
-            }
-            QPushButton:disabled {
-                background-color: rgba(0, 0, 0, 50);
-                color: #666;
-            }
-        """)
+        self.button_next_shot = QPushButton()
+        self.button_next_shot.setFixedSize(40, 36)
         self.button_next_shot.setToolTip("Next Shot")
+        set_review_button_icon(self.button_next_shot, "next")
         self.button_next_shot.clicked.connect(self.next_shot_clicked.emit)
         layout.addWidget(self.button_next_shot, 0, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
@@ -1799,7 +2020,12 @@ class ShotInfoHeader(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("review_shot_header")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedHeight(64)
+        self.preview_paths = []
+        self.render_options = []
+        self._media_mode = "video"
         
         self._setup_ui()
     
@@ -1814,14 +2040,14 @@ class ShotInfoHeader(QWidget):
         
         # Shot title
         self.label_shot_title = QLabel("No Shot Loaded")
-        self.label_shot_title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.label_shot_title.setObjectName("review_shot_title")
         top_row.addWidget(self.label_shot_title)
         
         top_row.addStretch()
         
         # Shot position (e.g., "2 of 5")
         self.label_shot_position = QLabel("")
-        self.label_shot_position.setStyleSheet("color: #888;")
+        self.label_shot_position.setObjectName("review_shot_position")
         top_row.addWidget(self.label_shot_position)
 
         layout.addLayout(top_row)
@@ -1830,17 +2056,24 @@ class ShotInfoHeader(QWidget):
         bottom_row.setSpacing(12)
 
         self.label_shot_meta = QLabel("")
-        self.label_shot_meta.setStyleSheet("color: #aaa; font-size: 12px;")
+        self.label_shot_meta.setObjectName("review_shot_meta")
         bottom_row.addWidget(self.label_shot_meta)
 
-        bottom_row.addStretch()
-
-        self.label_preview = QLabel("Preview:")
+        self.label_preview = QLabel("Media:")
         bottom_row.addWidget(self.label_preview)
 
-        self.combo_preview = QComboBox()
+        self.combo_preview = ReadableComboBox(elide_mode=Qt.TextElideMode.ElideMiddle)
         self.combo_preview.setMinimumWidth(220)
-        bottom_row.addWidget(self.combo_preview)
+        self.combo_preview.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        self.combo_preview.setMinimumContentsLength(22)
+        bottom_row.addWidget(self.combo_preview, 1)
+
+        self.button_play_render = QPushButton("Play Render/Preview")
+        self.button_play_render.setFixedHeight(30)
+        self.button_play_render.setToolTip("No preview or render available")
+        self.button_play_render.setEnabled(False)
+        bottom_row.addWidget(self.button_play_render)
+        self.combo_preview.currentIndexChanged.connect(self._update_play_media_button)
 
         layout.addLayout(bottom_row)
     
@@ -1880,28 +2113,54 @@ class ShotInfoHeader(QWidget):
         selected_path: Path | None,
         thumbnail_url: str | None = None,
         selected_preview: dict | None = None,
+        render_options: list | None = None,
+        media_mode: str | None = None,
     ):
-        """Populate the preview selector."""
+        """Populate versions for the active preview or render mode."""
         self.combo_preview.blockSignals(True)
         self.combo_preview.clear()
+        self.render_options = render_options or []
+        self.preview_paths = list(preview_paths)
+        selection = selected_preview or {}
+        mode = media_mode or selection.get("type")
+        if mode == "thumbnail":
+            mode = selection.get("media_mode", "video")
+        if mode not in ("video", "render"):
+            mode = "video" if self.preview_paths else "render"
+        if not media_mode and mode == "render" and not self.render_options and self.preview_paths:
+            mode = "video"
+        elif not media_mode and mode == "video" and not self.preview_paths and self.render_options:
+            mode = "render"
+        self._media_mode = mode
+        self.label_preview.setText(
+            "Renders:" if mode == "render" else
+            "Previews:" if self.preview_paths else "Media:"
+        )
 
-        if thumbnail_url:
+        if thumbnail_url and (mode == "video" or self.render_options):
             self.combo_preview.addItem(
                 "Thumbnail",
-                {"type": "thumbnail", "value": thumbnail_url},
+                {"type": "thumbnail", "value": thumbnail_url, "media_mode": mode},
             )
 
-        if preview_paths:
+        if mode == "video":
             for preview_path in preview_paths:
                 self.combo_preview.addItem(
-                    preview_path.name,
+                    f"Preview: {preview_path.name}",
                     {"type": "video", "value": str(preview_path)},
                 )
 
+        for render in self.render_options if mode == "render" else []:
+            self.combo_preview.addItem(
+                f"Render: {render['display_name']}",
+                {"type": "render", "value": render["render_path"], "render": render},
+            )
+
         if self.combo_preview.count() == 0:
-            self.combo_preview.addItem("No previews", None)
+            self.combo_preview.addItem("No renders" if mode == "render" else "No media", None)
             self.combo_preview.setEnabled(False)
             self.combo_preview.blockSignals(False)
+            self._update_play_media_button()
             return
 
         self.combo_preview.setEnabled(True)
@@ -1929,6 +2188,30 @@ class ShotInfoHeader(QWidget):
             self.combo_preview.setCurrentIndex(matched_index)
 
         self.combo_preview.blockSignals(False)
+        self._update_play_media_button()
+
+    def play_media_target_type(self):
+        """Offer the other source when available, or play the only source."""
+        if self.render_options and self._media_mode != "render":
+            return "render"
+        if self.preview_paths:
+            return "video"
+        if self.render_options:
+            return "render"
+        return None
+
+    def _update_play_media_button(self, index=None):
+        target = self.play_media_target_type()
+        self.button_play_render.setEnabled(target is not None)
+        if target == "render":
+            self.button_play_render.setText("Play Render")
+            self.button_play_render.setToolTip("Play a render from renders/comp at the current playback time")
+        elif target == "video":
+            self.button_play_render.setText("Play Preview")
+            self.button_play_render.setToolTip("Play the preview at the current playback time")
+        else:
+            self.button_play_render.setText("Play Render/Preview")
+            self.button_play_render.setToolTip("No preview or render available")
 
     def current_preview_selection(self) -> dict | None:
         data = self.combo_preview.currentData()
@@ -1965,6 +2248,8 @@ class ReviewSelectionBar(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("review_selection_bar")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedHeight(44)
         self._setup_ui()
 
@@ -1976,22 +2261,26 @@ class ReviewSelectionBar(QWidget):
         self.label_job = QLabel("Job:")
         layout.addWidget(self.label_job)
 
-        self.combo_job = QComboBox()
+        self.combo_job = ReadableComboBox()
         self.combo_job.setMinimumWidth(200)
         self.combo_job.currentIndexChanged.connect(self._on_job_changed)
-        layout.addWidget(self.combo_job)
+        layout.addWidget(self.combo_job, 1)
 
         layout.addSpacing(16)
 
         self.label_timeline = QLabel("Timeline:")
         layout.addWidget(self.label_timeline)
 
-        self.combo_timeline = QComboBox()
+        self.combo_timeline = ReadableComboBox()
         self.combo_timeline.setMinimumWidth(200)
         self.combo_timeline.currentIndexChanged.connect(self._on_timeline_changed)
-        layout.addWidget(self.combo_timeline)
+        layout.addWidget(self.combo_timeline, 1)
 
-        layout.addStretch()
+        self.button_ocio = QPushButton("OCIO")
+        self.button_ocio.setCheckable(True)
+        self.button_ocio.setFixedHeight(28)
+        self.button_ocio.setToolTip("Show colour management controls")
+        layout.addWidget(self.button_ocio)
 
         self.button_refresh = QPushButton("Refresh")
         self.button_refresh.setFixedHeight(28)
@@ -2064,6 +2353,9 @@ class ReviewPageUI:
         Set up the Review Page UI on the given widget.
         All widgets become attributes of 'widget'.
         """
+        widget.setObjectName("review_page")
+        widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
         # Main layout - horizontal split
         main_layout = QHBoxLayout(widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -2075,6 +2367,8 @@ class ReviewPageUI:
         
         # === Center area - Video viewer and controls ===
         center_widget = QWidget()
+        widget.center_widget = center_widget
+        center_widget.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         center_layout = QVBoxLayout(center_widget)
         center_layout.setContentsMargins(0, 0, 0, 0)
         center_layout.setSpacing(0)
@@ -2086,15 +2380,23 @@ class ReviewPageUI:
         # Shot info header (top)
         widget.shot_info_header = ShotInfoHeader()
         center_layout.addWidget(widget.shot_info_header)
+
+        widget.session_bar = ReviewSessionBar()
+        center_layout.addWidget(widget.session_bar)
         
         # Annotation toolbar
         widget.annotation_toolbar = AnnotationToolbar()
         center_layout.addWidget(widget.annotation_toolbar)
+
+        widget.ocio_panel = OCIOPanel()
+        widget.ocio_panel.hide()
+        center_layout.addWidget(widget.ocio_panel)
+        widget.review_selection_bar.button_ocio.toggled.connect(widget.ocio_panel.setVisible)
         
         # Video viewer with navigation overlay
         # Use a frame to contain video and overlay together
         widget.viewer_frame = QFrame()
-        widget.viewer_frame.setStyleSheet("background-color: #0a0a0a;")
+        widget.viewer_frame.setObjectName("review_viewer_frame")
         viewer_frame_layout = QVBoxLayout(widget.viewer_frame)
         viewer_frame_layout.setContentsMargins(0, 0, 0, 0)
         viewer_frame_layout.setSpacing(0)
@@ -2106,9 +2408,65 @@ class ReviewPageUI:
         
         # Navigation overlay (parented to viewer_frame, positioned in logic)
         widget.shot_navigation = ShotNavigationOverlay(widget.viewer_frame)
+
+        status_row = QWidget()
+        status_row.setObjectName("review_status_row")
+        status_layout = QVBoxLayout(status_row)
+        status_layout.setContentsMargins(12, 4, 12, 4)
+        status_layout.setSpacing(4)
+        source_layout = QHBoxLayout()
+        widget.review_status = FlexibleLabel()
+        widget.review_status.elide_text = True
+        widget.review_status.setTextFormat(Qt.TextFormat.PlainText)
+        widget.review_status.setObjectName("review_status")
+        source_layout.addWidget(widget.review_status, 1)
+        source_layout.addWidget(QLabel("Resolution:"))
+        widget.combo_resolution = ReadableComboBox(compact=True)
+        for label, scale in (("Full", 1), ("Half", 2), ("Quarter", 4), ("Eighth", 8)):
+            widget.combo_resolution.addItem(label, scale)
+        widget.combo_resolution.setToolTip(
+            "Reduce display resolution for faster playback and OCIO processing. "
+            "Choose Full for detailed QC; frame position and colour settings stay the same.")
+        widget.combo_resolution.currentIndexChanged.connect(
+            lambda _: widget.video_viewer.set_decode_scale(widget.combo_resolution.currentData()))
+        source_layout.addWidget(widget.combo_resolution)
+        widget.playback_status = FlexibleLabel("No media")
+        widget.playback_status.elide_text = True
+        widget.playback_status.setMinimumWidth(180)
+        widget.playback_status.setObjectName("review_playback_status")
+        source_layout.addWidget(widget.playback_status, 1)
+        status_layout.addLayout(source_layout)
+
+        cache_layout = QHBoxLayout()
+        cache_layout.addWidget(QLabel("Cache RAM:"))
+        widget.combo_cache_memory = ReadableComboBox(compact=True)
+        for label, megabytes in (("256 MB", 256), ("512 MB", 512), ("1 GB", 1024),
+                                ("2 GB", 2048), ("4 GB", 4096), ("8 GB", 8192)):
+            widget.combo_cache_memory.addItem(label, megabytes)
+        widget.combo_cache_memory.setCurrentIndex(2)
+        widget.combo_cache_memory.setToolTip("RAM available for loaded frames; increase it to cache longer ranges")
+        widget.combo_cache_memory.currentIndexChanged.connect(widget._set_cache_memory)
+        cache_layout.addWidget(widget.combo_cache_memory)
+        widget.button_load_frames = QPushButton("Load Frames")
+        widget.button_load_frames.setToolTip("Load the selected range into the frame cache; retry failed frames")
+        widget.button_load_frames.setEnabled(False)
+        widget.button_load_frames.clicked.connect(widget.video_viewer.preload_frames)
+        widget.video_viewer.duration_changed.connect(lambda count: widget.button_load_frames.setEnabled(count > 0))
+        cache_layout.addWidget(widget.button_load_frames)
+        widget.cache_progress = QProgressBar()
+        widget.cache_progress.setRange(0, 1)
+        widget.cache_progress.setValue(0)
+        widget.cache_progress.setFormat("No frames")
+        cache_layout.addWidget(widget.cache_progress, 1)
+        widget.cache_memory_label = QLabel("0 / 1024 MB")
+        cache_layout.addWidget(widget.cache_memory_label)
+        widget.video_viewer.cache_progress_changed.connect(widget._on_cache_progress)
+        status_layout.addLayout(cache_layout)
+        center_layout.addWidget(status_row)
         
         # Playback bar (bottom)
         widget.playback_bar = PlaybackBar()
+        widget.playback_bar.set_total_frames(0)
         center_layout.addWidget(widget.playback_bar)
         
         main_layout.addWidget(center_widget, 1)
@@ -2131,17 +2489,21 @@ class ReviewPageLogic:
         self.current_shot = None
         self._api = http_help.DjangoAPI()
         self._files_io = filesIO.Folders()
-        self._preview_version_re = re.compile(r"_v(\\d+)", re.IGNORECASE)
+        self._preview_version_re = re.compile(r"_v(\d+)", re.IGNORECASE)
         self._was_playing_before_scrub = False
+        self._version_position_seconds = 0.0
+        self._version_playing = False
+        self._version_range_seconds = None
+        self._review_mode = None
+        self._play_all = False
+        self._play_all_loop_restore = True
     
     def connect_signals(self):
         """Connect all signals between UI components."""
         widget = self.widget
         
         # Annotation toolbar -> Canvas
-        widget.annotation_toolbar.tool_selected.connect(
-            widget.video_viewer.annotation_canvas.set_mode
-        )
+        widget.annotation_toolbar.tool_selected.connect(self._on_annotation_tool)
         widget.annotation_toolbar.color_selected.connect(
             widget.video_viewer.annotation_canvas.set_color
         )
@@ -2152,7 +2514,9 @@ class ReviewPageLogic:
             widget.video_viewer.annotation_canvas.set_scope_mode
         )
         widget.annotation_toolbar.range_selected.connect(
-            widget.video_viewer.annotation_canvas.set_scope_range
+            lambda start, end: widget.video_viewer.annotation_canvas.set_scope_range(
+                start - widget.video_viewer.source_start_frame,
+                end - widget.video_viewer.source_start_frame)
         )
         widget.annotation_toolbar.clear_clicked.connect(
             widget.video_viewer.annotation_canvas.clear_current_frame
@@ -2178,6 +2542,8 @@ class ReviewPageLogic:
         widget.playback_bar.in_point_changed.connect(widget.video_viewer.set_in_point)
         widget.playback_bar.out_point_changed.connect(widget.video_viewer.set_out_point)
         widget.playback_bar.play_range_toggled.connect(widget.video_viewer.set_play_range_enabled)
+        widget.playback_bar.frame_rate_changed.connect(widget.video_viewer.set_frame_rate)
+        widget.playback_bar.button_loop.toggled.connect(widget.video_viewer.set_loop_playback)
         widget.playback_bar.scrub_started.connect(self._on_scrub_started)
         widget.playback_bar.scrub_finished.connect(self._on_scrub_finished)
         
@@ -2186,6 +2552,10 @@ class ReviewPageLogic:
         widget.video_viewer.duration_changed.connect(widget.playback_bar.set_total_frames)
         widget.video_viewer.duration_changed.connect(widget.annotation_toolbar.set_frame_range_limit)
         widget.video_viewer.playback_state_changed.connect(widget.playback_bar.set_playing)
+        widget.video_viewer.frame_rate_changed.connect(widget.playback_bar.set_frame_rate)
+        widget.video_viewer.source_start_changed.connect(widget.playback_bar.set_frame_offset)
+        widget.video_viewer.source_start_changed.connect(widget.annotation_toolbar.set_frame_offset)
+        widget.video_viewer.playback_status_changed.connect(widget.playback_status.setText)
         
         # Video viewer errors
         widget.video_viewer.error_occurred.connect(self._on_video_error)
@@ -2202,6 +2572,57 @@ class ReviewPageLogic:
             widget.shot_info_header.combo_preview.currentIndexChanged.connect(
                 self._on_preview_selected
             )
+        widget.shot_info_header.button_play_render.clicked.connect(self._on_play_media)
+        widget.ocio_panel.processor_changed.connect(widget.video_viewer.set_ocio_processor)
+        widget.ocio_panel.status_changed.connect(self._on_ocio_status)
+        widget.session_bar.shot_selected.connect(self._load_shot)
+        widget.session_bar.previous_shot.connect(self._go_to_previous_shot)
+        widget.session_bar.next_shot.connect(self._go_to_next_shot)
+        widget.session_bar.play_all_toggled.connect(self._set_play_all)
+        widget.video_viewer.playback_finished.connect(self._on_playback_finished)
+
+    def _set_play_all(self, enabled):
+        viewer = self.widget.video_viewer
+        button = self.widget.session_bar.button_play_all
+        if enabled and viewer.total_frames:
+            self._play_all = True
+            self._play_all_loop_restore = viewer.loop_playback
+            self.widget.playback_bar.button_loop.setChecked(False)
+            self.widget.playback_bar.button_loop.setEnabled(False)
+            button.setText("Stop Timeline")
+            viewer.go_to_start()
+            viewer.play()
+        else:
+            was_active = self._play_all
+            self._play_all = False
+            if was_active:
+                viewer.pause()
+                self.widget.playback_bar.button_loop.setChecked(self._play_all_loop_restore)
+            self.widget.playback_bar.button_loop.setEnabled(True)
+            button.blockSignals(True)
+            button.setChecked(False)
+            button.setText("Play Timeline")
+            button.blockSignals(False)
+
+    def _on_playback_finished(self):
+        if not self._play_all:
+            return
+        if self.current_shot_index + 1 < len(self.shots):
+            self._load_shot(self.current_shot_index + 1, continue_session=True)
+            if self.widget.video_viewer.total_frames:
+                self.widget.video_viewer.play()
+                return
+        self._set_play_all(False)
+
+    def _on_annotation_tool(self, mode):
+        if mode != AnnotationCanvas.MODE_NONE:
+            self.widget.video_viewer.pause()
+        self.widget.video_viewer.annotation_canvas.set_mode(mode)
+
+    def _on_ocio_status(self, text, error):
+        button = self.widget.review_selection_bar.button_ocio
+        button.setText("OCIO !" if error else "OCIO")
+        button.setToolTip(f"Show colour management controls\n{text}")
     
     def set_shots(self, shots: list):
         """Set the list of shots to review."""
@@ -2226,18 +2647,38 @@ class ReviewPageLogic:
         if shots:
             self._load_shot(target_index)
         else:
+            self._set_play_all(False)
+            self.current_shot = None
+            self._version_position_seconds = 0.0
+            self._version_playing = False
+            self._version_range_seconds = None
+            self.widget.video_viewer.clear_media()
             self.widget.shot_info_header.clear()
             self.widget.task_list_sidebar.set_tasks([])
+            self._set_status("No shots in this timeline.")
+            self.widget.session_bar.set_shots([], 0)
         
         self._update_navigation_state()
     
-    def _load_shot(self, index: int):
+    def _load_shot(self, index: int, *, continue_session=False):
         """Load a shot by index."""
         if 0 <= index < len(self.shots):
-            previous_shot_id = self.current_shot.get("id") if self.current_shot else None
+            previous_shot = self.current_shot
+            previous_shot_id = previous_shot.get("id") if previous_shot else None
             self.current_shot_index = index
             self.current_shot = self.shots[index]
-            shot_changed = previous_shot_id != self.current_shot.get("id")
+            shot_changed = (previous_shot_id != self.current_shot.get("id") or
+                            (previous_shot_id is None and previous_shot is not self.current_shot))
+            if shot_changed and self._play_all and not continue_session:
+                self._set_play_all(False)
+            if shot_changed:
+                self._version_position_seconds = 0.0
+                self._version_playing = False
+                self._version_range_seconds = None
+                self.widget.playback_bar.button_play_range.setChecked(False)
+                self.widget.video_viewer.clear_media()
+            else:
+                self._remember_version_playback()
             
             # Update shot info header
             title = self.current_shot.get("title", f"Shot {index + 1}")
@@ -2249,44 +2690,35 @@ class ReviewPageLogic:
             self.widget.shot_info_header.set_shot_metadata(self.current_shot)
             
             preview_paths, selected_path = self._get_preview_paths(self.current_shot)
+            renders = discover_renders(self.current_shot.get("base_path"), self._files_io)
+            saved_selection = self.current_shot.get("preview_selection")
+            if self._review_mode is None:
+                self._review_mode = "video" if preview_paths or self.current_shot.get("thumbnail") else "render"
+            saved_mode = ((saved_selection.get("media_mode") if saved_selection.get("type") == "thumbnail"
+                           else saved_selection.get("type")) if saved_selection else None)
+            if self._review_mode == "render" and renders and saved_mode != "render":
+                render = renders[0]
+                saved_selection = {"type": "render", "value": render["render_path"], "render": render}
             self.widget.shot_info_header.set_preview_options(
                 preview_paths,
                 selected_path,
                 thumbnail_url=self.current_shot.get("thumbnail"),
-                selected_preview=self.current_shot.get("preview_selection"),
+                selected_preview=saved_selection,
+                render_options=renders,
+                media_mode=self._review_mode,
             )
             selection = self.widget.shot_info_header.current_preview_selection()
             if selection:
                 self.current_shot["preview_selection"] = selection
 
-            if selection and selection.get("type") == "thumbnail":
-                self.widget.video_viewer.pause()
-                self._show_thumbnail(selection.get("value"))
-            else:
-                selected_path_str = selection.get("value") if selection else None
-                current_video_path = self.widget.video_viewer.current_video_path
-                needs_reload = (
-                    shot_changed
-                    or self.widget.video_viewer.is_showing_still()
-                    or (selected_path_str and selected_path_str != current_video_path)
-                )
-
-                if needs_reload:
-                    self.widget.video_viewer.stop()
-
-                if selected_path_str and needs_reload:
-                    print(f"[Review] Loading shot: {title}")
-                    print(f"[Review] Video path: {selected_path_str}")
-                    self.current_shot["video_path"] = selected_path_str
-                    self.widget.video_viewer.load_video(selected_path_str)
-                elif not selected_path_str and shot_changed:
-                    print(f"[Review] Shot '{title}' has no preview video")
+            self._load_selection(selection)
             
             # Load tasks
             tasks = self.current_shot.get("tasks", [])
             self.widget.task_list_sidebar.set_tasks(tasks)
             
             self._update_navigation_state()
+            self.widget.session_bar.set_shots(self.shots, index)
     
     def _update_navigation_state(self):
         """Update navigation buttons based on current position."""
@@ -2316,22 +2748,96 @@ class ReviewPageLogic:
         selection = self.widget.shot_info_header.current_preview_selection()
         if not selection:
             return
+        if self._play_all:
+            self._set_play_all(False)
+        self._remember_version_playback()
         self.current_shot["preview_selection"] = selection
+        self._review_mode = self.widget.shot_info_header._media_mode
+        self._load_selection(selection)
+
+    def _remember_version_playback(self):
+        """Keep a shared comparison time, including while viewing a thumbnail."""
+        viewer = self.widget.video_viewer
+        if viewer.total_frames <= 0 or viewer.is_showing_still():
+            return
+        # An EXR seek can still be decoding when another version is selected.
+        frame = viewer._sequence_target if viewer._sequence_target is not None else viewer.current_frame
+        self._version_position_seconds = frame / viewer.frame_rate
+        self._version_playing = viewer.is_playing()
+        self._version_range_seconds = ((viewer.in_point / viewer.frame_rate, viewer.out_point / viewer.frame_rate)
+                                       if viewer.use_play_range else None)
+
+    def _load_selection(self, selection):
+        if not selection:
+            self.widget.video_viewer.clear_media()
+            self._set_status("No renders for this shot. Use Play Preview to review the preview."
+                             if self._review_mode == "render" else "No preview available for this shot.")
+            return
         if selection.get("type") == "thumbnail":
-            self.widget.video_viewer.pause()
             self._show_thumbnail(selection.get("value"))
             return
         path = selection.get("value")
         if not path:
             return
+        is_exr = Path(path).suffix.lower() == ".exr"
+        self.widget.ocio_panel.set_source(is_exr, self.current_shot.get("colourspace") if is_exr else None)
         if path == self.widget.video_viewer.current_video_path and not self.widget.video_viewer.is_showing_still():
             return
-        self.current_shot["video_path"] = path
-        self.widget.video_viewer.load_video(path)
+        if selection.get("type") == "video":
+            self.current_shot["video_path"] = path
+        source = selection.get("render", {}).get("display_name") or Path(path).name
+        self.widget.shot_info_header.combo_preview.setToolTip(path)
+        self._set_status(f"{'Render' if selection.get('type') == 'render' else 'Preview'}: {source}")
+        self.widget.video_viewer.load_video(
+            path, selection.get("render", {}).get("sequence_path"),
+            start_position_seconds=self._version_position_seconds,
+            source_start_frame=1001,
+        )
+        viewer = self.widget.video_viewer
+        if self._version_range_seconds is not None and viewer.total_frames:
+            low, high = (min(viewer.total_frames - 1, round(time * viewer.frame_rate))
+                         for time in self._version_range_seconds)
+            self.widget.playback_bar.spinbox_in_point.setValue(viewer.source_start_frame + low)
+            self.widget.playback_bar.spinbox_out_point.setValue(viewer.source_start_frame + high)
+            self.widget.playback_bar.button_play_range.setChecked(True)
+        if self._version_playing:
+            self.widget.video_viewer.play()
+
+    def _on_play_media(self):
+        if not self.current_shot:
+            return
+        header = self.widget.shot_info_header
+        target_type = header.play_media_target_type()
+        current_selection = header.current_preview_selection() or {}
+        renders = discover_renders(self.current_shot.get("base_path"), self._files_io)
+        paths, selected_path = self._get_preview_paths(self.current_shot)
+        if target_type == "render" and renders:
+            render = next((item for item in renders
+                           if current_selection.get("type") == "render"
+                           and item["render_path"] == current_selection.get("value")), renders[0])
+            target_selection = {"type": "render", "value": render["render_path"], "render": render}
+        elif target_type == "video" and paths:
+            target_selection = {"type": "video", "value": str(selected_path or paths[0])}
+        else:
+            header.set_preview_options(paths, selected_path, self.current_shot.get("thumbnail"),
+                                       selected_preview=current_selection, render_options=renders)
+            self._set_status("No preview or render available for this shot.")
+            return
+        header.set_preview_options(paths, selected_path, self.current_shot.get("thumbnail"),
+                                   selected_preview=target_selection, render_options=renders)
+        self._on_preview_selected(header.combo_preview.currentIndex())
+        self.widget.video_viewer.play()
+
+    def _set_status(self, text):
+        self.widget.review_status.setText(text)
+        self.widget.review_status.setToolTip(text)
+        self.widget.review_status.setVisible(bool(text))
 
     def _show_thumbnail(self, thumbnail_url: str | None):
         """Load and display a thumbnail image."""
+        self.widget.video_viewer.clear_media()
         if not thumbnail_url:
+            self._set_status("No thumbnail available.")
             return
         image = QImage()
         if thumbnail_url.startswith("http://") or thumbnail_url.startswith("https://"):
@@ -2339,19 +2845,20 @@ class ReviewPageLogic:
                 response = self._api._request("GET", thumbnail_url)
                 response.raise_for_status()
                 if not image.loadFromData(response.content):
-                    print("[Review] Failed to decode thumbnail image")
+                    self._set_status("Failed to decode thumbnail image.")
                     return
             except Exception as exc:
-                print(f"[Review] Failed to load thumbnail: {exc}")
+                self._set_status(f"Failed to load thumbnail: {exc}")
                 return
         else:
             local_path = thumbnail_url
             if local_path.startswith("file://"):
                 local_path = local_path[7:]
             if not image.load(local_path):
-                print(f"[Review] Thumbnail file not found: {local_path}")
+                self._set_status(f"Thumbnail file not found: {local_path}")
                 return
         self.widget.video_viewer.show_still(image)
+        self._set_status("Thumbnail")
     
     def _on_add_task(self):
         """Handle add task button click."""
@@ -2395,7 +2902,7 @@ class ReviewPageLogic:
         preview_video = shot.get("preview_video")
         base_path = shot.get("base_path")
 
-        if video_path:
+        if video_path and Path(video_path).suffix.lower() != ".exr":
             candidate = Path(video_path)
             if candidate.exists():
                 selected_path = candidate
@@ -2442,7 +2949,7 @@ class ReviewPageLogic:
             no_version = 0 if match else 1
             return (no_version, version, path.name.lower())
 
-        return sorted(unique, key=sort_key)
+        return sorted(unique, key=sort_key, reverse=True)
     
     def _on_save_thumbnail(self):
         """Handle save as thumbnail button click."""
@@ -2486,6 +2993,7 @@ class ReviewPageLogic:
                 selected_path,
                 thumbnail_url=self.current_shot.get("thumbnail"),
                 selected_preview=self.current_shot.get("preview_selection"),
+                render_options=discover_renders(self.current_shot.get("base_path"), self._files_io),
             )
 
     def _on_save_annotated_preview(self):
@@ -2495,6 +3003,7 @@ class ReviewPageLogic:
     def _on_scrub_started(self):
         """Enter live scrubbing mode for the timeline."""
         self._was_playing_before_scrub = self.widget.video_viewer.is_playing()
+        self.widget.video_viewer.pause()
         self.widget.video_viewer.begin_scrub()
 
     def _on_scrub_finished(self):
@@ -2506,7 +3015,10 @@ class ReviewPageLogic:
     def _on_video_error(self, error_message: str):
         """Handle video playback errors."""
         print(f"[Review] Video error: {error_message}")
-        # TODO: Could show error message in UI
+        self.widget.video_viewer.pause()
+        self._set_play_all(False)
+        self.widget.playback_status.setText("Playback error")
+        self._set_status(error_message)
 
 
 # =============================================================================
@@ -2526,10 +3038,15 @@ class ReviewPage(QWidget):
         # Set up UI
         self.ui = ReviewPageUI()
         self.ui.setup_ui(self)
+        self.setFocusProxy(self.center_widget)
+        self._presentation_window = None
+        self._presentation_visibility = {}
         
         # Set up logic
         self.logic = ReviewPageLogic(self)
         self.logic.connect_signals()
+        self.session_bar.tools_toggled.connect(self.annotation_toolbar.setVisible)
+        self.session_bar.present_toggled.connect(self._set_presentation_mode)
 
         # Keyboard shortcuts
         self._setup_shortcuts()
@@ -2557,6 +3074,83 @@ class ReviewPage(QWidget):
         - thumbnail: URL to thumbnail (optional)
         """
         self.logic.set_shots(shots)
+
+    def set_settings_manager(self, settings):
+        self.ocio_panel.set_settings_manager(settings)
+        self._review_settings = settings
+        index = self.combo_cache_memory.findData(settings.get("review_cache_mb", 1024))
+        self.combo_cache_memory.blockSignals(True)
+        self.combo_cache_memory.setCurrentIndex(index if index >= 0 else 2)
+        self.combo_cache_memory.blockSignals(False)
+        self.video_viewer.set_cache_limit_mb(self.combo_cache_memory.currentData())
+
+    def _set_cache_memory(self, index):
+        megabytes = self.combo_cache_memory.itemData(index)
+        if megabytes is None:
+            return
+        self.video_viewer.set_cache_limit_mb(megabytes)
+        settings = getattr(self, "_review_settings", None)
+        if settings is not None:
+            settings.set("review_cache_mb", megabytes)
+
+    def _on_cache_progress(self, ready, total, used, limit):
+        self.cache_progress.setRange(0, max(1, total))
+        self.cache_progress.setValue(ready)
+        self.cache_progress.setFormat("%v / %m frames" if total else "No frames")
+        self.cache_memory_label.setText(f"{used / 1024**2:.0f} / {limit / 1024**2:.0f} MB")
+        tooltip = f"{ready}/{total} frames loaded at the selected resolution and OCIO settings."
+        if total and len(self.video_viewer._cache_plan) < total:
+            tooltip += " Increase Cache RAM or shorten In/Out to cache the whole range. Playback loads sections when needed."
+        self.cache_progress.setToolTip(tooltip)
+        if ready == total and total and not self.video_viewer._cache_errors:
+            kind = "Render" if self.logic._review_mode == "render" else "Preview"
+            self.logic._set_status(f"{kind}: {Path(self.video_viewer.current_video_path).name}")
+
+    def _set_presentation_mode(self, enabled):
+        if not enabled:
+            self._finish_presentation()
+            return
+        if self._presentation_window is not None:
+            return
+        window = ReviewPresentationWindow(self.window())
+        self._presentation_window = window
+        self._presentation_visibility = {
+            self.review_selection_bar: not self.review_selection_bar.isHidden(),
+            self.ocio_panel: not self.ocio_panel.isHidden(),
+        }
+        self._presentation_tools_visible = self.session_bar.button_tools.isChecked()
+        self.layout().removeWidget(self.center_widget)
+        window.layout().addWidget(self.center_widget)
+        for widget in self._presentation_visibility:
+            widget.hide()
+        self.session_bar.button_tools.setChecked(False)
+        self.session_bar.button_present.setText("Exit Present")
+        window.closing.connect(self._finish_presentation)
+        window.showFullScreen()
+        self.center_widget.show()
+        self.center_widget.setFocus()
+        QTimer.singleShot(0, self._reposition_navigation_overlay)
+
+    def _finish_presentation(self):
+        window = self._presentation_window
+        if window is None:
+            return
+        self._presentation_window = None
+        window.layout().removeWidget(self.center_widget)
+        self.layout().addWidget(self.center_widget, 1)
+        self.center_widget.show()
+        for widget, visible in self._presentation_visibility.items():
+            widget.setVisible(visible)
+        self.session_bar.button_tools.setChecked(self._presentation_tools_visible)
+        button = self.session_bar.button_present
+        button.blockSignals(True)
+        button.setChecked(False)
+        button.setText("Present")
+        button.blockSignals(False)
+        window.close()
+        window.deleteLater()
+        self.center_widget.setFocus()
+        QTimer.singleShot(0, self._reposition_navigation_overlay)
 
     def set_job_options(self, jobs: list):
         """Populate job selector options."""
@@ -2590,15 +3184,42 @@ class ReviewPage(QWidget):
         QTimer.singleShot(10, self._reposition_navigation_overlay)
 
     def closeEvent(self, event):
+        self._finish_presentation()
+        self.logic._set_play_all(False)
+        self._stop_nudge()
+        self.video_viewer.clear_media()
         app = QApplication.instance()
         if app is not None:
             app.removeEventFilter(self)
         super().closeEvent(event)
 
     def eventFilter(self, obj, event):
+        if obj is self.viewer_frame and event.type() == QEvent.Type.Resize:
+            self._reposition_navigation_overlay()
+        owner = obj if isinstance(obj, QWidget) else None
+        # QWidget.isAncestorOf stops at popup windows. Their parent chain still
+        # identifies the owning combo, so include Review's dropdown menus.
+        while owner is not None and owner is not self and owner is not self.center_widget:
+            owner = owner.parentWidget()
+        if owner is None:
+            return super().eventFilter(obj, event)
+        if event.type() == QEvent.Type.ShortcutOverride and self._shortcut_blocked():
+            # Rejecting a shortcut in its callback is too late: Qt has already
+            # consumed the key. Let open menus and focused controls handle it.
+            review_keys = {
+                Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down,
+                Qt.Key.Key_PageUp, Qt.Key.Key_PageDown, Qt.Key.Key_Space,
+                Qt.Key.Key_J, Qt.Key.Key_K, Qt.Key.Key_L, Qt.Key.Key_F11,
+                Qt.Key.Key_BracketLeft, Qt.Key.Key_BracketRight, Qt.Key.Key_Backslash,
+            }
+            if event.modifiers() in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier) and event.key() in review_keys:
+                event.accept()
+                return True
         if event.type() == QEvent.Type.KeyPress:
             key = event.key()
             if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):
+                if event.modifiers() != Qt.KeyboardModifier.NoModifier:
+                    return False
                 if self._shortcut_blocked():
                     return False
                 if event.isAutoRepeat():
@@ -2609,6 +3230,8 @@ class ReviewPage(QWidget):
         elif event.type() == QEvent.Type.KeyRelease:
             key = event.key()
             if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):
+                if event.modifiers() != Qt.KeyboardModifier.NoModifier:
+                    return False
                 if self._shortcut_blocked():
                     return False
                 if event.isAutoRepeat():
@@ -2618,45 +3241,55 @@ class ReviewPage(QWidget):
         return super().eventFilter(obj, event)
 
     def _setup_shortcuts(self):
-        self._shortcut_play_pause = QShortcut(QKeySequence(Qt.Key.Key_Space), self)
-        self._shortcut_play_pause.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._shortcut_play_pause.activated.connect(self._on_shortcut_play_pause)
+        shortcuts = (
+            ("Space", self._on_shortcut_play_pause), ("L", self._on_shortcut_play_forward),
+            ("J", self._on_shortcut_play_backward), ("K", self._on_shortcut_stop),
+            ("Up", self._on_shortcut_prev_preview), ("Down", self._on_shortcut_next_preview),
+            ("PgUp", self.logic._go_to_previous_shot), ("PgDown", self.logic._go_to_next_shot),
+            ("[", self._set_review_in), ("]", self._set_review_out),
+            ("\\", self._reset_review_range),
+            ("F11", lambda: self.session_bar.button_present.toggle()),
+        )
+        self._review_shortcuts = []
+        for key, callback in shortcuts:
+            shortcut = QShortcut(QKeySequence(key), self.center_widget)
+            shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.setAutoRepeat(False)
+            shortcut.activated.connect(lambda callback=callback: self._run_review_shortcut(callback))
+            self._review_shortcuts.append(shortcut)
 
-        self._shortcut_play_forward = QShortcut(QKeySequence(Qt.Key.Key_L), self)
-        self._shortcut_play_forward.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._shortcut_play_forward.activated.connect(self._on_shortcut_play_forward)
+    def _run_review_shortcut(self, callback):
+        if not self._shortcut_blocked():
+            callback()
 
-        self._shortcut_play_backward = QShortcut(QKeySequence(Qt.Key.Key_J), self)
-        self._shortcut_play_backward.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._shortcut_play_backward.activated.connect(self._on_shortcut_play_backward)
+    def _set_review_in(self):
+        if self.video_viewer.total_frames:
+            self.playback_bar.spinbox_in_point.setValue(
+                self.video_viewer.source_start_frame + self.video_viewer.current_frame)
+            self.playback_bar.button_play_range.setChecked(True)
 
-        self._shortcut_stop = QShortcut(QKeySequence(Qt.Key.Key_K), self)
-        self._shortcut_stop.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._shortcut_stop.activated.connect(self._on_shortcut_stop)
+    def _set_review_out(self):
+        if self.video_viewer.total_frames:
+            self.playback_bar.spinbox_out_point.setValue(
+                self.video_viewer.source_start_frame + self.video_viewer.current_frame)
+            self.playback_bar.button_play_range.setChecked(True)
 
-        self._shortcut_step_back = QShortcut(QKeySequence(Qt.Key.Key_Left), self)
-        self._shortcut_step_back.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._shortcut_step_back.setAutoRepeat(True)
-        self._shortcut_step_back.activated.connect(self._on_shortcut_step_back)
-
-        self._shortcut_step_forward = QShortcut(QKeySequence(Qt.Key.Key_Right), self)
-        self._shortcut_step_forward.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._shortcut_step_forward.setAutoRepeat(True)
-        self._shortcut_step_forward.activated.connect(self._on_shortcut_step_forward)
-
-        self._shortcut_prev_preview = QShortcut(QKeySequence(Qt.Key.Key_Up), self)
-        self._shortcut_prev_preview.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._shortcut_prev_preview.activated.connect(self._on_shortcut_prev_preview)
-
-        self._shortcut_next_preview = QShortcut(QKeySequence(Qt.Key.Key_Down), self)
-        self._shortcut_next_preview.setContext(Qt.ShortcutContext.WindowShortcut)
-        self._shortcut_next_preview.activated.connect(self._on_shortcut_next_preview)
+    def _reset_review_range(self):
+        self.playback_bar.spinbox_in_point.setValue(self.video_viewer.source_start_frame)
+        self.playback_bar.spinbox_out_point.setValue(
+            self.video_viewer.source_start_frame + max(0, self.video_viewer.total_frames - 1))
+        self.playback_bar.button_play_range.setChecked(False)
 
     def _shortcut_blocked(self) -> bool:
-        focus_widget = self.focusWidget()
-        if isinstance(focus_widget, (QLineEdit, QTextEdit, QPlainTextEdit)):
+        focus_widget = QApplication.focusWidget()
+        if not self.center_widget.isVisible() or QApplication.activeWindow() != self.center_widget.window():
             return True
-        if isinstance(focus_widget, QComboBox) and focus_widget.view().isVisible():
+        if focus_widget is not None and not (focus_widget is self or focus_widget is self.center_widget
+                                             or self.center_widget.isAncestorOf(focus_widget)):
+            return True
+        if isinstance(focus_widget, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox, QComboBox)):
+            return True
+        if QApplication.activePopupWidget() is not None:
             return True
         return False
 
@@ -2799,56 +3432,10 @@ if __name__ == "__main__":
     
     app = QApplication(sys.argv)
     
-    # Apply a basic dark theme for testing
-    app.setStyleSheet("""
-        QWidget {
-            background-color: #1e1e1e;
-            color: #e0e0e0;
-        }
-        QPushButton {
-            background-color: #3a3a3a;
-            border: 1px solid #555;
-            padding: 4px 8px;
-            border-radius: 3px;
-        }
-        QPushButton:hover {
-            background-color: #4a4a4a;
-        }
-        QPushButton:pressed {
-            background-color: #2a2a2a;
-        }
-        QPushButton:checked {
-            background-color: #505050;
-            border-color: #888;
-        }
-        QSlider::groove:horizontal {
-            height: 6px;
-            background: #3a3a3a;
-            border-radius: 3px;
-        }
-        QSlider::handle:horizontal {
-            background: #888;
-            width: 14px;
-            margin: -4px 0;
-            border-radius: 7px;
-        }
-        QSlider::handle:horizontal:hover {
-            background: #aaa;
-        }
-        QSpinBox, QComboBox {
-            background-color: #2a2a2a;
-            border: 1px solid #555;
-            padding: 2px;
-            border-radius: 3px;
-        }
-        QScrollArea {
-            border: none;
-        }
-        QLabel {
-            color: #e0e0e0;
-        }
-    """)
-    
+    # Use the application's shared theme when previewing Review independently.
+    theme_path = Path(__file__).resolve().parent / "ui" / "dark_v01.qss"
+    app.setStyleSheet(theme_path.read_text(encoding="utf-8"))
+
     # Create and show the review page
     review_page = ReviewPage()
     review_page.setWindowTitle("ShotBox Review - Debug Mode")

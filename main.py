@@ -176,6 +176,8 @@ class MainWindow(QMainWindow):
         )
         if review_page_class is not None:
             self.page_review = review_page_class()
+            if hasattr(self.page_review, "set_settings_manager"):
+                self.page_review.set_settings_manager(self._settings_manager)
             self.tabs.addTab(self.page_review, 'Review')
         if hasattr(self, "page_importer"):
             self.tabs.addTab(self.page_importer, 'Import')
@@ -733,24 +735,20 @@ class MainWindow(QMainWindow):
         for shot in timeline.get("shots", []):
             preview_video = shot.get("preview_video")
             base_path = shot.get("base_path")
-            if not preview_video:
-                continue
-
-            preview_path = Path(preview_video)
-            if preview_path.is_absolute():
-                full_path = Path(self._review_files_io.convert_path(preview_video))
-            elif base_path:
-                full_path = Path(self._review_files_io.convert_path(base_path)) / preview_video
-            else:
-                full_path = None
-
-            if not full_path or not full_path.exists():
-                continue
+            full_path = None
+            if preview_video:
+                preview_path = Path(preview_video)
+                if preview_path.is_absolute():
+                    full_path = Path(self._review_files_io.convert_path(preview_video))
+                elif base_path:
+                    full_path = Path(self._review_files_io.convert_path(base_path)) / preview_video
+                if full_path and not full_path.exists():
+                    full_path = None
 
             shots.append({
                 "id": shot.get("id"),
                 "title": shot.get("title", f"Shot {shot.get('id', '')}"),
-                "video_path": str(full_path),
+                "video_path": str(full_path) if full_path else None,
                 "tasks": shot.get("tasks", []),
                 "base_path": base_path,
                 "preview_video": preview_video,

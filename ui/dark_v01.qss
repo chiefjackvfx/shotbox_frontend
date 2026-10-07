@@ -13,6 +13,146 @@ QWidget {
     font-size: 12px;
 }
 
+/* === REVIEW === */
+/* Review shares the app's controls; only its surfaces and compact sizes differ. */
+QWidget#review_selection_bar,
+QWidget#review_session_bar,
+QWidget#review_status_row,
+QWidget#review_annotation_toolbar,
+QWidget#playback_bar {
+    background-color: #1E2228;
+    border-bottom: 1px solid #2F3542;
+}
+
+QWidget#review_shot_header {
+    background-color: #1A1D23;
+    border-bottom: 1px solid #2F3542;
+}
+
+QFrame#review_ocio_panel {
+    background-color: #1E2228;
+    border-bottom: 1px solid #2F3542;
+}
+
+QWidget#review_ocio_file_row {
+    background-color: transparent;
+}
+
+QWidget#review_page QLabel#review_status {
+    background-color: #1E2228;
+    color: #9CA3AF;
+    padding: 0;
+    font-size: 11px;
+}
+
+QLabel#review_playback_status {
+    color: #FF6B35;
+    font-size: 11px;
+}
+
+QLabel#review_ocio_status {
+    color: #9CA3AF;
+    font-size: 11px;
+}
+
+QLabel#review_ocio_status[error="true"] {
+    color: #FF6B35;
+}
+
+QWidget#review_task_sidebar {
+    background-color: #1E2228;
+    border-right: 2px solid #2F3542;
+}
+
+QFrame#review_viewer_frame,
+QWidget#review_video_viewer {
+    background-color: #0A0A0A;
+}
+
+QWidget#review_navigation,
+QWidget#review_page QLabel,
+QWidget#review_task_sidebar QScrollArea,
+QWidget#review_task_sidebar QScrollArea > QWidget {
+    background-color: transparent;
+}
+
+QLabel#review_task_heading,
+QLabel#review_shot_title {
+    font-size: 13px;
+    font-weight: bold;
+}
+
+QLabel#review_shot_position,
+QLabel#review_shot_meta {
+    color: #9CA3AF;
+    font-size: 11px;
+}
+
+QWidget#review_page QPushButton[review_icon="true"] {
+    padding: 2px 6px;
+    border-radius: 2px;
+}
+
+QWidget#review_page QPushButton:checked {
+    background-color: #FF6B35;
+    border-color: #D85A28;
+    color: #FFFFFF;
+}
+
+QWidget#review_page QPushButton:checked:hover {
+    background-color: #FF8357;
+    border-color: #FF6B35;
+}
+
+QWidget#review_page QPushButton[review_swatch="true"] {
+    padding: 0;
+    border: 2px solid #404754;
+    border-radius: 2px;
+}
+
+QWidget#review_page QPushButton[review_swatch="true"]:hover {
+    border-color: #D4D4D4;
+}
+
+QWidget#review_page QPushButton[review_swatch="true"]:checked,
+QWidget#review_page QPushButton[review_swatch="true"]:checked:hover {
+    border: 3px solid #FF6B35;
+}
+
+QWidget#review_page QComboBox {
+    min-height: 16px;
+    padding: 4px 8px;
+}
+
+QWidget#review_page QSpinBox,
+QWidget#review_page QDoubleSpinBox {
+    background-color: #252931;
+    color: #D4D4D4;
+    border: 2px solid #404754;
+    border-radius: 2px;
+    padding: 3px 18px 3px 6px;
+    min-height: 16px;
+    font-size: 11px;
+}
+
+QWidget#review_page QSpinBox:hover,
+QWidget#review_page QSpinBox:focus,
+QWidget#review_page QDoubleSpinBox:hover,
+QWidget#review_page QDoubleSpinBox:focus {
+    border-color: #FF6B35;
+}
+
+QWidget#review_page QSpinBox:disabled,
+QWidget#review_page QDoubleSpinBox:disabled {
+    background-color: #252931;
+    border-color: #2F3542;
+    color: #6B7280;
+}
+
+QWidget#playback_bar QSlider::handle:horizontal {
+    margin: -5px 0;
+}
+
 /* === TABS === */
 QTabWidget::pane {
     border: 2px solid #2F3542;
@@ -1691,6 +1831,13 @@ QPushButton#btn_open_precomp[v02="true"] {
     padding: 3px 5px;
     font-size: 10px;
     border-width: 1px;
+}
+QPushButton#btn_open_nuke[v02="true"],
+QPushButton#btn_latest_render[v02="true"] {
+    font-size: 11px;
+    font-weight: normal;
+    text-transform: none;
+    letter-spacing: 0px;
 }
 QFrame#task_frame[v02="true"] {
     border: 1px solid #343E4A;

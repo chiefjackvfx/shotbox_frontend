@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import inspect
 import random
 import traceback
@@ -50,7 +51,7 @@ from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
 from flow_layout import FlowLayout
 from masonry_layout import MasonryLayout
-from v02_cards import apply_shot_width, set_shot_presentation, set_task_presentation
+from v02_cards import apply_shot_width, preferred_shot_width, set_shot_presentation, set_task_presentation
 from settings import normalize_shots_layout_mode
 from colourspace_defaults import COLOURSPACE_LIST
 from quick_view import QuickViewMedia
@@ -1840,21 +1841,27 @@ class ShotCard(QWidget):
         lock_owner = getattr(self, "_lock_owner_machine", None) or "unknown"
         lock_script = getattr(self, "_lock_script_name", None) or base_label
 
+        self.btn_open_nuke.elide_suffix = ""
         if lock_state == "foreign_active":
-            text = _compact_text(f"{lock_script} @ {lock_owner}", 20 if self._compact_mode else 48)
-            self.btn_open_nuke.setText(text or "Locked")
-            return
-        if lock_state == "mine":
+            text = f"{lock_script} @ {lock_owner}"
+            if self._compact_mode or not getattr(self, "_v02_grid", False):
+                text = _compact_text(text, 20 if self._compact_mode else 48)
+        elif lock_state == "mine":
             if self._compact_mode:
-                self.btn_open_nuke.setText("Locked by you")
+                text = "Locked by you"
             else:
-                self.btn_open_nuke.setText(_compact_text(f"{base_label} (You)", 48))
-            return
-
-        if self._compact_mode:
-            self.btn_open_nuke.setText("Nuke" if base_label != "No .nk file" else "No Nuke")
-            return
-        self.btn_open_nuke.setText(base_label)
+                text = f"{base_label} (You)"
+                if not getattr(self, "_v02_grid", False):
+                    text = _compact_text(text, 48)
+        elif self._compact_mode:
+            text = "Nuke" if base_label != "No .nk file" else "No Nuke"
+        else:
+            text = base_label
+        if getattr(self, "_v02_grid", False) and not self._compact_mode:
+            suffix = re.search(r"_v\d+\.nk(?: @ .+| \(You\))?$", text, re.IGNORECASE)
+            if suffix:
+                self.btn_open_nuke.elide_suffix = suffix.group(0)
+        self.btn_open_nuke.setText(text)
     
     def _set_nuke_button_tooltip(self):
         """Render modified-time tooltip for the current .nk file."""
@@ -2291,6 +2298,9 @@ class ShotCard(QWidget):
             task.set_v02_grid(
                 bool(enabled), max(1, getattr(self, "_v02_layout_width", 600) - 36),
             )
+
+    def preferred_layout_width(self) -> int:
+        return preferred_shot_width(self)
 
     def prepare_layout_width(self, width: int) -> None:
         if getattr(self, "_v02_grid", False) and width != getattr(self, "_v02_layout_width", None):

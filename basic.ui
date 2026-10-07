@@ -153,7 +153,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="comboBox_jobs"/>
+              <widget class="ReadableComboBox" name="comboBox_jobs"/>
              </item>
              <item>
               <widget class="QLabel" name="label_3">
@@ -553,6 +553,13 @@
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>ReadableComboBox</class>
+   <extends>QComboBox</extends>
+   <header>readable_combo_box</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

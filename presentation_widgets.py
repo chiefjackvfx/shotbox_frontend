@@ -71,6 +71,7 @@ class FlexibleLabel(QLabel):
 class FlexibleButton(QPushButton):
     v02 = False
     elide_mode = Qt.TextElideMode.ElideRight
+    elide_suffix = ""
     fit_text = False
     preferred_width_limit = None
 
@@ -90,6 +91,14 @@ class FlexibleButton(QPushButton):
         option = QStyleOptionButton()
         self.initStyleOption(option)
         content = self.style().subElementRect(QStyle.SubElement.SE_PushButtonContents, option, self)
-        option.text = option.fontMetrics.elidedText(option.text, self.elide_mode, max(0, content.width()))
+        available = max(0, content.width())
+        suffix = self.elide_suffix
+        suffix_width = option.fontMetrics.horizontalAdvance(suffix)
+        # Keep the version and lock owner intact when shortening a filename.
+        if suffix and option.text.endswith(suffix) and suffix_width + option.fontMetrics.horizontalAdvance("…") < available:
+            filename = option.text[:-len(suffix)]
+            option.text = option.fontMetrics.elidedText(filename, self.elide_mode, available - suffix_width) + suffix
+        else:
+            option.text = option.fontMetrics.elidedText(option.text, self.elide_mode, available)
         painter = QStylePainter(self)
         painter.drawControl(QStyle.ControlElement.CE_PushButton, option)

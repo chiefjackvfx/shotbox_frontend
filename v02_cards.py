@@ -1,6 +1,6 @@
 """Reversible arrangement of existing shot and task controls."""
 
-from PyQt6.QtWidgets import QBoxLayout, QHBoxLayout, QLayout, QSizePolicy
+from PyQt6.QtWidgets import QBoxLayout, QHBoxLayout, QLayout, QPushButton, QSizePolicy
 
 from presentation_widgets import FlexibleButton, FlexibleLabel
 
@@ -185,6 +185,34 @@ def set_shot_presentation(card, enabled):
     card.set_compact_mode(card._compact_mode)
     card.refresh_file_state_tooltips()
     card.updateGeometry()
+
+
+def preferred_shot_width(card):
+    """Measure a readable width independently of the current card geometry."""
+    # The file row reserves half its space for each filename.
+    files_width = 2 * max(
+        QPushButton.sizeHint(button).width()
+        for button in (card.btn_open_nuke, card.btn_latest_render)
+    ) + 6
+    if not card._compact_mode and card._thumbnails_enabled:
+        files_width += card._base_thumb_target_width + 10
+    header_widgets = (
+        card.label_shot, card.label_frame_range, card.label_edit_inpoint,
+        card.label_edit_outpoint, card.btn_hide_shot, card.btn_colour_none,
+        card.btn_green, card.btn_amber, card.btn_red,
+    )
+    header_widths = []
+    for widget in header_widgets:
+        if widget.isHidden():
+            continue
+        if isinstance(widget, FlexibleLabel):
+            header_widths.append(widget.fontMetrics().horizontalAdvance(widget.text()))
+        else:
+            header_widths.append(min(
+                widget.maximumWidth(), max(widget.minimumWidth(), widget.sizeHint().width())
+            ))
+    header_width = sum(header_widths) + 6 * max(0, len(header_widths) - 1)
+    return max(720, files_width + 36, header_width + 36)
 
 
 def apply_shot_width(card, width):

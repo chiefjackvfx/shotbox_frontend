@@ -407,6 +407,27 @@ class TaskMaterializationTests(unittest.TestCase):
             harness.deleteLater()
             self.app.processEvents()
 
+    def test_task_name_search_materializes_only_matching_tasks(self):
+        harness = MaterializationHarness(self._shots())
+        try:
+            harness.Search_bar.setText("paint")
+            harness._apply_filters(force=True)
+            self.app.processEvents()
+
+            self.assertEqual(harness.all_task_widget_ids(), [2])
+            self.assertEqual(harness.Label_results.text(), "1 results")
+
+            harness.Search_bar.clear()
+            harness._apply_filters(force=True)
+            self.app.processEvents()
+
+            self.assertEqual(sorted(harness.all_task_widget_ids()), [1, 2, 3, 5, 6])
+            self.assertEqual(harness.Label_results.text(), "3 results")
+        finally:
+            harness.close()
+            harness.deleteLater()
+            self.app.processEvents()
+
     def test_force_apply_materializes_visible_tasks_even_with_cached_signature(self):
         harness = MaterializationHarness(self._shots())
         try:
