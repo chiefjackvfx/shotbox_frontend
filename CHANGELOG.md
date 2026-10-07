@@ -6,46 +6,19 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-06T10:26:45+01:00] Added range preloading, cache progress, and saved RAM budgets.
-- [2026-10-05T16:33:04+01:00] Added Review resolution choices for faster colour-managed playback.
-- [2026-10-05T16:12:12+01:00] Added shared-screen presentation, shot queue, and timeline playback.
-- [2026-10-05T16:12:12+01:00] Added bounded frame caching and measured playback status.
-- [2026-10-05T15:20:31+01:00] Added render/preview play toggle with documentation and regression tests.
-- [2026-10-05T14:52:04+01:00] Added native MOV and EXR render playback in Review.
-- [2026-10-05T14:52:04+01:00] Added saved OCIO configuration, input, display, view, and looks.
-- [2026-10-05T14:52:04+01:00] Added adjustable Review playback rate without changing source frames.
-- [2026-10-05T14:26:34+01:00] Added Review click-to-play/pause with drawing and thumbnail interaction tests.
-
 ### Changed
-
-- [2026-10-06T10:26:45+01:00] Documented caching and tested playback, retries, and selector readability.
-- [2026-10-05T17:15:40+01:00] Added task search regression coverage, including lazy task loading.
-- [2026-10-05T16:42:27+01:00] Removed Review notes, frame marks, shortcuts, and saved settings.
-- [2026-10-05T16:42:27+01:00] Updated Review documentation and playback regression coverage.
-- [2026-10-05T16:33:04+01:00] Documented resolution choices; tested decoding, concurrent buffering, and playback.
-- [2026-10-05T16:12:12+01:00] Documented group review and tested presentation, navigation, caching.
-- [2026-10-05T15:41:41+01:00] Tested shared widths, hidden cards, and automatic filename resizing.
-- [2026-10-05T15:26:24+01:00] Filtered Review versions by render/preview mode; updated regression coverage.
-- [2026-10-05T15:17:16+01:00] Matched grid card widths to widest content without stretching.
-- [2026-10-05T15:00:23+01:00] Documented version comparison; tested paused time and playback state.
-- [2026-10-05T14:52:04+01:00] Documented render review; added OpenColorIO dependency and regression tests.
-- [2026-10-05T14:26:34+01:00] Matched Review panels, controls, and icons to Shotbox styling.
 
 ### Fixed
 
-- [2026-10-06T11:35:47+01:00] Sized main Jobs selector to names and dropdown controls.
-- [2026-10-06T10:26:45+01:00] Played cached frames without repeated decoding or colour transforms.
-- [2026-10-06T10:26:45+01:00] Expanded Review selectors; preserved version suffixes and dropdown keyboard navigation.
-- [2026-10-05T17:15:40+01:00] Matched search against task names alongside shot names.
-- [2026-10-05T16:33:04+01:00] Accelerated EXR reads, pixel conversion, buffering, and movie decoding.
-- [2026-10-05T16:33:04+01:00] Stopped copying scaled images every playback frame.
-- [2026-10-05T16:12:12+01:00] Preserved render mode, comparison ranges, and accurate source frame counters.
-- [2026-10-05T16:12:12+01:00] Kept presentation drawings aligned and keyboard controls confined to Review.
-- [2026-10-05T16:12:12+01:00] Fixed cached movie resumption; disabled unavailable annotated movie export.
-- [2026-10-05T15:11:30+01:00] Improved filename button readability with natural case and spacing.
-- [2026-10-05T15:11:30+01:00] Preserved Nuke version numbers and lock owners during truncation.
-- [2026-10-05T15:00:23+01:00] Preserved playback time and state between Review media versions.
-- [2026-10-05T14:52:04+01:00] Included render-only shots and cleared stale media during navigation.
+## 4.4.2 - 2026-10-07
+
+### Added
+
+- better review page
+
+### Fixed
+
+- small ui fixes
 
 ## 4.4.1 - 2026-10-05
 
