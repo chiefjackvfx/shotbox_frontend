@@ -9,7 +9,7 @@ import unittest
 from unittest import mock
 
 from PyQt6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QPalette, QPixmap
 from PyQt6.QtWidgets import QApplication, QBoxLayout, QScrollArea, QWidget
 
 from flow_layout import FlowLayout
@@ -50,21 +50,21 @@ class MasonryLayoutTests(unittest.TestCase):
     def place(self, width):
         self.layout.setGeometry(QRect(0, 0, width, 1000))
 
-    def test_equal_widths_leave_spare_space_and_pack_shortest_column(self):
+    def test_columns_fill_width_and_preserve_rows_with_mixed_heights(self):
         self.place(1450)
-        self.assertEqual([card.width() for card in self.cards], [720] * 4)
-        self.assertEqual([(card.x(), card.y()) for card in self.cards], [(0, 0), (728, 0), (728, 108), (728, 166)])
-        self.assertEqual(self.layout.heightForWidth(1450), 246)
+        self.assertEqual([card.width() for card in self.cards], [721] * 4)
+        self.assertEqual([(card.x(), card.y()) for card in self.cards], [(0, 0), (729, 0), (0, 208), (729, 208)])
+        self.assertEqual(self.layout.heightForWidth(1450), 288)
 
     def test_hidden_cards_do_not_leave_space_and_sort_is_deterministic(self):
         self.cards[1].hide()
         self.place(1450)
         self.assertEqual(self.cards[2].y(), 0)
-        self.assertEqual(self.cards[3].y(), 58)
+        self.assertEqual(self.cards[3].y(), 208)
         widgets._ensure_order(self.layout, ["shot-3", "shot-0", "shot-2", "shot-1"])
         self.place(1450)
         self.assertEqual((self.cards[3].x(), self.cards[3].y()), (0, 0))
-        self.assertEqual((self.cards[0].x(), self.cards[0].y()), (728, 0))
+        self.assertEqual((self.cards[0].x(), self.cards[0].y()), (729, 0))
 
     def test_column_breakpoints_spacing_and_minimum_height(self):
         self.place(1447)
@@ -72,10 +72,10 @@ class MasonryLayoutTests(unittest.TestCase):
         self.place(1448)
         self.assertEqual(self.cards[1].x(), 728)
         self.cards[0].setMinimumHeight(300)
-        self.assertEqual(self.layout.heightForWidth(1448), 300)
+        self.assertEqual(self.layout.heightForWidth(1448), 388)
         self.layout.setSpacing(20)
         self.place(1460)
-        self.assertEqual(self.cards[2].y(), 120)
+        self.assertEqual(self.cards[2].y(), 320)
         self.place(320)
         self.assertEqual(self.cards[0].width(), 320)
 
@@ -84,10 +84,21 @@ class MasonryLayoutTests(unittest.TestCase):
         self.assertIs(self.layout.itemAt(0).widget(), self.cards[3])
         self.place(1451)
         self.assertLessEqual(abs(self.cards[3].width() - self.cards[0].width()), 1)
-        self.assertEqual(self.cards[0].geometry().right(), 1447)
+        self.assertEqual(self.cards[0].geometry().right(), 1450)
         for card in self.cards:
             self.layout.removeWidget(card)
         self.assertEqual(self.layout.heightForWidth(100), 0)
+
+    def test_three_columns_honour_margins_origin_and_partial_last_row(self):
+        self.layout.setContentsMargins(10, 12, 14, 16)
+        self.layout.setGeometry(QRect(30, 40, 2559, 1000))
+        first, second, third, fourth = self.cards
+        self.assertEqual([card.y() for card in self.cards[:3]], [52] * 3)
+        self.assertEqual(first.x(), 40)
+        self.assertEqual(third.geometry().right(), 30 + 2559 - 14 - 1)
+        self.assertEqual(fourth.x(), first.x())
+        self.assertEqual(fourth.y(), first.y() + 200 + 8)
+        self.assertEqual(self.layout.heightForWidth(2559), 12 + 200 + 8 + 80 + 16)
 
 
 class FakeAPI:
@@ -193,12 +204,12 @@ class V02CardTests(unittest.TestCase):
         self.assertFalse(card.label_notes.wordWrap())
         self.assertEqual(self.api.writes, [])
 
-    def test_real_cards_pack_without_horizontal_overflow_and_reflow_narrowly(self):
+    def test_real_cards_follow_rows_without_horizontal_overflow_and_reflow_narrowly(self):
         self.layout_v02()
         widths = [card.width() for card in self.cards]
-        self.assertEqual(widths, [720] * 3)
-        self.assertEqual(self.cards[2].x(), self.cards[1].x())
-        self.assertLess(self.cards[2].y(), self.cards[0].height() + 8)
+        self.assertEqual(widths, [721] * 3)
+        self.assertEqual(self.cards[2].x(), self.cards[0].x())
+        self.assertEqual(self.cards[2].y(), max(card.height() for card in self.cards[:2]) + 8)
         card = self.cards[0]
         for width in (700, 600, 519, 400, 320, 600):
             self.timeline.shots_layout.setGeometry(QRect(0, 0, width, 3000))
@@ -240,7 +251,7 @@ class V02CardTests(unittest.TestCase):
         self.app.processEvents()
         self.assertIs(self.timeline.shots_layout.parentWidget(), self.timeline.frame)
 
-    def test_widest_content_sets_shared_width_without_filling_the_row(self):
+    def test_long_filenames_do_not_change_columns_and_visible_cards_fill_width(self):
         original_style = self.app.styleSheet()
         self.addCleanup(self.app.setStyleSheet, original_style)
         self.app.setStyleSheet((Path(__file__).resolve().parents[1] / "ui" / "dark_v01.qss").read_text())
@@ -248,22 +259,23 @@ class V02CardTests(unittest.TestCase):
         card = self.cards[0]
         filename = "winter010_" + "comp_" * 12 + "v002.nk"
         card._set_nuke_file_state(file_path="/tmp/" + filename, file_name=filename, file_mtime=None)
-        widest = max(candidate.preferred_layout_width() for candidate in self.cards)
-        self.assertGreater(widest, 720)
-        for viewport in (widest * 2 + 108, widest * 3 + 216):
+        target_width = max(candidate.preferred_layout_width() for candidate in self.cards)
+        self.assertEqual(card.preferred_layout_width(), self.cards[1].preferred_layout_width())
+        for columns in (2, 3):
+            viewport = target_width * columns + 8 * (columns - 1) + 108
             self.timeline.shots_layout.setGeometry(QRect(0, 0, viewport, 5000))
-            self.assertEqual([candidate.width() for candidate in self.cards], [widest] * 3)
-            self.assertLess(max(candidate.geometry().right() for candidate in self.cards), viewport - 1)
+            self.assertLessEqual(max(candidate.width() for candidate in self.cards) - min(candidate.width() for candidate in self.cards), 1)
+            self.assertEqual(max(candidate.geometry().right() for candidate in self.cards), viewport - 1)
+        self.assertEqual(card.btn_open_nuke.text(), filename)
+        self.assertIn(filename, card.btn_open_nuke.toolTip())
         card.hide()
         self.timeline.shots_layout.setGeometry(QRect(0, 0, viewport, 5000))
-        visible_width = max(candidate.preferred_layout_width() for candidate in self.cards[1:])
-        self.assertLess(visible_width, widest)
-        self.assertEqual([candidate.width() for candidate in self.cards[1:]], [visible_width] * 2)
+        self.assertEqual(max(candidate.geometry().right() for candidate in self.cards[1:]), viewport - 1)
         self.cards[2].hide()
         self.timeline.shots_layout.setGeometry(QRect(0, 0, viewport, 5000))
-        self.assertEqual(self.cards[1].width(), visible_width)
+        self.assertEqual(self.cards[1].width(), viewport)
 
-    def test_changed_filename_updates_shared_width_without_window_resize(self):
+    def test_changed_filename_keeps_column_width_without_window_resize(self):
         self.timeline.set_layout_mode("v02_grid", 8)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -279,14 +291,13 @@ class V02CardTests(unittest.TestCase):
         card._set_nuke_file_state(file_path="/tmp/" + filename, file_name=filename, file_mtime=None)
         for _ in range(10):
             self.app.processEvents()
-        self.assertGreater(card.width(), original_width)
-        shared_width = max(candidate.preferred_layout_width() for candidate in self.cards)
-        self.assertEqual([candidate.width() for candidate in self.cards], [shared_width] * 3)
+        self.assertEqual(card.width(), original_width)
+        self.assertLessEqual(max(candidate.width() for candidate in self.cards) - min(candidate.width() for candidate in self.cards), 1)
         self.assertEqual(scroll.horizontalScrollBar().maximum(), 0)
         card._set_nuke_file_state(file_path=None, file_name=None, file_mtime=None)
         for _ in range(10):
             self.app.processEvents()
-        self.assertEqual([candidate.width() for candidate in self.cards], [original_width] * 3)
+        self.assertEqual(card.width(), original_width)
 
     def test_height_queries_never_resize_thumbnails_or_rebuild_task_rows(self):
         self.layout_v02()
@@ -304,6 +315,57 @@ class V02CardTests(unittest.TestCase):
         self.assertEqual(card.label_thumbnail.size(), thumbnail_size)
         self.assertEqual(card._thumb_scale_signature, signature)
         self.assertIs(task.task_layout.itemAt(0).layout(), first_row)
+
+    def test_readable_controls_fit_after_resizing_and_compact_switches(self):
+        original_style = self.app.styleSheet()
+        self.addCleanup(self.app.setStyleSheet, original_style)
+        self.app.setStyleSheet((Path(__file__).resolve().parents[1] / "ui" / "dark_v01.qss").read_text())
+        self.layout_v02(720)
+        card = self.cards[0]
+        task = next(iter(card._task_widgets_by_id.values()))
+        task._show_inline_title_editor(True)
+        task.edit_title_inline.setText("Unsaved cleanup title")
+        task.edit_notes_inline.setText("Unsaved cleanup note")
+        for compact in (False, True, False):
+            self.timeline.set_compact_mode(compact)
+            for width in (960, 720, 600, 480, 320):
+                with self.subTest(compact=compact, width=width):
+                    self.timeline.resize(width + 40, 1600)
+                    for _ in range(4):
+                        self.app.processEvents()
+                    self.timeline.shots_layout.setGeometry(QRect(0, 0, width, 5000))
+                    card.layout().activate()
+                    task.layout().activate()
+                    task.task_layout.activate()
+                    self.assertGreaterEqual(task.btn_task_title.font().pixelSize(), 13)
+                    self.assertGreaterEqual(card.label_notes.font().pixelSize(), 12)
+                    for control in (task.edit_notes_inline, task.btn_status, task.btn_assigned,
+                                    task.btn_priority, task.btn_budget_hours, task.btn_hide_task, task.btn_delete_task):
+                        self.assertGreaterEqual(control.font().pixelSize(), 12)
+                        self.assertGreaterEqual(control.height(), 24)
+                        self.assertGreaterEqual(control.mapTo(task, control.rect().topLeft()).x(), 0)
+                        self.assertLess(control.mapTo(task, control.rect().bottomRight()).x(), task.width())
+                        self.assertLess(control.mapTo(task, control.rect().bottomRight()).y(), task.height())
+                    self.assertGreaterEqual(task.title_stack.width(), 100)
+                    self.assertGreaterEqual(task.edit_notes_inline.width(), 80)
+                    self.assertEqual(task.edit_notes_inline.palette().color(QPalette.ColorRole.PlaceholderText).name(), "#afbbcb")
+                    self.assertTrue(task._title_edit_active)
+                    self.assertEqual(task.edit_title_inline.text(), "Unsaved cleanup title")
+                    self.assertEqual(task.edit_notes_inline.text(), "Unsaved cleanup note")
+        self.assertEqual(self.api.writes, [])
+
+    def test_preview_sizes_recompute_columns_without_leaving_a_right_gutter(self):
+        self.layout_v02()
+        for thumbnail_width in (80, 160, 240, 360, 160):
+            for card in self.cards:
+                card.set_thumbnail_width(thumbnail_width)
+            for _ in range(4):
+                self.app.processEvents()
+            self.timeline.shots_layout.setGeometry(QRect(0, 0, 2400, 5000))
+            self.assertEqual(max(card.geometry().right() for card in self.cards), 2399)
+            positions = [(card.y(), card.x()) for card in self.cards]
+            self.assertEqual(positions, sorted(positions))
+        self.assertEqual(self.api.writes, [])
 
     def test_compact_header_keeps_frame_values_inline_and_reflows_long_titles(self):
         self.layout_v02()

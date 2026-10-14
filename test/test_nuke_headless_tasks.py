@@ -243,6 +243,37 @@ class FindNukeExecutableTests(unittest.TestCase):
 
 
 class PreviewPathLogicTests(unittest.TestCase):
+    def test_comp_output_has_independent_version_and_existence_from_plates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previews = Path(directory) / module.PreviewConfig.PREVIEW_SUBDIR
+            previews.mkdir(parents=True)
+            (previews / "sho010_plate_01_v001.mp4").touch()
+            (previews / "sho010_plate_02_v009.mp4").touch()
+            output, version, exists = module.build_preview_output_path(directory, "sho010", version=1)
+            self.assertEqual(output.name, "sho010_v001.mp4")
+            self.assertFalse(exists)
+            output, version, exists = module.build_preview_output_path(directory, "sho010")
+            self.assertEqual(version, 1)
+
+    def test_comp_overwrite_preserves_same_version_plate_previews(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previews = Path(directory) / module.PreviewConfig.PREVIEW_SUBDIR
+            previews.mkdir(parents=True)
+            plate = previews / "sho010_plate_01_v001.mp4"
+            comp = previews / "sho010_v001.mp4"
+            legacy = previews / "sho010_v01_preview.mp4"
+            plate.write_bytes(b"plate")
+            comp.write_bytes(b"comp")
+            legacy.write_bytes(b"legacy comp")
+            generator = module.PreviewGenerator.__new__(module.PreviewGenerator)
+            with mock.patch.object(generator, "generate_preview", return_value=module.PreviewResult(success=True)):
+                generator.generate_preview_with_overwrite(
+                    input_path="/source.mov", shot_dir=directory, shot_name="sho010", version=1,
+                )
+            self.assertEqual(plate.read_bytes(), b"plate")
+            self.assertFalse(comp.exists())
+            self.assertFalse(legacy.exists())
+
     def test_preview_progress_marker_round_trips(self):
         marker = module.format_preview_progress(12, 48)
 

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import io
+from pathlib import Path
+import sys
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
-import pyqt_frontend.nuke_detector as nuke_detector
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import nuke_detector
 
 
 class FakeProc:
@@ -36,6 +39,36 @@ class FakeProc:
 
 
 class NukeDetectorTests(unittest.TestCase):
+    def test_strict_detection_rejects_unknown_process_owner(self):
+        proc = FakeProc(pid=1001, username="", cmdline=["Nuke15.0", "/show/shot.nk"])
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]):
+            with self.assertRaisesRegex(RuntimeError, "owner"):
+                nuke_detector.detect_open_nuke_scripts(strict=True)
+
+    def test_strict_detection_cannot_guess_relative_script_directory(self):
+        proc = FakeProc(pid=1001, cmdline=["Nuke15.0", "shot.nk"])
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"), \
+                patch.object(proc, "cwd", side_effect=nuke_detector.psutil.AccessDenied(1001)):
+            with self.assertRaises(nuke_detector.psutil.AccessDenied):
+                nuke_detector.detect_open_nuke_scripts(strict=True)
+
+    def test_strict_detection_reports_inaccessible_nuke_process(self):
+        proc = FakeProc(pid=1001)
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"), \
+                patch.object(proc, "cmdline", side_effect=nuke_detector.psutil.AccessDenied(1001)):
+            self.assertEqual(nuke_detector.detect_open_nuke_scripts(), [])
+            with self.assertRaises(nuke_detector.psutil.AccessDenied):
+                nuke_detector.detect_open_nuke_scripts(strict=True)
+
+    def test_strict_detection_reports_unidentified_running_session(self):
+        proc = FakeProc(pid=1001, cmdline=["Nuke15.0"])
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"):
+            with self.assertRaisesRegex(RuntimeError, "Could not identify"):
+                nuke_detector.detect_open_nuke_scripts(strict=True)
+
     def test_cmdline_detection_preferred(self):
         proc = FakeProc(
             pid=1001,

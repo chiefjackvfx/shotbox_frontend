@@ -158,7 +158,7 @@
              <item>
               <widget class="QLabel" name="label_3">
                <property name="text">
-                <string>Ui scale</string>
+                <string>UI scale</string>
                </property>
               </widget>
              </item>
@@ -168,7 +168,7 @@
              <item>
               <widget class="QCheckBox" name="checkBox_refresh">
                <property name="text">
-                <string>auto refresh</string>
+                <string>Auto refresh</string>
                </property>
                <property name="tristate">
                 <bool>false</bool>
@@ -300,7 +300,7 @@
              <item>
               <widget class="QCheckBox" name="checkBox_hidden_shot">
                <property name="text">
-                <string>ShowHiddenShot</string>
+                <string>Hidden shots</string>
                </property>
                <property name="tristate">
                 <bool>false</bool>
@@ -310,34 +310,34 @@
              <item>
               <widget class="QCheckBox" name="checkBox_hidden_tasks">
                <property name="text">
-                <string>ShowHiddenTasks</string>
+                <string>Hidden tasks</string>
                </property>
               </widget>
              </item>
              <item>
               <widget class="QLabel" name="label_sort">
                <property name="text">
-                <string>s</string>
+                <string>Sort</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="comboBox_sort"/>
+              <widget class="ReadableComboBox" name="comboBox_sort"/>
              </item>
              <item>
               <widget class="QLabel" name="label">
                <property name="text">
-                <string>a</string>
+                <string>Artist</string>
                </property>
               </widget>
              </item>
              <item>
-              <widget class="QComboBox" name="comboBox_sort_artist"/>
+              <widget class="ReadableComboBox" name="comboBox_sort_artist"/>
              </item>
              <item>
               <widget class="QLabel" name="label_2">
                <property name="text">
-                <string>s</string>
+                <string>Status</string>
                </property>
               </widget>
              </item>
@@ -346,6 +346,9 @@
              </item>
              <item>
               <widget class="QLineEdit" name="Search_bar">
+               <property name="placeholderText">
+                <string>Search shots / tasks</string>
+               </property>
                <property name="maximumSize">
                 <size>
                  <width>150</width>

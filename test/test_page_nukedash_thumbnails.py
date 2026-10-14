@@ -105,7 +105,9 @@ class NukeDashThumbnailTests(unittest.TestCase):
         self.assertTrue(page.btn_update_thumbnails.isEnabled())
         self.assertTrue(page.btn_make_previews.isEnabled())
         self.assertIsNone(page._thumbnail_batch_worker)
-        self.assertEqual(page.set_auto_refresh_paused.call_args_list, [mock.call(True), mock.call(False)])
+        self.assertEqual(page.set_auto_refresh_paused.call_args_list, [
+            mock.call(True, reason="thumbnails"), mock.call(False, reason="thumbnails"),
+        ])
         for index, card in enumerate(page.cards, start=1):
             self.assertEqual(card.data["thumbnail"], f"/media/{index}.png")
             cached = page._jobs_by_id[10]["timelines"][index - 1]["shots"][0]

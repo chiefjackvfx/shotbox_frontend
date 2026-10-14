@@ -31,6 +31,40 @@ class FakeFolders:
 
 
 class PreviewTaskCollectionTests(unittest.TestCase):
+    def test_overwrite_queues_existing_plate_and_comp_previews(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previews = Path(directory) / "renders/precomp/previews"
+            previews.mkdir(parents=True)
+            (previews / "sho010_plate_01_v001.mp4").touch()
+            (previews / "sho010_v003.mp4").touch()
+            shot = {"id": 7, "title": "sho010", "base_path": directory, "original_clip": "/plate.mov"}
+            folders = FakeFolders({directory: {"version": 3, "type": "mov", "render_path": "/comp.mov"}})
+            harness = _PreviewTaskHarness()
+            self.assertEqual(harness._collect_preview_tasks(self._job_payload(shot), folders), [])
+            tasks = harness._collect_preview_tasks(self._job_payload(shot), folders, overwrite=True)
+            self.assertEqual([task["source_type"] for task in tasks], ["original_clip", "render"])
+
+    def test_plate_preview_does_not_block_same_version_comp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previews = Path(directory) / "renders/precomp/previews"
+            previews.mkdir(parents=True)
+            (previews / "sho010_plate_01_v001.mp4").touch()
+            shot = {"id": 7, "title": "sho010", "base_path": directory, "original_clip": "/plate.mov"}
+            folders = FakeFolders({directory: {"version": 1, "type": "mov", "render_path": "/comp.mov"}})
+            tasks = _PreviewTaskHarness()._collect_preview_tasks(self._job_payload(shot), folders)
+            self.assertEqual([task["source_type"] for task in tasks], ["render"])
+
+    def test_multiple_plates_are_queued_and_existing_plates_are_independent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previews = Path(directory) / "renders/precomp/previews"
+            previews.mkdir(parents=True)
+            (previews / "sho010_plate_01_v001.mp4").touch()
+            shot = {"id": 7, "title": "sho010", "base_path": directory,
+                    "original_clip": "/plateA.mov", "original_clips": ["/plateA.mov", "/plateB.mov"]}
+            tasks = _PreviewTaskHarness()._collect_preview_tasks(self._job_payload(shot), FakeFolders())
+            self.assertEqual([(task["source_path"], task["plate_name"]) for task in tasks],
+                             [("/plateB.mov", "plate_02")])
+
     def _job_payload(self, shot: dict) -> dict:
         return {
             "id": 1,

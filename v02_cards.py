@@ -188,31 +188,13 @@ def set_shot_presentation(card, enabled):
 
 
 def preferred_shot_width(card):
-    """Measure a readable width independently of the current card geometry."""
-    # The file row reserves half its space for each filename.
-    files_width = 2 * max(
-        QPushButton.sizeHint(button).width()
-        for button in (card.btn_open_nuke, card.btn_latest_render)
-    ) + 6
-    if not card._compact_mode and card._thumbnails_enabled:
-        files_width += card._base_thumb_target_width + 10
-    header_widgets = (
-        card.label_shot, card.label_frame_range, card.label_edit_inpoint,
-        card.label_edit_outpoint, card.btn_hide_shot, card.btn_colour_none,
-        card.btn_green, card.btn_amber, card.btn_red,
+    """Choose readable columns from font and preview sizes, not filenames."""
+    text_width = card.label_notes.fontMetrics().horizontalAdvance("0123456789") * 9 + 36
+    preview_width = (
+        card._base_thumb_target_width
+        if not card._compact_mode and card._thumbnails_enabled else 0
     )
-    header_widths = []
-    for widget in header_widgets:
-        if widget.isHidden():
-            continue
-        if isinstance(widget, FlexibleLabel):
-            header_widths.append(widget.fontMetrics().horizontalAdvance(widget.text()))
-        else:
-            header_widths.append(min(
-                widget.maximumWidth(), max(widget.minimumWidth(), widget.sizeHint().width())
-            ))
-    header_width = sum(header_widths) + 6 * max(0, len(header_widths) - 1)
-    return max(720, files_width + 36, header_width + 36)
+    return max(720, text_width, preview_width + 480)
 
 
 def apply_shot_width(card, width):
@@ -251,14 +233,19 @@ def set_task_presentation(task, enabled, width=600):
             if enabled:
                 task._v02_task_box = BoxSnapshot(task.task_layout)
                 task._legacy_title_policy = task.title_stack.sizePolicy()
+                task._legacy_title_minimum_width = task.title_stack.minimumWidth()
                 task._legacy_progress_size = task.check_done_task.size()
+                task._legacy_action_sizes = (task.btn_hide_task.size(), task.btn_delete_task.size())
             else:
                 clear_box(task.task_layout)
                 task._v02_task_box.restore()
                 del task._v02_task_box
                 task._v02_task_arrangement = None
                 task.title_stack.setSizePolicy(task._legacy_title_policy)
+                task.title_stack.setMinimumWidth(task._legacy_title_minimum_width)
                 task.check_done_task.setFixedSize(task._legacy_progress_size)
+                for control, size in zip((task.btn_hide_task, task.btn_delete_task), task._legacy_action_sizes):
+                    control.setFixedSize(size)
         mark_v02(task, enabled)
         task.task_frame.setProperty("v02", "true" if enabled else "false")
         task.task_frame.style().unpolish(task.task_frame)
@@ -274,8 +261,13 @@ def set_task_presentation(task, enabled, width=600):
 
     if not enabled or not task._is_checklist_presentation():
         return
-    narrow = width < 420
-    single_line = width >= 520
+    # Reserve legible title/note fields before deciding whether controls fit.
+    column_width = max(90, task.btn_status.fontMetrics().horizontalAdvance("Unassigned") + 16)
+    title_width = max(100, task.btn_task_title.fontMetrics().horizontalAdvance("Cleanup task"))
+    notes_width = max(80, task.edit_notes_inline.fontMetrics().horizontalAdvance("Add note...") + 16)
+    fixed_width = sum(QPushButton.sizeHint(control).width() for control in (task.btn_priority, task.btn_budget_hours))
+    single_line = width >= 20 + 48 + fixed_width + 2 * column_width + title_width + notes_width + 8 * 4 + 16
+    narrow = width < max(420, 20 + title_width + 2 * column_width + 3 * 6 + 16)
     arrangement = (narrow, single_line)
     if changed or arrangement != getattr(task, "_v02_task_arrangement", None):
         task._v02_task_arrangement = arrangement
@@ -290,14 +282,16 @@ def set_task_presentation(task, enabled, width=600):
             task.task_layout.setStretch(2, 1)
         else:
             arrange_task_lines(task, narrow)
-    task.task_layout.setContentsMargins(6, 3, 6, 3)
+    task.task_layout.setContentsMargins(6, 4, 6, 4)
     task.check_done_task.setFixedSize(20, 20)
+    for control in (task.btn_hide_task, task.btn_delete_task):
+        control.setFixedSize(24, 24)
     task.edit_title_inline.setMinimumWidth(0)
-    task.edit_notes_inline.setMinimumWidth(0)
+    task.title_stack.setMinimumWidth(min(title_width, max(1, width - 32)))
+    task.edit_notes_inline.setMinimumWidth(min(notes_width, max(1, width - 32)))
     available = max(50, (width - 32) // 2)
     if single_line:
         # Keep status/artist columns aligned across mixed task statuses.
-        column_width = max(80, min(100, width // 7))
         task.btn_status.setMinimumWidth(column_width)
         task.btn_assigned.setMinimumWidth(column_width)
     else:

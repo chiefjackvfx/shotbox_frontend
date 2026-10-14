@@ -39,7 +39,7 @@ def _normalize_path_for_compare(path: str) -> str:
     return normed
 
 
-def _normalize_path(path: str, proc: psutil.Process | None = None) -> str:
+def _normalize_path(path: str, proc: psutil.Process | None = None, *, strict: bool = False) -> str:
     cleaned = str(path or "").strip().strip('"').strip("'")
     if not cleaned:
         return ""
@@ -52,6 +52,8 @@ def _normalize_path(path: str, proc: psutil.Process | None = None) -> str:
         try:
             cwd = proc.cwd() or ""
         except Exception:
+            if strict:
+                raise
             cwd = ""
 
     if cwd:
@@ -86,75 +88,89 @@ def _username_matches(proc_username: str, current_username: str) -> bool:
     return proc_user == current_user
 
 
-def _iter_nuke_processes(current_user_only: bool = True) -> Iterable[psutil.Process]:
+def _iter_nuke_processes(current_user_only: bool = True, *, strict: bool = False) -> Iterable[psutil.Process]:
     current_user = getpass.getuser()
     for proc in psutil.process_iter(["pid", "name", "username"]):
         try:
             name = proc.info.get("name", "") or ""
+            if strict and not name:
+                raise RuntimeError("Could not identify a running process")
             if not _is_nuke_process_name(name):
                 continue
 
             if current_user_only:
                 proc_username = proc.info.get("username", "") or ""
+                if strict and not proc_username:
+                    raise RuntimeError(f"Could not identify the owner of Nuke process {proc.pid}")
                 if not _username_matches(proc_username, current_user):
                     continue
             yield proc
-        except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied):
+        except (psutil.NoSuchProcess, psutil.ZombieProcess):
             continue
+        except psutil.AccessDenied:
+            if strict:
+                raise
 
 
-def _extract_nk_paths_from_cmdline(proc: psutil.Process) -> list[str]:
+def _extract_nk_paths_from_cmdline(proc: psutil.Process, *, strict: bool = False) -> list[str]:
     try:
         cmdline = proc.cmdline()
-    except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied):
+    except (psutil.NoSuchProcess, psutil.ZombieProcess):
         return []
     except Exception:
+        if strict:
+            raise
         return []
 
     out: list[str] = []
     for arg in cmdline:
         if _looks_like_nk(arg):
-            normalized = _normalize_path(arg, proc=proc)
+            normalized = _normalize_path(arg, proc=proc, strict=strict)
             if normalized:
                 out.append(normalized)
     return out
 
 
-def _extract_nk_paths_from_open_files(proc: psutil.Process) -> list[str]:
+def _extract_nk_paths_from_open_files(proc: psutil.Process, *, strict: bool = False) -> list[str]:
     try:
         files = proc.open_files()
-    except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied):
+    except (psutil.NoSuchProcess, psutil.ZombieProcess):
         return []
     except Exception:
+        if strict:
+            raise
         return []
 
     out: list[str] = []
     for item in files:
         file_path = getattr(item, "path", "")
         if _looks_like_nk(file_path):
-            normalized = _normalize_path(file_path, proc=proc)
+            normalized = _normalize_path(file_path, proc=proc, strict=strict)
             if normalized:
                 out.append(normalized)
     return out
 
 
-def detect_open_nuke_scripts(current_user_only: bool = True) -> list[NukeScriptDetection]:
+def detect_open_nuke_scripts(current_user_only: bool = True, *, strict: bool = False) -> list[NukeScriptDetection]:
     machine_name = socket.gethostname() or "unknown-machine"
     detected_at_utc = _now_utc_stamp()
 
     detections: list[NukeScriptDetection] = []
     seen: set[tuple[int, str]] = set()
 
-    for proc in _iter_nuke_processes(current_user_only=current_user_only):
+    for proc in _iter_nuke_processes(current_user_only=current_user_only, strict=strict):
         pid = int(proc.pid)
 
-        cmdline_paths = _extract_nk_paths_from_cmdline(proc)
+        cmdline_paths = _extract_nk_paths_from_cmdline(proc, strict=strict)
         if cmdline_paths:
             source = "cmdline"
             candidate_paths = cmdline_paths
         else:
             source = "open_files"
-            candidate_paths = _extract_nk_paths_from_open_files(proc)
+            candidate_paths = _extract_nk_paths_from_open_files(proc, strict=strict)
+        if strict and not candidate_paths:
+            # An unidentified running session cannot prove a tracked script closed.
+            raise RuntimeError(f"Could not identify the script in Nuke process {pid}")
 
         for script_path in candidate_paths:
             compare_path = _normalize_path_for_compare(script_path)

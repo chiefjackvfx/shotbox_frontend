@@ -81,6 +81,7 @@ class DjangoAPI:
 
     # Cached users list for username lookup
     _cached_users = None
+    _cached_users_base_url = None
     _system_id = None
     _lock_owner_id = None
     _max_retry_backoff = 3.0
@@ -132,6 +133,7 @@ class DjangoAPI:
         if url != cls._default_base_url:
             # User IDs and usernames belong to the server they came from.
             cls._cached_users = None
+            cls._cached_users_base_url = None
             cls.set_current_username(None)
         cls._default_base_url = url
     
@@ -354,6 +356,7 @@ class DjangoAPI:
         
         # Cache for later lookups
         DjangoAPI._cached_users = users
+        DjangoAPI._cached_users_base_url = self.base_url
 
         # Only keep users in group 1
         filtered = []
@@ -366,16 +369,21 @@ class DjangoAPI:
 
 
     def username_from_id(self, id):
-        name = None
         try:
-            users = self.get_users()
-            for user in users:
-                if id == user.get("id"):
-                    name = user.get("first_name")
-                    break
+            if DjangoAPI._cached_users is None or DjangoAPI._cached_users_base_url != self.base_url:
+                self.get_users()
         except Exception:
             return "None"
-        return name if name else "None"
+        return self.cached_username_from_id(id) or "None"
+
+    def cached_username_from_id(self, user_id):
+        """Resolve a card label without making a request on the UI thread."""
+        if DjangoAPI._cached_users_base_url != self.base_url:
+            return None
+        for user in DjangoAPI._cached_users or []:
+            if user.get("id") == user_id:
+                return user.get("first_name") or user.get("username")
+        return None
 
     # NEW: generic partial update for a task
     def update_task(self, task_id: int, **fields):

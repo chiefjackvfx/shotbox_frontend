@@ -289,6 +289,19 @@ def _set_dynamic_property(widget: QWidget | None, name: str, value) -> None:
     widget.update()
 
 
+def _notify_ancestor_filters(widget: QWidget) -> None:
+    # NukeDash is a child QMainWindow when embedded in the application.
+    parent = widget.parentWidget()
+    while parent is not None:
+        apply_filters = getattr(parent, "_apply_filters", None)
+        if callable(apply_filters):
+            if hasattr(parent, "_last_filter_sig"):
+                delattr(parent, "_last_filter_sig")
+            apply_filters(force=True)
+            return
+        parent = parent.parentWidget()
+
+
 def _compact_text(value, limit: int) -> str:
     text = str(value or "")
     if limit <= 3 or len(text) <= limit:
@@ -525,16 +538,7 @@ class TaskWidget(QWidget):
         self._notify_filter_state_changed()
 
     def _notify_filter_state_changed(self) -> None:
-        window = self.window()
-        apply_filters = getattr(window, "_apply_filters", None)
-        if not callable(apply_filters):
-            return
-        if hasattr(window, "_last_filter_sig"):
-            delattr(window, "_last_filter_sig")
-        try:
-            apply_filters(force=True)
-        except TypeError:
-            apply_filters()
+        _notify_ancestor_filters(self)
 
     def _open_menu_below(self, widget: QPushButton | None, menu: QMenu):
         if widget is None:
@@ -550,8 +554,9 @@ class TaskWidget(QWidget):
         if user_id in (None, "", 0):
             return "Unassigned"
         try:
-            name = self._api.username_from_id(user_id)
-            return name or "Unassigned"
+            lookup = getattr(self._api, "cached_username_from_id", self._api.username_from_id)
+            name = lookup(user_id)
+            return name or f"User {user_id}"
         except Exception:
             return "Unassigned"
 
@@ -2085,16 +2090,7 @@ class ShotCard(QWidget):
         self._task_render_state = dict(render_state or {})
 
     def _notify_filter_state_changed(self) -> None:
-        window = self.window()
-        apply_filters = getattr(window, "_apply_filters", None)
-        if not callable(apply_filters):
-            return
-        if hasattr(window, "_last_filter_sig"):
-            delattr(window, "_last_filter_sig")
-        try:
-            apply_filters(force=True)
-        except TypeError:
-            apply_filters()
+        _notify_ancestor_filters(self)
 
     def _remove_task_widget(self, task_id) -> None:
         self._ensure_task_cache_state()
@@ -3301,6 +3297,7 @@ class ShotCard(QWidget):
                 # Otherwise update local data and UI manually
                 self.data["hidden"] = new_hidden
                 self._set_hide_button_label()
+            self._notify_filter_state_changed()
         except Exception as e:
             pass  # Silent fail - could log to file if needed  
 
@@ -3683,20 +3680,12 @@ class ShotCard(QWidget):
             return
         values = dlg.get_values()
         try:
-            new_task = self._api.create_task(shot_id=self._shot_id, title=values.get("title", "New Task"))
-            update_payload = {}
-            if values.get("notes"):
-                update_payload["notes"] = values["notes"]
-            if values.get("status") is not None:
-                update_payload["status"] = values["status"]
-            if values.get("priority") is not None:
-                update_payload["priority"] = values["priority"]
-            if values.get("budget_hours") is not None:
-                update_payload["budget_hours"] = values["budget_hours"]
-            if values.get("artist") is not None:
-                update_payload["artist"] = values["artist"]
-            if update_payload:
-                new_task = self._api.update_task(new_task.get("id"), **update_payload)
+            new_task = self._api.create_task(
+                shot_id=self._shot_id, title=values.get("title", "New Task"),
+                notes=values.get("notes") or "", artist=values.get("artist"),
+                status=values.get("status", "unassigned"),
+                priority=values.get("priority", 5), budget_hours=values.get("budget_hours", 0),
+            )
             tasks = list(self.data.get("tasks", []) or [])
             tasks.append(new_task)
             self.data["tasks"] = tasks
@@ -3704,6 +3693,7 @@ class ShotCard(QWidget):
             self._notify_filter_state_changed()
         except Exception as e:
             print(f"[ShotCard] Add task failed: {e}")
+            QMessageBox.warning(self, "Create Task", f"Could not create task:\n{e}")
 
     def _on_add_note_clicked(self):
         if not self._shot_id:
@@ -3895,6 +3885,11 @@ class ShotCard(QWidget):
     def set_thumbnail(self, url: str | None):
         self._current_thumbnail_url = url
         if not url:
+            self._thumb_pending_url = None
+            self._thumb_orig = None
+            self._thumb_sig = None
+            self._thumb_scale_signature = None
+            self.label_thumbnail.clear()
             return
         if not self._thumbnails_enabled:
             self._thumb_pending_url = None

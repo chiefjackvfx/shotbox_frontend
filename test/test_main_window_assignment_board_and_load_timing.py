@@ -142,7 +142,7 @@ class FakePauseableNukeDash:
     def __init__(self):
         self.pause_calls = []
 
-    def set_auto_refresh_paused(self, paused: bool):
+    def set_auto_refresh_paused(self, paused: bool, *, reason="manual"):
         self.pause_calls.append(paused)
 
 
@@ -197,6 +197,8 @@ def build_main_window(startup_tab: int = 0, extra_settings: dict | None = None,
 
 
 class TimingHarness(QMainWindow):
+    def _request_api_refresh(self):
+        self._worker.fetch()
     _set_loaded_time_text = page_nukedash.page_nukedash._set_loaded_time_text
     _start_load_timing = page_nukedash.page_nukedash._start_load_timing
     _finish_load_timing = page_nukedash.page_nukedash._finish_load_timing
@@ -430,6 +432,7 @@ class PollTimelineWidget(QWidget):
 
 
 class FilePollHarness(QMainWindow):
+    _retry_preview_updates = page_nukedash.page_nukedash._retry_preview_updates
     _iter_timeline_shot_cards = page_nukedash.page_nukedash._iter_timeline_shot_cards
     _reset_shot_file_poll_targets = page_nukedash.page_nukedash._reset_shot_file_poll_targets
     _sync_preview_video_cache = page_nukedash.page_nukedash._sync_preview_video_cache

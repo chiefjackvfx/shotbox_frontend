@@ -6,12 +6,29 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-14T14:31:10+01:00] Tested ordered rows, responsive sizing, readability, and edit preservation.
+- [2026-10-14T13:46:53+01:00] Tested asynchronous job selection and responsive dashboard toolbar layouts.
+- [2026-10-14T12:43:29+01:00] Added Nuke Dash interaction, lock, preview, and lifecycle regressions.
 - [2026-10-14T10:05:22+01:00] Added assignment board regression tests for saves, refreshes, and thumbnails.
 
 ### Changed
 
+- [2026-10-14T12:43:29+01:00] Updated detector test imports for current frontend layout.
+
 ### Fixed
 
+- [2026-10-14T14:31:10+01:00] Filled shot grid width and preserved left-to-right row ordering.
+- [2026-10-14T14:31:10+01:00] Improved grid text contrast, control sizing, and responsive task wrapping.
+- [2026-10-14T13:46:53+01:00] Restored jobs dropdown sizing after asynchronous loading and refreshes.
+- [2026-10-14T13:46:53+01:00] Made dashboard filter labels readable without clipping.
+- [2026-10-14T13:49:29+01:00] Restored single-line filters, separating spacer, and uniform box typography.
+- [2026-10-14T12:43:29+01:00] Protected Nuke locks when process detection is uncertain.
+- [2026-10-14T12:43:29+01:00] Fixed Nuke Dash filters, hidden shots, and removed jobs.
+- [2026-10-14T12:43:29+01:00] Moved dashboard requests into workers; cached artist lookups.
+- [2026-10-14T12:43:29+01:00] Made Nuke Dash task creation atomic.
+- [2026-10-14T12:43:29+01:00] Corrected preview overwrite, plate selection, cancellation, and save retries.
+- [2026-10-14T12:43:29+01:00] Restored scroll positions, thumbnail clearing, and independent refresh pauses.
+- [2026-10-14T12:43:29+01:00] Cancelled dashboard callbacks and safely stopped workers during shutdown.
 - [2026-10-14T10:05:22+01:00] Fixed assignment moves, rollback, and board data synchronisation.
 - [2026-10-14T10:05:22+01:00] Created tasks atomically; corrected deletion counts and stale selections.
 - [2026-10-14T10:05:22+01:00] Restored thumbnails; removed repeated artist requests and rejected invalid drops.

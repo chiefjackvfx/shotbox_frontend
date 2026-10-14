@@ -423,6 +423,7 @@ def _preview_file_candidates(
     shot_name: str,
     plate_name: Optional[str] = None,
     preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
+    *, include_plate_previews: bool = True,
 ) -> List[Path]:
     previews_dir = Path(shot_dir) / preview_subdir
     if not previews_dir.exists():
@@ -431,6 +432,7 @@ def _preview_file_candidates(
         preview_path
         for preview_path in previews_dir.glob("*.mp4")
         if _preview_matches_name(preview_path.name, shot_name, plate_name=plate_name)
+        and (include_plate_previews or not preview_path.name.lower().startswith(f"{shot_name}_plate_".lower()))
     )
 
 
@@ -444,6 +446,7 @@ def list_existing_preview_paths(
     version: int,
     plate_name: Optional[str] = None,
     preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
+    *, include_plate_previews: bool = True,
 ) -> List[Path]:
     """Find preview files for a shot/version in either new or legacy naming."""
     matches: List[Path] = []
@@ -452,6 +455,7 @@ def list_existing_preview_paths(
         shot_name,
         plate_name=plate_name,
         preview_subdir=preview_subdir,
+        include_plate_previews=include_plate_previews,
     ):
         path_version = extract_version_from_path(preview_path.name)
         if path_version == version:
@@ -466,6 +470,7 @@ def preview_version_exists(
     version: int,
     plate_name: Optional[str] = None,
     preview_subdir: str = PreviewConfig.PREVIEW_SUBDIR,
+    *, include_plate_previews: bool = True,
 ) -> bool:
     return bool(
         list_existing_preview_paths(
@@ -474,6 +479,7 @@ def preview_version_exists(
             version,
             plate_name=plate_name,
             preview_subdir=preview_subdir,
+            include_plate_previews=include_plate_previews,
         )
     )
 
@@ -512,6 +518,7 @@ def build_preview_output_path(
             version,
             plate_name=plate_name,
             preview_subdir=preview_subdir,
+            include_plate_previews=_normalize_plate_name(plate_name) is not None,
         )
         return output_path, version, file_exists
     
@@ -521,6 +528,7 @@ def build_preview_output_path(
         shot_name,
         plate_name=plate_name,
         preview_subdir=preview_subdir,
+        include_plate_previews=_normalize_plate_name(plate_name) is not None,
     )
     
     if existing_previews:
@@ -1208,6 +1216,7 @@ class PreviewGenerator:
                 shot_name,
                 actual_version,
                 plate_name=plate_name,
+                include_plate_previews=_normalize_plate_name(plate_name) is not None,
             )
             try:
                 for existing_path in existing_paths:

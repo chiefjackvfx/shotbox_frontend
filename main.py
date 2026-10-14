@@ -569,7 +569,8 @@ class MainWindow(QMainWindow):
     def _apply_assignment_refresh_pause(self) -> None:
         if hasattr(self, "page_nukedash") and hasattr(self.page_nukedash, "set_auto_refresh_paused"):
             self.page_nukedash.set_auto_refresh_paused(
-                self._assignment_drag_refresh_pause or self._assignment_manual_refresh_pause
+                self._assignment_drag_refresh_pause or self._assignment_manual_refresh_pause,
+                reason="assignment",
             )
 
     def _on_jobs_data_updated_for_assignment(self, jobs: list):
@@ -1081,11 +1082,18 @@ class MainWindow(QMainWindow):
         
         # Stop the API worker thread
         if hasattr(self, 'page_nukedash') and hasattr(self.page_nukedash, '_thread'):
-            try:
-                self.page_nukedash._thread.quit()
-                self.page_nukedash._thread.wait(1000)
-            except Exception:
-                pass
+            shutdown = getattr(self.page_nukedash, "shutdown", None)
+            if callable(shutdown):
+                if not shutdown():
+                    self.page_nukedash._thread.finished.connect(self.close)
+                    event.ignore()
+                    return
+            else:
+                try:
+                    self.page_nukedash._thread.quit()
+                    self.page_nukedash._thread.wait(1000)
+                except Exception:
+                    pass
         
         super().closeEvent(event)
 

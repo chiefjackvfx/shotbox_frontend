@@ -42,11 +42,24 @@ from settings import get_settings_manager
 from timeline_matchmove_dialog import TimelineMatchmoveCandidate, TimelineMatchmoveDialog
 from quick_view import QuickViewController
 from thumbnail_updates import BatchThumbnailWorker
+from flow_layout import FlowLayout
 
 
 # Get the directory where this script is located (for cross-platform path handling)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSET_ROOT_DIRECTORY_NAMES = {"vfx", "nuke"}
+
+
+def _single_shot(owner, delay: int, callback) -> None:
+    """Keep delayed work owned by its page so deletion cancels it."""
+    timer = QTimer(owner)
+    timer.setSingleShot(True)
+    def run():
+        if not getattr(owner, "_shutting_down", False):
+            callback()
+    timer.timeout.connect(run)
+    timer.timeout.connect(timer.deleteLater)
+    timer.start(delay)
 
 
 class LoadingDialog(QDialog):
@@ -262,18 +275,33 @@ def _batch_preview_progress_value(
 
 class ApiWorker(QObject):
     data_ready = pyqtSignal(list)
+    users_ready = pyqtSignal(list)
     error = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
         self.api = http_help.DjangoAPI()
+        self._users_loaded_at = None
+        self._users_base_url = None
 
     @pyqtSlot()
     def fetch(self):
+        if QThread.currentThread().isInterruptionRequested():
+            return
         try:
             data = self.api.getAPI()
             if not isinstance(data, list):
                 raise ValueError("API did not return a list")
+            if (self._users_loaded_at is None or self._users_base_url != self.api.base_url
+                    or time.monotonic() - self._users_loaded_at >= 60):
+                try:
+                    users = self.api.get_users()
+                except Exception:
+                    pass  # Retry on the next fetch, without losing the job data.
+                else:
+                    self._users_loaded_at = time.monotonic()
+                    self._users_base_url = self.api.base_url
+                    self.users_ready.emit(users)
             self.data_ready.emit(data)
         except Exception as e:
             self.error.emit(str(e))
@@ -306,18 +334,27 @@ def _nukedash_combo_jobs(jobs: list[dict], active_job_id=None) -> list[dict]:
 
 
 class page_nukedash(QMainWindow):
+    fetch_requested = pyqtSignal()
     jobs_data_updated = pyqtSignal(list)
     active_job_changed = pyqtSignal(dict)
     active_timeline_changed = pyqtSignal(int)
 
     def __init__(self):
         super().__init__()
+        self._shutting_down = False
+        self._fetch_in_flight = False
+        self._refresh_pause_reasons = set()
+        self._preview_updates_pending = {}
+        self._users = []
         ui_path = os.path.join(SCRIPT_DIR, "basic.ui")
         uic.loadUi(ui_path, self)
 
-        # Reserve room for the job name and the styled dropdown button.
-        self.comboBox_jobs.compact = True
+        # Leave room while loading, then elide unusually long job names.
+        self.comboBox_jobs.compact = False
+        self.comboBox_jobs.setMinimumWidth(200)
+        self.comboBox_jobs.setMaximumWidth(400)
         self.comboBox_jobs.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self._setup_toolbar_layouts()
 
         self._load_timing_context = None
         self._load_timing_started_at = None
@@ -464,12 +501,15 @@ class page_nukedash(QMainWindow):
         self._worker = ApiWorker()
         self._worker.moveToThread(self._thread)
         self._worker.data_ready.connect(self._on_data)
+        self._worker.users_ready.connect(self._on_users_data)
         self._worker.error.connect(self._on_error)
+        self.fetch_requested.connect(self._worker.fetch, Qt.ConnectionType.QueuedConnection)
+        self._thread.finished.connect(self._worker.deleteLater)
         self._thread.start()
 
         self._timer = QTimer(self)
         self._timer.setInterval(5000) # timer 5
-        self._timer.timeout.connect(self._worker.fetch)
+        self._timer.timeout.connect(self._request_api_refresh)
 
         # --- Auto Refresh Checkbox Setup ---
         self.checkBox_refresh.setChecked(False)  # Disabled by default
@@ -552,17 +592,101 @@ class page_nukedash(QMainWindow):
             updater()
         self._start_load_timing("startup")
         self._set_filter_controls_enabled(self._filters_enabled())
-        self._worker.fetch()
+        self._request_api_refresh()
         self._start_lock_maintenance_timers()
         self._shot_file_poll_timer.start()
         self._shot_file_tooltip_timer.start()
         
         # Connect scroll detection after UI is loaded
-        QTimer.singleShot(100, self._setup_scroll_detection)
+        _single_shot(self, 100, self._setup_scroll_detection)
     
+    def _setup_toolbar_layouts(self):
+        """Keep filters on one line, with space before the selector controls."""
+        for combo in (self.comboBox_sort, self.comboBox_sort_artist,
+                      self.comboBox_sort_status):
+            combo.setMinimumWidth(128)
+        self.comboBox_sort_artist.setMaximumWidth(240)
+        self.comboBox_sort_status.setMinimumWidth(180)
+        self.Search_bar.setMinimumWidth(220)
+        self.Search_bar.setMaximumWidth(260)
+
+        def wrap(bar, groups):
+            layout = bar.layout()
+            while layout.count():
+                layout.takeAt(0)
+            bar.setMaximumHeight(16777215)
+            layout.setContentsMargins(8, 4, 8, 4)
+            container = QWidget(bar)
+            flow = FlowLayout(container, h_spacing=16, v_spacing=8)
+            height = max(32, *(control.sizeHint().height()
+                               for controls in groups for control in controls))
+            for controls in groups:
+                group = QWidget(container)
+                row = QtWidgets.QHBoxLayout(group)
+                row.setContentsMargins(0, 0, 0, 0)
+                row.setSpacing(8)
+                for control in controls:
+                    row.addWidget(control)
+                group.setFixedHeight(height)
+                group.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+                flow.addWidget(group)
+            layout.addWidget(container)
+
+        wrap(self.top_bar, [
+            (self.label_4, self.comboBox_jobs),
+            (self.label_3, self.comboBox_preview_size),
+            (self.checkBox_refresh,),
+            (self.btn_make_previews, self.btn_update_thumbnails, self.btn_export_excel),
+            (self.checkBox_compact_view,),
+            (self.label_loaded_time, self.label_task_loading),
+        ])
+        layout = self.search_bar.layout()
+        while layout.count():
+            layout.takeAt(0)
+        layout.setContentsMargins(8, 4, 8, 4)
+        scroll = QtWidgets.QScrollArea(self.search_bar)
+        scroll.setObjectName("dashboard_filter_scroll")
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidgetResizable(True)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        contents = QWidget()
+        row = QtWidgets.QHBoxLayout(contents)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(8)
+        left = (self.label_mode_state, self.checkBox_enable_filters,
+                self.checkBox_show_to_conform, self.checkBox_hidden_shot,
+                self.checkBox_hidden_tasks)
+        right = (self.label_sort, self.comboBox_sort, self.label,
+                 self.comboBox_sort_artist, self.label_2,
+                 self.comboBox_sort_status, self.Search_bar, self.Label_results)
+        boxes = (self.comboBox_sort, self.comboBox_sort_artist,
+                 self.comboBox_sort_status, self.Search_bar)
+        for box in boxes:
+            box.ensurePolished()
+        box_height = max(box.sizeHint().height() for box in boxes)
+        for box in boxes:
+            box.setFixedHeight(box_height)
+        for control in left:
+            row.addWidget(control)
+        row.addSpacing(16)
+        row.addStretch(1)
+        for control in right:
+            row.addWidget(control)
+        row.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
+        height = max(control.sizeHint().height() for control in (*left, *right))
+        scroll.setFixedHeight(height + scroll.horizontalScrollBar().sizeHint().height())
+        scroll.setWidget(contents)
+        self.search_bar.setFixedHeight(scroll.height() + 8)
+        layout.addWidget(scroll)
+        self._filter_row_scroll = scroll
+
     def _setup_scroll_detection(self):
         """Connect to scroll area's scrollbar signals to detect scrolling."""
         # Find the scroll area in timelines_tabs
+        main_scroll = getattr(self, "preview_scroll", None)
+        if main_scroll is not None:
+            main_scroll.verticalScrollBar().valueChanged.connect(self._on_scroll_activity)
+            return
         tabs = self.timelines_tabs
         for i in range(tabs.count()):
             widget = tabs.widget(i)
@@ -585,6 +709,18 @@ class page_nukedash(QMainWindow):
 
     def eventFilter(self, watched, event):
         """Handle the Space shortcuts without stealing typing input."""
+        viewport = getattr(self, "_status_popup_viewport", None)
+        if viewport is not None and watched is viewport and event.type() in (
+            QEvent.Type.MouseButtonPress, QEvent.Type.MouseButtonRelease,
+        ) and event.button() == Qt.MouseButton.LeftButton:
+            combo = self.comboBox_sort_status
+            index = combo.view().indexAt(event.position().toPoint())
+            if index.isValid() and index.flags() & Qt.ItemFlag.ItemIsUserCheckable:
+                if event.type() == QEvent.Type.MouseButtonPress:
+                    self._on_status_popup_pressed(index)
+                # QComboBox otherwise activates its old current item ('All')
+                # when its delegate consumes a checkbox click.
+                return True
         controller = getattr(self, "_quick_view_controller", None)
         if (
             controller is not None
@@ -666,7 +802,8 @@ class page_nukedash(QMainWindow):
         return cards
 
     def _reset_shot_file_poll_targets(self) -> None:
-        new_targets = self._iter_timeline_shot_cards(visible_only=True)
+        conform = bool(getattr(self, "show_to_conform", False))
+        new_targets = self._iter_timeline_shot_cards(visible_only=not conform)
         old_names = [
             getattr(card, "objectName", lambda: "")()
             for card in getattr(self, "_shot_file_poll_targets", [])
@@ -700,12 +837,16 @@ class page_nukedash(QMainWindow):
             timeline_matchmove_refresher()
         self._reset_shot_file_poll_targets()
         targets = getattr(self, "_shot_file_poll_targets", [])
+        if not hasattr(self, "_preview_updates_pending"):
+            self._preview_updates_pending = {}
         if not targets:
+            self._retry_preview_updates()
             return
 
         total = len(targets)
         batch_size = max(1, min(self._shot_file_poll_batch_size, (total + 9) // 10))
         processed = 0
+        conform_changed = False
         while processed < min(batch_size, total):
             if self._shot_file_poll_cursor >= total:
                 self._shot_file_poll_cursor = 0
@@ -713,17 +854,22 @@ class page_nukedash(QMainWindow):
             self._shot_file_poll_cursor += 1
             processed += 1
 
-            if shot_card is None or not shot_card.isVisible():
+            conform = bool(getattr(self, "show_to_conform", False))
+            if shot_card is None or (not shot_card.isVisible() and not (conform and self.isVisible())):
                 continue
             shot_dir = getattr(shot_card, "shot_dir", None)
             if not shot_dir:
                 continue
 
             preview_before = str((shot_card.data or {}).get("preview_video") or "").strip()
+            render_button = getattr(shot_card, "btn_latest_render", None)
+            render_before = render_button.property("render_display") if render_button else None
             snapshot = self.filesIO.scan_shot_file_state(shot_dir)
             preview_relative = None
             if hasattr(shot_card, "apply_file_state_snapshot"):
                 preview_relative = shot_card.apply_file_state_snapshot(snapshot)
+            if conform and render_button and render_before != render_button.property("render_display"):
+                conform_changed = True
             if not preview_relative or preview_relative == preview_before:
                 continue
 
@@ -732,10 +878,22 @@ class page_nukedash(QMainWindow):
                 continue
 
             self._sync_preview_video_cache(int(shot_id), preview_relative)
+            self._preview_updates_pending[int(shot_id)] = {"path": preview_relative, "retry_at": 0}
+        self._retry_preview_updates()
+        if conform_changed:
+            _single_shot(self, 0, lambda: self._apply_filters(force=True))
+
+    def _retry_preview_updates(self) -> None:
+        pending = getattr(self, "_preview_updates_pending", {})
+        for shot_id, update in list(pending.items()):
+            if time.monotonic() < update["retry_at"]:
+                continue
             try:
-                self._shot_card_api.update_shot(int(shot_id), preview_video=preview_relative)
+                self._shot_card_api.update_shot(shot_id, preview_video=update["path"])
             except Exception:
-                pass
+                update["retry_at"] = time.monotonic() + 5
+            else:
+                pending.pop(shot_id, None)
 
     def _refresh_visible_shot_card_tooltips(self) -> None:
         for shot_card in self._iter_timeline_shot_cards(visible_only=True):
@@ -1204,7 +1362,7 @@ class page_nukedash(QMainWindow):
     def _start_lock_maintenance_timers(self):
         for timer in (self._lock_sync_timer, self._lock_detector_timer, self._lock_heartbeat_timer):
             jitter_ms = random.randint(0, 5000)
-            QTimer.singleShot(jitter_ms, timer.start)
+            _single_shot(self, jitter_ms, timer.start)
 
     def _normalize_script_path(self, value: str | None) -> str:
         if not value:
@@ -1942,9 +2100,13 @@ class page_nukedash(QMainWindow):
         if not self._owned_locks_by_shot_id:
             return
         try:
-            detections = nuke_detector.detect_open_nuke_scripts(current_user_only=True)
+            detections = nuke_detector.detect_open_nuke_scripts(current_user_only=True, strict=True)
         except Exception:
-            detections = []
+            # A failed/partial scan cannot prove a script has been closed.
+            now = time.monotonic()
+            for state in self._owned_locks_by_shot_id.values():
+                state["last_seen_open_monotonic"] = now
+            return
         detected_paths = {
             self._normalize_script_path(item.script_path)
             for item in detections
@@ -1963,7 +2125,8 @@ class page_nukedash(QMainWindow):
                 continue
 
             result = self._worker.api.update_shot_lock(int(shot_id), release=True, force=False)
-            self._owned_locks_by_shot_id.pop(int(shot_id), None)
+            if result.get("ok") or result.get("conflict"):
+                self._owned_locks_by_shot_id.pop(int(shot_id), None)
             if result.get("shot"):
                 self._apply_shot_lock_payload(result["shot"])
             elif result.get("nuke_in_use") is not None:
@@ -1979,7 +2142,8 @@ class page_nukedash(QMainWindow):
                     self._apply_shot_lock_payload(result["shot"])
                 continue
 
-            self._owned_locks_by_shot_id.pop(int(shot_id), None)
+            if result.get("conflict") or result.get("status_code") in (403, 404):
+                self._owned_locks_by_shot_id.pop(int(shot_id), None)
             if result.get("shot"):
                 self._apply_shot_lock_payload(result["shot"])
             elif result.get("nuke_in_use") is not None:
@@ -1997,22 +2161,43 @@ class page_nukedash(QMainWindow):
         self.comboBox_sort_artist.addItem("All Artists", None)
         
         # Get unique artists from API
-        try:
-            users = self._worker.api.get_users()
-            for user in users:
-                user_id = user.get("id")
-                username = user.get("username", f"User {user_id}")
-                self.comboBox_sort_artist.addItem(username, user_id)
-        except Exception:
-            pass
+        for user in getattr(self, "_users", []):
+            user_id = user.get("id")
+            username = user.get("username", f"User {user_id}")
+            self.comboBox_sort_artist.addItem(username, user_id)
         
         self.comboBox_sort_artist.blockSignals(False)
+        self.comboBox_sort_artist.updateGeometry()
         
         # Populate status dropdown (multi-select with checkboxes)
         self._setup_status_filter_dropdown()
         self._apply_saved_filter_state_to_controls()
         
         self._dropdowns_populated = True
+
+    @pyqtSlot(list)
+    def _on_users_data(self, users: list) -> None:
+        if self._shutting_down:
+            return
+        self._users = users
+        if not self._dropdowns_populated:
+            return
+        combo = self.comboBox_sort_artist
+        selected = combo.currentData()
+        if selected is None:
+            selected = self._saved_filter_state.get("artist_id")
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("All Artists", None)
+        for user in users:
+            combo.addItem(user.get("username") or f"User {user.get('id')}", user.get("id"))
+        combo.setCurrentIndex(max(0, combo.findData(selected)))
+        combo.blockSignals(False)
+        combo.updateGeometry()
+        for card in self._iter_shot_cards():
+            card._sync_task_widgets_from_data()
+        if not self._is_chunked_loading:
+            self._apply_filters(force=True)
 
     def _setup_status_filter_dropdown(self) -> None:
         if hasattr(self, "_status_filter_ready") and self._status_filter_ready:
@@ -2039,16 +2224,19 @@ class page_nukedash(QMainWindow):
         for value, label in http_help.TASK_STATUS_CHOICES:
             item = QStandardItem(label)
             item.setData(value, Qt.ItemDataRole.UserRole)
-            item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             item.setCheckState(Qt.CheckState.Unchecked)
             model.appendRow(item)
             self._status_filter_items[value] = item
 
         self.comboBox_sort_status.setModel(model)
+        self._status_popup_viewport = self.comboBox_sort_status.view().viewport()
+        self._status_popup_viewport.installEventFilter(self)
         self.comboBox_sort_status.setEditable(True)
         if self.comboBox_sort_status.lineEdit():
             self.comboBox_sort_status.lineEdit().setReadOnly(True)
             self.comboBox_sort_status.lineEdit().setPlaceholderText("Any Status")
+            self.comboBox_sort_status.lineEdit().setFont(self.comboBox_sort_status.font())
 
         self.comboBox_sort_status.view().pressed.connect(self._on_status_popup_pressed)
         self.comboBox_sort_status.activated.connect(self._on_status_combo_activated)
@@ -2694,7 +2882,7 @@ class page_nukedash(QMainWindow):
             return
         self._on_preview_size_changed(preview_combo.currentText())
 
-    def _collect_preview_tasks(self, active_job, files_io):
+    def _collect_preview_tasks(self, active_job, files_io, *, overwrite=False):
         from nuke_headless_tasks import preview_version_exists
 
         preview_tasks = []
@@ -2712,13 +2900,25 @@ class page_nukedash(QMainWindow):
 
                 local_shot_dir = files_io.convert_path(shot_dir)
 
-                if original_clip and original_clip not in {"None", "—"}:
-                    if not preview_version_exists(local_shot_dir, shot_name, 1):
+                clip_paths = shot.get("original_clips") or [original_clip]
+                clip_paths = list(dict.fromkeys(
+                    str(path).strip() for path in clip_paths
+                    if path and str(path).strip().lower() not in {"none", "—", "offline"}
+                ))
+                for plate_index, clip_path in enumerate(clip_paths, start=1):
+                    plate_name = f"plate_{plate_index:02d}"
+                    exists = preview_version_exists(local_shot_dir, shot_name, 1, plate_name=plate_name)
+                    if not shot.get("original_clips"):
+                        # Legacy single-plate previews had no plate suffix.
+                        exists = exists or preview_version_exists(
+                            local_shot_dir, shot_name, 1, include_plate_previews=False,
+                        )
+                    if overwrite or not exists:
                         preview_tasks.append({
                             "shot": shot,
                             "source_type": "original_clip",
-                            "source_path": original_clip,
-                            "plate_name": "plate_01",
+                            "source_path": clip_path,
+                            "plate_name": plate_name,
                             "version": 1,
                             "job_name": job_name,
                         })
@@ -2731,7 +2931,9 @@ class page_nukedash(QMainWindow):
                 render_version = render_info.get("version")
                 if not render_path or render_version is None:
                     continue
-                if preview_version_exists(local_shot_dir, shot_name, int(render_version)):
+                if not overwrite and preview_version_exists(
+                    local_shot_dir, shot_name, int(render_version), include_plate_previews=False,
+                ):
                     continue
 
                 preview_tasks.append({
@@ -2840,7 +3042,7 @@ class page_nukedash(QMainWindow):
         self._start_load_timing("manual_refresh")
         parent_window = self.window()
         self._loading_dialog.show_loading(parent_window, "Refreshing...")
-        self._worker.fetch()
+        self._request_api_refresh()
 
     def _on_update_all_thumbnails_clicked(self):
         if self._thumbnail_batch_worker is not None:
@@ -2880,7 +3082,7 @@ class page_nukedash(QMainWindow):
         self._thumbnail_batch_progress = progress
         self.btn_update_thumbnails.setEnabled(False)
         self.btn_make_previews.setEnabled(False)
-        self.set_auto_refresh_paused(True)
+        self.set_auto_refresh_paused(True, reason="thumbnails")
         progress.show()
         QThreadPool.globalInstance().start(worker)
 
@@ -2913,7 +3115,7 @@ class page_nukedash(QMainWindow):
             progress.deleteLater()
         self.btn_update_thumbnails.setEnabled(True)
         self.btn_make_previews.setEnabled(True)
-        self.set_auto_refresh_paused(False)
+        self.set_auto_refresh_paused(False, reason="thumbnails")
         title = "Cancelled." if summary["cancelled"] else "Done."
         message = (
             f"{title}\n\nUpdated: {summary['updated']}\nFailed: {summary['failed']}\n"
@@ -2972,7 +3174,7 @@ class page_nukedash(QMainWindow):
         
         # Collect all shots that need previews
         files_io = filesIO.Folders()
-        preview_tasks = self._collect_preview_tasks(active_job, files_io)
+        preview_tasks = self._collect_preview_tasks(active_job, files_io, overwrite=overwrite_enabled)
         
         if not preview_tasks:
             QMessageBox.information(
@@ -3029,148 +3231,155 @@ class page_nukedash(QMainWindow):
         failed = 0
         skipped = 0
         
-        for i, task in enumerate(preview_tasks):
-            if progress.wasCanceled():
-                break
+        cancelled = False
+        self.set_auto_refresh_paused(True, reason="previews")
+        try:
+            for i, task in enumerate(preview_tasks):
+                if progress.wasCanceled():
+                    break
             
-            shot = task["shot"]
-            shot_id = shot.get("id")
-            shot_name = shot.get("title", f"shot_{shot_id}")
-            shot_dir = shot.get("base_path", "")
-            source_path = task["source_path"]
-            version = task["version"]
-            job_name = task["job_name"]
-            source_type = task["source_type"]
-            plate_name = task.get("plate_name")
-            media_type = task.get("media_type")
-            preview_target_label = (
-                f"{shot_name} {plate_name} v{version:03d}"
-                if plate_name
-                else f"{shot_name} v{version:03d}"
-            )
+                shot = task["shot"]
+                shot_id = shot.get("id")
+                shot_name = shot.get("title", f"shot_{shot_id}")
+                shot_dir = shot.get("base_path", "")
+                source_path = task["source_path"]
+                version = task["version"]
+                job_name = task["job_name"]
+                source_type = task["source_type"]
+                plate_name = task.get("plate_name")
+                media_type = task.get("media_type")
+                preview_target_label = (
+                    f"{shot_name} {plate_name} v{version:03d}"
+                    if plate_name
+                    else f"{shot_name} v{version:03d}"
+                )
             
-            # Update progress
-            task_start_value, _ = _batch_preview_progress_value(
-                i,
-                len(preview_tasks),
-            )
-            progress.setValue(task_start_value)
-            progress.setLabelText(
-                f"Creating MP4 {i + 1} of {len(preview_tasks)}: "
-                f"{preview_target_label}\n\n"
-                f"Completed: {completed} | Failed: {failed} | Skipped: {skipped}"
-            )
-            QApplication.processEvents()
+                # Update progress
+                task_start_value, _ = _batch_preview_progress_value(
+                    i,
+                    len(preview_tasks),
+                )
+                progress.setValue(task_start_value)
+                progress.setLabelText(
+                    f"Creating MP4 {i + 1} of {len(preview_tasks)}: "
+                    f"{preview_target_label}\n\n"
+                    f"Completed: {completed} | Failed: {failed} | Skipped: {skipped}"
+                )
+                QApplication.processEvents()
             
-            # Convert paths for local filesystem
-            local_shot_dir = files_io.convert_path(shot_dir)
+                # Convert paths for local filesystem
+                local_shot_dir = files_io.convert_path(shot_dir)
             
-            # Build full source path
-            local_source = files_io.convert_path(source_path)
+                # Build full source path
+                local_source = files_io.convert_path(source_path)
             
-            # Validate source exists
-            if not preview_input_exists(local_source):
-                skipped += 1
-                print(f"[SKIP] {shot_name}: Source not found - {local_source}")
+                # Validate source exists
+                if not preview_input_exists(local_source):
+                    skipped += 1
+                    print(f"[SKIP] {shot_name}: Source not found - {local_source}")
+                    progress.setValue(
+                        _batch_preview_progress_value(i + 1, len(preview_tasks))[0]
+                    )
+                    continue
+            
+                # Get shot metadata
+                colourspace = resolve_preview_input_colourspace(
+                    source_type=source_type,
+                    media_type=media_type,
+                    input_path=local_source,
+                    requested_colourspace=shot.get("colourspace", "sRGB"),
+                )
+                fps = shot.get("fps", 25)
+            
+                # Check for cancelled
+                def check_cancelled():
+                    QApplication.processEvents()
+                    return progress.wasCanceled()
+
+                def on_output(line):
+                    print(line)
+                    frame_progress = parse_preview_progress(line)
+                    if frame_progress is not None:
+                        current_frame, total_frames = frame_progress
+                        progress_value, progress_maximum = _batch_preview_progress_value(
+                            i,
+                            len(preview_tasks),
+                            current_frame,
+                            total_frames,
+                        )
+                        current_percentage = round(
+                            (current_frame / total_frames) * 100
+                        )
+                        overall_percentage = round(
+                            (progress_value / progress_maximum) * 100
+                        )
+                        progress.setValue(progress_value)
+                        progress.setLabelText(
+                            f"Creating MP4 {i + 1} of {len(preview_tasks)}: "
+                            f"{preview_target_label}\n\n"
+                            f"Overall {overall_percentage}% — current MP4 "
+                            f"{current_percentage}% "
+                            f"(frame {current_frame} of {total_frames})\n"
+                            f"Completed: {completed} | Failed: {failed} | "
+                            f"Skipped: {skipped}"
+                        )
+                    QApplication.processEvents()
+            
+                # Generate the preview (with overwrite)
+                render_fn = generator.generate_preview_with_overwrite if overwrite_enabled else generator.generate_preview
+                result = render_fn(
+                    input_path=local_source,
+                    shot_dir=local_shot_dir,
+                    shot_name=shot_name,
+                    project=job_name,
+                    artist="ShotBox",
+                    colourspace=colourspace,
+                    fps=fps,
+                    quality=preview_quality,
+                    version=version,
+                    plate_name=plate_name,
+                    on_output=on_output,
+                    check_cancelled=check_cancelled,
+                )
+            
+                if progress.wasCanceled():
+                    break
+
                 progress.setValue(
                     _batch_preview_progress_value(i + 1, len(preview_tasks))[0]
                 )
-                continue
-            
-            # Get shot metadata
-            colourspace = resolve_preview_input_colourspace(
-                source_type=source_type,
-                media_type=media_type,
-                input_path=local_source,
-                requested_colourspace=shot.get("colourspace", "sRGB"),
-            )
-            fps = shot.get("fps", 25)
-            
-            # Check for cancelled
-            def check_cancelled():
-                QApplication.processEvents()
-                return progress.wasCanceled()
-
-            def on_output(line):
-                print(line)
-                frame_progress = parse_preview_progress(line)
-                if frame_progress is not None:
-                    current_frame, total_frames = frame_progress
-                    progress_value, progress_maximum = _batch_preview_progress_value(
-                        i,
-                        len(preview_tasks),
-                        current_frame,
-                        total_frames,
-                    )
-                    current_percentage = round(
-                        (current_frame / total_frames) * 100
-                    )
-                    overall_percentage = round(
-                        (progress_value / progress_maximum) * 100
-                    )
-                    progress.setValue(progress_value)
-                    progress.setLabelText(
-                        f"Creating MP4 {i + 1} of {len(preview_tasks)}: "
-                        f"{preview_target_label}\n\n"
-                        f"Overall {overall_percentage}% — current MP4 "
-                        f"{current_percentage}% "
-                        f"(frame {current_frame} of {total_frames})\n"
-                        f"Completed: {completed} | Failed: {failed} | "
-                        f"Skipped: {skipped}"
-                    )
                 QApplication.processEvents()
             
-            # Generate the preview (with overwrite)
-            render_fn = generator.generate_preview_with_overwrite if overwrite_enabled else generator.generate_preview
-            result = render_fn(
-                input_path=local_source,
-                shot_dir=local_shot_dir,
-                shot_name=shot_name,
-                project=job_name,
-                artist="ShotBox",
-                colourspace=colourspace,
-                fps=fps,
-                quality=preview_quality,
-                version=version,
-                plate_name=plate_name,
-                on_output=on_output,
-                check_cancelled=check_cancelled,
-            )
-            
-            if progress.wasCanceled():
-                break
+                if result.error == "FILE_EXISTS" and not overwrite_enabled:
+                    skipped += 1
+                    print(f"[SKIP] {shot_name}: Preview already exists")
+                    continue
 
-            progress.setValue(
-                _batch_preview_progress_value(i + 1, len(preview_tasks))[0]
-            )
-            QApplication.processEvents()
-            
-            if result.error == "FILE_EXISTS" and not overwrite_enabled:
-                skipped += 1
-                print(f"[SKIP] {shot_name}: Preview already exists")
-                continue
+                if result.success:
+                    completed += 1
+                    # Update the shot's preview_video field in the database
+                    try:
+                        api.update_shot(shot_id, preview_video=result.relative_path)
+                    except Exception as e:
+                        print(f"[WARN] Could not update preview_video for {shot_name}: {e}")
+                else:
+                    failed += 1
+                    print(f"[FAIL] {shot_name}: {result.error}")
+                    if result.output_lines:
+                        print("[NUKE OUTPUT]")
+                        for line in result.output_lines[-20:]:
+                            print(line)
+        
+            cancelled = progress.wasCanceled()
+            if not cancelled:
+                progress.setValue(batch_progress_maximum)
+        finally:
+            cancelled = cancelled or progress.wasCanceled()
+            progress.close()
+            self.set_auto_refresh_paused(False, reason="previews")
 
-            if result.success:
-                completed += 1
-                # Update the shot's preview_video field in the database
-                try:
-                    api.update_shot(shot_id, preview_video=result.relative_path)
-                except Exception as e:
-                    print(f"[WARN] Could not update preview_video for {shot_name}: {e}")
-            else:
-                failed += 1
-                print(f"[FAIL] {shot_name}: {result.error}")
-                if result.output_lines:
-                    print("[NUKE OUTPUT]")
-                    for line in result.output_lines[-20:]:
-                        print(line)
-        
-        if not progress.wasCanceled():
-            progress.setValue(batch_progress_maximum)
-        progress.close()
-        
         # Show summary
-        if progress.wasCanceled():
+        if cancelled:
             summary = f"Cancelled.\n\nCompleted: {completed}\nFailed: {failed}\nSkipped: {skipped}"
         else:
             summary = f"Done!\n\nCompleted: {completed}\nFailed: {failed}\nSkipped: {skipped}"
@@ -3180,28 +3389,62 @@ class page_nukedash(QMainWindow):
         QMessageBox.information(self, "Make All Previews", summary)
         
         # Refresh to show updated previews
-        self._worker.fetch()
+        self._request_api_refresh()
 
     def _on_auto_refresh_changed(self, state):
         """Toggle API polling timer on/off based on checkbox state."""
-        if state:
+        if state and not getattr(self, "_refresh_pause_reasons", set()) and not getattr(self, "_shutting_down", False):
             # Start polling timers
             self._timer.start()
         else:
             # Stop polling timers
             self._timer.stop()
 
-    def set_auto_refresh_paused(self, paused: bool) -> None:
+    def set_auto_refresh_paused(self, paused: bool, *, reason: str = "manual") -> None:
         """Temporarily pause auto-refresh without changing user preference."""
+        if not hasattr(self, "_refresh_pause_reasons"):
+            self._refresh_pause_reasons = set()
         if paused:
+            self._refresh_pause_reasons.add(reason)
+        else:
+            self._refresh_pause_reasons.discard(reason)
+        if self._refresh_pause_reasons:
             if self._timer:
                 self._timer.stop()
             return
-        if self.checkBox_refresh.isChecked() and self._timer:
+        if self.checkBox_refresh.isChecked() and self._timer and not getattr(self, "_shutting_down", False):
             self._timer.start()
+
+    def _request_api_refresh(self) -> None:
+        if self._shutting_down or self._fetch_in_flight:
+            return
+        self._fetch_in_flight = True
+        self.fetch_requested.emit()
+
+    def shutdown(self) -> bool:
+        self._shutting_down = True
+        for timer in self.findChildren(QTimer):
+            timer.stop()
+        self._chunked_loader.stop()
+        worker = getattr(self, "_thumbnail_batch_worker", None)
+        if worker is not None:
+            worker.cancel()
+        self._thread.requestInterruption()
+        self._thread.quit()
+        return self._thread.wait(1000)
+
+    def closeEvent(self, event):
+        if not self.shutdown():
+            self._thread.finished.connect(self.close)
+            event.ignore()
+            return
+        super().closeEvent(event)
 
     @pyqtSlot(str)
     def _on_error(self, msg):
+        self._fetch_in_flight = False
+        if getattr(self, "_shutting_down", False):
+            return
         self._loading_dialog.hide_loading()  # Hide loading dialog on error
         reset_queue = getattr(self, "_reset_task_materialize_queue", None)
         if callable(reset_queue):
@@ -3256,6 +3499,9 @@ class page_nukedash(QMainWindow):
 
     @pyqtSlot(list)
     def _on_data(self, jobs):
+        self._fetch_in_flight = False
+        if getattr(self, "_shutting_down", False):
+            return
         if getattr(self, "_thumbnail_batch_worker", None) is not None:
             # Keep an older in-flight refresh from replacing uploaded images.
             return
@@ -3265,6 +3511,19 @@ class page_nukedash(QMainWindow):
         if self._is_chunked_loading:
             self._pending_refresh_jobs = jobs
             return
+
+        incoming_ids = {job.get("id") for job in jobs}
+        if self._active_job_id is not None and self._active_job_id not in incoming_ids:
+            self._active_job_id = None
+            self._pending_job_data = None
+            self._last_job_sig = None
+            self._reset_task_materialize_queue()
+            self.timelines_tabs.blockSignals(True)
+            while self.timelines_tabs.count():
+                tab = self.timelines_tabs.widget(0)
+                self.timelines_tabs.removeTab(0)
+                tab.deleteLater()
+            self.timelines_tabs.blockSignals(False)
         
         # Hide loading dialog now that data has arrived (but only after initial load completes)
         if not self._initial_load:
@@ -3312,6 +3571,10 @@ class page_nukedash(QMainWindow):
                 item.setToolTip("This job is hidden in Django admin")
         
         self.comboBox_jobs.blockSignals(False)
+        # The initial request now completes after the first layout pass. Qt's
+        # minimum-content adjustment policy retains the empty control's width
+        # unless the content-aware size hint is explicitly invalidated.
+        self.comboBox_jobs.updateGeometry()
         
         # index by id for fast lookup
         by_id = {}
@@ -3326,6 +3589,19 @@ class page_nukedash(QMainWindow):
             for job in combo_jobs
             if job.get("id") is not None and not bool(job.get("hidden", False))
         }
+        self._jobs_by_id = by_id
+        if not combo_jobs:
+            self._initial_load = False
+            self._session_restored = True
+            self._loading_dialog.hide_loading()
+            if hasattr(self, "Label_results"):
+                self.Label_results.setText("0 results")
+            self.jobs_data_updated.emit(jobs)
+            self._finish_timed_load_after_data()
+            updater = getattr(self, "_update_assets_action_buttons", None)
+            if callable(updater):
+                updater()
+            return
         
         # AUTO-SELECT JOB ON INITIAL LOAD
         # Try to restore last session first, otherwise select first job
@@ -3356,7 +3632,9 @@ class page_nukedash(QMainWindow):
                 # Find and select the job in the combobox
                 for i in range(self.comboBox_jobs.count()):
                     if self.comboBox_jobs.itemData(i) == target_job_id:
+                        self.comboBox_jobs.blockSignals(True)
                         self.comboBox_jobs.setCurrentIndex(i)
+                        self.comboBox_jobs.blockSignals(False)
                         break
                 
                 # Store for delayed activation
@@ -3366,7 +3644,7 @@ class page_nukedash(QMainWindow):
                 job_title = target_job.get("title", "job")
                 self._loading_dialog.set_message(f"Loading {job_title}...")
                 # Use timer to let UI update, then start chunked loading
-                QTimer.singleShot(50, self._do_activate_pending_job)
+                _single_shot(self, 50, self._do_activate_pending_job)
                 return  # Exit early, rest will happen after activation
 
         # update job buttons list in place and avoid full clear
@@ -3386,7 +3664,7 @@ class page_nukedash(QMainWindow):
         
         # Reapply filters after data update (with small delay to ensure widgets are ready)
         # Use force=True to apply even if user happens to be scrolling
-        QTimer.singleShot(50, lambda: self._apply_filters(force=True))
+        _single_shot(self, 50, lambda: self._apply_filters(force=True))
         self.jobs_data_updated.emit(jobs)
         updater = getattr(self, "_update_assets_action_buttons", None)
         if callable(updater):
@@ -3453,7 +3731,7 @@ class page_nukedash(QMainWindow):
                 self._loading_dialog.show_loading(parent_window, f"Loading {job_title}...")
                 
             # Start chunked loading after dialog is shown
-            QTimer.singleShot(50, lambda: self._start_job_loading(job))
+            _single_shot(self, 50, lambda: self._start_job_loading(job))
     
     def _start_job_loading(self, job_data: dict):
         """Start loading a job using chunked loader with per-shot-card progress."""
@@ -3708,24 +3986,24 @@ class page_nukedash(QMainWindow):
                 tabs.blockSignals(False)
             scroll_position = restore_data.get("scroll_position", 0)
             if scroll_position > 0:
-                QTimer.singleShot(50, lambda: self._restore_scroll_position(scroll_position))
+                _single_shot(self, 50, lambda: self._restore_scroll_position(scroll_position))
         else:
             # No session to restore, save current state (user selected a new job)
-            QTimer.singleShot(150, self._save_session_state)
+            _single_shot(self, 150, self._save_session_state)
 
         self._apply_compact_view_state()
         updater = getattr(self, "_update_assets_action_buttons", None)
         if callable(updater):
             updater()
         # Reapply filters and task materialization after the new shot cards exist.
-        QTimer.singleShot(50, lambda: self._apply_filters(force=True))
+        _single_shot(self, 50, lambda: self._apply_filters(force=True))
         
         # BUGFIX: Process any refresh data that arrived during loading
         if self._pending_refresh_jobs is not None:
             pending = self._pending_refresh_jobs
             self._pending_refresh_jobs = None
             # Process with a small delay to let UI settle
-            QTimer.singleShot(100, lambda: self._on_data(pending))
+            _single_shot(self, 100, lambda: self._on_data(pending))
         if hasattr(self, "_pending_job_data") and self._pending_job_data:
             self.active_job_changed.emit(self._pending_job_data)
     
@@ -3740,10 +4018,14 @@ class page_nukedash(QMainWindow):
         # Restore scroll position with a small delay to ensure tab is active
         scroll_position = restore_data.get("scroll_position", 0)
         if scroll_position > 0:
-            QTimer.singleShot(50, lambda: self._restore_scroll_position(scroll_position))
+            _single_shot(self, 50, lambda: self._restore_scroll_position(scroll_position))
     
     def _restore_scroll_position(self, position: int):
         """Restore scroll position for the current timeline tab."""
+        scroll = getattr(self, "preview_scroll", None)
+        if scroll is not None:
+            scroll.verticalScrollBar().setValue(position)
+            return
         tabs = self.timelines_tabs
         current_widget = tabs.currentWidget()
         if current_widget:
@@ -3771,7 +4053,10 @@ class page_nukedash(QMainWindow):
         
         # Save scroll position of current timeline
         scroll_position = 0
-        current_widget = tabs.currentWidget()
+        main_scroll = getattr(self, "preview_scroll", None)
+        current_widget = tabs.currentWidget() if main_scroll is None else None
+        if main_scroll is not None:
+            scroll_position = main_scroll.verticalScrollBar().value()
         if current_widget:
             from PyQt6.QtWidgets import QScrollArea
             scroll_areas = current_widget.findChildren(QScrollArea)

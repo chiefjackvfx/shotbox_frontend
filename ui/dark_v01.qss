@@ -1026,6 +1026,40 @@ QLineEdit::placeholder {
     color: #6B7280;
 }
 
+/* Dashboard selectors and their embedded status editor use one text size. */
+QWidget#search_bar QComboBox,
+QWidget#search_bar QLineEdit {
+    font-size: 11px;
+}
+
+QWidget#search_bar QComboBox QLineEdit {
+    border: none;
+    padding: 0;
+    background-color: transparent;
+}
+
+QScrollArea#dashboard_filter_scroll QScrollBar:horizontal {
+    background-color: #1A1D23;
+    height: 8px;
+    margin: 0;
+}
+
+QScrollArea#dashboard_filter_scroll QScrollBar::handle:horizontal {
+    background-color: #404754;
+    min-width: 24px;
+    border-radius: 4px;
+}
+
+QScrollArea#dashboard_filter_scroll QScrollBar::add-line:horizontal,
+QScrollArea#dashboard_filter_scroll QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+
+QScrollArea#dashboard_filter_scroll QScrollBar::add-page:horizontal,
+QScrollArea#dashboard_filter_scroll QScrollBar::sub-page:horizontal {
+    background: transparent;
+}
+
 /* === SCROLLBARS === */
 QScrollBar:vertical {
     background-color: #1A1D23;
@@ -1818,8 +1852,8 @@ QLabel#label_colourspace[v02="true"],
 QLabel#label_original_clip[v02="true"],
 QLabel#label_notes[v02="true"],
 QLabel#label_last_conform[v02="true"] {
-    color: #B2BCC9;
-    font-size: 11px;
+    color: #C6CFDB;
+    font-size: 12px;
     border: none;
     background-color: transparent;
 }
@@ -1829,12 +1863,12 @@ QToolButton#btn_open_assets[v02="true"],
 QPushButton#btn_open_precomp[v02="true"] {
     min-height: 20px;
     padding: 3px 5px;
-    font-size: 10px;
+    font-size: 12px;
     border-width: 1px;
 }
 QPushButton#btn_open_nuke[v02="true"],
 QPushButton#btn_latest_render[v02="true"] {
-    font-size: 11px;
+    font-size: 12px;
     font-weight: normal;
     text-transform: none;
     letter-spacing: 0px;
@@ -1843,33 +1877,62 @@ QFrame#task_frame[v02="true"] {
     border: 1px solid #343E4A;
     border-radius: 4px;
 }
-QPushButton#btn_status[v02="true"],
-QPushButton#btn_assigned[v02="true"] {
-    font-size: 10px;
+QFrame#task_frame[v02="true"] QPushButton#btn_status,
+QFrame#task_frame[v02="true"] QPushButton#btn_assigned {
+    font-size: 12px;
+    color: #F1F5FA;
     text-transform: none;
     letter-spacing: 0px;
-    min-height: 14px;
-    padding: 1px 6px;
+    min-height: 20px;
+    padding: 2px 6px;
 }
-QLineEdit#edit_task_title_inline[presentation="checklist"][v02="true"],
-QLineEdit#edit_task_notes_inline[presentation="checklist"][v02="true"] {
-    min-height: 14px;
-    padding: 1px 6px;
+QFrame#task_frame[v02="true"] QLineEdit#edit_task_title_inline,
+QFrame#task_frame[v02="true"] QLineEdit#edit_task_notes_inline {
+    font-size: 12px;
+    color: #DCE3EC;
+    placeholder-text-color: #AFBBCB;
+    min-height: 20px;
+    padding: 2px 6px;
 }
-QPushButton#btn_priority[presentation="checklist"][v02="true"],
-QPushButton#btn_budget_hours[presentation="checklist"][v02="true"] {
-    min-height: 14px;
-    padding: 1px 4px;
+QFrame#task_frame[v02="true"] QPushButton#btn_priority,
+QFrame#task_frame[v02="true"] QPushButton#btn_budget_hours {
+    font-size: 12px;
+    color: #DCE3EC;
+    min-height: 20px;
+    padding: 2px 4px;
 }
-QPushButton#btn_task_title[v02="true"] {
-    font-size: 11px;
+QFrame#task_frame[v02="true"] QPushButton#btn_task_title,
+QFrame#task_frame[v02="true"] QLineEdit#edit_task_title_inline {
+    font-size: 13px;
     letter-spacing: 0px;
     text-align: left;
 }
+QFrame#task_frame[v02="true"] QPushButton#btn_hide_task,
+QFrame#task_frame[v02="true"] QPushButton#btn_delete_task {
+    color: #B8C4D3;
+    font-size: 12px;
+    min-width: 24px;
+    max-width: 24px;
+    min-height: 24px;
+    max-height: 24px;
+    padding: 0px;
+}
+QFrame#task_frame[v02="true"] QPushButton#btn_delete_task:hover {
+    color: #FF9797;
+}
+QFrame#frame_7[v02="true"] QLabel#label_frame_range,
+QFrame#frame_7[v02="true"] QLabel#label_edit_inpoint,
+QFrame#frame_7[v02="true"] QLabel#label_edit_outpoint,
+QFrame#frame_7[v02="true"] QLabel#label_4 {
+    color: #C6CFDB;
+    font-size: 12px;
+}
+QFrame#frame_7[v02="true"] QPushButton#btn_hide_shot,
+QFrame#frame_7[v02="true"] QPushButton#bnt_addTask {
+    color: #DCE3EC;
+    font-size: 12px;
+    padding: 2px 6px;
+}
 QLabel#label_shot[v02="true"][compact="true"] {
     font-size: 14px;
-}
-QPushButton#btn_status[v02="true"][compact="true"],
-QPushButton#btn_assigned[v02="true"][compact="true"] {
-    font-size: 8px;
 }
