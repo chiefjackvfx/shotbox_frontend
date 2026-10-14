@@ -383,9 +383,9 @@ class DjangoAPI:
         r = self._request('PATCH', url, json=fields, operation="update_task")
         return r.json()
     
-    def create_task(self, *, shot_id: int, title: str = "New Task", notes: str = ""):
+    def create_task(self, *, shot_id: int, title: str = "New Task", notes: str = "", **fields):
         url = f"{self.base_url}tasks"
-        payload = {"title": title, "shot": shot_id, "notes": notes}
+        payload = {**fields, "title": title, "shot": shot_id, "notes": notes}
         r = self._request('POST', url, json=payload, operation="create_task")
         return r.json()
     

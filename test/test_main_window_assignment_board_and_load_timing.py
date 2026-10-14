@@ -712,6 +712,55 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
 
 
 class MainWindowAssignmentBoardSyncTests(unittest.TestCase):
+    def test_saved_edit_survives_board_tab_reactivation_from_nukedash_cache(self):
+        board_module = importlib.import_module("page_assignment_board")
+        main_module, _fake_modules = import_main_module()
+        app = QApplication.instance() or QApplication([])
+        source_jobs = [{"id": 1, "title": "Job", "timelines": [{"id": 101, "shots": [
+            {"id": 1001, "title": "SH010", "tasks": [
+                {"id": 7, "title": "Comp", "artist": None, "status": "in_progress"},
+            ]},
+        ]}]}]
+        harness = types.SimpleNamespace(page_nukedash=types.SimpleNamespace(_jobs_by_id={1: source_jobs[0]}))
+        with mock.patch.object(board_module.AssignmentBoardPage, "_load_users", lambda self: None):
+            board = board_module.AssignmentBoardPage()
+        try:
+            board.task_data_changed.connect(
+                lambda shot_id, task: main_module.MainWindow._on_assignment_task_changed(harness, shot_id, task)
+            )
+            board.show()
+            board.set_jobs_data(source_jobs)
+            app.processEvents()
+            board.columns["unassigned"].task_cards[7][1]._apply_updated_task({"id": 7, "title": "Renamed"})
+            board.hide()
+            board.set_jobs_data(list(harness.page_nukedash._jobs_by_id.values()))
+            board.show()
+            app.processEvents()
+            self.assertEqual(board.columns["unassigned"].task_cards[7][1].btn_task_title.text(), "Renamed")
+        finally:
+            board.close()
+            board.deleteLater()
+            app.processEvents()
+
+    def test_board_task_changes_update_snapshot_used_on_tab_activation(self):
+        main_module, _fake_modules = import_main_module()
+        shot = {"id": 1001, "tasks": [{"id": 7, "title": "Comp", "artist": 10}]}
+        nuke_page = types.SimpleNamespace(
+            _jobs_by_id={1: {"id": 1, "timelines": [{"shots": [shot]}]}},
+            _last_job_sig="old signature",
+        )
+        harness = types.SimpleNamespace(page_nukedash=nuke_page)
+        handler = main_module.MainWindow._on_assignment_task_changed
+
+        handler(harness, 1001, {"id": 7, "title": "Renamed", "artist": 20})
+        self.assertEqual(shot["tasks"], [{"id": 7, "title": "Renamed", "artist": 20}])
+        self.assertIsNone(nuke_page._last_job_sig)
+
+        handler(harness, 1001, {"id": 8, "title": "Paint", "artist": None})
+        self.assertEqual(len(shot["tasks"]), 2)
+        handler(harness, 1001, {"id": 7, "deleted": True})
+        self.assertEqual(shot["tasks"], [{"id": 8, "title": "Paint", "artist": None}])
+
     def test_active_job_sync_pushes_jobs_snapshot_to_assignment_board(self):
         main_module, fake_modules = import_main_module()
         with mock.patch.dict(sys.modules, fake_modules, clear=False):

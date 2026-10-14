@@ -9,15 +9,17 @@ Kanban-style drag-and-drop interface for assigning tasks to artists.
 from typing import Optional
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 import gc
 import threading
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QFrame, QScrollArea, QPushButton, QComboBox, QProgressBar, QDialog, QCheckBox
+    QLabel, QFrame, QScrollArea, QPushButton, QComboBox, QProgressBar, QDialog, QCheckBox,
+    QApplication
 )
 from PyQt6.QtCore import (
-    Qt, QMimeData, QTimer, QSize, QEvent, pyqtSignal
+    Qt, QMimeData, QTimer, QSize, QEvent, pyqtSignal, pyqtSlot
 )
 from PyQt6.QtGui import QDrag, QPixmap, QPainter, QColor
 
@@ -30,6 +32,7 @@ _THUMB_CACHE = OrderedDict()
 _THUMB_CACHE_LOCK = threading.Lock()
 _THUMB_CACHE_MAX = 100
 _THUMB_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+_TASK_MIME_TYPE = "application/x-shotbox-task"
 
 # ============================================================================
 # TASK CARD WIDGET
@@ -41,7 +44,9 @@ class DraggableTaskWidget(widgets_module.TaskWidget):
     def __init__(self, task_data: dict, parent=None, column=None):
         self._column = column
         self._task_ref = task_data if isinstance(task_data, dict) else None
+        self._initializing = True
         super().__init__(task_data)
+        self._initializing = False
         if parent is not None:
             self.setParent(parent)
         self._drag_start_pos = None
@@ -60,21 +65,27 @@ class DraggableTaskWidget(widgets_module.TaskWidget):
             self.drag_handle.setVisible(True)
 
     def update_from_data(self, task_data: dict):
-        if self._column and isinstance(task_data, dict):
-            new_artist = task_data.get("artist")
+        # API responses use 'shot' for its numeric ID; cards use it as a label.
+        merged = dict(self._task_ref or {})
+        fields = dict(task_data or {})
+        if "shot_id" in merged:
+            fields.pop("shot", None)
+        merged.update(fields)
+        if self._column and not self._initializing:
+            board = self._column.board
+            new_artist = merged.get("artist")
             target_id = new_artist if new_artist is not None else "unassigned"
-            board = getattr(self._column, "board", None)
-            if board and hasattr(board, "columns") and target_id not in board.columns:
-                target_id = self._column.artist_data.get("id")
+            if target_id not in board.columns:
+                target_id = "unassigned"
             if self._column.artist_data.get("id") != target_id:
-                if self._column.board and hasattr(self._column.board, "relocate_task_ui"):
-                    self._column.board.relocate_task_ui(task_data, self._column, target_id)
+                board.relocate_task_ui(merged, self._column, target_id)
                 return
+            board._remember_task(merged)
 
-        super().update_from_data(task_data)
-        if isinstance(self._task_ref, dict) and isinstance(task_data, dict):
-            self._task_ref.update(task_data)
-        if self._column:
+        super().update_from_data(merged)
+        if isinstance(self._task_ref, dict):
+            self._task_ref.update(merged)
+        if self._column and not self._initializing:
             if self._column.board and hasattr(self._column.board, "_should_show_task"):
                 task_ref = self._task_ref if isinstance(self._task_ref, dict) else task_data
                 if not self._column.board._should_show_task(task_ref):
@@ -83,6 +94,30 @@ class DraggableTaskWidget(widgets_module.TaskWidget):
                         self._column.remove_task(task_id)
                     return
             self._column._update_stats()
+
+    def _artist_label(self, user_id) -> str:
+        if self._column:
+            if user_id is None:
+                return "Unassigned"
+            for user in self._column.board._users:
+                if user.get("id") == user_id:
+                    return user.get("first_name") or user.get("username") or f"User {user_id}"
+            return f"User {user_id}"
+        return super()._artist_label(user_id)
+
+    def _on_delete_clicked(self):
+        if not self._column:
+            return super()._on_delete_clicked()
+        board = self._column.board
+        if self._task_id in board._pending_assignments:
+            return
+        try:
+            self._api.delete_task(self._task_id)
+        except Exception:
+            board.toast.show_message("Could not delete task")
+            return
+        board._forget_task(self._task_id)
+        self._column.remove_task(self._task_id)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -113,34 +148,40 @@ class DraggableTaskWidget(widgets_module.TaskWidget):
         task_id = getattr(self, "_task_id", None)
         if task_id is None:
             return
+        if self._column and task_id in self._column.board._pending_assignments:
+            return
 
-        if self._column and self._column.board:
-            self._column.board.notify_drag_state(True)
+        board = self._column.board if self._column else None
+        if board:
+            board.notify_drag_state(True)
+        try:
+            drag = QDrag(self)
+            mime_data = QMimeData()
+            mime_data.setText(str(task_id))
+            mime_data.setData(_TASK_MIME_TYPE, str(task_id).encode("ascii"))
+            drag.setMimeData(mime_data)
 
-        drag = QDrag(self)
-        mime_data = QMimeData()
-        mime_data.setText(str(task_id))
-        drag.setMimeData(mime_data)
+            pixmap = QPixmap(self.size())
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            painter.setOpacity(0.8)
+            self.render(painter)
+            painter.end()
 
-        pixmap = QPixmap(self.size())
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        painter.setOpacity(0.8)
-        self.render(painter)
-        painter.end()
-
-        drag.setPixmap(pixmap)
-        drag.setHotSpot(event.pos())
-        drag.exec(Qt.DropAction.MoveAction)
-
-        if self._column and self._column.board:
-            self._column.board.notify_drag_state(False)
+            drag.setPixmap(pixmap)
+            drag.setHotSpot(event.pos())
+            drag.exec(Qt.DropAction.MoveAction)
+        finally:
+            self._drag_allowed = False
+            self._drag_start_pos = None
+            if board:
+                board.notify_drag_state(False)
 
     def _is_drag_handle_hit(self, pos) -> bool:
         handle = getattr(self, "drag_handle", None)
         if not handle or not handle.isVisible():
             return True
-        return handle.geometry().contains(pos)
+        return handle.rect().contains(handle.mapFrom(self, pos))
 
 
 # ============================================================================
@@ -149,6 +190,8 @@ class DraggableTaskWidget(widgets_module.TaskWidget):
 
 class ShotGroupCard(QFrame):
     """A small shot card that contains its tasks."""
+
+    thumbnail_ready = pyqtSignal(str, bytes)
 
     def __init__(self, shot_data: dict, parent=None, column=None):
         super().__init__(parent)
@@ -166,6 +209,7 @@ class ShotGroupCard(QFrame):
 
         self._destroyed = False
         self.destroyed.connect(self._mark_destroyed)
+        self.thumbnail_ready.connect(self._set_thumbnail_from_bytes, Qt.ConnectionType.QueuedConnection)
 
         self._setup_ui()
         self._apply_thumbnail()
@@ -239,10 +283,14 @@ class ShotGroupCard(QFrame):
                 _THUMB_CACHE.move_to_end(url)
                 while len(_THUMB_CACHE) > _THUMB_CACHE_MAX:
                     _THUMB_CACHE.popitem(last=False)
-            QTimer.singleShot(0, lambda: self._set_thumbnail_from_bytes(url, data))
+            try:
+                self.thumbnail_ready.emit(url, data)
+            except RuntimeError:
+                pass  # The shot group was deleted while downloading.
 
         _THUMB_EXECUTOR.submit(worker)
 
+    @pyqtSlot(str, bytes)
     def _set_thumbnail_from_bytes(self, url: str, data: bytes) -> None:
         if self._destroyed or not data:
             return
@@ -266,6 +314,8 @@ class ShotGroupCard(QFrame):
         card.setAcceptDrops(True)
         if column:
             card.installEventFilter(column)
+            if task_data.get("id") in column.board._pending_assignments:
+                card.setEnabled(False)
         self.tasks_layout.addWidget(card)
         self._task_cards.append(card)
         return card
@@ -292,25 +342,23 @@ class ShotGroupCard(QFrame):
             return
         values = dlg.get_values()
         try:
-            new_task = self._api.create_task(shot_id=shot_id, title=values.get("title", "New Task"))
-            update_payload = {}
-            if values.get("notes"):
-                update_payload["notes"] = values["notes"]
-            if values.get("status") is not None:
-                update_payload["status"] = values["status"]
-            if values.get("priority") is not None:
-                update_payload["priority"] = values["priority"]
-            if values.get("budget_hours") is not None:
-                update_payload["budget_hours"] = values["budget_hours"]
-            if values.get("artist") is not None:
-                update_payload["artist"] = values["artist"]
-            if update_payload:
-                new_task = self._api.update_task(new_task.get("id"), **update_payload)
+            new_task = self._api.create_task(
+                shot_id=shot_id,
+                title=values.get("title", "New Task"),
+                notes=values.get("notes") or "",
+                status=values.get("status", "unassigned"),
+                priority=values.get("priority", 5),
+                budget_hours=values.get("budget_hours", 0),
+                artist=values.get("artist"),
+            )
         except Exception as exc:
             print(f"[Assignment Board] Add task failed: {exc}")
+            if self.column:
+                self.column.board.toast.show_message("Could not create task")
             return
 
         task_data = {
+            **new_task,
             "id": new_task.get("id"),
             "shot": self.shot_data.get("shot", ""),
             "shot_id": shot_id,
@@ -328,6 +376,7 @@ class ShotGroupCard(QFrame):
         target_artist_id = task_data.get("artist") or "unassigned"
         target_column = None
         if self.column and getattr(self.column, "board", None):
+            self.column.board._remember_task(task_data)
             target_column = self.column.board.columns.get(target_artist_id)
             if not target_column:
                 target_column = self.column.board.columns.get("unassigned")
@@ -554,6 +603,10 @@ class ArtistColumn(QFrame):
         if self.board and hasattr(self.board, "_should_show_task"):
             if not self.board._should_show_task(task_data):
                 return
+        existing = self.task_cards.get(task_data.get("id"))
+        if existing:
+            existing[1].update_from_data(task_data)
+            return
         shot_id = task_data.get("shot_id")
         if shot_id is None:
             shot_id = task_data.get("shot")
@@ -635,13 +688,17 @@ class ArtistColumn(QFrame):
             self.footer_left.setText(f"{count} tasks")
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasText():
+        if self._drop_task_id(event) is not None:
             event.acceptProposedAction()
             self.drop_indicator.show()
+        else:
+            event.ignore()
 
     def dragMoveEvent(self, event):
-        if event.mimeData().hasText():
+        if self._drop_task_id(event) is not None:
             event.acceptProposedAction()
+        else:
+            event.ignore()
 
     def dragLeaveEvent(self, event):
         self.drop_indicator.hide()
@@ -649,15 +706,32 @@ class ArtistColumn(QFrame):
     def dropEvent(self, event):
         self.drop_indicator.hide()
 
-        if not event.mimeData().hasText():
+        task_id = self._drop_task_id(event)
+        if task_id is None:
             event.ignore()
             return
 
-        task_id = int(event.mimeData().text())
         if self.board:
             self.board.move_task(task_id, self.artist_data["id"])
 
         event.acceptProposedAction()
+
+    def _drop_task_id(self, event):
+        mime = event.mimeData()
+        if not mime.hasFormat(_TASK_MIME_TYPE):
+            return None
+        source = event.source()
+        if not isinstance(source, DraggableTaskWidget):
+            return None
+        if not source._column or source._column.board is not self.board:
+            return None
+        try:
+            task_id = int(bytes(mime.data(_TASK_MIME_TYPE)).decode("ascii"))
+        except (ValueError, UnicodeDecodeError):
+            return None
+        if task_id != source._task_id or task_id in self.board._pending_assignments:
+            return None
+        return task_id
 
 
 # ============================================================================
@@ -709,11 +783,17 @@ class AssignmentBoardPage(QWidget):
 
     drag_state_changed = pyqtSignal(bool)
     auto_refresh_pause_changed = pyqtSignal(bool)
+    task_data_changed = pyqtSignal(int, object)
+    _async_completed = pyqtSignal(object, object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self._api = http_help.DjangoAPI()
         self._jobs_by_id = {}
+        self._task_records = {}
+        self._shots_by_id = {}
+        self._pending_assignments = {}
+        self._selected_shot_ids = set()
         self._active_job_id = None
         self._active_timeline_id = None
         self._users = []
@@ -729,8 +809,12 @@ class AssignmentBoardPage(QWidget):
         self._pending_task_index = 0
         self._build_chunk_size = 25
         self._build_chunk_delay_ms = 10
+        self._refresh_retry_timer = QTimer(self)
+        self._refresh_retry_timer.setSingleShot(True)
+        self._refresh_retry_timer.timeout.connect(self._apply_pending_jobs)
 
         self._setup_ui()
+        self._async_completed.connect(self._dispatch_async_result, Qt.ConnectionType.QueuedConnection)
         self._load_users()
 
     def _setup_ui(self):
@@ -809,38 +893,75 @@ class AssignmentBoardPage(QWidget):
         try:
             jobs = self._api.getAPI()
         except Exception:
-            jobs = []
+            self.toast.show_message("Could not refresh board")
+            return
         self.set_jobs_data(jobs, force=True)
 
     def set_jobs_data(self, jobs: list, force: bool = False):
         if not self.isVisible():
-            self._deferred_jobs_data = jobs
+            self._deferred_jobs_data = deepcopy(jobs)
+            self._pending_jobs_data = None
+            self._refresh_retry_timer.stop()
             return
-        if self._drag_active:
-            self._pending_jobs_data = jobs
+        if self._drag_active or self._has_open_editor():
+            self._pending_jobs_data = deepcopy(jobs)
+            if not self._drag_active:
+                self._refresh_retry_timer.start(100)
             return
-        self._jobs_by_id = {job.get("id"): job for job in jobs if job.get("id") is not None}
+        self._pending_jobs_data = None
+        self._refresh_retry_timer.stop()
+        # Own the board's editable data without mutating NukeDash's snapshot.
+        incoming = {job.get("id"): deepcopy(job) for job in jobs if job.get("id") is not None}
+        for job in incoming.values():
+            for timeline in job.get("timelines", []):
+                for shot in timeline.get("shots", []):
+                    for task in shot.get("tasks", []):
+                        pending = self._pending_assignments.get(task.get("id"))
+                        if pending:
+                            task["artist"] = pending["target_artist"]
+        if not force and incoming == self._jobs_by_id and self.columns:
+            return
+        self._jobs_by_id = incoming
+        self._index_tasks()
+        if self._active_job_id not in incoming:
+            self._active_job_id = next(iter(incoming), None)
+            self._active_timeline_id = None
         self._populate_job_combo()
-        if self.job_combo.count() == 0:
+        self._populate_timeline_combo()
+        if not incoming:
             self._clear_board()
             return
-        if self._active_job_id is not None:
-            self.set_active_job_id(self._active_job_id)
+        self._rebuild_board()
+
+    def _has_open_editor(self) -> bool:
+        for widget in (QApplication.activeModalWidget(), QApplication.activePopupWidget()):
+            # isAncestorOf stops at window boundaries such as QDialog/QMenu.
+            while widget is not None:
+                if widget is self:
+                    return True
+                widget = widget.parentWidget()
+        return False
+
+    def _apply_pending_jobs(self) -> None:
+        if self._pending_jobs_data is None or self._drag_active:
             return
-        if self.job_combo.currentIndex() < 0:
-            self.job_combo.blockSignals(True)
-            self.job_combo.setCurrentIndex(0)
-            self.job_combo.blockSignals(False)
-        if self.job_combo.currentIndex() >= 0:
-            self._on_job_selected(self.job_combo.currentIndex())
+        if self._has_open_editor():
+            self._refresh_retry_timer.start(100)
+            return
+        pending = self._pending_jobs_data
+        self._pending_jobs_data = None
+        self.set_jobs_data(pending, force=True)
 
     def set_active_job_id(self, job_id: int | None):
         if job_id is None:
             return
-        self._active_job_id = job_id
+        if not self.isVisible() or self.job_combo.count() == 0:
+            self._active_job_id = job_id
+            return
         for i in range(self.job_combo.count()):
             if self.job_combo.itemData(i) == job_id:
                 if self.job_combo.currentIndex() == i:
+                    self._active_job_id = job_id
                     if not self.columns:
                         self._populate_timeline_combo()
                         self._rebuild_board()
@@ -853,13 +974,12 @@ class AssignmentBoardPage(QWidget):
             return
         self._drag_active = active
         self.drag_state_changed.emit(active)
-        if not active and self._pending_jobs_data is not None:
-            pending = self._pending_jobs_data
-            self._pending_jobs_data = None
-            self.set_jobs_data(pending, force=True)
+        if not active:
+            self._apply_pending_jobs()
 
     def set_active_timeline_id(self, timeline_id: int | None):
-        if self.timeline_combo.count() == 0:
+        if not self.isVisible() or self.timeline_combo.count() == 0:
+            self._active_timeline_id = timeline_id
             return
         if timeline_id is None:
             if self.timeline_combo.currentIndex() == 0:
@@ -887,6 +1007,7 @@ class AssignmentBoardPage(QWidget):
             return
         if self._jobs_by_id and not self.columns:
             if self._active_job_id is not None:
+                self._populate_job_combo()
                 self._populate_timeline_combo()
                 self._rebuild_board()
             elif self.job_combo.count() > 0:
@@ -907,17 +1028,16 @@ class AssignmentBoardPage(QWidget):
             title = job.get("title", f"Job {job_id}")
             self.job_combo.addItem(title, job_id)
 
+        index = self.job_combo.findData(self._active_job_id)
+        self.job_combo.setCurrentIndex(index)
         self.job_combo.blockSignals(False)
-
-        if self._active_job_id is None and self.job_combo.count() > 0:
-            self.job_combo.setCurrentIndex(0)
-        elif self._active_job_id is not None:
-            self.set_active_job_id(self._active_job_id)
 
     def _on_job_selected(self, index):
         if index < 0:
             return
         job_id = self.job_combo.itemData(index)
+        if job_id != self._active_job_id:
+            self._active_timeline_id = None
         self._active_job_id = job_id
         self._populate_timeline_combo()
         self._rebuild_board()
@@ -934,9 +1054,10 @@ class AssignmentBoardPage(QWidget):
                 title = timeline.get("title", f"Timeline {timeline_id}")
                 self.timeline_combo.addItem(title, timeline_id)
 
+        index = self.timeline_combo.findData(self._active_timeline_id)
+        self.timeline_combo.setCurrentIndex(max(0, index))
+        self._active_timeline_id = self.timeline_combo.currentData()
         self.timeline_combo.blockSignals(False)
-        self.timeline_combo.setCurrentIndex(0)
-        self._active_timeline_id = None
 
     def _on_timeline_selected(self, index):
         if index < 0:
@@ -957,6 +1078,7 @@ class AssignmentBoardPage(QWidget):
         self.auto_refresh_pause_changed.emit(checked)
 
     def _clear_board(self):
+        self._build_token += 1
         while self.board_layout.count():
             item = self.board_layout.takeAt(0)
             if item.widget():
@@ -966,10 +1088,10 @@ class AssignmentBoardPage(QWidget):
         self._pending_task_index = 0
 
     def _rebuild_board(self):
-        self._build_token += 1
-        build_token = self._build_token
-
         self._clear_board()
+        build_token = self._build_token
+        if not self.isVisible():
+            return
 
         artists = self._build_artist_list()
         for artist in artists:
@@ -993,7 +1115,11 @@ class AssignmentBoardPage(QWidget):
         start = self._pending_task_index
         end = min(start + self._build_chunk_size, len(self._pending_tasks))
         for i in range(start, end):
-            task = self._pending_tasks[i]
+            record = self._task_records.get(self._pending_tasks[i].get("id"))
+            if record is None:
+                continue
+            shot, raw_task = record
+            task = self._display_task(raw_task, shot)
             artist_id = task.get("artist", "unassigned")
             if artist_id not in self.columns:
                 artist_id = "unassigned"
@@ -1046,6 +1172,7 @@ class AssignmentBoardPage(QWidget):
         return artists
 
     def _collect_tasks(self) -> list[dict]:
+        self._selected_shot_ids = set()
         job = self._jobs_by_id.get(self._active_job_id)
         if not job:
             return []
@@ -1055,28 +1182,93 @@ class AssignmentBoardPage(QWidget):
             if self._active_timeline_id is not None and timeline.get("id") != self._active_timeline_id:
                 continue
             for shot in timeline.get("shots", []):
-                shot_title = shot.get("title", "")
-                shot_id = shot.get("id")
-                thumbnail_url = self._build_thumbnail_url(shot.get("thumbnail"))
+                self._selected_shot_ids.add(shot.get("id"))
                 for task in shot.get("tasks", []):
                     if not self._should_show_task(task):
                         continue
-                    status = task.get("status", "unassigned")
-                    tasks.append({
-                        "id": task.get("id"),
-                        "shot": shot_title,
-                        "shot_id": shot_id,
-                        "thumbnail_url": thumbnail_url,
-                        "title": task.get("title", "Task"),
-                        "notes": task.get("notes") or "",
-                        "status": status,
-                        "artist": task.get("artist"),
-                        "priority": task.get("priority", 5),
-                        "budget_hours": task.get("budget_hours", 0),
-                        "hidden": task.get("hidden", False),
-                        "hours": float(task.get("budget_hours") or 0),
-                    })
+                    tasks.append(self._display_task(task, shot))
         return tasks
+
+    def _index_tasks(self) -> None:
+        self._task_records = {}
+        self._shots_by_id = {}
+        for job in self._jobs_by_id.values():
+            for timeline in job.get("timelines", []):
+                for shot in timeline.get("shots", []):
+                    self._shots_by_id[shot.get("id")] = shot
+                    for task in shot.get("tasks", []):
+                        self._task_records[task.get("id")] = (shot, task)
+
+    def _display_task(self, task: dict, shot: dict) -> dict:
+        return {
+            **task,
+            "shot": shot.get("title", ""),
+            "shot_id": shot.get("id"),
+            "thumbnail_url": self._build_thumbnail_url(shot.get("thumbnail")),
+            "hours": float(task.get("budget_hours") or 0),
+        }
+
+    def _remember_task(self, task_data: dict) -> None:
+        task_id = task_data.get("id")
+        record = self._task_records.get(task_id)
+        if record is None:
+            shot = self._shots_by_id.get(task_data.get("shot_id"))
+            if shot is None or task_id is None:
+                return
+            task = {"id": task_id}
+            shot.setdefault("tasks", []).append(task)
+            self._task_records[task_id] = (shot, task)
+        else:
+            shot, task = record
+        updates = {key: value for key, value in task_data.items()
+                   if key not in ("shot", "shot_id", "thumbnail_url", "hours")}
+        task.update(updates)
+        task["shot"] = shot.get("id")
+        self._sync_queued_task(shot["id"], updates)
+        self.task_data_changed.emit(shot["id"], deepcopy(task))
+
+    def _forget_task(self, task_id: int) -> None:
+        record = self._task_records.pop(task_id, None)
+        if record:
+            shot, task = record
+            shot["tasks"].remove(task)
+            self._sync_queued_task(shot["id"], task, deleted=True)
+            self.task_data_changed.emit(shot["id"], {"id": task_id, "deleted": True})
+
+    def _sync_queued_task(self, shot_id: int, task: dict, *, deleted: bool = False) -> None:
+        # Snapshots queued during a drag/tab switch can predate a local save.
+        for snapshot in (self._pending_jobs_data, self._deferred_jobs_data):
+            for job in snapshot or []:
+                for timeline in job.get("timelines", []):
+                    for shot in timeline.get("shots", []):
+                        if shot.get("id") != shot_id:
+                            continue
+                        tasks = shot.setdefault("tasks", [])
+                        if deleted:
+                            shot["tasks"] = [item for item in tasks if item.get("id") != task["id"]]
+                        else:
+                            existing = next((item for item in tasks if item.get("id") == task["id"]), None)
+                            if existing is None:
+                                record = self._task_records.get(task["id"])
+                                if record:
+                                    tasks.append(deepcopy(record[1]))
+                            else:
+                                existing.update(deepcopy(task))
+
+    def _place_task(self, task_id: int) -> None:
+        # Resolve current columns: a refresh or tab switch may have replaced them.
+        for column in self.columns.values():
+            if task_id in column.task_cards:
+                column.remove_task(task_id)
+        record = self._task_records.get(task_id)
+        if record is None or not self.isVisible():
+            return
+        shot, task = record
+        if shot.get("id") not in self._selected_shot_ids:
+            return
+        column = self.columns.get(task.get("artist")) or self.columns.get("unassigned")
+        if column:
+            column.add_task(self._display_task(task, shot))
 
     def _should_show_task(self, task_data: dict) -> bool:
         if task_data.get("hidden") and not self._show_hidden_tasks:
@@ -1099,72 +1291,52 @@ class AssignmentBoardPage(QWidget):
         return f"{base_url.rstrip('/')}{path}"
 
     def move_task(self, task_id: int, target_artist_id):
-        source_column = None
-        task_data = None
-
-        for column in self.columns.values():
-            for task in column.tasks:
-                if task.get("id") == task_id:
-                    source_column = column
-                    break
-            if source_column:
-                break
-
-        if not source_column:
+        if task_id in self._pending_assignments:
             return
-
-        if source_column.artist_data["id"] == target_artist_id:
+        record = self._task_records.get(task_id)
+        if record is None:
             return
-
+        _shot, task = record
         target_artist = None if target_artist_id == "unassigned" else target_artist_id
-
-        task_data = source_column.remove_task(task_id)
-        if not task_data:
+        if task.get("artist") == target_artist or target_artist_id not in self.columns:
             return
 
-        task_data["artist"] = target_artist
-
-        target_column = self.columns.get(target_artist_id)
-        if not target_column:
-            target_column = self.columns.get("unassigned")
-        if not target_column:
-            self.toast.show_message("Assignment failed")
-            return
-
-        target_column.add_task(task_data)
+        original_artist = task.get("artist")
+        self._pending_assignments[task_id] = {
+            "original_artist": original_artist,
+            "target_artist": target_artist,
+        }
+        self._remember_task({"id": task_id, "artist": target_artist})
+        self._place_task(task_id)
+        artist_name = self.columns[target_artist_id].artist_data["name"]
 
         def on_success():
-            if target_artist_id == "unassigned":
-                self.toast.show_message("Task moved to Unassigned")
-            else:
-                artist_name = target_column.artist_data["name"]
-                self.toast.show_message(f"Task assigned to {artist_name}")
+            self._pending_assignments.pop(task_id, None)
+            self._remember_task({"id": task_id, "artist": target_artist})
+            self._place_task(task_id)
+            message = ("Task moved to Unassigned" if target_artist is None
+                       else f"Task assigned to {artist_name}")
+            self.toast.show_message(message)
 
         def on_error(_exc: Exception):
-            target_column.remove_task(task_id)
-            task_data["artist"] = source_column.artist_data.get("id")
-            source_column.add_task(task_data)
+            self._pending_assignments.pop(task_id, None)
+            self._remember_task({"id": task_id, "artist": original_artist})
+            self._place_task(task_id)
             self.toast.show_message("Assignment failed")
 
         self._update_task_artist_async(task_id, target_artist, on_success, on_error)
 
     def relocate_task_ui(self, task_data: dict, source_column: ArtistColumn, target_artist_id):
-        if not source_column:
-            return
-        if target_artist_id is None:
-            target_artist_id = "unassigned"
-        if source_column.artist_data.get("id") == target_artist_id:
-            return
-        task_id = task_data.get("id")
-        if task_id is None:
-            return
+        # Preserve shot metadata and the real artist ID, even without a column.
+        self._remember_task(task_data)
+        self._place_task(task_data.get("id"))
 
-        source_column.remove_task(task_id)
-
-        task_data["artist"] = None if target_artist_id == "unassigned" else target_artist_id
-        target_column = self.columns.get(target_artist_id) or self.columns.get("unassigned")
-        if target_column:
-            target_column.add_task(task_data)
+    @pyqtSlot(object, object)
+    def _dispatch_async_result(self, callback, error) -> None:
+        if error is None:
+            callback()
+        else:
+            callback(error)
 
     def _update_task_artist_async(
         self,
@@ -1177,8 +1349,12 @@ class AssignmentBoardPage(QWidget):
             try:
                 self._api.update_task(task_id, artist=target_artist)
             except Exception as exc:
-                QTimer.singleShot(0, lambda: on_error(exc))
-                return
-            QTimer.singleShot(0, on_success)
+                callback, error = on_error, exc
+            else:
+                callback, error = on_success, None
+            try:
+                self._async_completed.emit(callback, error)
+            except RuntimeError:
+                pass  # The board was closed and deleted during the request.
 
         threading.Thread(target=worker, daemon=True).start()

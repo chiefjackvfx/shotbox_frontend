@@ -8,9 +8,9 @@ import unittest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDialog, QPushButton
+from PyQt6.QtWidgets import QApplication, QDialog, QPushButton, QScrollArea
 
 from task_create_dialog import TaskCreateDialog
 
@@ -99,6 +99,43 @@ class TaskCreateDialogTests(unittest.TestCase):
                     QTest.mouseClick(cancel, Qt.MouseButton.LeftButton)
                 self.assertFalse(dialog.isVisible())
                 self.assertEqual(dialog.result(), QDialog.DialogCode.Rejected)
+
+    def test_styled_dialog_keeps_wrapped_presets_inside_their_containers(self):
+        old_style = self.app.styleSheet()
+        self.addCleanup(self.app.setStyleSheet, old_style)
+        theme = Path(__file__).resolve().parents[1] / "ui" / "dark_v01.qss"
+        self.app.setStyleSheet(theme.read_text(encoding="utf-8"))
+        dialog = self.show_dialog()
+
+        # Exercise initial sizing, a cramped display, and subsequent resizing.
+        for size in (None, (300, 380), (560, 300), (700, 520)):
+            with self.subTest(size=size):
+                if size is not None:
+                    dialog.resize(*size)
+                self.app.processEvents()
+                for button in dialog.findChildren(QPushButton):
+                    if button.objectName() in {"task_preset_button", "task_artist_button"}:
+                        self.assertTrue(
+                            button.parentWidget().rect().contains(button.geometry()),
+                            f"Clipped preset: {button.text()}",
+                        )
+                for field in (dialog.title_edit, dialog.notes_edit, dialog.budget_spin, dialog.priority_spin):
+                    self.assertGreaterEqual(field.height(), field.minimumSizeHint().height())
+                for button in dialog.findChildren(QPushButton):
+                    if button.text() in {"Cancel", "Create"}:
+                        top_left = button.mapTo(dialog, QPoint())
+                        self.assertTrue(dialog.rect().contains(top_left))
+                        self.assertTrue(dialog.rect().contains(top_left + button.rect().bottomRight()))
+
+                scroll = dialog.findChild(QScrollArea)
+                if size == (560, 300):
+                    self.assertGreater(scroll.verticalScrollBar().maximum(), 0)
+                    last_preset = dialog.findChildren(QPushButton, "task_artist_button")[-1]
+                    scroll.ensureWidgetVisible(last_preset)
+                    self.app.processEvents()
+                    top_left = last_preset.mapTo(scroll.viewport(), QPoint())
+                    self.assertTrue(scroll.viewport().rect().contains(top_left))
+                    self.assertTrue(scroll.viewport().rect().contains(top_left + last_preset.rect().bottomRight()))
 
 
 if __name__ == "__main__":

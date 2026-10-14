@@ -18,9 +18,10 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QComboBox,
     QFrame,
+    QScrollArea,
     QWidget,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QKeySequence, QShortcut
 
 import http_help
@@ -100,10 +101,40 @@ class TaskCreateDialog(QDialog):
         self.priority_spin.interpretText()
         super().accept()
 
+    def sizeHint(self) -> QSize:
+        if not hasattr(self, "_form"):
+            return super().sizeHint()
+        # Qt uses logical pixels here; do not multiply by the monitor's DPR.
+        margins = self.layout().contentsMargins()
+        width = max(560, self.fontMetrics().averageCharWidth() * 80)
+        screen = self.screen()
+        if screen is not None:
+            width = min(width, max(1, screen.availableGeometry().width() - 32))
+        form_width = max(1, width - margins.left() - margins.right())
+        height = self._form.layout().totalHeightForWidth(form_width)
+        height += self._buttons_row.sizeHint().height() + self.layout().spacing()
+        height += margins.top() + margins.bottom()
+        if screen is not None:
+            height = min(height, max(1, screen.availableGeometry().height() - 64))
+        return QSize(width, height)
+
     def _build_ui(self) -> None:
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(8, 8, 8, 8)
+        outer_layout.setSpacing(6)
+
+        # A resizable scroll area respects the form's height-for-width, including
+        # every wrapped preset row, even on smaller or differently scaled screens.
+        self._form = QWidget()
+        layout = QVBoxLayout(self._form)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(6)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(self._form)
+        outer_layout.addWidget(scroll)
 
         grid_container = QWidget()
         grid_layout = QGridLayout(grid_container)
@@ -200,7 +231,7 @@ class TaskCreateDialog(QDialog):
         layout.addLayout(artist_row)
 
         # Buttons
-        buttons_row = QHBoxLayout()
+        self._buttons_row = buttons_row = QHBoxLayout()
         buttons_row.addStretch()
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
@@ -209,7 +240,7 @@ class TaskCreateDialog(QDialog):
         create_btn.setDefault(True)
         create_btn.clicked.connect(self.accept)
         buttons_row.addWidget(create_btn)
-        layout.addLayout(buttons_row)
+        outer_layout.addLayout(buttons_row)
 
     def _add_field(
         self,

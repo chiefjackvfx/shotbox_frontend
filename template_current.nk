@@ -1,5 +1,5 @@
-#! /opt/Nuke17.0v1/libnuke-17.0.1.so -nx
-version 17.0 v1
+#! /opt/Nuke17.1v2/libnuke-17.1.2.so -nx
+version 17.1 v2
 define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 <layout version="1.0">
     <window x="2560" y="32" w="2560" h="1387" maximized="1" screen="0">
@@ -19,14 +19,10 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
             </splitter>
             <split size="615"/>
             <splitter orientation="2">
-                <split size="1080"/>
+                <split size="1349"/>
                 <dock id="" activePageId="Properties.1">
                     <page id="Properties.1"/>
                     <page id="uk.co.thefoundry.backgroundrenderview.1"/>
-                </dock>
-                <split size="265"/>
-                <dock id="" activePageId="com.adrianpueyo.KnobScripterPane">
-                    <page id="com.adrianpueyo.KnobScripterPane"/>
                 </dock>
             </splitter>
         </splitter>
@@ -43,6 +39,14 @@ define_window_layout_xml {<?xml version="1.0" encoding="UTF-8"?>
 }
 Root {
  inputs 0
+ gsv  {
+  __default__ {
+  }
+  __panel__ {
+   tab {Main}
+  }
+ 
+}
  name /home/gambit/Nextcloud/01_projects/shotbox/shotbox_frontend/template_current.nk
  project_directory /home/rockybtw/Documents/projects/LNER_TEST/VFX/60s_cut_7/sho010/scripts
  frame 1001
@@ -138,6 +142,7 @@ Read {
  file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3].mov"
  origset true
  colorspace "ARRI LogC3 (EI800)"
+ mov64_prraw_plugin Standard
  name ReadCompMov
  label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
  xpos 400
@@ -196,7 +201,7 @@ NoOp {
  addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
  addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
 }
-set N124772d0 [stack 0]
+set N11396550 [stack 0]
 PostageStamp {
  name Stamp5
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
@@ -256,6 +261,7 @@ Read {
  origlast 100
  origset true
  colorspace "ARRI LogC3 (EI800)"
+ mov64_prraw_plugin Standard
  name Read1
  label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
  xpos 282
@@ -270,12 +276,11 @@ Retime {
  xpos 282
  ypos 255
 }
-set N123293b0 [stack 0]
+set N11414510 [stack 0]
 Reformat {
  type "to box"
  box_width 4096
  name Reformat3
- selected true
  xpos 282
  ypos 287
 }
@@ -308,7 +313,7 @@ NoOp {
  addUserKnob {22 buttonHelp l Help -STARTLINE T stamps.showHelp()}
  addUserKnob {26 version l " " t "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025." -STARTLINE T "<a href=\"http://www.nukepedia.com/gizmos/other/stamps\" style=\"color:#666;text-decoration: none;\"><span style=\"color:#666\"><big>Stamps v1.2</big></span></a>"}
 }
-set N12383bc0 [stack 0]
+set N113bf350 [stack 0]
 PostageStamp {
  name Stamp1
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
@@ -374,7 +379,7 @@ Group {
   ypos 300
  }
 end_group
-push $N12383bc0
+push $N113bf350
 PostageStamp {
  name Stamp2
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated March 3 2025"
@@ -450,1037 +455,7 @@ Write {
  xpos 180
  ypos 993
 }
-Read {
- inputs 0
- file_type exr
- file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3]/\[string range  \[basename \[value root.name]] 0 end-3]_####.exr"
- origset true
- colorspace "ARRI LogC3 (EI800)"
- name ReadCompEXR
- label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
- xpos 620
- ypos 3100
-}
-Reformat {
- format "1920 1080 0 0 1920 1080 1 HD_1080"
- name Reformat2
- xpos 620
- ypos 3230
-}
-Group {
- name MS_slate_overlay
- tile_color 0xefb500ff
- note_font "Verdana Bold Italic"
- xpos 620
- ypos 3313
- addUserKnob {20 settings t "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
- addUserKnob {26 text l "" +STARTLINE T "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
- addUserKnob {26 ""}
- addUserKnob {7 slateextend l "slate area" R 0 200}
- slateextend 60
- addUserKnob {41 color l "overlay color" T Constant1.color}
- addUserKnob {6 enableline l "use line" +STARTLINE}
- enableline true
- addUserKnob {3 linewidth l "&nbsp;&nbsp;&nbsp;&nbsp;width&nbsp;" -STARTLINE}
- linewidth 2
- addUserKnob {26 elements l "<b><span style=\"color:#ffaf24\">Elements</span>"}
- addUserKnob {6 framecount l "frame count" +STARTLINE}
- framecount true
- addUserKnob {6 timecode1 l timecode -STARTLINE}
- timecode1 true
- addUserKnob {6 date1 l date -STARTLINE}
- date1 true
- addUserKnob {6 fpscounter l framerate +STARTLINE}
- fpscounter true
- addUserKnob {6 compname l "comp name" -STARTLINE}
- compname true
- addUserKnob {3 startfr l "start frame"}
- startfr 1001
- addUserKnob {6 duration t "\nDisplay duration of entire timeline based on project sttings." -STARTLINE}
- duration true
- addUserKnob {4 durationtype l "" -STARTLINE M {frames timecode both ""}}
- durationtype both
- addUserKnob {41 set l "apply duration" t "\nPress this to run the timeline calculation.\n\nRun this again if the timeline range changes during production." -STARTLINE T readtime.set}
- addUserKnob {6 project +STARTLINE}
- addUserKnob {1 projecttext l "" -STARTLINE}
- projecttext project
- addUserKnob {6 artist +STARTLINE}
- addUserKnob {1 artisttext l "" -STARTLINE}
- artisttext artist
- addUserKnob {6 comment +STARTLINE}
- addUserKnob {1 commenttext l "" -STARTLINE}
- commenttext "add comment here"
- addUserKnob {26 Font l "<b><span style=\"color:#ffaf24\">Font</span>"}
- addUserKnob {3 fontsize1 l "font size" t "\nControls all fonts at once"}
- fontsize1 3
- addUserKnob {3 commentsize l "&nbsp;&nbsp;comment size&nbsp;" -STARTLINE}
- commentsize 3
- addUserKnob {3 xedgedistance l "&nbsp;distance to side&nbsp;" t "\nSets the distance from the markers to the format baoundarys." -STARTLINE}
- xedgedistance 20
-}
- Input {
-  inputs 0
-  name Input1
-  xpos -760
-  ypos -1292
- }
- Dot {
-  name Dot5
-  xpos -728
-  ypos -1049
- }
-set N124fcb90 [stack 0]
- Shuffle2 {
-  fromInput1 {
-   {0}
-   B
-  }
-  fromInput2 {
-   {0}
-   B
-  }
-  mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
-  name Shuffle4
-  label "\[value in1]"
-  xpos -941
-  ypos -1057
- }
- Dot {
-  name Dot1
-  xpos -1089
-  ypos -1047
- }
-set N125109a0 [stack 0]
- Dot {
-  name Dot13
-  xpos -1808
-  ypos -1048
- }
- Shuffle2 {
-  fromInput1 {
-   {0}
-   B
-  }
-  fromInput2 {
-   {0}
-   B
-  }
-  mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
-  name Shuffle1
-  label emtpy
-  xpos -1840
-  ypos -576
- }
-set N1251db80 [stack 0]
- AddTimeCode {
-  frame {{"\[value startfr]"}}
-  useFrame true
-  name AddTimeCode1
-  xpos -1840
-  ypos -410
- }
-set N12529e00 [stack 0]
- Dot {
-  name Dot14
-  xpos -2527
-  ypos -408
- }
- Dot {
-  name Dot12
-  xpos -2527
-  ypos 793
- }
-set N1253ce20 [stack 0]
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "total:  \[value readtime.durationframe] / \[value readtime.tc1]"
-  old_message {
-   {116 111 116 97 108 58 32 32 49 48 48 32 47 32 48 48 58 48 48 58 48 50 58 49 50}
-  }
-  old_expression_markers {
-   {8 10 14 24}
-  }
-  box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
-  xjustify center
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 8
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text12
-  label "duration both\n"
-  note_font "Verdana Bold"
-  xpos -2380
-  ypos 864
- }
-push $N1253ce20
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "total: \[value readtime.tc1]"
-  old_message {
-   {116 111 116 97 108 58 32 48 48 58 48 48 58 48 50 58 49 50}
-  }
-  old_expression_markers {
-   {7 17}
-  }
-  box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
-  xjustify center
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 5
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  scale {1 1}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text11
-  label "duration time\n"
-  note_font "Verdana Bold"
-  xpos -2380
-  ypos 784
- }
-push $N1253ce20
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "total: \[value readtime.durationframe]"
-  old_message {
-   {116 111 116 97 108 58 32 49 48 48}
-  }
-  old_expression_markers {
-   {7 9}
-  }
-  box {0 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
-  xjustify center
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 5
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text10
-  label "duration frame\n"
-  note_font "Verdana Bold"
-  xpos -2380
-  ypos 704
- }
- Switch {
-  inputs 3
-  which {{parent.durationtype}}
-  name Switch1
-  xpos -2200
-  ypos 790
- }
-push $N1251db80
- Dot {
-  name Dot3
-  xpos -1987
-  ypos -567
- }
-set N125cf730 [stack 0]
- Dot {
-  name Dot6
-  xpos -2168
-  ypos -567
- }
-set N125d5f80 [stack 0]
- Dot {
-  name Dot7
-  xpos -2347
-  ypos -567
- }
-set N125dcb10 [stack 0]
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v+utility.addres}}
-  box_fixed true
-  resize none
-  black_outside true
-  name Reformat2
-  label height
-  xpos -2740
-  ypos -575
- }
-set N125e36a0 [stack 0]
- Dot {
-  name Dot8
-  xpos -2888
-  ypos -567
- }
-set N125f7190 [stack 0]
- Dot {
-  name Dot9
-  xpos -3067
-  ypos -567
- }
-set N125fda60 [stack 0]
- Dot {
-  name Dot10
-  xpos -3247
-  ypos -567
- }
-set N126045b0 [stack 0]
- Dot {
-  name Dot11
-  xpos -3428
-  ypos -567
- }
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "fps: \[python \{(nuke.root().fps() )\}]"
-  old_message {
-   {102 112 115 58 32 50 53}
-  }
-  old_expression_markers {
-   {5 6}
-  }
-  box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? timecode1==0 ? parent.utility.inres.u-xedgedistance-(fontsize1*40) : parent.utility.inres.u-xedgedistance-(fontsize1*120) : timecode1==1 ?  parent.utility.inres.u-xedgedistance-(fontsize1*70) : parent.utility.inres.u-xedgedistance-(fontsize1*70)\n||\nframecount==0 && timecode1==0 ? parent.utility.inres.u-xedgedistance:0"} {abs(parent.utility.addres/2)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 36
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text9
-  label "framerate\n"
-  note_font "Verdana Bold"
-  xpos -3460
-  ypos 624
- }
-push $N126045b0
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "   \[value \[python nuke.thisGroup().name()].artisttext]\n"
-  old_message {
-   {32 32 32 97 114 116 105 115 116 10}
-  }
-  old_expression_markers {
-   {3 8}
-  }
-  box {{parent.utility.inres.u/2} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u} {parent.utility.inres.v+(utility.addres)}}
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 3
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.07)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text8
-  label artist
-  note_font "Verdana Bold"
-  xpos -3280
-  ypos 544
- }
-push $N125fda60
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 0 0 ] \"\"].\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 1 1 ] \"\"]\n"
-  old_message {
-   {116 101 109 112 108 97 116 101 95 99 117 114 114 101 110 116 46 110 107 10}
-  }
-  old_expression_markers {
-   {0 15 17 18}
-  }
-  box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.07) x1000 1.375}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text7
-  label "comp name"
-  note_font "Verdana Bold"
-  xpos -3100
-  ypos 464
- }
-push $N125f7190
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[value \[python nuke.thisGroup().name()].projecttext]   "
-  old_message {
-   {112 114 111 106 101 99 116 32 32 32}
-  }
-  old_expression_markers {
-   {0 6}
-  }
-  box {0 {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u/2} {parent.utility.inres.v+(utility.addres)}}
-  xjustify center
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.12)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text6
-  label project
-  note_font "Verdana Bold"
-  xpos -2920
-  ypos 384
- }
-push $N125e36a0
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[date %d/%m/%y]"
-  old_message {
-   {50 50 47 48 52 47 50 54}
-  }
-  old_expression_markers {
-   {0 7}
-  }
-  box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 15
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.09)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text4
-  label date
-  note_font "Verdana Bold"
-  xpos -2740
-  ypos 304
- }
-push $N125dcb10
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[value \[python nuke.thisGroup().name()].commenttext]"
-  old_message {
-   {97 100 100 32 99 111 109 109 101 110 116 32 104 101 114 101}
-  }
-  old_expression_markers {
-   {0 15}
-  }
-  box {{parent.xedgedistance x1000 0} 0 {parent.utility.inres.u/2.7} {abs(parent.utility.addres/2)}}
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 52
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*((commentsize)*0.01))+0.1}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text3
-  label comment
-  note_font "Verdana Bold"
-  xpos -2381
-  ypos 224
- }
-push $N125d5f80
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message |
-  old_message {
-   {124}
-  }
-  box {0 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*33) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 1
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text2
-  label divider
-  note_font "Verdana Bold"
-  xpos -2200
-  ypos 144
- }
-push $N125cf730
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[frame]"
-  old_message {
-   {49 48 48 49}
-  }
-  old_expression_markers {
-   {0 3}
-  }
-  box {0 0 {parent.utility.inres.u-xedgedistance} {abs(parent.utility.addres/2)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 7
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text1
-  label frame
-  note_font "Verdana Bold"
-  xpos -2021
-  ypos 64
- }
-push $N12529e00
- Text2 {
-  font_size_toolbar 100
-  font_width_toolbar 100
-  font_height_toolbar 100
-  message "\[timecode]"
-  old_message {
-   {48 49 58 48 48 58 48 48 58 48 48}
-  }
-  old_expression_markers {
-   {0 10}
-  }
-  box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*50) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
-  xjustify right
-  yjustify center
-  transforms {
-   {0 2}
-  }
-  cursor_position 10
-  font {{ Courier : Regular : Courier.pfa : 0 }}
-  global_font_scale {{(parent.fontsize1*0.1)}}
-  center {960 540}
-  cursor_initialised true
-  autofit_bbox false
-  initial_cursor_position {
-   {0 1080}
-  }
-  group_animations {
-   {0}
-   imported:
-   0
-   selected:
-   0
-   items:
-   "root transform/"
-  }
-  animation_layers {
-   {1 11 960 540 0 0 1 1 0 0 0 0}
-  }
-  name Text5
-  label time
-  note_font "Verdana Bold"
-  xpos -1840
-  ypos -16
- }
-push $N125109a0
- NoOp {
-  name utility
-  xpos -1120
-  ypos -810
-  addUserKnob {20 User}
-  addUserKnob {30 inres l "in res"}
-  inres {{"\[value input.format.r]"} {"slateextend<0 ? \[value input.format.t]+slateextend : \[value input.format.t]"}}
-  addUserKnob {7 addres l "add res" R -500 500}
-  addres {{parent.slateextend*2}}
- }
-set N12788cc0 [stack 0]
- Shuffle2 {
-  fromInput1 {
-   {0}
-   B
-  }
-  fromInput2 {
-   {0}
-   B
-  }
-  mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
-  name Shuffle2
-  label "\[value in1]"
-  xpos -1480
-  ypos -816
- }
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v+utility.addres}}
-  box_fixed true
-  resize none
-  black_outside true
-  name Reformat3
-  label height
-  xpos -1480
-  ypos -734
- }
-push $N12788cc0
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v}}
-  box_fixed true
-  resize none
-  black_outside true
-  name Reformat1
-  label height
-  xpos -1120
-  ypos -736
- }
-set N127b7dd0 [stack 0]
- Shuffle2 {
-  fromInput1 {
-   {0}
-   B
-  }
-  fromInput2 {
-   {0}
-   B
-  }
-  mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
-  name Shuffle3
-  label "\[value in1]"
-  xpos -1300
-  ypos -736
- }
- Dot {
-  name Dot4
-  xpos -1267
-  ypos -646
- }
- Merge2 {
-  inputs 2
-  operation mask
-  name Merge3
-  xpos -1480
-  ypos -648
- }
- Dot {
-  name Dot2
-  xpos -1447
-  ypos -487
- }
-set N127f4470 [stack 0]
-push $N127f4470
- Dilate {
-  size {{parent.linewidth}}
-  name Dilate1
-  xpos -1299
-  ypos -497
- }
- Merge2 {
-  inputs 2
-  operation from
-  name Merge4
-  xpos -1480
-  ypos -410
- }
- Dot {
-  name Dot17
-  xpos -1448
-  ypos -247
- }
-push $N127b7dd0
- Merge2 {
-  inputs 2
-  name Merge5
-  xpos -1120
-  ypos -249
-  disable {{!parent.enableline}}
- }
- Merge2 {
-  inputs 2
-  name Merge1
-  xpos -1120
-  ypos -10
-  disable {{"slateextend==0 ? 1: !parent.timecode1"}}
- }
- Merge2 {
-  inputs 2
-  name Merge2
-  xpos -1120
-  ypos 70
-  disable {{"slateextend==0 ? 1:!parent.framecount"}}
- }
- Merge2 {
-  inputs 2
-  name Merge7
-  xpos -1120
-  ypos 150
-  disable {{"slateextend==0 ? 1:framecount==1 && timecode1==1 ? 0:1"}}
- }
- Merge2 {
-  inputs 2
-  name Merge8
-  xpos -1120
-  ypos 230
-  disable {{"slateextend==0 ? 1:!parent.comment"}}
- }
- Merge2 {
-  inputs 2
-  name Merge9
-  xpos -1120
-  ypos 310
-  disable {{"slateextend==0 ? 1:!parent.date1"}}
- }
- Merge2 {
-  inputs 2
-  name Merge10
-  xpos -1120
-  ypos 390
-  disable {{"slateextend==0 ? 1:!parent.project"}}
- }
- Merge2 {
-  inputs 2
-  name Merge11
-  xpos -1120
-  ypos 470
-  disable {{"slateextend==0 ? 1:!parent.compname"}}
- }
- Merge2 {
-  inputs 2
-  name Merge12
-  xpos -1120
-  ypos 551
-  disable {{"slateextend==0 ? 1:!parent.artist"}}
- }
- Merge2 {
-  inputs 2
-  name Merge13
-  xpos -1120
-  ypos 630
-  disable {{"slateextend==0 ? 1:!parent.fpscounter"}}
- }
- Merge2 {
-  inputs 2
-  name Merge14
-  xpos -1120
-  ypos 790
-  disable {{"slateextend==0 ? 1:!parent.duration"}}
- }
- Constant {
-  inputs 0
-  color {0.9822503924 0.1274376512 0.02217387967 0}
-  name Constant1
-  xpos -1300
-  ypos 925
- }
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v+utility.addres}}
-  box_fixed true
-  name Reformat5
-  label height
-  xpos -1300
-  ypos 1023
- }
- Copy {
-  inputs 2
-  from0 rgba.alpha
-  to0 rgba.alpha
-  name Copy1
-  xpos -1120
-  ypos 1023
- }
- Premult {
-  name Premult1
-  xpos -1120
-  ypos 1109
- }
- Crop {
-  box {0 0 {"\[value input.format.r]"} {"\[value input.format.t]"}}
-  name Crop1
-  xpos -1120
-  ypos 1189
- }
-push $N124fcb90
- Reformat {
-  type "to box"
-  box_width {{parent.utility.inres.u}}
-  box_height {{parent.utility.inres.v+utility.addres}}
-  box_fixed true
-  resize none
-  black_outside true
-  name Reformat4
-  label height
-  xpos -761
-  ypos -897
- }
- Merge2 {
-  inputs 2
-  bbox A
-  name Merge6
-  xpos -761
-  ypos 1189
- }
- Output {
-  name Output1
-  xpos -760
-  ypos 1429
- }
- StickyNote {
-  inputs 0
-  name StickyNote1
-  label "\[frames \{first\}] - \[frames \{last\}]\n\nimport re\n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.Root().firstFrame()\nlast_frame = nuke.Root().lastFrame()\n\n# Function to convert frames to timecode\ndef frames_to_timecode(frames, fps=24):\n    hours = int(frames // (fps * 3600))\n    minutes = int((frames % (fps * 3600)) // (fps * 60))\n    seconds = int((frames % (fps * 60)) // fps)\n    frames_remaining = int(frames % fps)\n    return f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames_remaining:02\}\"\n\n# Calculate the total frames\ntotal_frames = last_frame - first_frame\n\n# Get the FPS from the project settings\nfps = nuke.Root()\['fps'].value()\n\n# Convert to timecode using the project FPS\ntimecode = frames_to_timecode(total_frames, fps=fps)\n\n# Function to replace or append the timecode in a given text\ndef replace_last_timecode(text, new_timecode):\n    # Regular expression to match timecode patterns\n    pattern = re.compile(r'\\b\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}\\b')\n    # Replace the last match with the new timecode\n    if pattern.search(text):\n        return pattern.sub(new_timecode, text, count=1)\n    else:\n        # If no timecode is found, just append the new timecode\n        return f\"\{text\}\\n\{new_timecode\}\" if text else new_timecode\n\n# Update Text11 with the timecode in the first line\ntext11_node = nuke.toNode(\"Text11\")  # Replace \"Text11\" with the correct node name\nif text11_node:\n    current_text11 = text11_node.knob(\"message\").value()\n    # Replace the old timecode with the new one, or prepend it if none exists\n    updated_text11 = replace_last_timecode(current_text11, timecode)\n    # Ensure the timecode is in the first line\n    if not re.search(r'^\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}', updated_text11):\n        updated_text11 = f\"\{timecode\}\\n\{updated_text11\}\"\n    text11_node.knob(\"message\").setValue(updated_text11)\nelse:\n    nuke.message(\"Text11 node not found\")\n\n# Update Text12 with the timecode while keeping existing content\ntext12_node = nuke.toNode(\"Text12\")  # Replace \"Text12\" with the correct node name\nif text12_node:\n    current_text12 = text12_node.knob(\"message\").value()\n    updated_text12 = replace_last_timecode(current_text12, timecode)\n    text12_node.knob(\"message\").setValue(updated_text12)\nelse:\n    nuke.message(\"Text12 node not found\")\n    \n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.root().firstFrame()\nlast_frame = nuke.root().lastFrame()\n\n# Calculate the total frames minus one\ntotal_frames_minus_one = last_frame - first_frame\n\n# Update Text10 with the total duration in frames minus one\ntext10_node = nuke.toNode(\"Text10\")  # Replace \"Text10\" with the correct node name\nif text10_node:\n    # Set the text to the total duration in frames minus one\n    text10_node.knob(\"message\").setValue(str(total_frames_minus_one))\nelse:\n    nuke.message(\"Text10 node not found\")\n\n"
-  xpos -2082
-  ypos 826
- }
-push $N12529e00
- NoOp {
-  name readtime
-  xpos -2740
-  ypos 790
-  hide_input true
-  addUserKnob {20 User}
-  addUserKnob {30 intime l "in time"}
-  intime {{root.first_frame} {root.last_frame}}
-  addUserKnob {3 durationframe l duration}
-  durationframe {{intime.v-intime.u+1}}
-  addUserKnob {22 set T "import nuke\n\n# Get the current node where the Python knob is being executed\nnode = nuke.thisNode()\n\n# Ensure the 'durationframe' knob exists and get the frame count from it\nif 'durationframe' in node.knobs():\n    frame_count = node\['durationframe'].value()\nelse:\n    nuke.message(\"Error: 'durationframe' knob not found in the current node.\")\n    raise ValueError(\"'durationframe' knob not found\")\n\n# Get the frame rate from the project settings\nframe_rate = nuke.root().fps()\n\n# Calculate hours, minutes, seconds, and frames\nhours = int(frame_count / (3600 * frame_rate))\nminutes = int((frame_count % (3600 * frame_rate)) / (60 * frame_rate))\nseconds = int((frame_count % (60 * frame_rate)) / frame_rate)\nframes = int(frame_count % frame_rate)\n\n# Format the timecode as HH:MM:SS:FF\ntimecode = f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames:02\}\"\n\n# Ensure the 'tc1' knob exists in the node\nif 'tc1' in node.knobs():\n    # Update the 'tc1' knob with the new timecode\n    node\['tc1'].setValue(timecode)\n    print(f\"Timecode updated to: \{timecode\} in 'tc1' knob.\")\nelse:\n    nuke.message(\"Error: 'tc1' knob not found in the current node.\")\n    raise ValueError(\"'tc1' knob not found\")\n" +STARTLINE}
-  addUserKnob {1 tc1 l timecode}
-  tc1 00:00:02:12
- }
-end_group
-Write {
- file "../renders/precomp/previews/\[string range  \[basename \[value root.name]] 0 end-3].mp4"
- file_type mov
- mov64_format "mp4 (MP4 (MPEG-4 Part 14))"
- mov64_codec h264
- mov_h264_codec_profile "High 4:2:0 8-bit"
- mov64_pixel_format {
-  {0}
-  "yuv420p\tYCbCr 4:2:0 8-bit"
- }
- mov64_quality Custom
- mov64_fast_start true
- mov64_write_timecode true
- mov64_gop_size 12
- mov64_b_frames 0
- mov64_bitrate 28000
- mov64_bitrate_tolerance 0
- mov64_quality_min 1
- mov64_quality_max 3
- colorspace color_picking
- create_directories true
- checkHashOnRead false
- in_colorspace scene_linear
- out_colorspace scene_linear
- ocioColorspace scene_linear
- display "sRGB - Display"
- view "ACES 2.0 - SDR 100 nits (Rec.709)"
- name WriteCompMP4
- xpos 620
- ypos 3372
-}
-push $N124772d0
+push $N11396550
 PostageStamp {
  name Stamp8
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
@@ -1540,7 +515,7 @@ Dot {
  xpos 104
  ypos 2322
 }
-set N15624b90 [stack 0]
+set N129c0360 [stack 0]
 Dot {
  inputs 0
  name Dot11
@@ -1551,13 +526,13 @@ Dot {
  xpos 544
  ypos 2250
 }
-set N15575370 [stack 0]
+set N129d5c30 [stack 0]
 Dot {
  name Dot57
  xpos 544
  ypos 2370
 }
-set N1564c8d0 [stack 0]
+set N129dc1a0 [stack 0]
 Group {
  inputs 2
  name common_key1
@@ -1629,14 +604,14 @@ Group {
   xpos -407
   ypos 305
  }
-set N155dd800 [stack 0]
+set N12a4c0d0 [stack 0]
  Invert {
   name Invert4
   xpos -407
   ypos 360
   disable {{"parent.size>=0 ? 1 : 0" i}}
  }
-set N154f66d0 [stack 0]
+set N12a53060 [stack 0]
  Blur {
   size {{parent.size.w i} {parent.size.h i}}
   crop {{parent.crop i}}
@@ -1645,7 +620,7 @@ set N154f66d0 [stack 0]
   xpos -615
   ypos 477
  }
-push $N154f66d0
+push $N12a53060
  Blur {
   size {{parent.size.w*parent.Multiplier i} {parent.size.h*parent.Multiplier i}}
   crop {{parent.crop i}}
@@ -1660,7 +635,7 @@ push $N154f66d0
   xpos -537
   ypos 572
  }
-push $N154f66d0
+push $N12a53060
  Blur {
   size {{parent.size.w*parent.Multiplier*2 i} {parent.size.h*parent.Multiplier*2 i}}
   crop {{parent.crop i}}
@@ -1675,7 +650,7 @@ push $N154f66d0
   xpos -477
   ypos 637
  }
-push $N154f66d0
+push $N12a53060
  Blur {
   size {{parent.size.w*parent.Multiplier*4 i} {parent.size.h*parent.Multiplier*4 i}}
   crop {{parent.crop i}}
@@ -1696,7 +671,7 @@ push $N154f66d0
   ypos 768
   disable {{"parent.size>=0 ? 1 : 0" i}}
  }
-push $N155dd800
+push $N12a4c0d0
  Dot {
   name Dot2
   xpos -101
@@ -1727,14 +702,14 @@ Dot {
  xpos 104
  ypos 2538
 }
-set N1576af70 [stack 0]
+set N12b23d70 [stack 0]
 Dot {
  name Dot12
  xpos 104
  ypos 2682
 }
-push $N1576af70
-push $N15624b90
+push $N12b23d70
+push $N129c0360
 Dot {
  name Dot13
  xpos 434
@@ -1745,7 +720,7 @@ Dot {
  xpos 434
  ypos 2466
 }
-push $N12383bc0
+push $N113bf350
 PostageStamp {
  name Stamp9
  help "Stamps by Adrian Pueyo and Alexey Kuchinski.\nUpdated May 18 2021"
@@ -1805,8 +780,8 @@ Dot {
  xpos 764
  ypos 2538
 }
-set N157862a0 [stack 0]
-push $N1564c8d0
+set N12b3e690 [stack 0]
+push $N129dc1a0
 Group {
  inputs 4
  name DasGrain
@@ -1893,7 +868,7 @@ Group {
  addUserKnob {26 info l "" +STARTLINE T "Last change: 2021-03-07\n\n"}
  addUserKnob {26 name_1 l "" +STARTLINE T "Fabian Holtz"}
  addUserKnob {26 mail l "" +STARTLINE T "<a href=\"mailto:holtzf+nuke@gmail.com?subject=Help with DasGrain v1.7.8\"><span style=\"color:#C8C8C8;\">holtzf+nuke@gmail.com</a>"}
- addUserKnob {26 testimonial l "" +STARTLINE T "<br><br><br><i>&laquo;DasGrain is officially the best thing ever&raquo;</i><br>&mdash; anonymous<br><br>"}
+ addUserKnob {26 testimonial l "" +STARTLINE T "<br><br><br><i>&laquo;My new favourite node, thanks!<br>Having said that, ...&raquo;</i><br>&mdash; anonymous<br><br>"}
  addUserKnob {26 ""}
  addUserKnob {26 credit l "" +STARTLINE T "<br>VoronoiScatter based on <a href=\"http://www.nukepedia.com/blink/image/voronoi/\"><span style=\"color:#C8C8C8;\">Ivan Busquets' implementation</a> of<br> libNoise's\nVoronoi generator"}
  addUserKnob {26 thanks l "" +STARTLINE T "<br>Special thanks to Ben Dickson for bearing with my questions and<br>problems and RSP comp for the valuable feedback."}
@@ -2051,20 +1026,20 @@ Group {
   xpos 764
   ypos -390
  }
-set N1585cf30 [stack 0]
+set N12c16500 [stack 0]
  Dot {
   name Dot28
   xpos 764
   ypos -198
  }
-set N15863280 [stack 0]
+set N12c1c870 [stack 0]
  Dot {
   name Dot32
   xpos 764
   ypos 234
  }
-set N15869bd0 [stack 0]
-push $N15863280
+set N12c231c0 [stack 0]
+push $N12c1c870
  Dot {
   name Dot27
   xpos 624
@@ -2081,7 +1056,7 @@ push $N15863280
   xpos 624
   ypos -54
  }
-set N158961b0 [stack 0]
+set N12c4f5d0 [stack 0]
  Input {
   inputs 0
   name PLATE
@@ -2096,7 +1071,7 @@ set N158961b0 [stack 0]
   xpos 324
   ypos -726
  }
-set N158a3b00 [stack 0]
+set N12c5cf20 [stack 0]
  OCIOColorSpace {
   in_colorspace scene_linear
   out_colorspace scene_linear
@@ -2109,7 +1084,7 @@ set N158a3b00 [stack 0]
   xpos 324
   ypos -198
  }
-set N158dc5a0 [stack 0]
+set N12c959d0 [stack 0]
  Dot {
   name Dot6
   xpos 464
@@ -2144,7 +1119,7 @@ set N158dc5a0 [stack 0]
   xpos 464
   ypos 90
  }
-push $N158961b0
+push $N12c4f5d0
  Merge2 {
   inputs 2
   operation plus
@@ -2178,8 +1153,8 @@ push $N158961b0
   xpos 624
   ypos 306
  }
-set N1597c9e0 [stack 0]
-push $N15869bd0
+set N12d363a0 [stack 0]
+push $N12c231c0
  Merge2 {
   inputs 2
   operation from
@@ -2197,19 +1172,19 @@ push $N15869bd0
   xpos 764
   ypos 522
  }
-set N15998b70 [stack 0]
+set N12d52570 [stack 0]
  Dot {
   name Dot30
   xpos 764
   ypos 690
  }
-set N1599f5b0 [stack 0]
+set N12d58fb0 [stack 0]
  Dot {
   name Dot55
   xpos 764
   ypos 1170
  }
-set N159a6140 [stack 0]
+set N12d5fb40 [stack 0]
  Input {
   inputs 0
   name mask
@@ -2224,21 +1199,21 @@ set N159a6140 [stack 0]
   xpos 1204
   ypos 258
  }
-set N159b3860 [stack 0]
+set N12d6d260 [stack 0]
  Dot {
   name Dot26
   xpos 1204
   ypos 1074
  }
-set N159ba2c0 [stack 0]
+set N12d73cc0 [stack 0]
  Invert {
   name Invert2
   xpos 180
   ypos 1064
   disable {{!parent.invert_1}}
  }
-push $N1599f5b0
-push $N158dc5a0
+push $N12d58fb0
+push $N12c959d0
  Merge2 {
   inputs 2
   operation from
@@ -2255,14 +1230,14 @@ push $N158dc5a0
   xpos 324
   ypos 786
  }
-set N159e5ac0 [stack 0]
+set N12d9f540 [stack 0]
  Dot {
   name Dot5
   xpos 104
   ypos 786
  }
-set N159ec560 [stack 0]
-push $N159ec560
+set N12da5fe0 [stack 0]
+push $N12da5fe0
  Copy {
   inputs 2
   from0 {{{parent.Copy2.from0}}}
@@ -2281,8 +1256,8 @@ push $N159ec560
   xpos 70
   ypos 926
  }
-set N15a05f80 [stack 0]
-push $N15998b70
+set N12dbfa40 [stack 0]
+push $N12d52570
  Colorspace {
   colorspace_out AlexaV3LogC
   name Colorspace5
@@ -2300,14 +1275,14 @@ push $N15998b70
   xpos -116
   ypos 522
  }
-set N15a4b390 [stack 0]
+set N12e04950 [stack 0]
  Dot {
   name Dot48
   xpos -116
   ypos 786
  }
-set N15a52190 [stack 0]
-push $N15a52190
+set N12e0b750 [stack 0]
+push $N12e0b750
  Copy {
   inputs 2
   from0 rgba.blue
@@ -2342,7 +1317,7 @@ push $N15a52190
   xpos -40
   ypos 985
  }
-push $N15a05f80
+push $N12dbfa40
  Copy {
   inputs 2
   from0 rgba.alpha
@@ -2402,7 +1377,7 @@ push $N15a05f80
   xpos 70
   ypos 1424
  }
-push $N15a4b390
+push $N12e04950
  Dot {
   name Dot16
   xpos -336
@@ -2431,7 +1406,7 @@ push $N15a4b390
   xpos 840
   ypos 1502
  }
-push $N158a3b00
+push $N12c5cf20
  Dot {
   name Dot51
   xpos 115
@@ -2450,7 +1425,7 @@ push $N158a3b00
   xpos 984
   ypos -605
  }
-set N15b47bf0 [stack 0]
+set N12f00e20 [stack 0]
  Switch {
   inputs 2
   which {{parent.meta}}
@@ -2473,13 +1448,13 @@ set N15b47bf0 [stack 0]
   xpos -685
   ypos 3762
  }
-push $N159b3860
+push $N12d6d260
  Dot {
   name Dot40
   xpos 874
   ypos 258
  }
-push $N1597c9e0
+push $N12d363a0
  Dot {
   name Dot34
   xpos 624
@@ -2494,7 +1469,7 @@ push $N1597c9e0
   xpos 840
   ypos 374
  }
-push $N15b47bf0
+push $N12f00e20
  OCIOColorSpace {
   in_colorspace {{OCIOColorSpace1.in_colorspace x1001 7}}
   out_colorspace {{OCIOColorSpace1.out_colorspace x1001 7}}
@@ -2507,7 +1482,7 @@ push $N15b47bf0
   xpos 984
   ypos -390
  }
-set N15bbcf40 [stack 0]
+set N12f761d0 [stack 0]
  Merge2 {
   inputs 2
   operation from
@@ -2525,7 +1500,7 @@ set N15bbcf40 [stack 0]
   xpos 984
   ypos 2658
  }
-set N15bd8440 [stack 0]
+set N12f91870 [stack 0]
  ColorLookup {
   lut {master {}
     red {curve x0.00382891763 0.0002557597445 x0.007590188179 0.0002960292788 x0.01285281964 0.0003363993789 x0.0197017882 0.0004224070649 x0.02941314131 0.0004961362375 x0.04079099745 0.0005678633893 x0.05852931738 0.0006819239172 x0.07195483893 0.0008004350806 x0.1015054211 0.000923921764 x0.1350959986 0.001097035256 x0.178611353 0.001195716955 x0.2347512543 0.00138423128 x0.3000544012 0.00175979199 x0.4047375619 0.002084045775 x0.5263175964 0.002373547234 x0.6850759983 0.003520714591 x0.8822851777 0.004078153046 x1.164262295 0.003909756967 x1.558669448 0.004522861415 x1.988148332 0.005021561272}
@@ -2536,7 +1511,7 @@ set N15bd8440 [stack 0]
   xpos 730
   ypos 2654
  }
-push $N159ba2c0
+push $N12d73cc0
  Dot {
   name Dot38
   xpos 1204
@@ -2552,19 +1527,19 @@ push $N159ba2c0
   xpos 544
   ypos 2271
  }
-set N15c05530 [stack 0]
+set N12fbeff0 [stack 0]
  Dot {
   name Dot20
   xpos 544
   ypos 2391
  }
-push $N15c05530
+push $N12fbeff0
  Dot {
   name Dot17
   xpos 434
   ypos 2271
  }
-set N15c12c00 [stack 0]
+set N12fcc6c0 [stack 0]
  Dot {
   name Dot13
   xpos 214
@@ -2584,7 +1559,7 @@ set N15c12c00 [stack 0]
   xpos -116
   ypos 1938
  }
-push $N159a6140
+push $N12d5fb40
  ColorLookup {
   channels rgb
   lut {master {}
@@ -2601,7 +1576,7 @@ push $N159a6140
   xpos 764
   ypos 1746
  }
-push $N159e5ac0
+push $N12d9f540
  Dot {
   name Dot33
   xpos 324
@@ -2624,7 +1599,7 @@ push $N159e5ac0
   xpos 324
   ypos 1842
  }
-set N15c667c0 [stack 0]
+set N130203a0 [stack 0]
  Dot {
   name Dot25
   xpos 104
@@ -2672,7 +1647,7 @@ set N15c667c0 [stack 0]
    xpos 214
    ypos -750
   }
-set N15c96e10 [stack 0]
+set N13050b70 [stack 0]
   Dot {
    name Dot16
    xpos 434
@@ -2688,13 +1663,13 @@ set N15c96e10 [stack 0]
    xpos 434
    ypos -606
   }
-set N15cb10b0 [stack 0]
+set N1306bc40 [stack 0]
   Dot {
    name Dot15
    xpos 654
    ypos -606
   }
-set N15cb7ac0 [stack 0]
+set N13072650 [stack 0]
   Dot {
    name Dot7
    xpos 874
@@ -2730,10 +1705,10 @@ set N15cb7ac0 [stack 0]
    xpos 874
    ypos -366
   }
-push $N15cb7ac0
+push $N13072650
   BlinkScript {
    ProgramGroup 1
-   KernelDescription "3 \"VoroNoise\" iterate pixelWise 19bb7e8333a60e3042117ce5163537b5b88551a8d1747223464ea753b25d637e 2 \"src\" Read Point \"dst\" Write Point 6 \"Frequency\" Float 1 AABIQg== \"Seed\" Int 1 AAAAAA== \"aspect ratio\" Float 1 AACAPw== \"width\" Int 1 AAAAAA== \"height\" Int 1 AAAAAA== \"Randomness\" Float 1 AAAAPw== 6 \"frequency\" 1 1 Default \"seed\" 1 1 Default \"aspect_ratio\" 1 1 Default \"width\" 1 1 Default \"height\" 1 1 Default \"randomness\" 1 1 Default 0"
+   KernelDescription "3 \"VoroNoise\" iterate pixelWise 4783c42a5f6ba1b6b25b19e1b03dfac95007ef41106e66554481a7080f456213 2 \"src\" Read Point \"dst\" Write Point 6 \"Frequency\" Float 1 AABIQg== \"Seed\" Int 1 AAAAAA== \"aspect ratio\" Float 1 AACAPw== \"width\" Int 1 AAAAAA== \"height\" Int 1 AAAAAA== \"Randomness\" Float 1 AAAAPw== 6 \"frequency\" 1 1 Default \"seed\" 1 1 Default \"aspect_ratio\" 1 1 Default \"width\" 1 1 Default \"height\" 1 1 Default \"randomness\" 1 1 Default 0"
    kernelSource "// Voronoi.blink\n// A test implementation of libNoise's Voronoi generator using Blink\n// Ivan Busquets - August 2013\n// Modified for DasGrain by Fabian Holtz - April 2019\n\n#define X_NOISE_GEN  1619\n#define Y_NOISE_GEN  31337\n#define Z_NOISE_GEN  6971\n#define SEED_NOISE_GEN  1013\n#define SQRT_3 1.73205081\n\ninline int IntValueNoise3D (int x, int y, int z, int seed)\n\{\n  // All constants are primes and must remain prime in order for this noise\n  // function to work correctly.\n  int n = (\n      X_NOISE_GEN    * x\n    + Y_NOISE_GEN    * y\n    + Z_NOISE_GEN    * z\n    + SEED_NOISE_GEN * seed)\n    & 0x7fffffff;\n  n = (n >> 13) ^ n;\n  return (n * (n * n * 60493 + 19990303) + 1376312589) & 0x7fffffff;\n\}\n\ninline float ValueNoise3D (int x, int y, int z, int seed)\n\{\n  return 1.0 - ((float)IntValueNoise3D (x, y, z, seed) / 1073741824.0);\n\}\n\nkernel VoroNoise : ImageComputationKernel<ePixelWise>\n\{\n  Image<eRead> src;\n  Image<eWrite, eAccessPoint> dst;\n\nparam:\n  float frequency;\n  int seed;\n  float aspect_ratio;\n  int width;\n  int height;\n  float randomness;\n\n\n  void define() \{\n    defineParam(frequency, \"Frequency\", 50.0f);\n    defineParam(aspect_ratio, \"aspect ratio\", 1.0f);\n    defineParam(seed, \"Seed\", 0);\n    defineParam(randomness, \"Randomness\", 0.5f);\n  \}\n\n\n\n\n  void process(int2 pos) \{\n   float x = pos.x * aspect_ratio * frequency / width;\n   float y = pos.y * frequency / width;\n   int xInt = (x > 0.0) ? x : x - 1;\n   int yInt = (y > 0.0) ? y : y - 1;\n\n\n    float minDist = 2147483647.0;\n    float xCandidate = 0;\n    float yCandidate = 0;\n\n    float dist;\n\nfor (int yCur = yInt - 2; yCur <= yInt + 2; yCur++) \{\n      for (int xCur = xInt - 2; xCur <= xInt + 2; xCur++) \{\n\n        // Calculate the position and distance to the seed point inside of\n        // this unit cube. Limited by the randomness value\n        float xPos = xCur + (ValueNoise3D (xCur, yCur, 0, seed    ) + 1 ) * randomness + (1-randomness) - 1;\n        float yPos = yCur + (ValueNoise3D (xCur, yCur, 0, seed + 1) + 1 ) * randomness + (1-randomness) - 1;\n\n        float xDist = xPos - x;\n        float yDist = yPos - y;\n\n        dist = pow(xDist, 2) + pow(yDist, 2);\n        if (dist < minDist) \{\n          // This seed point is closer to any others found so far, so record\n          // this seed point.\n          minDist = dist;\n          xCandidate = xPos;\n          yCandidate = yPos;\n\t\}\n    \}\n\}\n\n    SampleType(dst) sample(0.0f);\n\n    sample.x = xCandidate / aspect_ratio / frequency;\n    sample.y = yCandidate / height * width / frequency;\n    sample.z = 0;\n\n    dst() = sample;\n\}\n\};"
    rebuild ""
    VoroNoise_Frequency {{"width / parent.cell_size"}}
@@ -2795,8 +1770,8 @@ push $N15cb7ac0
    xpos 654
    ypos 42
   }
-set N197b51d0 [stack 0]
-push $N15cb10b0
+set N131c3fd0 [stack 0]
+push $N1306bc40
   Expression {
    expr0 "(x + .5) / width"
    expr1 "(y + .5) / height"
@@ -2826,7 +1801,7 @@ push $N15cb10b0
    xpos 434
    ypos 210
   }
-push $N197b51d0
+push $N131c3fd0
   Expression {
    temp_name0 view_index
    temp_expr0 "parent.parent.stereo == 1 ? \[lsearch \[value root.views] \[view]] / 2 : 0"
@@ -2887,13 +1862,13 @@ push $N197b51d0
    xpos 654
    ypos 354
   }
-set N163f89d0 [stack 0]
+set N13245870 [stack 0]
   Dot {
    name Dot13
    xpos 654
    ypos 546
   }
-push $N163f89d0
+push $N13245870
   Dot {
    name Dot8
    xpos 874
@@ -2937,8 +1912,8 @@ push $N163f89d0
    xpos 874
    ypos 762
   }
-push $N163f89d0
-push $N15c96e10
+push $N13245870
+push $N13050b70
   FrameHold {
    firstFrame {{parent.sample_frame}}
    name FrameHold1
@@ -2960,7 +1935,7 @@ push $N15c96e10
    xpos 180
    ypos 350
   }
-set N15eb19d0 [stack 0]
+set N132c0d00 [stack 0]
   TimeBlur {
    divisions {{"max(Transform1.size == 1 ? 2 : pow2(Transform1.size), 1)"}}
    shutter 1
@@ -2970,8 +1945,8 @@ set N15eb19d0 [stack 0]
    ypos 446
    disable {{"parent.edge_blend_size < 1"}}
   }
-set N19812180 [stack 0]
-push $N15eb19d0
+set N132d1a10 [stack 0]
+push $N132c0d00
   Dot {
    name Dot1
    xpos -6
@@ -3013,7 +1988,7 @@ push $N15eb19d0
    xpos -6
    ypos 666
   }
-push $N19812180
+push $N132d1a10
   Grade {
    inputs 1+1
    white 1.4
@@ -3062,8 +2037,8 @@ push $N19812180
   xpos 104
   ypos 2391
  }
-push $N15c12c00
-push $N15c667c0
+push $N12fcc6c0
+push $N130203a0
  Multiply {
   inputs 1+1
   channels rgb
@@ -3092,7 +2067,7 @@ push $N15c667c0
   xpos 324
   ypos 2490
  }
-set N17549590 [stack 0]
+set N133aec70 [stack 0]
  MergeExpression {
   inputs 2
   temp_name0 reverse
@@ -3109,7 +2084,7 @@ set N17549590 [stack 0]
   xpos 324
   ypos 2850
  }
-push $N15bd8440
+push $N12f91870
  Merge2 {
   inputs 2
   operation plus
@@ -3126,7 +2101,7 @@ push $N15bd8440
   xpos 984
   ypos 3018
  }
-set N189a8cc0 [stack 0]
+set N133e4a10 [stack 0]
  OCIOColorSpace {
   in_colorspace {{OCIOColorSpace1.out_colorspace x1001 7}}
   out_colorspace {{OCIOColorSpace1.in_colorspace x1001 7}}
@@ -3139,13 +2114,13 @@ set N189a8cc0 [stack 0]
   xpos 984
   ypos 3162
  }
-set N12890a10 [stack 0]
+set N1341e140 [stack 0]
  Dot {
   name Dot41
   xpos 1204
   ypos 3162
  }
-set N199406f0 [stack 0]
+set N13424500 [stack 0]
  Dot {
   name Dot36
   xpos 1314
@@ -3158,7 +2133,7 @@ set N199406f0 [stack 0]
   xpos 1280
   ypos 3254
  }
-push $N199406f0
+push $N13424500
  Merge2 {
   inputs 2
   operation difference
@@ -3182,13 +2157,13 @@ push $N199406f0
   xpos 1204
   ypos 3402
  }
-push $N15bbcf40
+push $N12f761d0
  Dot {
   name Dot45
   xpos 1424
   ypos -390
  }
-push $N189a8cc0
+push $N133e4a10
  Merge2 {
   inputs 2
   operation from
@@ -3204,7 +2179,7 @@ push $N189a8cc0
   xpos 1424
   ypos 3522
  }
-push $N17549590
+push $N133aec70
  Dot {
   name Dot14
   xpos 104
@@ -3215,13 +2190,13 @@ push $N17549590
   xpos 104
   ypos 3402
  }
-push $N1585cf30
+push $N12c16500
  Dot {
   name Dot47
   xpos -556
   ypos -390
  }
-push $N158dc5a0
+push $N12c959d0
  Merge2 {
   inputs 2
   operation from
@@ -3237,7 +2212,7 @@ push $N158dc5a0
   xpos -556
   ypos 3522
  }
-push $N12890a10
+push $N1341e140
  Switch {
   inputs 5
   which {{output}}
@@ -3260,7 +2235,7 @@ push $N12890a10
   ypos 3854
  }
 end_group
-push $N157862a0
+push $N12b3e690
 Dot {
  name Dot61
  xpos 764
@@ -3272,7 +2247,7 @@ Keymix {
  xpos 510
  ypos 2673
 }
-push $N15575370
+push $N129d5c30
 Dot {
  name Dot3
  xpos 874
@@ -3289,14 +2264,13 @@ Switch {
  name Switch1
  xpos 510
  ypos 2871
- disable true
 }
 Reformat {
  name Reformat1
  xpos 510
  ypos 2967
 }
-set N19e1cbb0 [stack 0]
+set N1350b410 [stack 0]
 Write {
  file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3]/\[string range  \[basename \[value root.name]] 0 end-3]_####.exr"
  file_type exr
@@ -3313,7 +2287,7 @@ Write {
  xpos 620
  ypos 3017
 }
-push $N19e1cbb0
+push $N1350b410
 Write {
  file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3].mov"
  file_type mov
@@ -3346,12 +2320,1051 @@ Write {
  xpos 400
  ypos 3027
 }
-push $N123293b0
+push $N11414510
 Viewer {
  frame_range 1001-1100
  fps 25
+ render_settings_schema false
  monitorOutNDISenderName "NukeX - template_current - Viewer1"
  name Viewer1
  xpos 510
  ypos 2895
+}
+Read {
+ inputs 0
+ file_type exr
+ file "../renders/comp/\[string range  \[basename \[value root.name]] 0 end-3]/\[string range  \[basename \[value root.name]] 0 end-3]_####.exr"
+ origset true
+ colorspace "ARRI LogC3 (EI800)"
+ name ReadCompEXR
+ label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
+ xpos 620
+ ypos 3100
+}
+Reformat {
+ format "1920 1080 0 0 1920 1080 1 HD_1080"
+ name Reformat2
+ xpos 620
+ ypos 3230
+}
+Group {
+ name MS_slate_overlay
+ tile_color 0xefb500ff
+ note_font "Verdana Bold Italic"
+ xpos 620
+ ypos 3341
+ addUserKnob {20 settings t "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
+ addUserKnob {26 text l "" +STARTLINE T "<span style=\"color:#aaa;font-family:sans-serif\"><b><span style=\"color:#ffaf24\">MS_Slate Overlay v.1.0</span></b>"}
+ addUserKnob {26 ""}
+ addUserKnob {7 slateextend l "slate area" R 0 200}
+ slateextend 60
+ addUserKnob {41 color l "overlay color" T Constant1.color}
+ addUserKnob {6 enableline l "use line" +STARTLINE}
+ enableline true
+ addUserKnob {3 linewidth l "&nbsp;&nbsp;&nbsp;&nbsp;width&nbsp;" -STARTLINE}
+ linewidth 2
+ addUserKnob {26 elements l "<b><span style=\"color:#ffaf24\">Elements</span>"}
+ addUserKnob {6 framecount l "frame count" +STARTLINE}
+ framecount true
+ addUserKnob {6 timecode1 l timecode -STARTLINE}
+ timecode1 true
+ addUserKnob {6 date1 l date -STARTLINE}
+ date1 true
+ addUserKnob {6 fpscounter l framerate +STARTLINE}
+ fpscounter true
+ addUserKnob {6 compname l "comp name" -STARTLINE}
+ compname true
+ addUserKnob {3 startfr l "start frame"}
+ startfr 1001
+ addUserKnob {6 duration t "\nDisplay duration of entire timeline based on project sttings." -STARTLINE}
+ duration true
+ addUserKnob {4 durationtype l "" -STARTLINE M {frames timecode both ""}}
+ durationtype both
+ addUserKnob {41 set l "apply duration" t "\nPress this to run the timeline calculation.\n\nRun this again if the timeline range changes during production." -STARTLINE T readtime.set}
+ addUserKnob {6 project +STARTLINE}
+ addUserKnob {1 projecttext l "" -STARTLINE}
+ projecttext project
+ addUserKnob {6 artist +STARTLINE}
+ addUserKnob {1 artisttext l "" -STARTLINE}
+ artisttext artist
+ addUserKnob {6 comment +STARTLINE}
+ addUserKnob {1 commenttext l "" -STARTLINE}
+ commenttext "add comment here"
+ addUserKnob {26 Font l "<b><span style=\"color:#ffaf24\">Font</span>"}
+ addUserKnob {3 fontsize1 l "font size" t "\nControls all fonts at once"}
+ fontsize1 3
+ addUserKnob {3 commentsize l "&nbsp;&nbsp;comment size&nbsp;" -STARTLINE}
+ commentsize 3
+ addUserKnob {3 xedgedistance l "&nbsp;distance to side&nbsp;" t "\nSets the distance from the markers to the format baoundarys." -STARTLINE}
+ xedgedistance 20
+}
+ Input {
+  inputs 0
+  name Input1
+  xpos -760
+  ypos -1292
+ }
+ Dot {
+  name Dot5
+  xpos -728
+  ypos -1049
+ }
+set N124bc910 [stack 0]
+ Shuffle2 {
+  fromInput1 {
+   {0}
+   B
+  }
+  fromInput2 {
+   {0}
+   B
+  }
+  mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
+  name Shuffle4
+  label "\[value in1]"
+  xpos -941
+  ypos -1057
+ }
+ Dot {
+  name Dot1
+  xpos -1089
+  ypos -1047
+ }
+set N12486340 [stack 0]
+ Dot {
+  name Dot13
+  xpos -1808
+  ypos -1048
+ }
+ Shuffle2 {
+  fromInput1 {
+   {0}
+   B
+  }
+  fromInput2 {
+   {0}
+   B
+  }
+  mappings "4 black -1 -1 rgba.red 0 0 black -1 -1 rgba.green 0 1 black -1 -1 rgba.blue 0 2 black -1 -1 rgba.alpha 0 3"
+  name Shuffle1
+  label emtpy
+  xpos -1840
+  ypos -576
+ }
+set N124e3640 [stack 0]
+ AddTimeCode {
+  frame {{"\[value startfr]"}}
+  useFrame true
+  name AddTimeCode1
+  xpos -1840
+  ypos -410
+ }
+set N1244eab0 [stack 0]
+ Dot {
+  name Dot14
+  xpos -2527
+  ypos -408
+ }
+ Dot {
+  name Dot12
+  xpos -2527
+  ypos 793
+ }
+set N124b2260 [stack 0]
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "total:  \[value readtime.durationframe] / \[value readtime.tc1]"
+  old_message {
+   {116 111 116 97 108 58 32 32 49 48 48 32 47 32 48 48 58 48 48 58 48 50 58 49 50}
+  }
+  old_expression_markers {
+   {8 10 14 24}
+  }
+  box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+  xjustify center
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 8
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text12
+  label "duration both\n"
+  note_font "Verdana Bold"
+  xpos -2380
+  ypos 864
+ }
+push $N124b2260
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "total: \[value readtime.tc1]"
+  old_message {
+   {116 111 116 97 108 58 32 48 48 58 48 48 58 48 50 58 49 50}
+  }
+  old_expression_markers {
+   {7 17}
+  }
+  box {{parent.Text2.box.x x1000 0} 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+  xjustify center
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 5
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  scale {1 1}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text11
+  label "duration time\n"
+  note_font "Verdana Bold"
+  xpos -2380
+  ypos 784
+ }
+push $N124b2260
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "total: \[value readtime.durationframe]"
+  old_message {
+   {116 111 116 97 108 58 32 49 48 48}
+  }
+  old_expression_markers {
+   {7 9}
+  }
+  box {0 0 {utility.inres.u} {abs(parent.utility.addres/2)}}
+  xjustify center
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 5
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text10
+  label "duration frame\n"
+  note_font "Verdana Bold"
+  xpos -2380
+  ypos 704
+ }
+ Switch {
+  inputs 3
+  which {{parent.durationtype}}
+  name Switch1
+  xpos -2200
+  ypos 790
+ }
+push $N124e3640
+ Dot {
+  name Dot3
+  xpos -1987
+  ypos -567
+ }
+set N12560040 [stack 0]
+ Dot {
+  name Dot6
+  xpos -2168
+  ypos -567
+ }
+set N12566750 [stack 0]
+ Dot {
+  name Dot7
+  xpos -2347
+  ypos -567
+ }
+set N1256d170 [stack 0]
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v+utility.addres}}
+  box_fixed true
+  resize none
+  black_outside true
+  name Reformat2
+  label height
+  xpos -2740
+  ypos -575
+ }
+set N12573d00 [stack 0]
+ Dot {
+  name Dot8
+  xpos -2888
+  ypos -567
+ }
+set N1258d990 [stack 0]
+ Dot {
+  name Dot9
+  xpos -3067
+  ypos -567
+ }
+set N12594260 [stack 0]
+ Dot {
+  name Dot10
+  xpos -3247
+  ypos -567
+ }
+set N1259adb0 [stack 0]
+ Dot {
+  name Dot11
+  xpos -3428
+  ypos -567
+ }
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "fps: \[python \{(nuke.root().fps() )\}]"
+  old_message {
+   {102 112 115 58 32 50 53}
+  }
+  old_expression_markers {
+   {5 6}
+  }
+  box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? timecode1==0 ? parent.utility.inres.u-xedgedistance-(fontsize1*40) : parent.utility.inres.u-xedgedistance-(fontsize1*120) : timecode1==1 ?  parent.utility.inres.u-xedgedistance-(fontsize1*70) : parent.utility.inres.u-xedgedistance-(fontsize1*70)\n||\nframecount==0 && timecode1==0 ? parent.utility.inres.u-xedgedistance:0"} {abs(parent.utility.addres/2)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 36
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text9
+  label "framerate\n"
+  note_font "Verdana Bold"
+  xpos -3460
+  ypos 624
+ }
+push $N1259adb0
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "   \[value \[python nuke.thisGroup().name()].artisttext]\n"
+  old_message {
+   {32 32 32 97 114 116 105 115 116 10}
+  }
+  old_expression_markers {
+   {3 8}
+  }
+  box {{parent.utility.inres.u/2} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u} {parent.utility.inres.v+(utility.addres)}}
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 3
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.07)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text8
+  label artist
+  note_font "Verdana Bold"
+  xpos -3280
+  ypos 544
+ }
+push $N12594260
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 0 0 ] \"\"].\[join \[lrange \[split \[file tail \[value root.name]] \".\"] 1 1 ] \"\"]\n"
+  old_message {
+   {116 101 109 112 108 97 116 101 95 99 117 114 114 101 110 116 46 110 107 10}
+  }
+  old_expression_markers {
+   {0 15 17 18}
+  }
+  box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.07) x1000 1.375}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text7
+  label "comp name"
+  note_font "Verdana Bold"
+  xpos -3100
+  ypos 464
+ }
+push $N1258d990
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[value \[python nuke.thisGroup().name()].projecttext]   "
+  old_message {
+   {112 114 111 106 101 99 116 32 32 32}
+  }
+  old_expression_markers {
+   {0 6}
+  }
+  box {0 {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u/2} {parent.utility.inres.v+(utility.addres)}}
+  xjustify center
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.12)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text6
+  label project
+  note_font "Verdana Bold"
+  xpos -2920
+  ypos 384
+ }
+push $N12573d00
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[date %d/%m/%y]"
+  old_message {
+   {49 50 47 49 48 47 50 54}
+  }
+  old_expression_markers {
+   {0 7}
+  }
+  box {{parent.xedgedistance x1000 0} {"slateextend<0 ? parent.utility.inres.v+(utility.addres*1.5) : parent.utility.inres.v+(utility.addres/2)"} {parent.utility.inres.u-xedgedistance} {parent.utility.inres.v+(utility.addres)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 15
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.09)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text4
+  label date
+  note_font "Verdana Bold"
+  xpos -2740
+  ypos 304
+ }
+push $N1256d170
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[value \[python nuke.thisGroup().name()].commenttext]"
+  old_message {
+   {97 100 100 32 99 111 109 109 101 110 116 32 104 101 114 101}
+  }
+  old_expression_markers {
+   {0 15}
+  }
+  box {{parent.xedgedistance x1000 0} 0 {parent.utility.inres.u/2.7} {abs(parent.utility.addres/2)}}
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 52
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*((commentsize)*0.01))+0.1}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text3
+  label comment
+  note_font "Verdana Bold"
+  xpos -2381
+  ypos 224
+ }
+push $N12566750
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message |
+  old_message {
+   {124}
+  }
+  box {0 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*33) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 1
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text2
+  label divider
+  note_font "Verdana Bold"
+  xpos -2200
+  ypos 144
+ }
+push $N12560040
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[frame]"
+  old_message {
+   {49 48 48 49}
+  }
+  old_expression_markers {
+   {0 3}
+  }
+  box {0 0 {parent.utility.inres.u-xedgedistance} {abs(parent.utility.addres/2)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 7
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text1
+  label frame
+  note_font "Verdana Bold"
+  xpos -2021
+  ypos 64
+ }
+push $N1244eab0
+ Text2 {
+  font_size_toolbar 100
+  font_width_toolbar 100
+  font_height_toolbar 100
+  message "\[timecode]"
+  old_message {
+   {48 49 58 48 48 58 48 48 58 48 48}
+  }
+  old_expression_markers {
+   {0 10}
+  }
+  box {{parent.Text2.box.x x1000 0} 0 {"framecount==1 ? parent.utility.inres.u-xedgedistance-(fontsize1*50) : parent.utility.inres.u-xedgedistance"} {abs(parent.utility.addres/2)}}
+  xjustify right
+  yjustify center
+  transforms {
+   {0 2}
+  }
+  cursor_position 10
+  font {{ Courier : Regular : Courier.pfa : 0 }}
+  global_font_scale {{(parent.fontsize1*0.1)}}
+  center {960 540}
+  cursor_initialised true
+  autofit_bbox false
+  initial_cursor_position {
+   {0 1080}
+  }
+  group_animations {
+   {0}
+   imported:
+   0
+   selected:
+   0
+   items:
+   "root transform/"
+  }
+  animation_layers {
+   {1 11 960 540 0 0 1 1 0 0 0 0}
+  }
+  name Text5
+  label time
+  note_font "Verdana Bold"
+  xpos -1840
+  ypos -16
+ }
+push $N12486340
+ NoOp {
+  name utility
+  xpos -1120
+  ypos -810
+  addUserKnob {20 User}
+  addUserKnob {30 inres l "in res"}
+  inres {{"\[value input.format.r]"} {"slateextend<0 ? \[value input.format.t]+slateextend : \[value input.format.t]"}}
+  addUserKnob {7 addres l "add res" R -500 500}
+  addres {{parent.slateextend*2}}
+ }
+set N12718b00 [stack 0]
+ Shuffle2 {
+  fromInput1 {
+   {0}
+   B
+  }
+  fromInput2 {
+   {0}
+   B
+  }
+  mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
+  name Shuffle2
+  label "\[value in1]"
+  xpos -1480
+  ypos -816
+ }
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v+utility.addres}}
+  box_fixed true
+  resize none
+  black_outside true
+  name Reformat3
+  label height
+  xpos -1480
+  ypos -734
+ }
+push $N12718b00
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v}}
+  box_fixed true
+  resize none
+  black_outside true
+  name Reformat1
+  label height
+  xpos -1120
+  ypos -736
+ }
+set N1274e630 [stack 0]
+ Shuffle2 {
+  fromInput1 {
+   {0}
+   B
+  }
+  fromInput2 {
+   {0}
+   B
+  }
+  mappings "4 white -1 -1 rgba.red 0 0 white -1 -1 rgba.green 0 1 white -1 -1 rgba.blue 0 2 white -1 -1 rgba.alpha 0 3"
+  name Shuffle3
+  label "\[value in1]"
+  xpos -1300
+  ypos -736
+ }
+ Dot {
+  name Dot4
+  xpos -1267
+  ypos -646
+ }
+ Merge2 {
+  inputs 2
+  operation mask
+  name Merge3
+  xpos -1480
+  ypos -648
+ }
+ Dot {
+  name Dot2
+  xpos -1447
+  ypos -487
+ }
+set N1278b5a0 [stack 0]
+push $N1278b5a0
+ Dilate {
+  size {{parent.linewidth}}
+  name Dilate1
+  xpos -1299
+  ypos -497
+ }
+ Merge2 {
+  inputs 2
+  operation from
+  name Merge4
+  xpos -1480
+  ypos -410
+ }
+ Dot {
+  name Dot17
+  xpos -1448
+  ypos -247
+ }
+push $N1274e630
+ Merge2 {
+  inputs 2
+  name Merge5
+  xpos -1120
+  ypos -249
+  disable {{!parent.enableline}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge1
+  xpos -1120
+  ypos -10
+  disable {{"slateextend==0 ? 1: !parent.timecode1"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge2
+  xpos -1120
+  ypos 70
+  disable {{"slateextend==0 ? 1:!parent.framecount"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge7
+  xpos -1120
+  ypos 150
+  disable {{"slateextend==0 ? 1:framecount==1 && timecode1==1 ? 0:1"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge8
+  xpos -1120
+  ypos 230
+  disable {{"slateextend==0 ? 1:!parent.comment"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge9
+  xpos -1120
+  ypos 310
+  disable {{"slateextend==0 ? 1:!parent.date1"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge10
+  xpos -1120
+  ypos 390
+  disable {{"slateextend==0 ? 1:!parent.project"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge11
+  xpos -1120
+  ypos 470
+  disable {{"slateextend==0 ? 1:!parent.compname"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge12
+  xpos -1120
+  ypos 551
+  disable {{"slateextend==0 ? 1:!parent.artist"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge13
+  xpos -1120
+  ypos 630
+  disable {{"slateextend==0 ? 1:!parent.fpscounter"}}
+ }
+ Merge2 {
+  inputs 2
+  name Merge14
+  xpos -1120
+  ypos 790
+  disable {{"slateextend==0 ? 1:!parent.duration"}}
+ }
+ Constant {
+  inputs 0
+  color {0.9822503924 0.1274376512 0.02217387967 0}
+  name Constant1
+  xpos -1300
+  ypos 925
+ }
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v+utility.addres}}
+  box_fixed true
+  name Reformat5
+  label height
+  xpos -1300
+  ypos 1023
+ }
+ Copy {
+  inputs 2
+  from0 rgba.alpha
+  to0 rgba.alpha
+  name Copy1
+  xpos -1120
+  ypos 1023
+ }
+ Premult {
+  name Premult1
+  xpos -1120
+  ypos 1109
+ }
+ Crop {
+  box {0 0 {"\[value input.format.r]"} {"\[value input.format.t]"}}
+  name Crop1
+  xpos -1120
+  ypos 1189
+ }
+push $N124bc910
+ Reformat {
+  type "to box"
+  box_width {{parent.utility.inres.u}}
+  box_height {{parent.utility.inres.v+utility.addres}}
+  box_fixed true
+  resize none
+  black_outside true
+  name Reformat4
+  label height
+  xpos -761
+  ypos -897
+ }
+ Merge2 {
+  inputs 2
+  bbox A
+  name Merge6
+  xpos -761
+  ypos 1189
+ }
+ Output {
+  name Output1
+  xpos -760
+  ypos 1429
+ }
+ StickyNote {
+  inputs 0
+  name StickyNote1
+  label "\[frames \{first\}] - \[frames \{last\}]\n\nimport re\n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.Root().firstFrame()\nlast_frame = nuke.Root().lastFrame()\n\n# Function to convert frames to timecode\ndef frames_to_timecode(frames, fps=24):\n    hours = int(frames // (fps * 3600))\n    minutes = int((frames % (fps * 3600)) // (fps * 60))\n    seconds = int((frames % (fps * 60)) // fps)\n    frames_remaining = int(frames % fps)\n    return f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames_remaining:02\}\"\n\n# Calculate the total frames\ntotal_frames = last_frame - first_frame\n\n# Get the FPS from the project settings\nfps = nuke.Root()\['fps'].value()\n\n# Convert to timecode using the project FPS\ntimecode = frames_to_timecode(total_frames, fps=fps)\n\n# Function to replace or append the timecode in a given text\ndef replace_last_timecode(text, new_timecode):\n    # Regular expression to match timecode patterns\n    pattern = re.compile(r'\\b\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}\\b')\n    # Replace the last match with the new timecode\n    if pattern.search(text):\n        return pattern.sub(new_timecode, text, count=1)\n    else:\n        # If no timecode is found, just append the new timecode\n        return f\"\{text\}\\n\{new_timecode\}\" if text else new_timecode\n\n# Update Text11 with the timecode in the first line\ntext11_node = nuke.toNode(\"Text11\")  # Replace \"Text11\" with the correct node name\nif text11_node:\n    current_text11 = text11_node.knob(\"message\").value()\n    # Replace the old timecode with the new one, or prepend it if none exists\n    updated_text11 = replace_last_timecode(current_text11, timecode)\n    # Ensure the timecode is in the first line\n    if not re.search(r'^\\d\{2\}:\\d\{2\}:\\d\{2\}:\\d\{2\}', updated_text11):\n        updated_text11 = f\"\{timecode\}\\n\{updated_text11\}\"\n    text11_node.knob(\"message\").setValue(updated_text11)\nelse:\n    nuke.message(\"Text11 node not found\")\n\n# Update Text12 with the timecode while keeping existing content\ntext12_node = nuke.toNode(\"Text12\")  # Replace \"Text12\" with the correct node name\nif text12_node:\n    current_text12 = text12_node.knob(\"message\").value()\n    updated_text12 = replace_last_timecode(current_text12, timecode)\n    text12_node.knob(\"message\").setValue(updated_text12)\nelse:\n    nuke.message(\"Text12 node not found\")\n    \n\n# Get the first and last frame from the project settings\nfirst_frame = nuke.root().firstFrame()\nlast_frame = nuke.root().lastFrame()\n\n# Calculate the total frames minus one\ntotal_frames_minus_one = last_frame - first_frame\n\n# Update Text10 with the total duration in frames minus one\ntext10_node = nuke.toNode(\"Text10\")  # Replace \"Text10\" with the correct node name\nif text10_node:\n    # Set the text to the total duration in frames minus one\n    text10_node.knob(\"message\").setValue(str(total_frames_minus_one))\nelse:\n    nuke.message(\"Text10 node not found\")\n\n"
+  xpos -2082
+  ypos 826
+ }
+push $N1244eab0
+ NoOp {
+  name readtime
+  xpos -2740
+  ypos 790
+  hide_input true
+  addUserKnob {20 User}
+  addUserKnob {30 intime l "in time"}
+  intime {{root.first_frame} {root.last_frame}}
+  addUserKnob {3 durationframe l duration}
+  durationframe {{intime.v-intime.u+1}}
+  addUserKnob {22 set T "import nuke\n\n# Get the current node where the Python knob is being executed\nnode = nuke.thisNode()\n\n# Ensure the 'durationframe' knob exists and get the frame count from it\nif 'durationframe' in node.knobs():\n    frame_count = node\['durationframe'].value()\nelse:\n    nuke.message(\"Error: 'durationframe' knob not found in the current node.\")\n    raise ValueError(\"'durationframe' knob not found\")\n\n# Get the frame rate from the project settings\nframe_rate = nuke.root().fps()\n\n# Calculate hours, minutes, seconds, and frames\nhours = int(frame_count / (3600 * frame_rate))\nminutes = int((frame_count % (3600 * frame_rate)) / (60 * frame_rate))\nseconds = int((frame_count % (60 * frame_rate)) / frame_rate)\nframes = int(frame_count % frame_rate)\n\n# Format the timecode as HH:MM:SS:FF\ntimecode = f\"\{hours:02\}:\{minutes:02\}:\{seconds:02\}:\{frames:02\}\"\n\n# Ensure the 'tc1' knob exists in the node\nif 'tc1' in node.knobs():\n    # Update the 'tc1' knob with the new timecode\n    node\['tc1'].setValue(timecode)\n    print(f\"Timecode updated to: \{timecode\} in 'tc1' knob.\")\nelse:\n    nuke.message(\"Error: 'tc1' knob not found in the current node.\")\n    raise ValueError(\"'tc1' knob not found\")\n" +STARTLINE}
+  addUserKnob {1 tc1 l timecode}
+  tc1 00:00:02:12
+ }
+end_group
+OCIODisplay {
+ colorspace scene_linear
+ display "sRGB - Display"
+ view "ACES 2.0 - SDR 100 nits (Rec.709)"
+ name OCIODisplay3
+ xpos 620
+ ypos 3389
+}
+Write {
+ file "../renders/precomp/previews/\[string range  \[basename \[value root.name]] 0 end-3].mp4"
+ file_type mov
+ mov64_format "mp4 (MP4 (MPEG-4 Part 14))"
+ mov64_codec h264
+ mov_h264_codec_profile "High 4:2:0 8-bit"
+ mov64_pixel_format {
+  {0}
+  "yuv420p\tYCbCr 4:2:0 8-bit"
+ }
+ mov64_quality Custom
+ mov64_fast_start true
+ mov64_write_timecode true
+ mov64_gop_size 12
+ mov64_b_frames 0
+ mov64_bitrate 28000
+ mov64_bitrate_tolerance 0
+ mov64_quality_min 1
+ mov64_quality_max 3
+ colorspace color_picking
+ create_directories true
+ checkHashOnRead false
+ in_colorspace scene_linear
+ out_colorspace scene_linear
+ ocioColorspace scene_linear
+ display "sRGB - Display"
+ view "ACES 2.0 - SDR 100 nits (Rec.709)"
+ name WriteCompMP4
+ xpos 620
+ ypos 3435
 }

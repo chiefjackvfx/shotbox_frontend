@@ -531,6 +531,7 @@ class MainWindow(QMainWindow):
         self.page_assignment_board.auto_refresh_pause_changed.connect(
             self._on_assignment_auto_refresh_pause_changed
         )
+        self.page_assignment_board.task_data_changed.connect(self._on_assignment_task_changed)
         if hasattr(self, "tabs"):
             self.tabs.currentChanged.connect(self._on_tab_changed)
         QTimer.singleShot(0, self._sync_assignment_board_from_nukedash)
@@ -575,6 +576,27 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "page_assignment_board"):
             return
         self.page_assignment_board.set_jobs_data(jobs)
+
+    def _on_assignment_task_changed(self, shot_id: int, task_data: dict) -> None:
+        # Tab activation reuses this snapshot before the next server poll.
+        jobs = getattr(self.page_nukedash, "_jobs_by_id", {})
+        for job in jobs.values():
+            for timeline in job.get("timelines", []):
+                for shot in timeline.get("shots", []):
+                    if shot.get("id") != shot_id:
+                        continue
+                    tasks = shot.setdefault("tasks", [])
+                    task_id = task_data.get("id")
+                    if task_data.get("deleted"):
+                        shot["tasks"] = [task for task in tasks if task.get("id") != task_id]
+                    else:
+                        existing = next((task for task in tasks if task.get("id") == task_id), None)
+                        if existing is None:
+                            tasks.append(dict(task_data))
+                        else:
+                            existing.update(task_data)
+                    self.page_nukedash._last_job_sig = None
+                    return
 
     def _on_active_job_changed_for_assignment(self, job_data: dict):
         if not hasattr(self, "page_assignment_board"):

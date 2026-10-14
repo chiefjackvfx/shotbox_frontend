@@ -6,9 +6,16 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-14T10:05:22+01:00] Added assignment board regression tests for saves, refreshes, and thumbnails.
+
 ### Changed
 
 ### Fixed
+
+- [2026-10-14T10:05:22+01:00] Fixed assignment moves, rollback, and board data synchronisation.
+- [2026-10-14T10:05:22+01:00] Created tasks atomically; corrected deletion counts and stale selections.
+- [2026-10-14T10:05:22+01:00] Restored thumbnails; removed repeated artist requests and rejected invalid drops.
+- [2026-10-12T11:37:35+01:00] Prevented Create Task fields clipping on differently scaled monitors.
 
 ## 4.4.2 - 2026-10-07
 
