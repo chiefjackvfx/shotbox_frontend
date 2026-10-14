@@ -34,7 +34,7 @@ from PyQt6.QtWidgets import (
 import widgets
 import http_help
 import filesIO
-import nuke_detector
+from nuke_lock_worker import NukeLockWorker
 import project_load_profiler
 import nukedash_excel_export
 from nuke_lock_utils import display_owner_name, parse_lock_info
@@ -335,6 +335,9 @@ def _nukedash_combo_jobs(jobs: list[dict], active_job_id=None) -> list[dict]:
 
 class page_nukedash(QMainWindow):
     fetch_requested = pyqtSignal()
+    lock_claim_requested = pyqtSignal(dict)
+    lock_launch_finished = pyqtSignal(int, bool)
+    lock_stop_requested = pyqtSignal()
     jobs_data_updated = pyqtSignal(list)
     active_job_changed = pyqtSignal(dict)
     active_timeline_changed = pyqtSignal(int)
@@ -542,7 +545,8 @@ class page_nukedash(QMainWindow):
         self._saved_filter_state = self._load_saved_filter_state()
         self._lock_interval_ms = 45_000
         self._lock_release_grace_sec = 90
-        self._owned_locks_by_shot_id = {}
+        self._pending_nuke_opens = {}
+        self._lock_read_api = http_help.DjangoAPI(base_url=self._worker.api.base_url)
         self._project_load_profiler = project_load_profiler.ProjectLoadProfiler(
             enabled=bool(
                 self._settings_manager.get("debug_modes.project_load_profiler", False)
@@ -571,18 +575,6 @@ class page_nukedash(QMainWindow):
         self._shot_file_tooltip_timer = QTimer(self)
         self._shot_file_tooltip_timer.setInterval(30_000)
         self._shot_file_tooltip_timer.timeout.connect(self._refresh_visible_shot_card_tooltips)
-
-        self._lock_sync_timer = QTimer(self)
-        self._lock_sync_timer.setInterval(self._lock_interval_ms)
-        self._lock_sync_timer.timeout.connect(self._on_lock_state_sync_tick)
-
-        self._lock_detector_timer = QTimer(self)
-        self._lock_detector_timer.setInterval(self._lock_interval_ms)
-        self._lock_detector_timer.timeout.connect(self._on_lock_detector_tick)
-
-        self._lock_heartbeat_timer = QTimer(self)
-        self._lock_heartbeat_timer.setInterval(self._lock_interval_ms)
-        self._lock_heartbeat_timer.timeout.connect(self._on_lock_heartbeat_tick)
 
         self._apply_saved_filter_state_to_controls()
         if enable_filters_checkbox is not None:
@@ -1360,14 +1352,27 @@ class page_nukedash(QMainWindow):
             self._save_session_state()
 
     def _start_lock_maintenance_timers(self):
-        for timer in (self._lock_sync_timer, self._lock_detector_timer, self._lock_heartbeat_timer):
-            jitter_ms = random.randint(0, 5000)
-            _single_shot(self, jitter_ms, timer.start)
+        self._lock_thread = QThread(self)
+        self._lock_worker = NukeLockWorker(
+            api=http_help.DjangoAPI(base_url=self._lock_read_api.base_url, skip_activity_logging=True),
+            interval_ms=self._lock_interval_ms + random.randint(0, 5000),
+            release_grace_sec=self._lock_release_grace_sec,
+        )
+        self._lock_worker.moveToThread(self._lock_thread)
+        self.lock_claim_requested.connect(self._lock_worker.claim)
+        self.lock_launch_finished.connect(self._lock_worker.finish_launch)
+        self.lock_stop_requested.connect(self._lock_worker.stop)
+        self._lock_worker.lock_updated.connect(self._on_worker_lock_updated)
+        self._lock_worker.claim_finished.connect(self._on_nuke_lock_claimed)
+        self._lock_worker.stopped.connect(self._lock_thread.quit, Qt.ConnectionType.DirectConnection)
+        self._lock_thread.started.connect(self._lock_worker.start)
+        self._lock_thread.finished.connect(self._lock_worker.deleteLater)
+        self._lock_thread.start()
 
-    def _normalize_script_path(self, value: str | None) -> str:
-        if not value:
-            return ""
-        return os.path.normcase(os.path.normpath(str(value)))
+    @pyqtSlot(int, object)
+    def _on_worker_lock_updated(self, shot_id, value):
+        if not self._shutting_down:
+            self._apply_shot_lock_value(shot_id, value)
 
     def _active_job_data(self) -> dict | None:
         jobs_by_id = getattr(self, "_jobs_by_id", None)
@@ -1956,11 +1961,11 @@ class page_nukedash(QMainWindow):
         shot_data = shot_card.data or {}
         shot_id = shot_data.get("id")
         shot_title = shot_data.get("title", "Unknown Shot")
-        if shot_id is None or not nk_path:
+        if shot_id is None or not nk_path or int(shot_id) in self._pending_nuke_opens:
             return
 
         try:
-            fresh_shot = self._worker.api.get_shot(int(shot_id))
+            fresh_shot = self._lock_read_api.get_shot(int(shot_id))
         except Exception as exc:
             QMessageBox.warning(self, "Open Nuke", f"Could not refresh lock state.\n\n{exc}")
             return
@@ -1968,7 +1973,8 @@ class page_nukedash(QMainWindow):
         self._apply_shot_lock_payload(fresh_shot)
         lock_info = parse_lock_info(fresh_shot.get("nuke_in_use"))
         force_take = False
-        system_id = self._worker.api.get_system_id()
+        system_id = self._lock_read_api.get_lock_owner_id()
+        already_owned = bool(lock_info and lock_info.matches_system(system_id))
         if lock_info:
             if lock_info.matches_system(system_id):
                 popup = QMessageBox(self)
@@ -2006,148 +2012,37 @@ class page_nukedash(QMainWindow):
                     return
                 force_take = True
 
-        lock_result = self._worker.api.update_shot_lock(int(shot_id), release=False, force=force_take)
-        if not lock_result.get("ok"):
-            if lock_result.get("nuke_in_use") is not None:
-                self._apply_shot_lock_value(int(shot_id), lock_result.get("nuke_in_use"))
-            if lock_result.get("conflict"):
+        self._pending_nuke_opens[int(shot_id)] = {
+            "files_io": shot_card.filesIO, "shot_title": shot_title,
+        }
+        self.lock_claim_requested.emit({
+            "shot_id": int(shot_id), "script_path": str(nk_path),
+            "base_path": fresh_shot.get("base_path") or shot_data.get("base_path"),
+            "owner_id": system_id, "force": force_take, "already_owned": already_owned,
+        })
+
+    @pyqtSlot(dict)
+    def _on_nuke_lock_claimed(self, request):
+        shot_id = request["shot_id"]
+        pending = self._pending_nuke_opens.pop(shot_id, None)
+        if pending is None or self._shutting_down:
+            return
+        result = request["result"]
+        if not result.get("ok"):
+            if result.get("conflict"):
                 self._warn_lock_conflict(
-                    shot_title=shot_title,
-                    lock_status=lock_result.get("lock_status"),
-                    detail=lock_result.get("detail"),
+                    pending["shot_title"], result.get("lock_status"), result.get("detail"),
                 )
             else:
-                QMessageBox.warning(
-                    self,
-                    "Open Nuke",
-                    lock_result.get("detail") or "Could not claim Nuke lock.",
-                )
+                QMessageBox.warning(self, "Open Nuke", result.get("detail") or "Could not claim Nuke lock.")
             return
-
-        shot_payload = lock_result.get("shot")
-        if isinstance(shot_payload, dict):
-            self._apply_shot_lock_payload(shot_payload)
-
         try:
-            shot_card.filesIO.open_file(str(nk_path))
+            pending["files_io"].open_file(request["script_path"])
         except Exception as exc:
-            self._worker.api.update_shot_lock(int(shot_id), release=True, force=False)
-            self._owned_locks_by_shot_id.pop(int(shot_id), None)
-            QMessageBox.warning(
-                self,
-                "Open Nuke",
-                f"Failed to launch Nuke after claiming lock.\nLock was released.\n\n{exc}",
-            )
-            return
-
-        self._owned_locks_by_shot_id[int(shot_id)] = {
-            "script_path": str(nk_path),
-            "last_seen_open_monotonic": time.monotonic(),
-        }
-
-    def _on_lock_state_sync_tick(self):
-        if self._active_job_id is None:
-            return
-        try:
-            job_data = self._worker.api.get_job(int(self._active_job_id))
-        except Exception:
-            return
-        if not isinstance(job_data, dict):
-            return
-
-        active_job = self._jobs_by_id.get(int(self._active_job_id))
-        if not isinstance(active_job, dict):
-            return
-
-        local_system_id = self._worker.api.get_system_id()
-        now = time.monotonic()
-        remote_timelines = {tl.get("id"): tl for tl in job_data.get("timelines", [])}
-        for timeline in active_job.get("timelines", []):
-            remote_timeline = remote_timelines.get(timeline.get("id"))
-            if not remote_timeline:
-                continue
-            remote_shots = {shot.get("id"): shot for shot in remote_timeline.get("shots", [])}
-            for shot in timeline.get("shots", []):
-                shot_id = shot.get("id")
-                if shot_id not in remote_shots:
-                    continue
-                try:
-                    shot_id_int = int(shot_id)
-                except (TypeError, ValueError):
-                    continue
-                remote_lock = remote_shots[shot_id].get("nuke_in_use")
-                shot["nuke_in_use"] = remote_lock
-                self._apply_shot_lock_value(shot_id_int, remote_lock)
-
-                # Track local-owned locks from sync so detector can auto-release even after UI/app restarts.
-                lock_info = parse_lock_info(remote_lock)
-                if lock_info and lock_info.matches_system(local_system_id):
-                    existing = self._owned_locks_by_shot_id.get(shot_id_int, {})
-                    script_path = existing.get("script_path")
-                    card = self._find_shot_card_by_id(shot_id_int)
-                    if card is not None and hasattr(card, "btn_open_nuke"):
-                        card_script_path = card.btn_open_nuke.property("file_path")
-                        if card_script_path:
-                            script_path = str(card_script_path)
-                    self._owned_locks_by_shot_id[shot_id_int] = {
-                        "script_path": script_path or "",
-                        "last_seen_open_monotonic": existing.get("last_seen_open_monotonic", now),
-                    }
-                else:
-                    self._owned_locks_by_shot_id.pop(shot_id_int, None)
-
-    def _on_lock_detector_tick(self):
-        if not self._owned_locks_by_shot_id:
-            return
-        try:
-            detections = nuke_detector.detect_open_nuke_scripts(current_user_only=True, strict=True)
-        except Exception:
-            # A failed/partial scan cannot prove a script has been closed.
-            now = time.monotonic()
-            for state in self._owned_locks_by_shot_id.values():
-                state["last_seen_open_monotonic"] = now
-            return
-        detected_paths = {
-            self._normalize_script_path(item.script_path)
-            for item in detections
-            if getattr(item, "script_path", None)
-        }
-
-        now = time.monotonic()
-        for shot_id, lock_state in list(self._owned_locks_by_shot_id.items()):
-            tracked_script = self._normalize_script_path(lock_state.get("script_path"))
-            if tracked_script and tracked_script in detected_paths:
-                lock_state["last_seen_open_monotonic"] = now
-                continue
-
-            last_seen = lock_state.get("last_seen_open_monotonic", now)
-            if now - last_seen < self._lock_release_grace_sec:
-                continue
-
-            result = self._worker.api.update_shot_lock(int(shot_id), release=True, force=False)
-            if result.get("ok") or result.get("conflict"):
-                self._owned_locks_by_shot_id.pop(int(shot_id), None)
-            if result.get("shot"):
-                self._apply_shot_lock_payload(result["shot"])
-            elif result.get("nuke_in_use") is not None:
-                self._apply_shot_lock_value(int(shot_id), result.get("nuke_in_use"))
-
-    def _on_lock_heartbeat_tick(self):
-        if not self._owned_locks_by_shot_id:
-            return
-        for shot_id in list(self._owned_locks_by_shot_id.keys()):
-            result = self._worker.api.update_shot_lock(int(shot_id), release=False, force=False)
-            if result.get("ok"):
-                if result.get("shot"):
-                    self._apply_shot_lock_payload(result["shot"])
-                continue
-
-            if result.get("conflict") or result.get("status_code") in (403, 404):
-                self._owned_locks_by_shot_id.pop(int(shot_id), None)
-            if result.get("shot"):
-                self._apply_shot_lock_payload(result["shot"])
-            elif result.get("nuke_in_use") is not None:
-                self._apply_shot_lock_value(int(shot_id), result.get("nuke_in_use"))
+            self.lock_launch_finished.emit(shot_id, False)
+            QMessageBox.warning(self, "Open Nuke", f"Failed to launch Nuke.\n\n{exc}")
+        else:
+            self.lock_launch_finished.emit(shot_id, True)
 
     def _populate_filter_dropdowns(self):
         """Populate artist and status filter dropdowns."""
@@ -3431,11 +3326,20 @@ class page_nukedash(QMainWindow):
             worker.cancel()
         self._thread.requestInterruption()
         self._thread.quit()
-        return self._thread.wait(1000)
+        lock_thread = getattr(self, "_lock_thread", None)
+        if lock_thread is not None and lock_thread.isRunning():
+            lock_thread.requestInterruption()
+            self.lock_stop_requested.emit()
+        stopped = self._thread.wait(1000)
+        if lock_thread is not None:
+            stopped = lock_thread.wait(1000) and stopped
+        return stopped
 
     def closeEvent(self, event):
         if not self.shutdown():
-            self._thread.finished.connect(self.close)
+            for thread in (self._thread, getattr(self, "_lock_thread", None)):
+                if thread is not None and thread.isRunning():
+                    thread.finished.connect(self.close)
             event.ignore()
             return
         super().closeEvent(event)

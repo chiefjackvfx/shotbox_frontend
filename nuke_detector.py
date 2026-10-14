@@ -112,9 +112,9 @@ def _iter_nuke_processes(current_user_only: bool = True, *, strict: bool = False
                 raise
 
 
-def _extract_nk_paths_from_cmdline(proc: psutil.Process, *, strict: bool = False) -> list[str]:
+def _read_process_cmdline(proc: psutil.Process, *, strict: bool = False) -> list[str]:
     try:
-        cmdline = proc.cmdline()
+        return proc.cmdline()
     except (psutil.NoSuchProcess, psutil.ZombieProcess):
         return []
     except Exception:
@@ -122,6 +122,24 @@ def _extract_nk_paths_from_cmdline(proc: psutil.Process, *, strict: bool = False
             raise
         return []
 
+
+def _is_frameserver_cmdline(cmdline: list[str]) -> bool:
+    """Recognise Foundry workers without treating unknown sessions as closed."""
+    has_terminal_mode = any(arg in {"-t", "-ti", "-it"} for arg in cmdline)
+    if not has_terminal_mode:
+        return False
+    worker_suffix = "/foundry/frameserver/nuke/workerapplication.py"
+    return any(
+        str(arg).strip().strip('"').strip("'").replace("\\", "/").casefold().endswith(worker_suffix)
+        for arg in cmdline
+    )
+
+
+def _extract_nk_paths_from_cmdline(
+    proc: psutil.Process, *, strict: bool = False, cmdline: list[str] | None = None,
+) -> list[str]:
+    if cmdline is None:
+        cmdline = _read_process_cmdline(proc, strict=strict)
     out: list[str] = []
     for arg in cmdline:
         if _looks_like_nk(arg):
@@ -161,7 +179,10 @@ def detect_open_nuke_scripts(current_user_only: bool = True, *, strict: bool = F
     for proc in _iter_nuke_processes(current_user_only=current_user_only, strict=strict):
         pid = int(proc.pid)
 
-        cmdline_paths = _extract_nk_paths_from_cmdline(proc, strict=strict)
+        cmdline = _read_process_cmdline(proc, strict=strict)
+        if _is_frameserver_cmdline(cmdline):
+            continue
+        cmdline_paths = _extract_nk_paths_from_cmdline(proc, strict=strict, cmdline=cmdline)
         if cmdline_paths:
             source = "cmdline"
             candidate_paths = cmdline_paths

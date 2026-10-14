@@ -1833,7 +1833,7 @@ class ShotCard(QWidget):
             self.set_lock_state("stale", owner_machine=owner, script_name=script_name)
             return
 
-        if lock_info.matches_system(self._api.get_system_id()):
+        if lock_info.matches_system(self._api.get_lock_owner_id()):
             self.set_lock_state("mine", owner_machine=owner, script_name=script_name)
             return
 
@@ -1847,7 +1847,11 @@ class ShotCard(QWidget):
         lock_script = getattr(self, "_lock_script_name", None) or base_label
 
         self.btn_open_nuke.elide_suffix = ""
-        if lock_state == "foreign_active":
+        if lock_state == "stale":
+            text = f"{lock_script} @ {lock_owner} (stale)"
+            if self._compact_mode:
+                text = f"Stale lock: {lock_owner}"
+        elif lock_state == "foreign_active":
             text = f"{lock_script} @ {lock_owner}"
             if self._compact_mode or not getattr(self, "_v02_grid", False):
                 text = _compact_text(text, 20 if self._compact_mode else 48)
@@ -1871,6 +1875,14 @@ class ShotCard(QWidget):
     def _set_nuke_button_tooltip(self):
         """Render modified-time tooltip for the current .nk file."""
         lock_state = getattr(self, "_lock_state", "none")
+        if lock_state == "stale":
+            owner = getattr(self, "_lock_owner_machine", None) or "unknown"
+            script = getattr(self, "_lock_script_name", None) or self._get_nuke_base_label()
+            self.btn_open_nuke.setToolTip(
+                f"Locked by: {owner}\nScript: {script}\n"
+                "Heartbeat overdue; the script may still be open."
+            )
+            return
         if lock_state == "foreign_active":
             owner = getattr(self, "_lock_owner_machine", None) or "unknown"
             script = getattr(self, "_lock_script_name", None) or self._get_nuke_base_label()

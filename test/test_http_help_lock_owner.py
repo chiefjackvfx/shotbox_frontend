@@ -74,6 +74,17 @@ class DjangoAPILockOwnerTests(unittest.TestCase):
         self.assertEqual(http_help.DjangoAPI._default_base_url, "http://saved-server:8000/api/")
         self.assertEqual(http_help.DjangoAPI.get_current_username(), "jack")
 
+    def test_existing_lock_can_be_renewed_after_selected_user_changes(self):
+        api = http_help.DjangoAPI()
+        api._request = mock.Mock(return_value=_response())
+        http_help.DjangoAPI.set_current_username("replacement")
+
+        api.update_shot_lock(12, owner_id="original@desk")
+
+        self.assertEqual(
+            api._request.call_args.kwargs["headers"]["X-ShotBox-System"], "original@desk",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

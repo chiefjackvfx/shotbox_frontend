@@ -927,6 +927,12 @@ QPushButton#btn_open_nuke[lock_state="mine"] {
     color: #FFF8D6;
 }
 
+QPushButton#btn_open_nuke[lock_state="stale"] {
+    background-color: #51462E;
+    border-color: #C19A50;
+    color: #FFF0CE;
+}
+
 QPushButton#btn_open_nuke[lock_state="foreign_active"]:hover,
 QPushButton#btn_open_nuke[lock_state="foreign_active"]:pressed {
     background-color: #872F2F;

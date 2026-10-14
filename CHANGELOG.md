@@ -6,6 +6,9 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-14T16:53:39+01:00] Tested frame-server exclusions and stale cleanup alongside open Nuke scripts.
+- [2026-10-14T16:34:18+01:00] Tested stale cleanup across jobs, ownership boundaries, and uncertain detection.
+- [2026-10-14T16:24:14+01:00] Added regressions for Nuke ownership, heartbeats, launches, and release recovery.
 - [2026-10-14T14:31:10+01:00] Tested ordered rows, responsive sizing, readability, and edit preservation.
 - [2026-10-14T13:46:53+01:00] Tested asynchronous job selection and responsive dashboard toolbar layouts.
 - [2026-10-14T12:43:29+01:00] Added Nuke Dash interaction, lock, preview, and lifecycle regressions.
@@ -13,10 +16,18 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-10-14T16:24:14+01:00] Moved Nuke lock maintenance and claims into a dedicated worker.
 - [2026-10-14T12:43:29+01:00] Updated detector test imports for current frontend layout.
 
 ### Fixed
 
+- [2026-10-14T16:53:39+01:00] Excluded Foundry frame-server workers from Nuke editing-session detection.
+- [2026-10-14T16:39:59+01:00] Updated stale lock displays when unchanged heartbeats age.
+- [2026-10-14T16:34:18+01:00] Cleaned owned stale Nuke locks across all jobs.
+- [2026-10-14T16:34:18+01:00] Preserved stale status until an open Nuke script is confirmed.
+- [2026-10-14T16:24:14+01:00] Unified Nuke ownership checks and preserved original heartbeat owners.
+- [2026-10-14T16:24:14+01:00] Preserved Nuke lock tracking across version changes and restarts.
+- [2026-10-14T16:24:14+01:00] Kept stale Nuke locks and their owners visible.
 - [2026-10-14T14:31:10+01:00] Filled shot grid width and preserved left-to-right row ordering.
 - [2026-10-14T14:31:10+01:00] Improved grid text contrast, control sizing, and responsive task wrapping.
 - [2026-10-14T13:46:53+01:00] Restored jobs dropdown sizing after asynchronous loading and refreshes.

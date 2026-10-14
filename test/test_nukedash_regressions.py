@@ -21,11 +21,12 @@ from PyQt6.QtWidgets import (QApplication, QDialog, QMainWindow, QMessageBox,
 
 import filesIO
 import http_help
-import nuke_detector
 import nuke_headless_tasks
 import page_nukedash as dash
 import widgets
 from test.test_page_nukedash_status_filter import FakeSettingsManager
+
+START_LOCK_MAINTENANCE = dash.page_nukedash._start_lock_maintenance_timers
 
 USERS = [{'id': 10, 'username': 'artist', 'first_name': 'Artist', 'groups': [1]}]
 
@@ -113,6 +114,69 @@ class NukeDashRegressionTests(unittest.TestCase):
 
     def task(self, page, task_id=7):
         return self.shot(page)._task_widgets_by_id[task_id]
+
+    def lock_page(self):
+        page = self.page(jobs_data())
+        card = self.shot(page)
+        page._lock_read_api.get_shot = mock.Mock(return_value={
+            **card.data, 'nuke_in_use': 'None',
+        })
+        START_LOCK_MAINTENANCE(page)
+        return page, card
+
+    def test_nuke_claim_runs_on_worker_and_launches_once_after_success(self):
+        from datetime import datetime, timezone
+        page, card = self.lock_page()
+        claim_threads = []
+        stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        def claim(*args, **kwargs):
+            claim_threads.append(threading.get_ident())
+            return {'ok': True, 'shot': {'id': card.data['id'], 'nuke_in_use': f'chief@desk|{stamp}'}}
+        page._lock_worker.api.update_shot_lock = mock.Mock(side_effect=claim)
+        with mock.patch.object(http_help.DjangoAPI, 'get_lock_owner_id', return_value='chief@desk'), \
+                mock.patch.object(card.filesIO, 'open_file') as launch:
+            page._handle_nuke_open_request(card, '/show/SH010_v001.nk')
+            page._handle_nuke_open_request(card, '/show/SH010_v001.nk')
+            self.wait(lambda: launch.called)
+            launch.assert_called_once_with('/show/SH010_v001.nk')
+            page._lock_worker.api.update_shot_lock.assert_called_once_with(
+                card.data['id'], force=False, owner_id='chief@desk',
+            )
+            self.assertEqual(card._lock_state, 'mine')
+            self.assertTrue(all(ident != self.gui_thread for ident in claim_threads))
+
+    def test_conflicting_claim_updates_owner_and_never_launches_nuke(self):
+        page, card = self.lock_page()
+        page._lock_worker.api.update_shot_lock = mock.Mock(return_value={
+            'ok': False, 'conflict': True, 'nuke_in_use': 'other@desk|20000101T000000Z',
+            'lock_status': {'owner': 'other@desk'},
+        })
+        with mock.patch.object(card.filesIO, 'open_file') as launch, \
+                mock.patch.object(page, '_warn_lock_conflict') as warning:
+            page._handle_nuke_open_request(card, '/show/SH010_v001.nk')
+            self.wait(lambda: warning.called)
+            launch.assert_not_called()
+            self.assertIn('other', card.btn_open_nuke.text())
+
+    def test_close_waits_for_lock_claim_and_cleans_unlaunched_lock(self):
+        page, card = self.lock_page()
+        started, release = threading.Event(), threading.Event()
+        def update(*args, **kwargs):
+            if not kwargs.get('release'):
+                started.set()
+                release.wait(3)
+            return {'ok': True}
+        page._lock_worker.api.update_shot_lock = mock.Mock(side_effect=update)
+        with mock.patch.object(card.filesIO, 'open_file') as launch:
+            try:
+                page._handle_nuke_open_request(card, '/show/SH010_v001.nk')
+                self.assertTrue(started.wait(1))
+                self.assertFalse(page.close())
+            finally:
+                release.set()
+            self.wait(lambda: not page._lock_thread.isRunning() and not page.isVisible())
+            launch.assert_not_called()
+            self.assertTrue(page._lock_worker.api.update_shot_lock.call_args.kwargs['release'])
 
     def test_startup_and_manual_refresh_fetch_on_worker_thread(self):
         page = self.page()
@@ -526,45 +590,6 @@ class NukeDashRegressionTests(unittest.TestCase):
             self.assertIn('Completed: 1', info.call_args.args[2])
             self.assertNotIn('previews', page._refresh_pause_reasons)
 
-
-class NukeLockRegressionTests(unittest.TestCase):
-    def harness(self):
-        api = mock.Mock()
-        api.update_shot_lock.return_value = {'ok': True}
-        harness = SimpleNamespace(
-            _owned_locks_by_shot_id={7: {'script_path': '/show/SH010.nk', 'last_seen_open_monotonic': 0}},
-            _lock_release_grace_sec=90, _worker=SimpleNamespace(api=api),
-            _apply_shot_lock_payload=mock.Mock(), _apply_shot_lock_value=mock.Mock(),
-            _normalize_script_path=lambda path: str(path or ''),
-        )
-        return harness, api
-
-    def test_detection_failure_never_releases_existing_lock(self):
-        harness, api = self.harness()
-        with mock.patch.object(nuke_detector, 'detect_open_nuke_scripts', side_effect=RuntimeError('Cannot inspect process')), \
-                mock.patch.object(dash.time, 'monotonic', return_value=100):
-            dash.page_nukedash._on_lock_detector_tick(harness)
-        api.update_shot_lock.assert_not_called()
-        self.assertEqual(harness._owned_locks_by_shot_id[7]['last_seen_open_monotonic'], 100)
-
-    def test_reliable_absence_releases_after_grace_and_retries_failed_release(self):
-        harness, api = self.harness()
-        api.update_shot_lock.side_effect = [{'ok': False, 'status_code': None}, {'ok': True}]
-        with mock.patch.object(nuke_detector, 'detect_open_nuke_scripts', return_value=[]), \
-                mock.patch.object(dash.time, 'monotonic', return_value=100):
-            dash.page_nukedash._on_lock_detector_tick(harness)
-            self.assertIn(7, harness._owned_locks_by_shot_id)
-            dash.page_nukedash._on_lock_detector_tick(harness)
-        self.assertFalse(harness._owned_locks_by_shot_id)
-        self.assertEqual(api.update_shot_lock.call_count, 2)
-
-    def test_transient_heartbeat_failure_keeps_tracking_but_conflict_clears_it(self):
-        harness, api = self.harness()
-        api.update_shot_lock.side_effect = [{'ok': False, 'status_code': None}, {'ok': False, 'conflict': True}]
-        dash.page_nukedash._on_lock_heartbeat_tick(harness)
-        self.assertIn(7, harness._owned_locks_by_shot_id)
-        dash.page_nukedash._on_lock_heartbeat_tick(harness)
-        self.assertFalse(harness._owned_locks_by_shot_id)
 
 
 if __name__ == '__main__':

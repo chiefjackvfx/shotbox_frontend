@@ -411,6 +411,11 @@ class DjangoAPI:
         url = f"{self.base_url}shots/{shot_id}"
         r = self._request('GET', url, operation="get_shot")
         return r.json()
+
+    def get_shots(self):
+        url = f"{self.base_url}shots"
+        r = self._request('GET', url, operation="get_shots")
+        return r.json()
     
     def get_job(self, job_id: int):
         url = f"{self.base_url}jobs/{job_id}"
@@ -427,13 +432,16 @@ class DjangoAPI:
         r = self._request('GET', url, operation="get_timeline")
         return r.json()
 
-    def update_shot_lock(self, shot_id: int, release: bool = False, force: bool = False):
+    def update_shot_lock(
+        self, shot_id: int, release: bool = False, force: bool = False,
+        *, owner_id: str | None = None,
+    ):
         url = f"{self.base_url}shots/{shot_id}"
         payload = {"nuke_in_use": "None" if release else "heartbeat"}
         if force and not release:
             payload["nuke_force_take"] = True
 
-        headers = {"X-ShotBox-System": DjangoAPI.get_lock_owner_id()}
+        headers = {"X-ShotBox-System": normalize_system_id(owner_id or DjangoAPI.get_lock_owner_id())}
         try:
             r = self._request(
                 'PATCH',

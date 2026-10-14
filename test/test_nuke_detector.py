@@ -39,6 +39,60 @@ class FakeProc:
 
 
 class NukeDetectorTests(unittest.TestCase):
+    def test_strict_detection_ignores_frameserver_workers_beside_open_script(self):
+        gui = FakeProc(pid=1001, name="Nuke17.1", cmdline=["Nuke17.1", "--nukex", "/show/bed030.nk"])
+        worker_script = "/opt/Nuke17.1v2/pythonextensions/site-packages/foundry/frameserver/nuke/workerapplication.py"
+        workers = [
+            FakeProc(pid=1002, name="Nuke17.1", cmdline=["Nuke17.1", "-ti", worker_script, "--parenturl=tcp://localhost:5640"]),
+            FakeProc(pid=1003, name="Nuke17.1", cmdline=["Nuke17.1", "-m", "-t", "-i", "-c", worker_script]),
+        ]
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[workers[0], gui, workers[1]]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"), \
+                patch.object(workers[0], "open_files", side_effect=nuke_detector.psutil.AccessDenied(1002)) as files:
+            result = nuke_detector.detect_open_nuke_scripts(strict=True)
+        self.assertEqual([(item.pid, item.script_path) for item in result], [(1001, "/show/bed030.nk")])
+        files.assert_not_called()
+
+    def test_frameserver_workers_alone_count_as_no_open_editing_session(self):
+        worker_script = "/opt/Nuke17.1v2/pythonextensions/site-packages/foundry/frameserver/nuke/workerapplication.py"
+        proc = FakeProc(pid=1002, cmdline=["Nuke17.1", "-ti", worker_script])
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"):
+            self.assertEqual(nuke_detector.detect_open_nuke_scripts(strict=True), [])
+
+    def test_frameserver_recognition_handles_windows_paths(self):
+        proc = FakeProc(pid=1002, cmdline=[
+            "Nuke17.1.exe", "-t", "-i",
+            r'"C:\Program Files\Nuke17.1v2\pythonextensions\site-packages\Foundry\FrameServer\Nuke\workerapplication.py"',
+        ])
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"):
+            self.assertEqual(nuke_detector.detect_open_nuke_scripts(strict=True), [])
+
+    def test_unidentified_sessions_are_not_excluded_by_partial_worker_matches(self):
+        worker_script = "/opt/Nuke17.1v2/pythonextensions/site-packages/foundry/frameserver/nuke/workerapplication.py"
+        commands = [
+            ["Nuke17.1", "-t", "/show/workerapplication.py"],
+            ["Nuke17.1", "-ti", "/show/custom_render.py"],
+            ["Nuke17.1", worker_script],
+            ["Nuke17.1", "-t", worker_script + ".bak"],
+        ]
+        for command in commands:
+            with self.subTest(command=command):
+                proc = FakeProc(pid=1002, cmdline=command)
+                with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]), \
+                        patch.object(nuke_detector.getpass, "getuser", return_value="artist"):
+                    with self.assertRaisesRegex(RuntimeError, "Could not identify"):
+                        nuke_detector.detect_open_nuke_scripts(strict=True)
+
+    def test_inaccessible_worker_command_line_remains_uncertain(self):
+        proc = FakeProc(pid=1002, cmdline=["Nuke17.1", "-ti", "/foundry/frameserver/nuke/workerapplication.py"])
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"), \
+                patch.object(proc, "cmdline", side_effect=nuke_detector.psutil.AccessDenied(1002)):
+            with self.assertRaises(nuke_detector.psutil.AccessDenied):
+                nuke_detector.detect_open_nuke_scripts(strict=True)
+
     def test_strict_detection_rejects_unknown_process_owner(self):
         proc = FakeProc(pid=1001, username="", cmdline=["Nuke15.0", "/show/shot.nk"])
         with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]):
