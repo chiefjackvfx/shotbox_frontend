@@ -101,6 +101,103 @@ class SettingsAutosaveTests(unittest.TestCase):
         self.assertTrue(self.read_saved("nuke_lock_auto_release"))
         self.assertTrue(self.page.nuke_lock_release_grace_spin.isEnabled())
 
+    def test_nuke_detector_debug_autosaves_reloads_and_can_be_disabled(self):
+        self.assertFalse(self.page.debug_nuke_detector_check.isChecked())
+        emitted = []
+        self.page.settings_changed.connect(lambda *args: emitted.append(args))
+        self.page.debug_nuke_detector_check.setChecked(True)
+        self.page._flush_autosave()
+        self.assertTrue(self.read_saved("debug_modes.nuke_detector"))
+        self.assertIn(("debug_modes.nuke_detector", True), emitted)
+        self.page._load_current_values()
+        self.assertTrue(self.page.debug_nuke_detector_check.isChecked())
+        self.page.debug_nuke_detector_check.setChecked(False)
+        self.page._flush_autosave()
+        self.assertFalse(self.read_saved("debug_modes.nuke_detector"))
+        self.assertIn(("debug_modes.nuke_detector", False), emitted)
+
+    def test_nuke_detector_interval_autosaves_and_reloads(self):
+        self.assertEqual(self.page.nuke_detector_interval_spin.value(), 45)
+        emitted = []
+        self.page.settings_changed.connect(lambda *args: emitted.append(args))
+        self.page.nuke_detector_interval_spin.setValue(5)
+        self.page._flush_autosave()
+        self.assertEqual(self.read_saved("nuke_detector_interval_sec"), 5)
+        self.assertIn(("nuke_detector_interval_sec", 5), emitted)
+        self.page._load_current_values()
+        self.assertEqual(self.page.nuke_detector_interval_spin.value(), 5)
+
+    def test_manual_lock_buttons_request_previews_without_saving_settings(self):
+        previews, clears = [], []
+        self.page.nuke_locks_preview_requested.connect(previews.append)
+        self.page.nuke_locks_clear_requested.connect(clears.append)
+        self.page.clear_stale_nuke_locks_btn.click()
+        self.assertEqual(previews, [True])
+        self.assertFalse(self.page.clear_all_nuke_locks_btn.isEnabled())
+        self.page.review_nuke_lock_clear_preview({"stale_only": True, "shots": []})
+        self.page.clear_all_nuke_locks_btn.click()
+        self.assertEqual(previews, [True, False])
+        self.assertEqual(clears, [])
+        self.manager.save.assert_not_called()
+        self.assertFalse(self.page._autosave_pending)
+
+    def test_manual_lock_preview_shows_affected_shots_before_clear(self):
+        clears = []
+        self.page.nuke_locks_clear_requested.connect(clears.append)
+        for stale_only in (True, False):
+            with self.subTest(stale_only=stale_only):
+                preview = {"stale_only": stale_only, "shots": [
+                    {"shot_id": 7, "title": "bam030", "owner_id": "artist@desk"},
+                ]}
+                dialog = Mock()
+                dialog.exec.return_value = QMessageBox.StandardButton.Yes
+                with patch.object(settings, "QMessageBox", return_value=dialog) as box:
+                    box.Icon = QMessageBox.Icon
+                    box.StandardButton = QMessageBox.StandardButton
+                    self.page.review_nuke_lock_clear_preview(preview)
+                dialog.setDetailedText.assert_called_once_with("bam030 — artist@desk")
+                dialog.setDefaultButton.assert_called_once_with(QMessageBox.StandardButton.Cancel)
+                if not stale_only:
+                    self.assertIn("active locks", dialog.setInformativeText.call_args.args[0])
+                self.assertEqual(clears[-1], preview)
+
+    def test_manual_lock_preview_cancellation_reenables_buttons_without_clear(self):
+        clears = []
+        self.page.nuke_locks_clear_requested.connect(clears.append)
+        self.page._request_nuke_lock_clear_preview(False)
+        with patch.object(QMessageBox, "exec", return_value=QMessageBox.StandardButton.Cancel):
+            self.page.review_nuke_lock_clear_preview({"stale_only": False, "shots": [
+                {"shot_id": 7, "title": "bam030", "owner_id": "artist@desk"},
+            ]})
+        self.assertEqual(clears, [])
+        self.assertTrue(self.page.clear_stale_nuke_locks_btn.isEnabled())
+        self.assertTrue(self.page.clear_all_nuke_locks_btn.isEnabled())
+        self.assertIn("cancelled", self.page.nuke_lock_cleanup_status.text())
+
+    def test_manual_lock_empty_or_failed_preview_reenables_buttons(self):
+        for error in (None, "Server unavailable"):
+            with self.subTest(error=error):
+                self.page._request_nuke_lock_clear_preview(True)
+                self.page.review_nuke_lock_clear_preview({"stale_only": True, "shots": [], "error": error})
+                self.assertTrue(self.page.clear_stale_nuke_locks_btn.isEnabled())
+                self.assertTrue(self.page.clear_all_nuke_locks_btn.isEnabled())
+                if error:
+                    self.warning.assert_called_once()
+                    self.assertEqual(self.page.nuke_lock_cleanup_status.text(), error)
+                else:
+                    self.warning.assert_not_called()
+                    self.assertIn("No stale locks", self.page.nuke_lock_cleanup_status.text())
+
+    def test_manual_lock_result_reports_partial_failure_and_restores_controls(self):
+        self.page._request_nuke_lock_clear_preview(False)
+        self.page.show_nuke_lock_clear_result({
+            "cleared": [{"shot_id": 7}], "skipped": [{"shot_id": 8}],
+            "failed": [{"title": "bam070", "detail": "Write unavailable"}],
+        })
+        self.assertTrue(self.page.clear_all_nuke_locks_btn.isEnabled())
+        self.assertEqual(self.page.nuke_lock_cleanup_status.text(), "Cleared 1; skipped 1; failed 1.")
+        self.assertIn("bam070: Write unavailable", self.warning.call_args.args[2])
+
     def test_saved_identity_is_emitted_after_server_and_unlink_is_emitted(self):
         self.page._django_users = [{"id": 1, "username": "jack"}]
         self.page._populate_user_combo()

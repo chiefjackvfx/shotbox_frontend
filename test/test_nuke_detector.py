@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import os
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -21,12 +22,17 @@ class FakeProc:
         cmdline: list[str] | None = None,
         open_files: list[str] | None = None,
         cwd: str = "/tmp",
+        started_at: float = 1000.0,
     ):
         self.pid = pid
         self.info = {"pid": pid, "name": name, "username": username}
         self._cmdline = cmdline or []
         self._open_files = open_files or []
         self._cwd = cwd
+        self._started_at = started_at
+
+    def create_time(self):
+        return self._started_at
 
     def cmdline(self):
         return list(self._cmdline)
@@ -39,6 +45,124 @@ class FakeProc:
 
 
 class NukeDetectorTests(unittest.TestCase):
+    def test_debug_output_shows_windows_script_paths_and_partial_scan_errors(self):
+        script = nuke_detector.NukeScriptDetection(
+            script_name="bam050.nk", script_path=r"Z:\PROJECTS\Bamboo HR\bam050.nk",
+            machine_name="cerebro", detected_at_utc="2026-10-23T15:00:00Z",
+            pid=101, source="cmdline",
+        )
+        snapshot = nuke_detector.NukeProcessSnapshot(
+            scripts=[script], errors=[RuntimeError("Could not identify the script in Nuke process 102")],
+        )
+        with patch("sys.stdout", new_callable=io.StringIO) as output:
+            nuke_detector.print_snapshot_debug(snapshot)
+        text = output.getvalue()
+        self.assertIn("scripts=1 scan=incomplete", text)
+        self.assertIn("pid=101 source=cmdline script=bam050.nk", text)
+        self.assertIn(script.script_path, text)
+        self.assertIn("Detection error: RuntimeError: Could not identify", text)
+
+    def test_debug_output_distinguishes_no_open_scripts_from_failed_detection(self):
+        for errors, expected in (
+            ([], "No open .nk scripts detected"),
+            ([RuntimeError("Cannot inspect Nuke")], "No scripts identified; detection is incomplete"),
+        ):
+            with self.subTest(errors=errors), patch("sys.stdout", new_callable=io.StringIO) as output:
+                nuke_detector.print_snapshot_debug(nuke_detector.NukeProcessSnapshot(errors=errors))
+            self.assertIn(expected, output.getvalue())
+            if errors:
+                self.assertNotIn("No open .nk scripts detected", output.getvalue())
+
+    def test_unreadable_system_process_does_not_block_empty_scan(self):
+        system = FakeProc(pid=4, name="", username="")
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[system]), \
+                patch.object(nuke_detector.platform, "system", return_value="Windows"):
+            self.assertEqual(nuke_detector.detect_open_nuke_scripts(strict=True), [])
+
+    def test_unreadable_non_system_process_remains_uncertain(self):
+        process = FakeProc(pid=101, name="", username="")
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[process]):
+            snapshot = nuke_detector.scan_open_nuke_scripts()
+        self.assertFalse(snapshot.complete)
+        self.assertEqual(snapshot.process_ids, {101})
+        self.assertFalse(snapshot.sessions_closed({(101, 1000.0)}))
+
+    def test_windows_username_formats_match_on_either_side(self):
+        for process_user, current_user in (
+            (r"CEREBRO\Kieran", "kieran"), ("Kieran", r"CEREBRO\kieran"),
+            ("Kieran@example.com", r"CEREBRO\Kieran"),
+        ):
+            with self.subTest(process_user=process_user, current_user=current_user):
+                self.assertTrue(nuke_detector._username_matches(process_user, current_user))
+        self.assertFalse(nuke_detector._username_matches(r"CEREBRO\Other", "Kieran"))
+
+    def test_windows_paths_and_names_are_detected_on_any_test_host(self):
+        proc = FakeProc(pid=101, name="Nuke17.1.exe", username=r"CEREBRO\artist", cmdline=[
+            "Nuke17.1.exe", r'"Z:\PROJECTS\Job One\shot010\shot010_v001.NK"',
+        ])
+        with patch.object(nuke_detector.platform, "system", return_value="Windows"), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"), \
+                patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]):
+            detections = nuke_detector.detect_open_nuke_scripts(strict=True)
+        self.assertEqual(detections[0].script_path, r"Z:\PROJECTS\Job One\shot010\shot010_v001.NK")
+        self.assertEqual(detections[0].script_name, "shot010_v001.NK")
+        self.assertEqual(detections[0].process_started_at, 1000.0)
+
+    def test_partial_scan_keeps_known_script_when_another_session_is_unidentified(self):
+        known = FakeProc(pid=101, cmdline=["Nuke17.1", "/show/shot.nk"])
+        unknown = FakeProc(pid=102)
+        for processes in ([known, unknown], [unknown, known]):
+            with self.subTest(order=[p.pid for p in processes]), \
+                    patch.object(nuke_detector.psutil, "process_iter", return_value=processes), \
+                    patch.object(nuke_detector.getpass, "getuser", return_value="artist"):
+                snapshot = nuke_detector.scan_open_nuke_scripts()
+            self.assertEqual([item.pid for item in snapshot.scripts], [101])
+            self.assertEqual(snapshot.process_ids, {101, 102})
+            self.assertFalse(snapshot.complete)
+            self.assertTrue(snapshot.enumeration_complete)
+            self.assertTrue(snapshot.can_release_unmatched)
+
+    def test_permission_and_enumeration_failures_still_prevent_unmatched_cleanup(self):
+        snapshot = nuke_detector.NukeProcessSnapshot(errors=[nuke_detector.psutil.AccessDenied(101)])
+        self.assertFalse(snapshot.can_release_unmatched)
+        snapshot.errors = [nuke_detector.UnidentifiedNukeScriptError("No script path")]
+        snapshot.enumeration_complete = False
+        self.assertFalse(snapshot.can_release_unmatched)
+
+    def test_debug_explains_local_cleanup_can_continue_with_unidentified_script(self):
+        snapshot = nuke_detector.NukeProcessSnapshot(errors=[
+            nuke_detector.UnidentifiedNukeScriptError("No script path"),
+        ])
+        with patch("sys.stdout", new_callable=io.StringIO) as output:
+            nuke_detector.print_snapshot_debug(snapshot)
+        self.assertIn("Unmatched locks owned by this machine can clear", output.getvalue())
+
+    def test_crash_reporters_and_python_helpers_are_not_editing_sessions(self):
+        processes = [FakeProc(pid=index, name=name) for index, name in enumerate((
+            "NukeCrashReporter.exe", "NukeCrashHandler", "nuke-python", "python",
+        ))]
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=processes):
+            self.assertEqual(nuke_detector.detect_open_nuke_scripts(strict=True), [])
+
+    def test_session_absence_uses_process_start_time_and_requires_complete_enumeration(self):
+        snapshot = nuke_detector.NukeProcessSnapshot(process_ids={101}, process_started_at={101: 2000.0})
+        self.assertTrue(snapshot.sessions_closed({(101, 1000.0)}))
+        self.assertFalse(snapshot.sessions_closed({(101, 2000.0)}))
+        snapshot.process_started_at[101] = None
+        self.assertFalse(snapshot.sessions_closed({(101, 1000.0)}))
+        snapshot.process_ids.clear()
+        snapshot.enumeration_complete = False
+        self.assertFalse(snapshot.sessions_closed({(101, 1000.0)}))
+
+    def test_reused_pid_is_identified_even_when_new_process_is_not_nuke(self):
+        reused = FakeProc(pid=101, name="python", started_at=2000.0)
+        unknown = FakeProc(pid=102)
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[reused, unknown]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"):
+            snapshot = nuke_detector.scan_open_nuke_scripts(tracked_process_ids={101})
+        self.assertFalse(snapshot.complete)
+        self.assertTrue(snapshot.sessions_closed({(101, 1000.0)}))
+
     def test_strict_detection_ignores_frameserver_workers_beside_open_script(self):
         gui = FakeProc(pid=1001, name="Nuke17.1", cmdline=["Nuke17.1", "--nukex", "/show/bed030.nk"])
         worker_script = "/opt/Nuke17.1v2/pythonextensions/site-packages/foundry/frameserver/nuke/workerapplication.py"
@@ -50,7 +174,7 @@ class NukeDetectorTests(unittest.TestCase):
                 patch.object(nuke_detector.getpass, "getuser", return_value="artist"), \
                 patch.object(workers[0], "open_files", side_effect=nuke_detector.psutil.AccessDenied(1002)) as files:
             result = nuke_detector.detect_open_nuke_scripts(strict=True)
-        self.assertEqual([(item.pid, item.script_path) for item in result], [(1001, "/show/bed030.nk")])
+        self.assertEqual([(item.pid, item.script_path) for item in result], [(1001, os.path.normpath("/show/bed030.nk"))])
         files.assert_not_called()
 
     def test_frameserver_workers_alone_count_as_no_open_editing_session(self):

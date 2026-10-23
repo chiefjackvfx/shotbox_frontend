@@ -64,6 +64,64 @@ def _normalizer_for(system: str):
     return ntpath if system == "Windows" else posixpath
 
 
+def _windows_network_root(drive: str) -> str | None:
+    """Resolve a mapped drive using the current Windows logon session."""
+    if os.name != "nt" or len(drive) != 2 or drive[1] != ":":
+        return None
+    import ctypes
+    from ctypes import wintypes
+    try:
+        get_connection = ctypes.WinDLL("mpr").WNetGetConnectionW
+        get_connection.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
+        get_connection.restype = wintypes.DWORD
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = wintypes.DWORD(len(buffer))
+        if get_connection(drive, buffer, ctypes.byref(length)) == 0:
+            return buffer.value.replace("\\", "/")
+    except OSError:
+        pass
+    return None
+
+
+def comparison_path(file_path: str, system: str | None = None) -> str:
+    """Compare project paths across drive letters and supported mount aliases.
+
+    Keys always use forward slashes, so comparison doesn't depend on the host
+    running the tests. Linux suffixes remain case-sensitive; Windows keys don't.
+    These keys are for matching only, never opening files.
+    """
+    target_system = system or platform.system()
+    paths = _normalizer_for(target_system)
+    value = str(file_path or "").strip().strip('"').strip("'")
+    if not value:
+        return ""
+    normalized = _normalize_for_matching(value)
+    if target_system == "Windows":
+        if normalized.casefold().startswith("//?/unc/"):
+            normalized = "//" + normalized[8:]
+        elif normalized.startswith("//?/"):
+            normalized = normalized[4:]
+        value = normalized
+    for mapping in PATH_MAPPINGS:
+        canonical_root = (mapping.windows or mapping.linux or mapping.darwin)[0].rstrip("/")
+        aliases = [
+            (mapping.windows, False), (mapping.linux, True), (mapping.darwin, True),
+        ]
+        if target_system == "Windows" and normalized.startswith("//"):
+            for root in mapping.windows:
+                drive, suffix = ntpath.splitdrive(root)
+                network_root = _windows_network_root(drive)
+                if network_root:
+                    aliases.append(((network_root.rstrip("/") + suffix.replace("\\", "/"),), False))
+        for roots, case_sensitive in aliases:
+            for root in roots:
+                if _matches_root(normalized, root, case_sensitive=case_sensitive):
+                    suffix = normalized[len(_normalize_for_matching(root).rstrip("/")):].lstrip("/")
+                    result = posixpath.normpath(canonical_root + "/" + suffix)
+                    return result.casefold() if target_system == "Windows" else result
+    return paths.normcase(paths.abspath(paths.normpath(value))).replace("\\", "/")
+
+
 def convert_path(file_path, system: str | None = None) -> str:
     """Convert a known project path to the root used by ``system``.
 

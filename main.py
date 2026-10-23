@@ -211,6 +211,10 @@ class MainWindow(QMainWindow):
         # Connect settings signals
         self.page_settings.settings_changed.connect(self._on_settings_changed)
         self.page_settings.server_url_changed.connect(self._on_server_url_changed)
+        self.page_settings.nuke_locks_preview_requested.connect(self.page_nukedash.lock_clear_preview_requested)
+        self.page_settings.nuke_locks_clear_requested.connect(self.page_nukedash.lock_clear_requested)
+        self.page_nukedash.lock_clear_preview_ready.connect(self.page_settings.review_nuke_lock_clear_preview)
+        self.page_nukedash.lock_clear_finished.connect(self.page_settings.show_nuke_lock_clear_result)
         
         self.setCentralWidget(self.tabs)
         self.version_label = QtWidgets.QLabel(f"ShotBox v{APP_VERSION}", self)
@@ -821,6 +825,9 @@ class MainWindow(QMainWindow):
                 self._settings_manager.get("nuke_lock_auto_release", True),
             )
 
+        elif key == "nuke_detector_interval_sec":
+            self.page_nukedash.set_nuke_detector_interval(int(value))
+
         elif key == "activity_refresh_interval":
             if hasattr(self, "page_activity"):
                 self.page_activity.set_refresh_interval(int(value))
@@ -840,6 +847,9 @@ class MainWindow(QMainWindow):
 
         elif key == "debug_modes.suppress_qt_multimedia_warnings":
             _set_qt_multimedia_warning_filter(bool(value))
+
+        elif key == "debug_modes.nuke_detector":
+            self.page_nukedash.set_nuke_detector_debug(bool(value))
 
         elif key == "card_spacing":
             if hasattr(self, 'page_nukedash'):

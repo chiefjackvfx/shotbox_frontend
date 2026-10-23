@@ -167,6 +167,75 @@ class NukeDashRegressionTests(unittest.TestCase):
         page.set_nuke_lock_release_settings(45, True)
         self.wait(lambda: page._lock_worker.release_grace_sec == 45 and page._lock_worker.auto_release)
 
+    def test_manual_cleanup_runs_on_worker_and_immediately_clears_visible_lock(self):
+        page, card = self.lock_page()
+        owner = 'chief@desk'
+        shot = {**card.data, 'nuke_in_use': f'{owner}|20000101T000000Z'}
+        threads, previews, results = [], [], []
+        callback_threads = []
+        def get_shots():
+            threads.append(threading.get_ident())
+            return [dict(shot)]
+        def get_shot(shot_id):
+            threads.append(threading.get_ident())
+            return dict(shot)
+        def release(shot_id, **kwargs):
+            threads.append(threading.get_ident())
+            shot['nuke_in_use'] = 'None'
+            return {'ok': True, 'shot': dict(shot)}
+        def preview_ready(preview):
+            callback_threads.append(threading.get_ident())
+            previews.append(preview)
+        def clear_finished(result):
+            callback_threads.append(threading.get_ident())
+            results.append(result)
+        api = page._lock_worker.api
+        api.get_shots = mock.Mock(side_effect=get_shots)
+        api.get_shot = mock.Mock(side_effect=get_shot)
+        api.get_lock_owner_ids = mock.Mock(return_value={owner})
+        api.update_shot_lock = mock.Mock(side_effect=release)
+        page.lock_clear_preview_ready.connect(preview_ready)
+        page.lock_clear_finished.connect(clear_finished)
+        page._on_worker_lock_updated(shot['id'], shot['nuke_in_use'])
+        self.assertEqual(card._lock_state, 'stale')
+        page.lock_clear_preview_requested.emit(True)
+        self.wait(lambda: bool(previews))
+        api.update_shot_lock.assert_not_called()
+        page.lock_clear_requested.emit(previews[0])
+        self.wait(lambda: bool(results) and card.data.get('nuke_in_use') == 'None')
+        api.update_shot_lock.assert_called_once_with(shot['id'], release=True, owner_id=owner)
+        self.assertEqual(card._lock_state, 'none')
+        self.assertEqual(len(results[0]['cleared']), 1)
+        self.assertTrue(threads)
+        self.assertTrue(all(ident != self.gui_thread for ident in threads))
+        self.assertEqual(callback_threads, [self.gui_thread, self.gui_thread])
+
+    def test_saved_and_live_detector_debug_settings_reach_lock_worker(self):
+        self.settings.set('debug_modes.nuke_detector', True)
+        with mock.patch('nuke_detector.print_snapshot_debug') as output:
+            page, card = self.lock_page()
+            self.wait(lambda: output.called)
+            self.assertTrue(page._lock_worker.debug)
+            page.set_nuke_detector_debug(False)
+            self.wait(lambda: not page._lock_worker.debug)
+            output.reset_mock()
+            page.set_nuke_detector_debug(True)
+            self.wait(lambda: output.called)
+            self.assertTrue(page._lock_worker.debug)
+
+    def test_saved_detector_interval_updates_running_timer_and_scan_frequency(self):
+        self.settings.set('nuke_detector_interval_sec', 12)
+        self.settings.set('debug_modes.nuke_detector', True)
+        with mock.patch('nuke_detector.print_snapshot_debug') as output:
+            page, card = self.lock_page()
+            self.wait(lambda: output.called)
+            self.assertEqual(page._lock_worker.timer.interval(), 12000)
+            output.reset_mock()
+            page.set_nuke_detector_interval(1)
+            self.wait(lambda: page._lock_worker.timer.interval() == 1000)
+            self.wait(lambda: output.called)
+            self.assertEqual(page._lock_interval_ms, 1000)
+
     def test_opening_recovered_alias_renews_original_owner_without_force_take(self):
         page, card = self.lock_page()
         page._lock_read_api.get_shot.return_value = {

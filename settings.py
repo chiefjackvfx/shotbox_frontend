@@ -88,6 +88,7 @@ DEFAULT_SETTINGS = {
     
     # Polling settings (stored in seconds for user convenience)
     "polling_interval": 5,  # seconds
+    "nuke_detector_interval_sec": 45,
     "nuke_lock_auto_release": True,
     "nuke_lock_release_grace_sec": 90,
 
@@ -121,6 +122,7 @@ DEFAULT_SETTINGS = {
         "ui_updates": False,
         "notifications": False,
         "project_load_profiler": False,
+        "nuke_detector": False,
         "suppress_qt_multimedia_warnings": False,
     },
     
@@ -327,6 +329,8 @@ class SettingsPage(QWidget):
     
     # Signal emitted when settings change that require immediate action
     settings_changed = pyqtSignal(str, object)  # key, new_value
+    nuke_locks_preview_requested = pyqtSignal(bool)
+    nuke_locks_clear_requested = pyqtSignal(dict)
     server_url_changed = pyqtSignal(str)  # new server URL
     
     def __init__(self, settings_manager: Optional[SettingsManager] = None, parent=None):
@@ -461,6 +465,15 @@ class SettingsPage(QWidget):
         self.activity_refresh_interval_spin.setToolTip("How often to refresh the Activity feed")
         polling_layout.addRow("Activity Refresh Interval:", self.activity_refresh_interval_spin)
 
+        self.nuke_detector_interval_spin = NoScrollSpinBox()
+        self.nuke_detector_interval_spin.setRange(1, 60)
+        self.nuke_detector_interval_spin.setSuffix(" sec")
+        self.nuke_detector_interval_spin.setToolTip(
+            "How often to detect open Nuke scripts, refresh heartbeats, and check for closed scripts. "
+            "Changes apply without restarting Shotbox."
+        )
+        polling_layout.addRow("Nuke Detector Interval:", self.nuke_detector_interval_spin)
+
         self.nuke_lock_auto_release_check = QCheckBox("Automatically clear closed Nuke locks")
         self.nuke_lock_auto_release_check.setToolTip(
             "Clear your local shot locks after their Nuke scripts are confirmed closed."
@@ -476,6 +489,18 @@ class SettingsPage(QWidget):
             "Clearing happens on the next Nuke lock check after this delay."
         )
         polling_layout.addRow("Nuke Lock Clear Delay:", self.nuke_lock_release_grace_spin)
+
+        self.clear_stale_nuke_locks_btn = QPushButton("Clear All Stale Locks")
+        self.clear_all_nuke_locks_btn = QPushButton("Clear All Locks")
+        self.clear_stale_nuke_locks_btn.setToolTip("Clear stale Nuke locks owned by this machine, across all jobs.")
+        self.clear_all_nuke_locks_btn.setToolTip("Clear all Nuke locks owned by this machine, including active locks.")
+        lock_buttons = QHBoxLayout()
+        lock_buttons.addWidget(self.clear_stale_nuke_locks_btn)
+        lock_buttons.addWidget(self.clear_all_nuke_locks_btn)
+        polling_layout.addRow("Manual Nuke Cleanup:", lock_buttons)
+        self.nuke_lock_cleanup_status = QLabel("Only this machine's own locks are affected.")
+        self.nuke_lock_cleanup_status.setWordWrap(True)
+        polling_layout.addRow("", self.nuke_lock_cleanup_status)
         
         container_layout.addWidget(polling_group)
 
@@ -576,6 +601,13 @@ class SettingsPage(QWidget):
             "Print a per-project switch timing breakdown to the console"
         )
         debug_layout.addWidget(self.debug_project_load_profiler_check)
+
+        self.debug_nuke_detector_check = QCheckBox("Nuke Detector Debug")
+        self.debug_nuke_detector_check.setToolTip(
+            "Print detected open Nuke scripts, process IDs, file paths, and detection errors "
+            "to the console. Prints immediately when enabled and on each Nuke lock check."
+        )
+        debug_layout.addWidget(self.debug_nuke_detector_check)
 
         self.debug_qt_multimedia_check = QCheckBox("Suppress Qt Multimedia Warnings")
         self.debug_qt_multimedia_check.setToolTip(
@@ -1017,6 +1049,7 @@ class SettingsPage(QWidget):
         self.activity_refresh_interval_spin.setValue(
             self._settings.get("activity_refresh_interval", 30)
         )
+        self.nuke_detector_interval_spin.setValue(self._settings.get("nuke_detector_interval_sec", 45))
         self.nuke_lock_auto_release_check.setChecked(self._settings.get("nuke_lock_auto_release", True))
         self.nuke_lock_release_grace_spin.setValue(self._settings.get("nuke_lock_release_grace_sec", 90))
         self.nuke_lock_release_grace_spin.setEnabled(self.nuke_lock_auto_release_check.isChecked())
@@ -1047,6 +1080,7 @@ class SettingsPage(QWidget):
         self.debug_project_load_profiler_check.setChecked(
             self._settings.get("debug_modes.project_load_profiler", False)
         )
+        self.debug_nuke_detector_check.setChecked(self._settings.get("debug_modes.nuke_detector", False))
         self.debug_qt_multimedia_check.setChecked(
             self._settings.get("debug_modes.suppress_qt_multimedia_warnings", False)
         )
@@ -1172,6 +1206,8 @@ class SettingsPage(QWidget):
     def _connect_signals(self):
         """Connect UI signals to handlers."""
         self.nuke_lock_auto_release_check.toggled.connect(self.nuke_lock_release_grace_spin.setEnabled)
+        self.clear_stale_nuke_locks_btn.clicked.connect(lambda: self._request_nuke_lock_clear_preview(True))
+        self.clear_all_nuke_locks_btn.clicked.connect(lambda: self._request_nuke_lock_clear_preview(False))
         # Save button
         self.save_button.clicked.connect(self._save_all_settings)
         for widget in self._settings_controls():
@@ -1208,6 +1244,59 @@ class SettingsPage(QWidget):
         self.apply_update_btn.clicked.connect(self._on_update_and_restart)
         self.change_log_combo.currentIndexChanged.connect(self._update_change_log_view)
     
+    def _set_nuke_cleanup_busy(self, busy):
+        self.clear_stale_nuke_locks_btn.setEnabled(not busy)
+        self.clear_all_nuke_locks_btn.setEnabled(not busy)
+
+    def _request_nuke_lock_clear_preview(self, stale_only):
+        self._set_nuke_cleanup_busy(True)
+        self.nuke_lock_cleanup_status.setText("Checking this machine's Nuke locks…")
+        self.nuke_locks_preview_requested.emit(stale_only)
+
+    def review_nuke_lock_clear_preview(self, preview):
+        error = preview.get("error")
+        shots = preview.get("shots", [])
+        if error or not shots:
+            self._set_nuke_cleanup_busy(False)
+            message = error or (
+                "No stale locks owned by this machine." if preview.get("stale_only") else
+                "No locks owned by this machine."
+            )
+            self.nuke_lock_cleanup_status.setText(message)
+            if error:
+                QMessageBox.warning(self, "Nuke Lock Cleanup", message)
+            return
+        scope = "stale " if preview.get("stale_only") else ""
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle("Nuke Lock Cleanup")
+        dialog.setIcon(QMessageBox.Icon.Warning)
+        dialog.setText(f"Clear {len(shots)} {scope}Nuke lock(s) owned by this machine?")
+        if not preview.get("stale_only"):
+            dialog.setInformativeText("This includes active locks, even if Nuke is still open.")
+        dialog.setDetailedText("\n".join(f"{shot['title']} — {shot['owner_id']}" for shot in shots))
+        dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        dialog.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        if dialog.exec() != QMessageBox.StandardButton.Yes:
+            self._set_nuke_cleanup_busy(False)
+            self.nuke_lock_cleanup_status.setText("Lock clearing cancelled.")
+            return
+        self.nuke_lock_cleanup_status.setText("Clearing this machine's Nuke locks…")
+        self.nuke_locks_clear_requested.emit(preview)
+
+    def show_nuke_lock_clear_result(self, result):
+        self._set_nuke_cleanup_busy(False)
+        message = (
+            f"Cleared {len(result.get('cleared', []))}; "
+            f"skipped {len(result.get('skipped', []))}; "
+            f"failed {len(result.get('failed', []))}."
+        )
+        errors = [f"{shot.get('title', 'Shot')}: {shot.get('detail', 'Failed')}" for shot in result.get("failed", [])]
+        if result.get("error"):
+            errors.append(result["error"])
+        self.nuke_lock_cleanup_status.setText(message)
+        if errors:
+            QMessageBox.warning(self, "Nuke Lock Cleanup", message + "\n\n" + "\n".join(errors))
+
     def _save_all_settings(self, checked=False, *, automatic=False):
         """Save the form; automatic saves report status without modal dialogs."""
         self._autosave_timer.stop()
@@ -1231,6 +1320,7 @@ class SettingsPage(QWidget):
             save=False,
         )
         self._set_pending_setting("nuke_lock_auto_release", self.nuke_lock_auto_release_check.isChecked(), save=False)
+        self._set_pending_setting("nuke_detector_interval_sec", self.nuke_detector_interval_spin.value(), save=False)
         self._set_pending_setting("nuke_lock_release_grace_sec", self.nuke_lock_release_grace_spin.value(), save=False)
 
         # Preview Generation
@@ -1253,6 +1343,7 @@ class SettingsPage(QWidget):
             self.debug_project_load_profiler_check.isChecked(),
             save=False,
         )
+        self._set_pending_setting("debug_modes.nuke_detector", self.debug_nuke_detector_check.isChecked(), save=False)
         self._set_pending_setting(
             "debug_modes.suppress_qt_multimedia_warnings",
             self.debug_qt_multimedia_check.isChecked(),
@@ -1355,6 +1446,7 @@ class SettingsPage(QWidget):
                 "activity_refresh_interval", self.activity_refresh_interval_spin.value()
             )
             self._emit_saved_setting("nuke_lock_auto_release", self.nuke_lock_auto_release_check.isChecked())
+            self._emit_saved_setting("nuke_detector_interval_sec", self.nuke_detector_interval_spin.value())
             self._emit_saved_setting("nuke_lock_release_grace_sec", self.nuke_lock_release_grace_spin.value())
 
             # Preview generation settings
@@ -1396,6 +1488,7 @@ class SettingsPage(QWidget):
                 "debug_modes.project_load_profiler",
                 self.debug_project_load_profiler_check.isChecked(),
             )
+            self._emit_saved_setting("debug_modes.nuke_detector", self.debug_nuke_detector_check.isChecked())
             self._emit_saved_setting(
                 "debug_modes.suppress_qt_multimedia_warnings",
                 self.debug_qt_multimedia_check.isChecked(),

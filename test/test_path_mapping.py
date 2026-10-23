@@ -14,6 +14,60 @@ import path_mapping
 
 
 class PathMappingTests(unittest.TestCase):
+    def test_comparison_handles_windows_drive_case_quotes_and_extended_paths(self):
+        paths = (
+            r'"z:\projects\C2255_Bamboo_HR\VFX\BAMBOO_HR\bam050\scripts\bam050.nk"',
+            "/Volumes/projects/PROJECTS/C2255_Bamboo_HR/VFX/BAMBOO_HR/bam050/scripts/bam050.nk",
+            r"\\?\Z:\PROJECTS\C2255_Bamboo_HR\VFX\BAMBOO_HR\bam050\scripts\bam050.nk",
+        )
+        self.assertEqual(len({path_mapping.comparison_path(path, system="Windows") for path in paths}), 1)
+
+    def test_comparison_unifies_linux_mount_aliases_without_folding_case(self):
+        paths = (
+            "/Volumes/projects/PROJECTS/Job/shot010/script.nk",
+            "/mnt/projects/PROJECTS/Job/shot010/script.nk",
+            r"Z:\PROJECTS\Job\shot010\script.nk",
+        )
+        self.assertEqual(len({path_mapping.comparison_path(path, system="Linux") for path in paths}), 1)
+        self.assertNotEqual(
+            path_mapping.comparison_path(paths[0], system="Linux"),
+            path_mapping.comparison_path(paths[0].replace("Job", "job"), system="Linux"),
+        )
+
+    def test_unc_comparison_accepts_extended_windows_prefix(self):
+        self.assertEqual(
+            path_mapping.comparison_path(r"\\?\UNC\server\share\Shot\script.nk", system="Windows"),
+            path_mapping.comparison_path(r"\\SERVER\SHARE\shot\script.nk", system="Windows"),
+        )
+
+    def test_unc_and_mapped_project_drive_compare_equally(self):
+        with mock.patch.object(path_mapping, "_windows_network_root", side_effect=lambda drive: (
+            "//server/projects" if drive.upper() == "Z:" else None
+        )):
+            self.assertEqual(
+                path_mapping.comparison_path(r"\\server\projects\PROJECTS\Job\shot010\script.nk", system="Windows"),
+                path_mapping.comparison_path(r"Z:\PROJECTS\Job\shot010\script.nk", system="Windows"),
+            )
+            self.assertNotEqual(
+                path_mapping.comparison_path(r"\\server\projects\PROJECTS-archive\Job\script.nk", system="Windows"),
+                path_mapping.comparison_path(r"Z:\PROJECTS\Job\script.nk", system="Windows"),
+            )
+
+    def test_windows_network_drive_resolution_handles_success_and_disconnection(self):
+        import ctypes
+        def connected(drive, buffer, length):
+            self.assertEqual(drive, "Z:")
+            buffer.value = r"\\server\projects"
+            return 0
+        with mock.patch.object(path_mapping.os, "name", "nt"), \
+                mock.patch.object(ctypes, "WinDLL", create=True) as library:
+            api = library.return_value.WNetGetConnectionW
+            api.side_effect = connected
+            self.assertEqual(path_mapping._windows_network_root("Z:"), "//server/projects")
+            api.side_effect = None
+            api.return_value = 2250  # ERROR_NOT_CONNECTED
+            self.assertIsNone(path_mapping._windows_network_root("Z:"))
+
     def test_maps_expansion_b_from_windows_to_linux_and_darwin(self):
         source = r"X:\Projects B\Job One\shot010\plate.mov"
         expected = "/Volumes/Expansion_B/Projects B/Job One/shot010/plate.mov"

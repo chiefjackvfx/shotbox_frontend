@@ -37,6 +37,9 @@ class DummySignal:
         for callback in list(self._callbacks):
             callback(*args)
 
+    def __call__(self, *args):
+        self.emit(*args)
+
 
 class FakeSettingsManager:
     def __init__(self, startup_tab: int = 0, extra_settings: dict | None = None):
@@ -70,6 +73,16 @@ class FakeSettingsPage(QWidget):
         super().__init__()
         self.settings_changed = DummySignal()
         self.server_url_changed = DummySignal()
+        self.nuke_locks_preview_requested = DummySignal()
+        self.nuke_locks_clear_requested = DummySignal()
+        self.lock_previews = []
+        self.lock_results = []
+
+    def review_nuke_lock_clear_preview(self, preview):
+        self.lock_previews.append(preview)
+
+    def show_nuke_lock_clear_result(self, result):
+        self.lock_results.append(result)
 
 
 class FakeLoadingDialog:
@@ -111,6 +124,10 @@ class FakeWorker:
 class FakeNukeDash(QWidget):
     def __init__(self):
         super().__init__()
+        self.lock_clear_preview_requested = DummySignal()
+        self.lock_clear_requested = DummySignal()
+        self.lock_clear_preview_ready = DummySignal()
+        self.lock_clear_finished = DummySignal()
         self._initial_load = False
         self._loading_dialog = FakeLoadingDialog()
 
@@ -640,6 +657,34 @@ class MainWindowActivityIdentityTests(unittest.TestCase):
         self.assertEqual(window.page_nukedash.set_nuke_lock_release_settings.call_args_list, [
             mock.call(180, False), mock.call(180, False),
         ])
+
+    def test_nuke_detector_debug_changes_are_forwarded_to_dashboard(self):
+        window = self.make_window()
+        window.page_nukedash.set_nuke_detector_debug = mock.Mock()
+        window.page_settings.settings_changed.emit("debug_modes.nuke_detector", True)
+        window.page_settings.settings_changed.emit("debug_modes.nuke_detector", False)
+        self.assertEqual(window.page_nukedash.set_nuke_detector_debug.call_args_list, [
+            mock.call(True), mock.call(False),
+        ])
+
+    def test_nuke_detector_interval_changes_are_forwarded_to_dashboard(self):
+        window = self.make_window()
+        window.page_nukedash.set_nuke_detector_interval = mock.Mock()
+        window.page_settings.settings_changed.emit("nuke_detector_interval_sec", 5)
+        window.page_nukedash.set_nuke_detector_interval.assert_called_once_with(5)
+
+    def test_manual_lock_cleanup_requests_and_results_connect_settings_to_worker_page(self):
+        window = self.make_window()
+        preview = {"stale_only": True, "shots": [{"shot_id": 7}]}
+        result = {"cleared": [{"shot_id": 7}], "failed": [], "skipped": []}
+        window.page_settings.nuke_locks_preview_requested.emit(True)
+        self.assertEqual(window.page_nukedash.lock_clear_preview_requested.emitted, [(True,)])
+        window.page_nukedash.lock_clear_preview_ready.emit(preview)
+        self.assertEqual(window.page_settings.lock_previews, [preview])
+        window.page_settings.nuke_locks_clear_requested.emit(preview)
+        self.assertEqual(window.page_nukedash.lock_clear_requested.emitted, [(preview,)])
+        window.page_nukedash.lock_clear_finished.emit(result)
+        self.assertEqual(window.page_settings.lock_results, [result])
 
 
 class MainWindowAssignmentBoardTests(unittest.TestCase):

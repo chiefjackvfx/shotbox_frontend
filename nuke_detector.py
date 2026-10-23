@@ -7,15 +7,20 @@ Detects .nk files opened by local Nuke processes and returns structured data.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import getpass
-import os
+import ntpath
 import platform
+import posixpath
+import re
 import socket
-from typing import Iterable
 
 import psutil
+
+
+class UnidentifiedNukeScriptError(RuntimeError):
+    """Nuke was inspected successfully but exposed no script path."""
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,42 @@ class NukeScriptDetection:
     detected_at_utc: str
     pid: int
     source: str  # "cmdline" or "open_files"
+    process_started_at: float | None = None
+
+
+@dataclass
+class NukeProcessSnapshot:
+    scripts: list[NukeScriptDetection] = field(default_factory=list)
+    process_ids: set[int] = field(default_factory=set)
+    process_started_at: dict[int, float | None] = field(default_factory=dict)
+    errors: list[Exception] = field(default_factory=list)
+    enumeration_complete: bool = True
+
+    @property
+    def complete(self) -> bool:
+        return self.enumeration_complete and not self.errors
+
+    @property
+    def can_release_unmatched(self) -> bool:
+        # Match cleanup to the detected script list. A Nuke session with no
+        # exposed .nk path must not retain every other local shot's lock.
+        # Permission failures and incomplete process enumeration still cannot
+        # establish which local scripts are open.
+        return self.enumeration_complete and all(
+            isinstance(error, UnidentifiedNukeScriptError) for error in self.errors
+        )
+
+    def sessions_closed(self, sessions: set[tuple[int, float | None]]) -> bool:
+        """Prove all previously matched processes ended, allowing for PID reuse."""
+        if not sessions or not self.enumeration_complete:
+            return False
+        for pid, started_at in sessions:
+            if pid not in self.process_ids:
+                continue
+            current_start = self.process_started_at.get(pid)
+            if started_at is None or current_start is None or current_start == started_at:
+                return False
+        return True
 
 
 def _now_utc_stamp() -> str:
@@ -33,10 +74,8 @@ def _now_utc_stamp() -> str:
 
 
 def _normalize_path_for_compare(path: str) -> str:
-    normed = os.path.normpath(path)
-    if platform.system() == "Windows":
-        return os.path.normcase(normed)
-    return normed
+    paths = ntpath if platform.system() == "Windows" else posixpath
+    return paths.normcase(paths.normpath(path))
 
 
 def _normalize_path(path: str, proc: psutil.Process | None = None, *, strict: bool = False) -> str:
@@ -44,8 +83,9 @@ def _normalize_path(path: str, proc: psutil.Process | None = None, *, strict: bo
     if not cleaned:
         return ""
 
-    if os.path.isabs(cleaned):
-        return os.path.normpath(cleaned)
+    paths = ntpath if platform.system() == "Windows" else posixpath
+    if paths.isabs(cleaned):
+        return paths.normpath(cleaned)
 
     cwd = ""
     if proc is not None:
@@ -57,13 +97,15 @@ def _normalize_path(path: str, proc: psutil.Process | None = None, *, strict: bo
             cwd = ""
 
     if cwd:
-        return os.path.normpath(os.path.abspath(os.path.join(cwd, cleaned)))
-    return os.path.normpath(os.path.abspath(cleaned))
+        return paths.normpath(paths.abspath(paths.join(cwd, cleaned)))
+    return paths.normpath(paths.abspath(cleaned))
 
 
 def _is_nuke_process_name(name: str) -> bool:
-    text = (name or "").lower()
-    return "nuke" in text and "python" not in text
+    return re.fullmatch(
+        r"nuke(?:studio|assist|x)?(?:\d+(?:\.\d+)*(?:v\d+)?)?(?:\.exe)?",
+        name or "", flags=re.IGNORECASE,
+    ) is not None
 
 
 def _looks_like_nk(path: str) -> bool:
@@ -75,41 +117,10 @@ def _username_matches(proc_username: str, current_username: str) -> bool:
     if not proc_username:
         return False
 
-    proc_user = proc_username.lower().strip()
-    current_user = current_username.lower().strip()
-    if proc_user == current_user:
-        return True
-
-    # Handles DOMAIN\\user and machine\\user variants.
-    if "\\" in proc_user:
-        proc_user = proc_user.split("\\")[-1]
-    if "/" in proc_user:
-        proc_user = proc_user.split("/")[-1]
-    return proc_user == current_user
-
-
-def _iter_nuke_processes(current_user_only: bool = True, *, strict: bool = False) -> Iterable[psutil.Process]:
-    current_user = getpass.getuser()
-    for proc in psutil.process_iter(["pid", "name", "username"]):
-        try:
-            name = proc.info.get("name", "") or ""
-            if strict and not name:
-                raise RuntimeError("Could not identify a running process")
-            if not _is_nuke_process_name(name):
-                continue
-
-            if current_user_only:
-                proc_username = proc.info.get("username", "") or ""
-                if strict and not proc_username:
-                    raise RuntimeError(f"Could not identify the owner of Nuke process {proc.pid}")
-                if not _username_matches(proc_username, current_user):
-                    continue
-            yield proc
-        except (psutil.NoSuchProcess, psutil.ZombieProcess):
-            continue
-        except psutil.AccessDenied:
-            if strict:
-                raise
+    def account(value):
+        # Either side may contain DOMAIN\\user, machine/user, or a UPN.
+        return value.strip().casefold().replace("\\", "/").rsplit("/", 1)[-1].split("@", 1)[0]
+    return account(proc_username) == account(current_username)
 
 
 def _read_process_cmdline(proc: psutil.Process, *, strict: bool = False) -> list[str]:
@@ -169,50 +180,81 @@ def _extract_nk_paths_from_open_files(proc: psutil.Process, *, strict: bool = Fa
     return out
 
 
-def detect_open_nuke_scripts(current_user_only: bool = True, *, strict: bool = False) -> list[NukeScriptDetection]:
+def scan_open_nuke_scripts(
+    current_user_only: bool = True, *, tracked_process_ids: set[int] | None = None,
+) -> NukeProcessSnapshot:
     machine_name = socket.gethostname() or "unknown-machine"
     detected_at_utc = _now_utc_stamp()
 
-    detections: list[NukeScriptDetection] = []
+    snapshot = NukeProcessSnapshot()
     seen: set[tuple[int, str]] = set()
-
-    for proc in _iter_nuke_processes(current_user_only=current_user_only, strict=strict):
-        pid = int(proc.pid)
-
-        cmdline = _read_process_cmdline(proc, strict=strict)
-        if _is_frameserver_cmdline(cmdline):
-            continue
-        cmdline_paths = _extract_nk_paths_from_cmdline(proc, strict=strict, cmdline=cmdline)
-        if cmdline_paths:
-            source = "cmdline"
-            candidate_paths = cmdline_paths
-        else:
-            source = "open_files"
-            candidate_paths = _extract_nk_paths_from_open_files(proc, strict=strict)
-        if strict and not candidate_paths:
-            # An unidentified running session cannot prove a tracked script closed.
-            raise RuntimeError(f"Could not identify the script in Nuke process {pid}")
-
-        for script_path in candidate_paths:
-            compare_path = _normalize_path_for_compare(script_path)
-            key = (pid, compare_path)
-            if key in seen:
+    current_user = getpass.getuser()
+    tracked_process_ids = tracked_process_ids or set()
+    try:
+        for proc in psutil.process_iter(["pid", "name", "username"]):
+            pid = int(proc.pid)
+            snapshot.process_ids.add(pid)
+            try:
+                name = proc.info.get("name", "") or ""
+                is_nuke = _is_nuke_process_name(name)
+                if is_nuke or pid in tracked_process_ids:
+                    try:
+                        snapshot.process_started_at[pid] = proc.create_time()
+                    except (psutil.AccessDenied, AttributeError):
+                        snapshot.process_started_at[pid] = None
+                # Idle/System cannot be Nuke. Other unreadable process names
+                # remain uncertain, and their observed PIDs protect live sessions.
+                if not name:
+                    if platform.system() == "Windows" and pid in (0, 4):
+                        continue
+                    raise RuntimeError(f"Could not identify running process {pid}")
+                if not is_nuke:
+                    continue
+                started_at = snapshot.process_started_at[pid]
+                if current_user_only:
+                    username = proc.info.get("username", "") or ""
+                    if not username:
+                        raise RuntimeError(f"Could not identify the owner of Nuke process {pid}")
+                    if not _username_matches(username, current_user):
+                        continue
+                cmdline = _read_process_cmdline(proc, strict=True)
+                if _is_frameserver_cmdline(cmdline):
+                    continue
+                candidate_paths = _extract_nk_paths_from_cmdline(proc, strict=True, cmdline=cmdline)
+                source = "cmdline"
+                if not candidate_paths:
+                    source = "open_files"
+                    candidate_paths = _extract_nk_paths_from_open_files(proc, strict=True)
+                if not candidate_paths:
+                    raise UnidentifiedNukeScriptError(f"Could not identify the script in Nuke process {pid}")
+                for script_path in candidate_paths:
+                    key = (pid, _normalize_path_for_compare(script_path))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    paths = ntpath if platform.system() == "Windows" else posixpath
+                    snapshot.scripts.append(NukeScriptDetection(
+                        script_name=paths.basename(script_path), script_path=script_path,
+                        machine_name=machine_name, detected_at_utc=detected_at_utc,
+                        pid=pid, source=source, process_started_at=started_at,
+                    ))
+            except (psutil.NoSuchProcess, psutil.ZombieProcess):
+                snapshot.process_ids.discard(pid)
                 continue
-            seen.add(key)
+            except Exception as exc:
+                snapshot.errors.append(exc)
+    except Exception as exc:
+        snapshot.enumeration_complete = False
+        snapshot.errors.append(exc)
+    snapshot.scripts.sort(key=lambda item: (item.pid, item.script_name.lower(), item.script_path.lower()))
+    return snapshot
 
-            detections.append(
-                NukeScriptDetection(
-                    script_name=os.path.basename(script_path),
-                    script_path=script_path,
-                    machine_name=machine_name,
-                    detected_at_utc=detected_at_utc,
-                    pid=pid,
-                    source=source,
-                )
-            )
 
-    detections.sort(key=lambda item: (item.pid, item.script_name.lower(), item.script_path.lower()))
-    return detections
+def detect_open_nuke_scripts(current_user_only: bool = True, *, strict: bool = False) -> list[NukeScriptDetection]:
+    snapshot = scan_open_nuke_scripts(current_user_only=current_user_only)
+    if strict and snapshot.errors:
+        raise snapshot.errors[0]
+    return snapshot.scripts
 
 
 def detect_primary_open_nuke_script(
@@ -222,6 +264,34 @@ def detect_primary_open_nuke_script(
     if not detections:
         return None
     return detections[0]
+
+
+def print_snapshot_debug(snapshot: NukeProcessSnapshot) -> None:
+    """Print the local scan, including partial results and their errors."""
+    prefix = "[Nuke Detector]"
+    status = "complete" if snapshot.complete else "incomplete"
+    lines = [
+        f"{prefix} {_now_utc_stamp()} machine={socket.gethostname()} user={getpass.getuser()} "
+        f"scripts={len(snapshot.scripts)} scan={status}",
+    ]
+    for item in snapshot.scripts:
+        lines.append(
+            f"{prefix} pid={item.pid} source={item.source} "
+            f"script={item.script_name} path={item.script_path}"
+        )
+    if not snapshot.scripts:
+        lines.append(
+            f"{prefix} No open .nk scripts detected for the current user."
+            if snapshot.complete else
+            f"{prefix} No scripts identified; detection is incomplete."
+        )
+    for error in snapshot.errors:
+        lines.append(f"{prefix} Detection error: {type(error).__name__}: {error}")
+    if snapshot.errors and snapshot.can_release_unmatched:
+        lines.append(
+            f"{prefix} Unmatched locks owned by this machine can clear after the configured delay."
+        )
+    print("\n".join(lines), flush=True)
 
 
 def debug_run() -> int:
