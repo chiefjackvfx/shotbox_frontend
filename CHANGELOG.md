@@ -6,20 +6,26 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-23T16:32:47+01:00] Added Windows regressions and native Linux process lifecycle coverage.
-- [2026-10-23T16:37:24+01:00] Added live Nuke detector debug output and settings coverage.
-- [2026-10-23T16:43:25+01:00] Added configurable Nuke detector interval with live settings coverage.
-- [2026-10-23T16:51:11+01:00] Added regressions protecting foreign locks during local cleanup.
-- [2026-10-23T17:00:58+01:00] Added Settings buttons clearing this machine's stale or active locks.
-- [2026-10-23T17:00:58+01:00] Added cleanup tests covering ownership, heartbeats, failures, and UI updates.
-
 ### Changed
 
 ### Fixed
 
-- [2026-10-23T16:32:47+01:00] Cleared unmatched local locks despite unidentified Nuke sessions.
-- [2026-10-23T16:32:47+01:00] Matched Windows usernames, mapped drives, UNC paths, and Linux mounts.
-- [2026-10-23T16:51:11+01:00] Stopped heartbeats for unmatched local locks during release grace.
+## 4.4.5 - 2026-10-23
+
+### Added
+
+- Added Windows regressions and native Linux process lifecycle coverage.
+- Added live Nuke detector debug output and settings coverage.
+- Added configurable Nuke detector interval with live settings coverage.
+- Added regressions protecting foreign locks during local cleanup.
+- Added Settings buttons clearing this machine's stale or active locks.
+- Added cleanup tests covering ownership, heartbeats, failures, and UI updates.
+
+### Fixed
+
+- Cleared unmatched local locks despite unidentified Nuke sessions.
+- Matched Windows usernames, mapped drives, UNC paths, and Linux mounts.
+- Stopped heartbeats for unmatched local locks during release grace.
 
 ## 4.4.4 - 2026-10-23
 
