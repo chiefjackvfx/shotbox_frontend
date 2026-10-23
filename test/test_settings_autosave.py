@@ -81,6 +81,26 @@ class SettingsAutosaveTests(unittest.TestCase):
         self.assertEqual(self.read_saved("server_url"), "http://new-server:8000")
         self.assertFalse(self.page._autosave_timer.isActive())
 
+    def test_nuke_lock_release_settings_autosave_and_reload(self):
+        self.assertTrue(self.page.nuke_lock_auto_release_check.isChecked())
+        self.assertEqual(self.page.nuke_lock_release_grace_spin.value(), 90)
+        emitted = []
+        self.page.settings_changed.connect(lambda *args: emitted.append(args))
+        self.page.nuke_lock_release_grace_spin.setValue(180)
+        self.page.nuke_lock_auto_release_check.setChecked(False)
+        self.page._flush_autosave()
+        self.assertEqual(self.read_saved("nuke_lock_release_grace_sec"), 180)
+        self.assertFalse(self.read_saved("nuke_lock_auto_release"))
+        self.assertFalse(self.page.nuke_lock_release_grace_spin.isEnabled())
+        self.assertIn(("nuke_lock_release_grace_sec", 180), emitted)
+        self.assertIn(("nuke_lock_auto_release", False), emitted)
+        self.page._load_current_values()
+        self.assertEqual(self.page.nuke_lock_release_grace_spin.value(), 180)
+        self.page.nuke_lock_auto_release_check.setChecked(True)
+        self.page._flush_autosave()
+        self.assertTrue(self.read_saved("nuke_lock_auto_release"))
+        self.assertTrue(self.page.nuke_lock_release_grace_spin.isEnabled())
+
     def test_saved_identity_is_emitted_after_server_and_unlink_is_emitted(self):
         self.page._django_users = [{"id": 1, "username": "jack"}]
         self.page._populate_user_combo()

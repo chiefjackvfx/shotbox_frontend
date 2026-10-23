@@ -158,6 +158,38 @@ class NukeDashRegressionTests(unittest.TestCase):
             launch.assert_not_called()
             self.assertIn('other', card.btn_open_nuke.text())
 
+    def test_saved_and_live_release_settings_reach_lock_worker(self):
+        self.settings.set('nuke_lock_release_grace_sec', 180)
+        self.settings.set('nuke_lock_auto_release', False)
+        page, card = self.lock_page()
+        self.assertEqual(page._lock_worker.release_grace_sec, 180)
+        self.assertFalse(page._lock_worker.auto_release)
+        page.set_nuke_lock_release_settings(45, True)
+        self.wait(lambda: page._lock_worker.release_grace_sec == 45 and page._lock_worker.auto_release)
+
+    def test_opening_recovered_alias_renews_original_owner_without_force_take(self):
+        page, card = self.lock_page()
+        page._lock_read_api.get_shot.return_value = {
+            **card.data, 'nuke_in_use': 'os-user@desk|20000101T000000Z',
+        }
+        page._lock_read_api.get_lock_owner_id = mock.Mock(return_value='chief@desk')
+        page._lock_read_api.get_lock_owner_ids = mock.Mock(return_value={'chief@desk', 'os-user@desk'})
+        requests = []
+        page.lock_claim_requested.connect(requests.append)
+        # Keep the real worker idle: this test checks the GUI's claim request.
+        page.lock_claim_requested.disconnect(page._lock_worker.claim)
+        popup = mock.Mock()
+        popup.addButton.side_effect = ['cancel', 'open']
+        popup.clickedButton.return_value = 'open'
+        with mock.patch.object(dash, 'QMessageBox', return_value=popup) as message_box:
+            message_box.Icon = QMessageBox.Icon
+            message_box.ButtonRole = QMessageBox.ButtonRole
+            page._handle_nuke_open_request(card, '/show/SH010_v001.nk')
+        self.assertEqual(requests[0]['owner_id'], 'os-user@desk')
+        self.assertTrue(requests[0]['already_owned'])
+        self.assertFalse(requests[0]['force'])
+        popup.setWindowTitle.assert_called_once_with('Already Locked By You')
+
     def test_close_waits_for_lock_claim_and_cleans_unlaunched_lock(self):
         page, card = self.lock_page()
         started, release = threading.Event(), threading.Event()

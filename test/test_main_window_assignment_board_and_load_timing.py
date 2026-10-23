@@ -5,6 +5,7 @@ import importlib
 import os
 from pathlib import Path
 import sys
+import tempfile
 import types
 import unittest
 from unittest import mock
@@ -570,10 +571,13 @@ class MainWindowActivityIdentityTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
         state = mock.patch.multiple(
             http_help.DjangoAPI,
             _default_base_url="http://old-server:8000/api/",
             _current_username=None, _cached_users=None, _lock_owner_id=None,
+            _lock_identity_store=http_help.NukeLockIdentityStore(Path(temporary.name)),
         )
         state.start()
         self.addCleanup(state.stop)
@@ -624,6 +628,18 @@ class MainWindowActivityIdentityTests(unittest.TestCase):
         self.requests.side_effect = None
         window.page_settings.settings_changed.emit("django_username", 1)
         self.assertEqual(http_help.DjangoAPI.get_current_username(), "jack")
+
+    def test_nuke_lock_setting_changes_are_forwarded_to_dashboard(self):
+        window = self.make_window()
+        window.page_nukedash.set_nuke_lock_release_settings = mock.Mock()
+        window._settings_manager.values.update(
+            nuke_lock_release_grace_sec=180, nuke_lock_auto_release=False,
+        )
+        for key, value in (("nuke_lock_release_grace_sec", 180), ("nuke_lock_auto_release", False)):
+            window.page_settings.settings_changed.emit(key, value)
+        self.assertEqual(window.page_nukedash.set_nuke_lock_release_settings.call_args_list, [
+            mock.call(180, False), mock.call(180, False),
+        ])
 
 
 class MainWindowAssignmentBoardTests(unittest.TestCase):

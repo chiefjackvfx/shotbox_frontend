@@ -24,16 +24,21 @@ class NukeLockWorker(QObject):
     claim_finished = pyqtSignal(dict)
     stopped = pyqtSignal()
 
-    def __init__(self, *, api=None, interval_ms=45_000, release_grace_sec=90):
+    def __init__(self, *, api=None, interval_ms=45_000, release_grace_sec=90, auto_release=True):
         super().__init__()
         self.api = api if api is not None else http_help.DjangoAPI(skip_activity_logging=True)
         self.owned_locks = {}
         self.pending_launches = {}
         self._reported_locks = {}
-        self.release_grace_sec = release_grace_sec
+        self.configure_release(release_grace_sec, auto_release)
         self.timer = QTimer(self)
         self.timer.setInterval(interval_ms)
         self.timer.timeout.connect(self.tick)
+
+    @pyqtSlot(int, bool)
+    def configure_release(self, grace_seconds, enabled):
+        self.release_grace_sec = max(1, min(3600, grace_seconds))
+        self.auto_release = enabled
 
     @pyqtSlot()
     def start(self):
@@ -127,7 +132,7 @@ class NukeLockWorker(QObject):
             return recovered
         if not isinstance(shots, list):
             return recovered
-        current_owner = self.api.get_lock_owner_id()
+        local_owners = self.api.get_lock_owner_ids()
         for shot in shots:
             try:
                 shot_id = int(shot["id"])
@@ -137,15 +142,17 @@ class NukeLockWorker(QObject):
             self._publish_lock_value(shot_id, value)
             info = parse_lock_info(value)
             state = self.owned_locks.get(shot_id)
-            owner_id = state["owner_id"] if state else current_owner
             if info is None:
                 # An older response must not stop an open session's heartbeat.
                 continue
-            if not info.matches_system(owner_id):
+            # Existing sessions must stop on takeover, even by a known alias.
+            if (state and not info.matches_system(state["owner_id"])) or (
+                state is None and info.normalized_owner not in local_owners
+            ):
                 self.owned_locks.pop(shot_id, None)
                 continue
             if state is None:
-                self.owned_locks[shot_id] = self._new_state(owner_id, shot.get("base_path"))
+                self.owned_locks[shot_id] = self._new_state(info.normalized_owner, shot.get("base_path"))
                 recovered.add(shot_id)
             elif not state["base_path"]:
                 state["base_path"] = normalize_script_path(shot.get("base_path"))
@@ -203,7 +210,12 @@ class NukeLockWorker(QObject):
                 elif state["missing_since"] is None:
                     state["missing_since"] = now
                 elif now - state["missing_since"] >= self.release_grace_sec:
-                    self._write_lock(shot_id, release=True)
+                    if self.auto_release:
+                        self._write_lock(shot_id, release=True)
+                    else:
+                        state["confirmed_open"] = False
+                    # A confirmed closed script must not keep sending heartbeats
+                    # when the user has chosen to retain its lock.
                     continue
             # Finding an old database lock is not evidence of an open script.
             if state["confirmed_open"]:

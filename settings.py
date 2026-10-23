@@ -88,6 +88,8 @@ DEFAULT_SETTINGS = {
     
     # Polling settings (stored in seconds for user convenience)
     "polling_interval": 5,  # seconds
+    "nuke_lock_auto_release": True,
+    "nuke_lock_release_grace_sec": 90,
 
     # Preview generation settings
     "preview_quality": "medium",  # low/medium/high
@@ -458,6 +460,22 @@ class SettingsPage(QWidget):
         self.activity_refresh_interval_spin.setSuffix(" sec")
         self.activity_refresh_interval_spin.setToolTip("How often to refresh the Activity feed")
         polling_layout.addRow("Activity Refresh Interval:", self.activity_refresh_interval_spin)
+
+        self.nuke_lock_auto_release_check = QCheckBox("Automatically clear closed Nuke locks")
+        self.nuke_lock_auto_release_check.setToolTip(
+            "Clear your local shot locks after their Nuke scripts are confirmed closed."
+        )
+        polling_layout.addRow("", self.nuke_lock_auto_release_check)
+
+        self.nuke_lock_release_grace_spin = NoScrollSpinBox()
+        self.nuke_lock_release_grace_spin.setRange(1, 3600)
+        self.nuke_lock_release_grace_spin.setSingleStep(15)
+        self.nuke_lock_release_grace_spin.setSuffix(" sec")
+        self.nuke_lock_release_grace_spin.setToolTip(
+            "How long a script must remain confirmed closed before its lock clears. "
+            "Clearing happens on the next Nuke lock check after this delay."
+        )
+        polling_layout.addRow("Nuke Lock Clear Delay:", self.nuke_lock_release_grace_spin)
         
         container_layout.addWidget(polling_group)
 
@@ -999,6 +1017,9 @@ class SettingsPage(QWidget):
         self.activity_refresh_interval_spin.setValue(
             self._settings.get("activity_refresh_interval", 30)
         )
+        self.nuke_lock_auto_release_check.setChecked(self._settings.get("nuke_lock_auto_release", True))
+        self.nuke_lock_release_grace_spin.setValue(self._settings.get("nuke_lock_release_grace_sec", 90))
+        self.nuke_lock_release_grace_spin.setEnabled(self.nuke_lock_auto_release_check.isChecked())
 
         # Preview Generation
         preview_quality = self._settings.get("preview_quality", "medium")
@@ -1150,6 +1171,7 @@ class SettingsPage(QWidget):
 
     def _connect_signals(self):
         """Connect UI signals to handlers."""
+        self.nuke_lock_auto_release_check.toggled.connect(self.nuke_lock_release_grace_spin.setEnabled)
         # Save button
         self.save_button.clicked.connect(self._save_all_settings)
         for widget in self._settings_controls():
@@ -1208,6 +1230,8 @@ class SettingsPage(QWidget):
             self.activity_refresh_interval_spin.value(),
             save=False,
         )
+        self._set_pending_setting("nuke_lock_auto_release", self.nuke_lock_auto_release_check.isChecked(), save=False)
+        self._set_pending_setting("nuke_lock_release_grace_sec", self.nuke_lock_release_grace_spin.value(), save=False)
 
         # Preview Generation
         self._set_pending_setting("preview_quality", self.preview_quality_combo.currentText(), save=False)
@@ -1330,6 +1354,8 @@ class SettingsPage(QWidget):
             self._emit_saved_setting(
                 "activity_refresh_interval", self.activity_refresh_interval_spin.value()
             )
+            self._emit_saved_setting("nuke_lock_auto_release", self.nuke_lock_auto_release_check.isChecked())
+            self._emit_saved_setting("nuke_lock_release_grace_sec", self.nuke_lock_release_grace_spin.value())
 
             # Preview generation settings
             self._emit_saved_setting("preview_quality", self.preview_quality_combo.currentText())

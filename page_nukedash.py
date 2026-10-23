@@ -338,6 +338,7 @@ class page_nukedash(QMainWindow):
     lock_claim_requested = pyqtSignal(dict)
     lock_launch_finished = pyqtSignal(int, bool)
     lock_stop_requested = pyqtSignal()
+    lock_release_settings_changed = pyqtSignal(int, bool)
     jobs_data_updated = pyqtSignal(list)
     active_job_changed = pyqtSignal(dict)
     active_timeline_changed = pyqtSignal(int)
@@ -544,7 +545,8 @@ class page_nukedash(QMainWindow):
         self._restoring_filter_controls = False
         self._saved_filter_state = self._load_saved_filter_state()
         self._lock_interval_ms = 45_000
-        self._lock_release_grace_sec = 90
+        self._lock_release_grace_sec = int(self._settings_manager.get("nuke_lock_release_grace_sec", 90))
+        self._lock_auto_release = bool(self._settings_manager.get("nuke_lock_auto_release", True))
         self._pending_nuke_opens = {}
         self._lock_read_api = http_help.DjangoAPI(base_url=self._worker.api.base_url)
         self._project_load_profiler = project_load_profiler.ProjectLoadProfiler(
@@ -1357,17 +1359,24 @@ class page_nukedash(QMainWindow):
             api=http_help.DjangoAPI(base_url=self._lock_read_api.base_url, skip_activity_logging=True),
             interval_ms=self._lock_interval_ms + random.randint(0, 5000),
             release_grace_sec=self._lock_release_grace_sec,
+            auto_release=self._lock_auto_release,
         )
         self._lock_worker.moveToThread(self._lock_thread)
         self.lock_claim_requested.connect(self._lock_worker.claim)
         self.lock_launch_finished.connect(self._lock_worker.finish_launch)
         self.lock_stop_requested.connect(self._lock_worker.stop)
+        self.lock_release_settings_changed.connect(self._lock_worker.configure_release)
         self._lock_worker.lock_updated.connect(self._on_worker_lock_updated)
         self._lock_worker.claim_finished.connect(self._on_nuke_lock_claimed)
         self._lock_worker.stopped.connect(self._lock_thread.quit, Qt.ConnectionType.DirectConnection)
         self._lock_thread.started.connect(self._lock_worker.start)
         self._lock_thread.finished.connect(self._lock_worker.deleteLater)
         self._lock_thread.start()
+
+    def set_nuke_lock_release_settings(self, grace_seconds: int, enabled: bool):
+        self._lock_release_grace_sec = max(1, min(3600, int(grace_seconds)))
+        self._lock_auto_release = bool(enabled)
+        self.lock_release_settings_changed.emit(self._lock_release_grace_sec, self._lock_auto_release)
 
     @pyqtSlot(int, object)
     def _on_worker_lock_updated(self, shot_id, value):
@@ -1974,9 +1983,12 @@ class page_nukedash(QMainWindow):
         lock_info = parse_lock_info(fresh_shot.get("nuke_in_use"))
         force_take = False
         system_id = self._lock_read_api.get_lock_owner_id()
-        already_owned = bool(lock_info and lock_info.matches_system(system_id))
+        already_owned = bool(lock_info and lock_info.normalized_owner in self._lock_read_api.get_lock_owner_ids())
+        if already_owned:
+            # Renew the stored owner; changing it would conflict with the backend.
+            system_id = lock_info.normalized_owner
         if lock_info:
-            if lock_info.matches_system(system_id):
+            if already_owned:
                 popup = QMessageBox(self)
                 popup.setWindowTitle("Already Locked By You")
                 popup.setIcon(QMessageBox.Icon.Warning)

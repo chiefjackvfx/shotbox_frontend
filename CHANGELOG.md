@@ -6,9 +6,15 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-23T16:02:08+01:00] Added regressions for stale lock recovery and identity persistence.
+- [2026-10-23T16:06:32+01:00] Added configurable Nuke lock clearing and settings regression coverage.
+
 ### Changed
 
 ### Fixed
+
+- [2026-10-23T16:02:08+01:00] Persisted Nuke ownership identities across restarts and lookup failures.
+- [2026-10-23T16:02:08+01:00] Recovered stale local locks using their original ownership identities.
 
 ## 4.4.3 - 2026-10-14
 

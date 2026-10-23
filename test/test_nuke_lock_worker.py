@@ -32,6 +32,7 @@ class NukeLockWorkerTests(unittest.TestCase):
     def setUp(self):
         self.api = mock.Mock()
         self.api.get_lock_owner_id.return_value = "chief@desk"
+        self.api.get_lock_owner_ids.return_value = {"chief@desk"}
         self.api.get_system_id.return_value = "os-user@desk"
         self.api.update_shot_lock.return_value = {"ok": True}
         self.worker = locks.NukeLockWorker(api=self.api)
@@ -60,6 +61,55 @@ class NukeLockWorkerTests(unittest.TestCase):
         self.api.get_system_id.assert_not_called()
         self.api.update_shot_lock.assert_called_once_with(7, release=False, owner_id="chief@desk")
         self.api.get_job.assert_not_called()
+
+    def test_restart_renews_stale_alias_with_its_original_owner(self):
+        self.api.get_lock_owner_ids.return_value = {"chief@desk", "os-user@desk"}
+        self.shot["nuke_in_use"] = "os-user@desk|20000101T000000Z"
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        self.api.update_shot_lock.return_value = {
+            "ok": True, "shot": {**self.shot, "nuke_in_use": f"os-user@desk|{stamp}"},
+        }
+        updates = []
+        self.worker.lock_updated.connect(lambda shot_id, value: updates.append(value))
+        self.worker.tick()
+        self.api.update_shot_lock.assert_called_once_with(7, release=False, owner_id="os-user@desk")
+        self.assertFalse(nuke_lock_utils.parse_lock_info(updates[-1]).is_stale())
+
+    def test_restart_releases_closed_stale_alias_after_grace(self):
+        self.api.get_lock_owner_ids.return_value = {"chief@desk", "os-user@desk"}
+        self.shot["nuke_in_use"] = "os-user@desk|20000101T000000Z"
+        self.detector.return_value = []
+        with mock.patch.object(locks.time, "monotonic", return_value=100) as clock:
+            self.worker.tick()
+            self.api.update_shot_lock.assert_not_called()
+            clock.return_value = 189
+            self.worker.tick()
+            self.api.update_shot_lock.assert_not_called()
+            clock.return_value = 190
+            # Simulate the server reflecting the successful release.
+            self.api.update_shot_lock.side_effect = lambda *args, **kwargs: (
+                self.shot.update(nuke_in_use="None") or {"ok": True, "shot": dict(self.shot)}
+            )
+            self.worker.tick()
+        self.api.update_shot_lock.assert_called_once_with(7, release=True, owner_id="os-user@desk")
+        self.assertNotIn(7, self.worker.owned_locks)
+
+    def test_alias_recovery_does_not_renew_unconfirmed_stale_lock(self):
+        self.api.get_lock_owner_ids.return_value = {"chief@desk", "os-user@desk"}
+        self.shot["nuke_in_use"] = "os-user@desk|20000101T000000Z"
+        self.detector.side_effect = RuntimeError("Cannot inspect Nuke")
+        self.worker.tick()
+        self.api.update_shot_lock.assert_not_called()
+        self.assertIn(7, self.worker.owned_locks)
+
+    def test_takeover_by_another_known_alias_stops_the_existing_session(self):
+        self.claim()
+        self.api.get_lock_owner_ids.return_value = {"chief@desk", "os-user@desk"}
+        self.shot["nuke_in_use"] = "os-user@desk|20000101T000000Z"
+        self.worker.sync()
+        self.worker.maintain()
+        self.api.update_shot_lock.assert_not_called()
+        self.assertNotIn(7, self.worker.owned_locks)
 
     def test_startup_cleans_all_closed_stale_locks_and_keeps_open_and_foreign_locks(self):
         stale = "chief@desk|20000101T000000Z"
@@ -230,6 +280,44 @@ class NukeLockWorkerTests(unittest.TestCase):
         self.assertIn(7, self.worker.owned_locks)
         self.assertTrue(all(not call.kwargs["release"] for call in self.api.update_shot_lock.call_args_list))
 
+    def test_changed_release_delay_applies_to_existing_closed_session(self):
+        self.claim()
+        self.detector.return_value = []
+        with mock.patch.object(locks.time, "monotonic", return_value=100) as clock:
+            self.worker.maintain()
+            self.worker.configure_release(180, True)
+            clock.return_value = 190
+            self.worker.maintain()
+            self.assertIn(7, self.worker.owned_locks)
+            self.assertFalse(any(call.kwargs["release"] for call in self.api.update_shot_lock.call_args_list))
+            clock.return_value = 280
+            self.worker.maintain()
+        self.assertNotIn(7, self.worker.owned_locks)
+        self.assertTrue(self.api.update_shot_lock.call_args.kwargs["release"])
+
+    def test_disabled_release_retains_closed_lock_without_heartbeats_until_reenabled(self):
+        self.claim()
+        self.worker.configure_release(90, False)
+        self.detector.return_value = []
+        with mock.patch.object(locks.time, "monotonic", return_value=100) as clock:
+            self.worker.maintain()
+            self.api.update_shot_lock.reset_mock()
+            clock.return_value = 190
+            self.worker.maintain()
+            self.assertIn(7, self.worker.owned_locks)
+            self.api.update_shot_lock.assert_not_called()
+            # Subsequent uncertainty must not revive a confirmed closed script.
+            self.detector.side_effect = RuntimeError("Cannot inspect Nuke")
+            self.worker.maintain()
+            self.api.update_shot_lock.assert_not_called()
+            self.detector.side_effect = None
+            self.worker.maintain()
+            self.worker.configure_release(90, True)
+            clock.return_value = 280
+            self.worker.maintain()
+        self.api.update_shot_lock.assert_called_once_with(7, release=True, owner_id="chief@desk")
+        self.assertNotIn(7, self.worker.owned_locks)
+
     def test_transient_heartbeat_failure_retries_but_conflict_stops_tracking(self):
         self.claim()
         self.api.update_shot_lock.side_effect = [
@@ -333,6 +421,7 @@ class NukeLockDisplayTests(unittest.TestCase):
     def card(self, timestamp):
         api = mock.Mock()
         api.get_lock_owner_id.return_value = "chief@desk"
+        api.get_lock_owner_ids.return_value = {"chief@desk", "os-user@desk"}
         api.get_system_id.return_value = "os-user@desk"
         card = SimpleNamespace(
             data={"nuke_in_use": f"chief@desk|{timestamp}"}, _api=api,
@@ -348,6 +437,12 @@ class NukeLockDisplayTests(unittest.TestCase):
         widgets.ShotCard.refresh_lock_state_from_data(card)
         self.assertEqual(card.btn_open_nuke.property("lock_state"), "mine")
         self.assertIn("(You)", card.btn_open_nuke.text())
+
+    def test_recovered_alias_is_shown_as_mine_after_heartbeat(self):
+        card = self.card(datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+        card.data["nuke_in_use"] = card.data["nuke_in_use"].replace("chief@desk", "os-user@desk")
+        widgets.ShotCard.refresh_lock_state_from_data(card)
+        self.assertEqual(card.btn_open_nuke.property("lock_state"), "mine")
 
     def test_stale_lock_keeps_owner_and_explains_overdue_heartbeat(self):
         card = self.card("20000101T000000Z")

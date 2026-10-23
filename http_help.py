@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import requests
 
 from nuke_lock_utils import local_machine_name, local_system_id, normalize_system_id
+from nuke_lock_identity import NukeLockIdentityStore, canonical_server_url
 
 TASK_STATUS_CHOICES = [
     ("unassigned", "Unassigned"),
@@ -84,6 +85,7 @@ class DjangoAPI:
     _cached_users_base_url = None
     _system_id = None
     _lock_owner_id = None
+    _lock_identity_store = NukeLockIdentityStore()
     _max_retry_backoff = 3.0
     
     def __init__(
@@ -118,14 +120,29 @@ class DjangoAPI:
 
     @classmethod
     def refresh_lock_owner_id(cls) -> str:
-        cls._lock_owner_id = cls._build_lock_owner_id(cls._current_username)
+        linked_owner = cls._build_lock_owner_id(cls._current_username) if cls._current_username else None
+        cls._lock_owner_id, _ = cls._lock_identity_store.resolve(
+            cls._default_base_url, local_system_id(), linked_owner,
+        )
         return cls._lock_owner_id
 
     @classmethod
     def get_lock_owner_id(cls) -> str:
         if not cls._lock_owner_id:
-            cls._lock_owner_id = cls._build_lock_owner_id(cls._current_username)
+            cls.refresh_lock_owner_id()
         return cls._lock_owner_id
+
+    def get_lock_owner_ids(self) -> set[str]:
+        """Include owners used by this OS login before a restart/user change."""
+        cls = type(self)
+        if canonical_server_url(self.base_url) == canonical_server_url(cls._default_base_url):
+            current_owner = cls.get_lock_owner_id()
+        else:
+            current_owner = None
+        _, owners = cls._lock_identity_store.resolve(self.base_url, local_system_id())
+        if current_owner is None:
+            return owners
+        return owners | {current_owner}
     
     @classmethod
     def set_default_base_url(cls, url: str):
@@ -134,7 +151,8 @@ class DjangoAPI:
             # User IDs and usernames belong to the server they came from.
             cls._cached_users = None
             cls._cached_users_base_url = None
-            cls.set_current_username(None)
+            cls._current_username = None
+            cls._lock_owner_id = None
         cls._default_base_url = url
     
     @classmethod

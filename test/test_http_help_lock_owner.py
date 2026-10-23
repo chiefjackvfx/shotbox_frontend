@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -13,6 +14,7 @@ if str(FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(FRONTEND_DIR))
 
 import http_help
+from nuke_lock_identity import NukeLockIdentityStore
 
 
 def _response(*, status_code=200, payload=None):
@@ -24,11 +26,14 @@ def _response(*, status_code=200, payload=None):
 
 class DjangoAPILockOwnerTests(unittest.TestCase):
     def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
         state = mock.patch.multiple(
             http_help.DjangoAPI,
             _default_base_url="http://old-server:8000/api/",
             _current_username=None, _cached_users=None,
             _system_id=None, _lock_owner_id=None,
+            _lock_identity_store=NukeLockIdentityStore(Path(temporary.name)),
         )
         state.start()
         self.addCleanup(state.stop)
@@ -84,6 +89,45 @@ class DjangoAPILockOwnerTests(unittest.TestCase):
         self.assertEqual(
             api._request.call_args.kwargs["headers"]["X-ShotBox-System"], "original@desk",
         )
+
+    def test_restart_with_failed_user_lookup_keeps_saved_owner_and_aliases(self):
+        cls = http_help.DjangoAPI
+        with mock.patch.object(http_help, "local_machine_name", return_value="cerebro"), \
+                mock.patch.object(http_help, "local_system_id", return_value="cerebro-local@cerebro"):
+            cls.set_current_username("kieran")
+            # New store and cleared class state simulate a new process.
+            cls._lock_identity_store = NukeLockIdentityStore(cls._lock_identity_store.directory)
+            cls._current_username = None
+            cls._lock_owner_id = None
+            with mock.patch.object(cls, "get_users", side_effect=http_help.requests.ConnectionError("offline")):
+                cls.set_current_user_by_id(4)
+            self.assertEqual(cls.get_lock_owner_id(), "kieran@cerebro")
+            self.assertEqual(cls().get_lock_owner_ids(), {"kieran@cerebro", "cerebro-local@cerebro"})
+
+    def test_selected_user_change_preserves_previous_owner_for_recovery_after_restart(self):
+        cls = http_help.DjangoAPI
+        with mock.patch.object(http_help, "local_machine_name", return_value="desk"), \
+                mock.patch.object(http_help, "local_system_id", return_value="os-user@desk"):
+            cls.set_current_username("original")
+            cls.set_current_username("replacement")
+            cls._lock_identity_store = NukeLockIdentityStore(cls._lock_identity_store.directory)
+            cls._current_username = None
+            cls._lock_owner_id = None
+            self.assertEqual(cls.get_lock_owner_id(), "replacement@desk")
+            self.assertEqual(cls().get_lock_owner_ids(), {"original@desk", "replacement@desk", "os-user@desk"})
+
+    def test_server_switch_does_not_reuse_previous_server_aliases(self):
+        cls = http_help.DjangoAPI
+        with mock.patch.object(http_help, "local_machine_name", return_value="desk"), \
+                mock.patch.object(http_help, "local_system_id", return_value="os-user@desk"):
+            cls.set_current_username("original")
+            original_api = cls()
+            cls.set_default_base_url("http://new-server:8000/api/")
+            cls.set_current_username("replacement")
+            self.assertNotIn("original@desk", cls().get_lock_owner_ids())
+            self.assertNotIn("replacement@desk", original_api.get_lock_owner_ids())
+            cls.set_default_base_url(original_api.base_url)
+            self.assertEqual(cls.get_lock_owner_id(), "original@desk")
 
 
 if __name__ == "__main__":

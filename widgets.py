@@ -1833,7 +1833,7 @@ class ShotCard(QWidget):
             self.set_lock_state("stale", owner_machine=owner, script_name=script_name)
             return
 
-        if lock_info.matches_system(self._api.get_lock_owner_id()):
+        if lock_info.normalized_owner in self._api.get_lock_owner_ids():
             self.set_lock_state("mine", owner_machine=owner, script_name=script_name)
             return
 

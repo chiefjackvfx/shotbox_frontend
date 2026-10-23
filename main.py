@@ -815,6 +815,12 @@ class MainWindow(QMainWindow):
             if hasattr(self, "page_activity"):
                 self.page_activity.set_auto_refresh(bool(value))
 
+        elif key in {"nuke_lock_auto_release", "nuke_lock_release_grace_sec"}:
+            self.page_nukedash.set_nuke_lock_release_settings(
+                self._settings_manager.get("nuke_lock_release_grace_sec", 90),
+                self._settings_manager.get("nuke_lock_auto_release", True),
+            )
+
         elif key == "activity_refresh_interval":
             if hasattr(self, "page_activity"):
                 self.page_activity.set_refresh_interval(int(value))
