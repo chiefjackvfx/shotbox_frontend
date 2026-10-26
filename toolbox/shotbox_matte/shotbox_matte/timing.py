@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import json
 import time
 
-from .temporal import MAX_SELECTED_FRAMES, temporal_chunks
+from .temporal import temporal_chunks
 
 
 def duration(seconds: float) -> str:
@@ -100,8 +100,8 @@ class JobHistory:
                 if not isinstance(key, str) or not isinstance(record, dict):
                     continue
                 selected, padded, stages = record.get("selected"), record.get("padded"), record.get("stages")
-                if (not isinstance(selected, int) or not 1 <= selected <= MAX_SELECTED_FRAMES
-                        or not isinstance(padded, int) or not selected <= padded <= MAX_SELECTED_FRAMES * 2 + 7
+                if (type(selected) is not int or selected < 1
+                        or type(padded) is not int or padded < selected
                         or not isinstance(stages, dict)):
                     continue
                 clean = {stage: float(seconds) for stage, seconds in stages.items()
@@ -145,7 +145,8 @@ class JobHistory:
             self.completed.update({"decode", "export"})
         if stage == "complete":
             self.completed.add("commit")
-        if stage == "prepare" and isinstance(total, (int, float)) and 1 <= total <= MAX_SELECTED_FRAMES:
+        if (stage == "prepare" and isinstance(total, (int, float))
+                and not isinstance(total, bool) and math.isfinite(total) and total >= 1):
             self.selected = int(total)
             chunks = temporal_chunks(self.selected, self.fps, self.temporal_mode)
             self.padded = sum(chunk.padded_count for chunk in chunks)

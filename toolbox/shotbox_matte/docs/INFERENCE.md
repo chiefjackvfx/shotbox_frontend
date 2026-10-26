@@ -13,7 +13,7 @@ EXR-to-matte run succeeded on this machine's RTX 5090 (32 GiB, NVIDIA driver
 590.48.01) outside the restricted execution sandbox, using the existing local
 weights and the installed combination below.
 
-Use Python 3.12 on Linux or Windows with a working NVIDIA CUDA GPU supporting
+Use Python 3.13 on Linux, or 3.12 on Windows, with an NVIDIA CUDA GPU supporting
 bf16. The [official PyTorch guide](https://docs.ltx.io/open-source-model/integration-tools/pytorch-api)
 lists Python >=3.12, CUDA >=12.7 and PyTorch ~=2.7 as broad requirements.
 The pinned source now selects **PyTorch 2.13 / CUDA 13.2** wheels through its UV
@@ -24,6 +24,12 @@ release. Use a driver compatible with the selected CUDA wheel. These are
 upstream's declared combinations, not an end-to-end GPU certification by this
 application. Older Torch 2.7 satisfying the broad dependency range alone does
 not establish compatibility with the newer Gemma4 encoder or VAE.
+
+The same pinned application stack also completed real Linux GPU generation on
+standard CPython 3.13.15. Python 3.13 is now the Linux production default. Windows/macOS retain 3.12;
+an isolated 3.13 qualification installation remains available on all platforms. See
+[Python 3.13 qualification](PYTHON313_QUALIFICATION.md) for the measured results,
+launch commands and remaining platform acceptance checks.
 
 The locally installed combination used for the successful inference check is
 **Python 3.12.13, torch 2.11.0+cu130, torchvision 0.26.0, torchaudio 2.11.0 and
@@ -36,7 +42,7 @@ this revision. The frontend's dependency configuration records the immutable
 source archives and the tested compatible package versions.
 
 Shotbox installs the pinned inference dependencies into its main frontend
-Python 3.12 `venv`. Use the frontend installer/updater and open Matte through
+`venv` (Python 3.13 on Linux, 3.12 on Windows). Use the frontend installer/updater and open Matte through
 Toolbox or the Precomp Roto action. Generation uses a background process with
 the same interpreter; there is no standalone Matte executable or private venv.
 

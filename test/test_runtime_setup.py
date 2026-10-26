@@ -45,7 +45,7 @@ def commands(monkeypatch):
         return subprocess.CompletedProcess(command, 0, "", "")
 
     monkeypatch.setattr(setup, "run_setup_command", run)
-    monkeypatch.setattr(setup, "compatible_environment", lambda *_: False)
+    monkeypatch.setattr(setup, "compatible_environment", lambda *_, **__: False)
     monkeypatch.setattr(setup, "verify_environment", lambda *_, **__: None)
     return calls
 
@@ -77,7 +77,8 @@ def test_incompatible_environment_backup_is_retained_at_success(root, commands):
 
 
 @pytest.mark.parametrize("stage", ["create", "install", "verify", "interrupt"])
-def test_failed_migration_restores_old_environment_at_original_path(root, commands, monkeypatch, stage):
+@pytest.mark.parametrize("required", [(3, 12), (3, 13)])
+def test_failed_migration_restores_old_environment_at_original_path(root, commands, monkeypatch, stage, required):
     old_environment(root)
     original_run = setup.run_setup_command
 
@@ -96,7 +97,7 @@ def test_failed_migration_restores_old_environment_at_original_path(root, comman
             raise RuntimeError("OpenImageIO DLL failed")
         monkeypatch.setattr(setup, "verify_environment", fail)
     with pytest.raises((subprocess.CalledProcessError, RuntimeError, KeyboardInterrupt)):
-        setup.prepare_runtime(root, uv="uv", inference=True)
+        setup.prepare_runtime(root, uv="uv", inference=True, required_python=required)
     assert (root / "venv/original").read_text() == "keep me"
     assert setup.environment_python(root).read_text() == "old interpreter"
     assert not (root / ".runtime/migration.json").exists()
@@ -112,7 +113,7 @@ def test_failed_fresh_setup_removes_partial_environment(root, commands, monkeypa
 
 def test_compatible312_is_reused_and_has_no_migration_backup(root, commands, monkeypatch):
     old_environment(root)
-    monkeypatch.setattr(setup, "compatible_environment", lambda *_: True)
+    monkeypatch.setattr(setup, "compatible_environment", lambda *_, **__: True)
     setup.prepare_runtime(root, uv="uv", inference=False)
     assert len(commands) == 1
     assert "--torch-backend" not in commands[0][0]
@@ -218,11 +219,20 @@ def test_probe_uses_frontend_imports_and_pinned_cuda_stack(root, monkeypatch):
     assert "torch" not in modules and versions == {}
 
 
-def test_shell_bootstrap_uses_local_managed_python_without_system_changes(root):
+@pytest.mark.parametrize("qualification", [False, True])
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_shell_bootstrap_uses_local_managed_python_without_system_changes(root, qualification, system):
     if os.name == "nt":
         pytest.skip("POSIX bootstrap")
     source = Path(setup.__file__).with_name("setup_runtime.sh")
     shutil.copy2(source, root / source.name)
+    shutil.copy2(source.with_name("runtime_python.txt"), root / "runtime_python.txt")
+    shutil.copy2(source.with_name("runtime_python_linux.txt"), root / "runtime_python_linux.txt")
+    tools = root / "test-bin"
+    tools.mkdir()
+    uname = tools / "uname"
+    uname.write_text(f"#!/bin/sh\nprintf '%s\\n' '{system}'\n")
+    uname.chmod(0o755)
     uv = root / ".runtime/tools/bin/uv"
     uv.parent.mkdir(parents=True)
     uv.write_text(
@@ -236,15 +246,20 @@ def test_shell_bootstrap_uses_local_managed_python_without_system_changes(root):
         "from pathlib import Path\n"
         "Path(os.environ['SHOTBOX_TEST_OUTPUT']).write_text(json.dumps({'args':sys.argv[1:], 'env':dict(os.environ), 'leases': list(str(p) for p in (Path(__file__).parent/'.cache/temp/.active-tasks').glob('*.json'))}))\n")
     environment = dict(os.environ, SHOTBOX_TEST_PYTHON=sys.executable,
+                       PATH=str(tools) + os.pathsep + os.environ.get("PATH", ""),
                        SHOTBOX_TEST_OUTPUT=str(root / "result.json"),
                        SHOTBOX_TEST_COMMANDS=str(root / "commands.txt"))
-    result = subprocess.run(["sh", str(root / source.name)], env=environment, capture_output=True, text=True, check=False)
+    args = ["--qualify-python313"] if qualification else []
+    result = subprocess.run(["sh", str(root / source.name), *args], env=environment,
+                            capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
-    assert (root / "commands.txt").read_text().strip() == "python install 3.12 --no-bin --no-registry"
+    version = "3.13" if qualification or system == "Linux" else "3.12"
+    assert (root / "commands.txt").read_text().strip() == f"python install {version} --no-bin --no-registry"
     recorded = json.loads((root / "result.json").read_text())
-    assert recorded["args"] == ["--uv", str(uv)]
+    assert recorded["args"] == ["--uv", str(uv), *args]
     assert recorded["env"]["UV_PYTHON_INSTALL_DIR"] == str(root / ".runtime/tools/python")
     assert recorded["env"]["UV_NO_MODIFY_PATH"] == "1"
+    assert recorded["env"]["PYTHON_JIT"] == "0"
     assert len(recorded["leases"]) == 1
     assert not list((root / ".cache/temp/.active-tasks").glob("*.json"))
 
@@ -366,3 +381,64 @@ def test_process_id_reuse_does_not_block_recovery(root, monkeypatch):
     monkeypatch.setattr(setup, "_process_identity", lambda *_: "new creation time")
     setup.recover_migration(root)
     assert not (root / "venv").exists()
+
+
+def test_313_qualification_migrates_with_requested_probe_and_frontend_requirements(root, commands, monkeypatch):
+    old_environment(root)
+    checked = []
+    monkeypatch.setattr(setup, "compatible_environment", lambda *_, **kw: checked.append(kw) or False)
+    monkeypatch.setattr(setup, "verify_environment", lambda *_, **kw: checked.append(kw))
+    requirements = root.parent / "requirements.txt"
+    setup.prepare_runtime(root, uv="uv", base_python="managed313", inference=True,
+                          required_python=(3, 13), requirements=requirements)
+    assert all(item["required_python"] == (3, 13) for item in checked)
+    create, install = [item[0] for item in commands]
+    assert create[create.index("--python") + 1] == "managed313"
+    assert install[install.index("--requirements") + 1] == str(requirements)
+    assert len(list((root / ".runtime/backups").iterdir())) == 1
+    assert setup.DEFAULT_PYTHON == ((3, 13) if sys.platform == "linux" else (3, 12))
+
+
+def test_reuses_313_environment_without_backup(root, commands, monkeypatch):
+    old_environment(root)
+    checked = []
+    monkeypatch.setattr(setup, "compatible_environment", lambda *_, **kw: checked.append(kw) or True)
+    setup.prepare_runtime(root, uv="uv", required_python=(3, 13), inference=False)
+    assert checked == [{"required_python": (3, 13)}]
+    assert len(commands) == 1
+    assert not (root / ".runtime/backups").exists()
+
+
+@pytest.mark.parametrize("required", [(3, 12), (3, 13)])
+def test_interpreter_check_uses_real_python_and_rejects_wrong_minor(root, required):
+    assert setup.compatible_environment(Path(sys.executable), root, os.environ.copy(), required_python=required) == (
+        sys.version_info[:2] == required)
+
+
+def test_interpreter_check_rejects_free_threaded_build(root):
+    code = "import sysconfig; sysconfig.get_config_var = lambda name: 1\n" + setup.INTERPRETER_CHECK
+    result = subprocess.run([sys.executable, "-c", code + "\nprint(errors)",
+                             f"{sys.version_info.major}.{sys.version_info.minor}"],
+                            cwd=root, capture_output=True, text=True, check=True)
+    assert "not a free-threaded build" in result.stdout
+
+
+def test_313_dependency_probe_requests_correct_interpreter(root, monkeypatch):
+    recorded = []
+    monkeypatch.setattr(setup.subprocess, "run", lambda command, **__: (
+        recorded.append(command) or subprocess.CompletedProcess(command, 0, "[]\n", "")))
+    setup.verify_environment(Path(sys.executable), root, {}, inference=True, required_python=(3, 13))
+    assert recorded[0][-2] == "3.13"
+    assert json.loads(recorded[0][-1])[1] == setup.INFERENCE_VERSIONS
+
+
+@pytest.mark.parametrize("system,expected", [("linux", (3, 13)), ("win32", (3, 12)), ("darwin", (3, 12))])
+def test_production_default_promotes_linux_only(root, system, expected):
+    (root / "runtime_python.txt").write_text("3.12\n")
+    (root / "runtime_python_linux.txt").write_text("3.13\n")
+    assert setup.default_python(root, system=system) == expected
+
+
+def test_linux_default_falls_back_to_shared_manifest(root):
+    (root / "runtime_python.txt").write_text("3.12\n")
+    assert setup.default_python(root, system="linux") == (3, 12)

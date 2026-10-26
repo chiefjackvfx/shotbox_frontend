@@ -1,4 +1,5 @@
-# Main Shotbox environment: Python 3.12.
+# Production Python: runtime_python_linux.txt on Linux; runtime_python.txt otherwise.
+# Python 3.13 qualification uses these same pins; see setup_runtime --qualify-python313.
 # Windows/Linux x86_64 install with uv --torch-backend cu130.
 # Linux requires glibc >=2.34 for the verified Qt 6.11.2 wheels.
 # Matte shares this environment; no separate tool runtime is installed.

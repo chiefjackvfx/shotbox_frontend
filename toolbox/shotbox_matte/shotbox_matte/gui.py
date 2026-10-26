@@ -646,7 +646,7 @@ def _build_qt_types() -> dict[str, Any]:
             form.addRow("Frame skip", self.frame_skip)
             self.frame_cap = self._spin(0, 1000000, 0)
             self.frame_cap.setSpecialValueText("All frames")
-            self.frame_cap.setToolTip("Up to 250 selected frames per shot. Choose segments or experimental full-range processing below.")
+            self.frame_cap.setToolTip("All frames removes the shot-length limit. Segments process long shots in bounded passes.")
             form.addRow("Frame cap", self.frame_cap)
             self.temporal_mode = QComboBox()
             self.temporal_mode.addItem("Segments · recommended", "segmented")

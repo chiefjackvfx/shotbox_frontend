@@ -2,18 +2,23 @@
 
 Matte is part of the Shotbox frontend. Open **Toolbox → Open Shotbox Matte**
 for the full window, or right-click **Precomp → sequence folder → Roto** for
-compact generation. Both use the frontend's main Python 3.12 `venv` and the
+compact generation. Both use the frontend's main `venv` (Python 3.13 on Linux; 3.12 elsewhere) and the
 same installed dependencies. Generation runs in a background process using
 that exact Python, keeping Shotbox responsive and releasing GPU memory when
 it exits. There is no standalone Matte launcher or private runtime setup.
 
 Run the normal Shotbox installer or updater to install or update dependencies.
-It automatically migrates an older frontend environment to Python 3.12,
+It automatically migrates an older frontend environment to the platform default,
 retains its backup for rollback, and verifies imports before restarting.
 Managed Python and setup tools live under the frontend's `.runtime`; download
 caches and working files live under `.cache/temp`. System Python and PATH are
 unchanged. Legacy shared parent environments and old private Matte environments
 are left untouched and are not used by the integrated feature.
+
+Python 3.13 can be installed separately for qualification with the frontend's
+`setup_runtime.sh --qualify-python313` or `setup_runtime.ps1 --qualify-python313`.
+Linux production uses 3.13; Windows/macOS retain 3.12 pending native acceptance. See
+[qualification instructions and evidence](docs/PYTHON313_QUALIFICATION.md).
 
 Generation requires Windows/Linux x86_64, a compatible NVIDIA GPU with BF16
 support and a driver supporting CUDA 13.0. The pinned Linux Qt build requires

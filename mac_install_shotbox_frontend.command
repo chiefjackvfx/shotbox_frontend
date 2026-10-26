@@ -217,7 +217,7 @@ fi
 echo "[Info] Repo is up to date on origin/$PUBLISHED_BRANCH."
 echo
 
-STEP="Preparing ShotBox Python 3.12 and dependencies"
+STEP="Preparing ShotBox managed Python and dependencies"
 echo "[Step] $STEP"
 if ! sh "$REPO_DIR/setup_runtime.sh"; then
   FAIL_MSG="Environment setup failed. Review the error above and retry."

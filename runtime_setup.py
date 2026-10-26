@@ -1,4 +1,4 @@
-"""Install Shotbox and Matte together in the frontend's Python 3.12 environment.
+"""Install Shotbox and Matte together in the frontend's managed Python environment.
 
 Called by setup_runtime.sh/ps1 using a managed base Python, never the environment
 being replaced. Model files and legacy environments outside this frontend stay
@@ -22,6 +22,26 @@ from pathlib import Path
 from app_cache import cache_directory, temporary_cache_lease, temporary_cache_task
 
 FRONTEND_ROOT = Path(__file__).resolve().parent
+QUALIFICATION_PYTHON = (3, 13)
+
+
+def python_version_string(version):
+    if version not in ((3, 12), (3, 13)):
+        raise ValueError("Only Python 3.12 and 3.13 runtimes are supported.")
+    return ".".join(map(str, version))
+
+
+def default_python(root=FRONTEND_ROOT, *, system=sys.platform):
+    manifest = root / "runtime_python.txt"
+    linux_manifest = root / "runtime_python_linux.txt"
+    if system == "linux" and linux_manifest.is_file():
+        manifest = linux_manifest
+    version = tuple(map(int, manifest.read_text().strip().split(".")))
+    python_version_string(version)
+    return version
+
+
+DEFAULT_PYTHON = default_python()
 FRONTEND_MODULES = (
     "PyQt6.QtWidgets", "yaml", "requests", "psutil", "av", "numpy", "PIL.Image",
     "OpenImageIO", "OpenEXR", "PyOpenColorIO", "cv2", "pyperclip", "openpyxl",
@@ -33,15 +53,20 @@ INFERENCE_VERSIONS = {
     "torch": "2.11.0", "torchvision": "0.26.0", "torchaudio": "2.11.0",
     "transformers": "5.14.1", "ltx-core": "1.5.0", "ltx-pipelines": "1.5.0",
 }
-PROBE = r'''
+INTERPRETER_CHECK = r'''
+import sys
+import sysconfig
+required = tuple(map(int, sys.argv[1].split(".")))
+errors = []
+if (sys.version_info[:2] != required or sys.implementation.name != "cpython"
+        or sysconfig.get_config_var("Py_GIL_DISABLED")):
+    errors.append(f"Standard CPython {sys.argv[1]} is required (not a free-threaded build).")
+'''
+PROBE = INTERPRETER_CHECK + r'''
 import importlib
 from importlib.metadata import version
 import json
-import sys
-modules, expected = json.loads(sys.argv[1])
-errors = []
-if sys.version_info[:2] != (3, 12):
-    errors.append("Python 3.12 is required.")
+modules, expected = json.loads(sys.argv[2])
 for module in modules:
     try:
         importlib.import_module(module)
@@ -80,6 +105,7 @@ def setup_environment(root):
     temporary.mkdir(parents=True, exist_ok=True)
     environment.update(UV_NO_CONFIG="1", UV_CACHE_DIR=str(temporary / "uv"),
                        PIP_CACHE_DIR=str(temporary / "pip"), PYTHONUTF8="1",
+                       PYTHON_JIT="0",
                        UV_PYTHON_INSTALL_DIR=str(Path(root) / ".runtime" / "tools" / "python"))
     for name in ("TMPDIR", "TEMP", "TMP"):
         environment[name] = str(temporary)
@@ -281,12 +307,13 @@ def recover_migration(root):
     journal.unlink()
 
 
-def compatible_environment(python, root, environment):
+def compatible_environment(python, root, environment, *, required_python=DEFAULT_PYTHON):
     if not python.is_file():
         return False
     try:
         result = subprocess.run(
-            [str(python), "-c", "import sys; sys.exit(sys.version_info[:2] != (3, 12))"],
+            [str(python), "-c", INTERPRETER_CHECK + "\nsys.exit(bool(errors))",
+             python_version_string(required_python)],
             cwd=root, env=environment, timeout=30, capture_output=True, check=False,
         )
         return result.returncode == 0
@@ -294,12 +321,12 @@ def compatible_environment(python, root, environment):
         return False
 
 
-def verify_environment(python, root, environment, *, inference):
+def verify_environment(python, root, environment, *, inference, required_python=DEFAULT_PYTHON):
     modules = list(FRONTEND_MODULES) + (list(INFERENCE_MODULES) if inference else [])
     versions = INFERENCE_VERSIONS if inference else {}
     try:
         result = subprocess.run(
-            [str(python), "-c", PROBE, json.dumps([modules, versions])], cwd=root,
+            [str(python), "-c", PROBE, python_version_string(required_python), json.dumps([modules, versions])], cwd=root,
             env=environment, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180, check=False,
         )
         if result.returncode:
@@ -314,7 +341,9 @@ def verify_environment(python, root, environment, *, inference):
 
 
 @temporary_cache_task
-def prepare_runtime(root=FRONTEND_ROOT, *, uv, base_python=None, inference=None):
+def prepare_runtime(root=FRONTEND_ROOT, *, uv, base_python=None, inference=None,
+                    required_python=DEFAULT_PYTHON, requirements=None):
+    version = python_version_string(required_python)
     root = Path(root).resolve()
     _check_runtime_paths(root)
     runtime = root / ".runtime"
@@ -325,7 +354,8 @@ def prepare_runtime(root=FRONTEND_ROOT, *, uv, base_python=None, inference=None)
     with setup_lock(runtime), temporary_cache_lease():
         recover_migration(root)
         canonical = root / "venv"
-        migrate = _linked_directory(canonical) or not compatible_environment(python, root, environment)
+        migrate = _linked_directory(canonical) or not compatible_environment(
+            python, root, environment, required_python=required_python)
         journal = runtime / "migration.json"
         backup = None
         state = None
@@ -346,12 +376,12 @@ def prepare_runtime(root=FRONTEND_ROOT, *, uv, base_python=None, inference=None)
                                   root=root, environment=environment, journal=journal, state=state)
             print(f"[Shotbox] Installing Shotbox and Matte dependencies in {python}", flush=True)
             command = [str(uv), "--no-config", "pip", "install", "--python", str(python),
-                       "--requirements", str(root / "requirements.txt")]
+                       "--requirements", str(requirements or root / "requirements.txt")]
             if inference:
                 command.extend(["--torch-backend", "cu130"])
             run_setup_command(command, root=root, environment=environment,
                               journal=journal if migrate else None, state=state)
-            verify_environment(python, root, environment, inference=inference)
+            verify_environment(python, root, environment, inference=inference, required_python=required_python)
             if migrate:
                 _write_journal(journal, {"schema": 1, "backup": backup.name if backup else None, "complete": True})
                 journal.unlink()
@@ -359,7 +389,7 @@ def prepare_runtime(root=FRONTEND_ROOT, *, uv, base_python=None, inference=None)
             if migrate and not isinstance(exc, InstallerStillRunning):
                 recover_migration(root)
             raise
-    print(f"[Shotbox] Python 3.12 environment ready: {python}", flush=True)
+    print(f"[Shotbox] Python {version} environment ready: {python}", flush=True)
     if backup is not None:
         print(f"[Shotbox] Rollback backup retained at {backup}. Restore it to {canonical} before use.", flush=True)
     if not inference:
@@ -370,12 +400,23 @@ def prepare_runtime(root=FRONTEND_ROOT, *, uv, base_python=None, inference=None)
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--uv", type=Path, required=True)
+    parser.add_argument("--qualify-python313", action="store_true",
+                        help="Prepare isolated .runtime/qualification/python313/venv; keep production unchanged.")
     args = parser.parse_args(argv)
-    if sys.version_info[:2] != (3, 12) or sys.prefix != sys.base_prefix:
-        print("Run setup_runtime.sh or setup_runtime.ps1 to use Shotbox's managed base Python 3.12.", file=sys.stderr)
+    required = QUALIFICATION_PYTHON if args.qualify_python313 else DEFAULT_PYTHON
+    version = python_version_string(required)
+    import sysconfig
+    if (sys.version_info[:2] != required or sys.prefix != sys.base_prefix
+            or sys.implementation.name != "cpython" or sysconfig.get_config_var("Py_GIL_DISABLED")):
+        print(f"Run setup_runtime.sh or setup_runtime.ps1 to use Shotbox's managed standard CPython {version}.",
+              file=sys.stderr)
         return 1
     try:
-        prepare_runtime(uv=args.uv)
+        if args.qualify_python313:
+            from runtime_qualification import qualify_runtime
+            qualify_runtime(uv=args.uv)
+        else:
+            prepare_runtime(uv=args.uv)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
         print(f"[Shotbox] Setup failed: {exc}\nCheck the connection and free disk space, then retry the installer.",
               file=sys.stderr, flush=True)

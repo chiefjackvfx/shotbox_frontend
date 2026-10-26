@@ -42,7 +42,7 @@ def refresh(node):
             pass
     from .readback import find_result
     result = find_result(node)
-    valid_range = 1 <= int(node["sb_end"].value()) - int(node["sb_start"].value()) + 1 <= 250
+    valid_range = int(node["sb_end"].value()) >= int(node["sb_start"].value())
     valid_source = node.input(0) is not None and node["sb_color"].value() != "Unset"
     states = {"sb_generate": not busy and valid_source and valid_range,
               "sb_cancel": local_busy and run.cancel_time is None,

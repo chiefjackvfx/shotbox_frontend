@@ -16,7 +16,7 @@ from typing import Any
 import numpy as np
 
 from .models import ModelConfig, validate_models
-from .temporal import MAX_MODEL_FRAMES, MAX_SELECTED_FRAMES, padded_frame_count
+from .temporal import MAX_MODEL_FRAMES
 
 LTX_REVISION = "e98f6d927d83c92ef2be6aec76c8440b19306e39"
 Progress = Callable[[str, int, int, str], None]
@@ -60,9 +60,9 @@ def _validate_frames(frames: np.ndarray, fps: float, *, force_full_range: bool =
     if not isinstance(frames, np.ndarray) or frames.ndim != 4 or frames.shape[-1] != 3:
         raise ValueError("Native inference requires float RGB frames shaped [T,H,W,3]")
     count, height, width, _ = frames.shape
-    limit = padded_frame_count(MAX_SELECTED_FRAMES) if force_full_range else MAX_MODEL_FRAMES
-    if not 1 <= count <= limit or (count - 1) % 8:
-        raise ValueError(f"Alpha Gen requires 8n+1 frames up to {limit}, received {count}; pad/limit before inference")
+    if count < 1 or (count - 1) % 8 or (not force_full_range and count > MAX_MODEL_FRAMES):
+        limit = "" if force_full_range else f" up to {MAX_MODEL_FRAMES}"
+        raise ValueError(f"Alpha Gen requires 8n+1 frames{limit}, received {count}; pad/limit before inference")
     if min(height, width) < 32 or height % 32 or width % 32:
         raise ValueError(f"Alpha Gen requires spatial dimensions divisible by 32; received {width}x{height}")
     if width > 1920 or height > 1088:

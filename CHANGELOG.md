@@ -6,7 +6,15 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-26T17:10:39+00:00] Added isolated Python 3.13 qualification with environment evidence.
+- [2026-10-26T17:10:39+00:00] Added Python 3.13 migration rollback and compatibility regressions.
+
 ### Changed
+
+- [2026-10-26T17:17:41+00:00] Switched normal Linux launches and updates to Python 3.13.
+
+- [2026-10-26T17:10:39+00:00] Centralized runtime selection with platform-specific production defaults.
+- [2026-10-26T17:10:39+00:00] Recorded Python 3.13 GPU, Nuke, and migration qualification.
 
 ### Fixed
 

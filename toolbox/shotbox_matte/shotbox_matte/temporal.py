@@ -5,7 +5,6 @@ from dataclasses import asdict, dataclass
 import math
 
 
-MAX_SELECTED_FRAMES = 250
 MAX_MODEL_FRAMES = 145
 PREFERRED_CHUNK_FRAMES = 121
 CHUNK_OVERLAP = 17
@@ -36,8 +35,6 @@ def temporal_chunks(count: int, fps: float, mode: str = "segmented") -> tuple[Te
     if mode not in TEMPORAL_MODES:
         raise ValueError(f"Frame processing mode must be one of: {', '.join(TEMPORAL_MODES)}.")
     padded = padded_frame_count(count)
-    if count > MAX_SELECTED_FRAMES:
-        raise ValueError(f"{count} selected frames exceeds the {MAX_SELECTED_FRAMES}-frame shot limit. Reduce the frame cap, select a range or increase frame skip.")
     if not isinstance(fps, (int, float)) or not math.isfinite(fps) or fps <= 0:
         raise ValueError("FPS must be a finite positive number.")
     if mode == "full-range":

@@ -282,6 +282,17 @@ def test_probe_rejects_unsupported_external_python(tmp_path, monkeypatch, versio
     assert any("Python" in error and "3.12" in error for error in report["errors"])
 
 
+@pytest.mark.parametrize("version", [(3, 12), (3, 13)])
+def test_probe_accepts_supported_external_python(tmp_path, monkeypatch, version):
+    make_pack(tmp_path / "models")
+    request = write_json(tmp_path / "runtime.json", {"schema_version": 1, "model_root": str(tmp_path / "models")})
+    monkeypatch.setattr(bridge, "_dependencies", lambda: ({}, []))
+    monkeypatch.setattr(bridge, "_cuda_report", lambda: {"available": True, "bf16": True})
+    monkeypatch.setattr(bridge.sys, "version_info", version)
+    report = bridge.probe(request)
+    assert report["ready"], report["errors"]
+
+
 def test_cli_usage_and_operation_failure(tmp_path):
     assert bridge.main(["preflight", "--job", str(tmp_path / "missing.json")]) == 1
     with pytest.raises(SystemExit) as error:

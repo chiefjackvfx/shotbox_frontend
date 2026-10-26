@@ -1,6 +1,9 @@
 # Frontend-owned Python provisioning; no system Python, PATH, or registry changes.
 $ErrorActionPreference = "Stop"
 $project = $PSScriptRoot
+$version = (Get-Content -Raw -LiteralPath (Join-Path $project "runtime_python.txt")).Trim()
+if ($args -contains "--qualify-python313") { $version = "3.13" }
+if ($version -notin @("3.12", "3.13")) { throw "Unsupported Shotbox Python version." }
 $tools = Join-Path $project ".runtime\tools"
 $uv = Join-Path $tools "bin\uv.exe"
 $downloads = Join-Path $project ".cache\temp\runtime-downloads"
@@ -13,6 +16,7 @@ try {
     $env:UV_PYTHON_INSTALL_DIR = Join-Path $tools "python"
     $env:UV_CACHE_DIR = Join-Path $downloads "uv"
     $env:PYTHONUTF8 = "1"
+    $env:PYTHON_JIT = "0"
     foreach ($name in @("TMPDIR", "TEMP", "TMP")) { Set-Item -Path "Env:$name" -Value $downloads }
     foreach ($name in @("PYTHONHOME", "PYTHONPATH", "VIRTUAL_ENV")) {
         Remove-Item -Path "Env:$name" -ErrorAction SilentlyContinue
@@ -27,11 +31,11 @@ try {
         & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $installer
         if ($LASTEXITCODE -ne 0) { throw "uv installation failed." }
     }
-    Write-Host "[Shotbox] Preparing local Python 3.12..."
-    & $uv python install 3.12 --no-bin --no-registry
-    if ($LASTEXITCODE -ne 0) { throw "Python 3.12 provisioning failed." }
-    $python = & $uv python find --managed-python --no-project 3.12
-    if ($LASTEXITCODE -ne 0) { throw "Managed Python 3.12 was not found." }
+    Write-Host "[Shotbox] Preparing local Python $version..."
+    & $uv python install $version --no-bin --no-registry
+    if ($LASTEXITCODE -ne 0) { throw "Python $version provisioning failed." }
+    $python = & $uv python find --managed-python --no-project $version
+    if ($LASTEXITCODE -ne 0) { throw "Managed Python $version was not found." }
     $python = $python.Trim()
     & $python (Join-Path $project "runtime_setup.py") --uv $uv @args
     exit $LASTEXITCODE

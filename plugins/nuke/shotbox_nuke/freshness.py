@@ -131,8 +131,8 @@ def fingerprint(node):
             root_references.update(_root_refs(knob, settings[key], unresolved, node.fullName() + '.' + key))
     try:
         start, end = int(node['sb_start'].value()), int(node['sb_end'].value())
-        if not 1 <= end - start + 1 <= 250:
-            raise ValueError('frame range must contain 1–250 frames')
+        if end < start:
+            raise ValueError('frame range must contain at least one frame')
     except Exception as exc:
         start = end = 1
         unresolved.append('Generation range: ' + str(exc))

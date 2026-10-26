@@ -86,7 +86,7 @@ if errorlevel 1 (
 echo [Info] Repo is up to date on origin/%BRANCH%.
 echo.
 
-set "STEP=Preparing ShotBox Python 3.12 and dependencies"
+set "STEP=Preparing ShotBox managed Python and dependencies"
 echo [Step] !STEP!
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%REPO_DIR%\setup_runtime.ps1"
 if errorlevel 1 (

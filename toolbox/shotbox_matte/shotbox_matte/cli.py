@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="source encoding; linear sources are converted for model input (default: %(default)s)")
     parser.add_argument("--fps", type=float, default=24.0, help="model frame rate (default: %(default)s)")
     parser.add_argument("--frame-skip", type=int, default=0, help="omit N frames between selected frames (default: 0)")
-    parser.add_argument("--frame-cap", type=int, default=0, help="maximum selected frames; 0 means all (up to 250 per shot)")
+    parser.add_argument("--frame-cap", type=int, default=0, help="maximum selected frames; 0 means all, with no shot-length limit")
     parser.add_argument("--temporal-mode", choices=("segmented", "full-range"), default="segmented",
                         help="segmented (default) or experimental full-range single pass beyond model limits")
     parser.add_argument("--source-in", type=int, help="inclusive source start: filename frame number, or 1-based position for movies/stills")

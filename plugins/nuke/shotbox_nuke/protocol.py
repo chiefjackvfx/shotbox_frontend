@@ -45,8 +45,8 @@ class FrameMap:
     def __post_init__(self):
         integer(self.start, "start")
         integer(self.end, "end")
-        if not 1 <= self.count <= 250:
-            raise ProtocolError("Choose an inclusive range of 1–250 frames.")
+        if self.count < 1:
+            raise ProtocolError("Choose an inclusive range containing at least one frame.")
 
     @property
     def count(self) -> int:

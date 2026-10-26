@@ -4,11 +4,24 @@ PyQt6 desktop frontend for ShotBox.
 
 ## Entry Point
 
-- Run the app from `main.py` using frontend `venv` (Python 3.12).
+- Run the app from `main.py` using frontend `venv` (Python 3.13 on Linux; 3.12 on Windows/macOS).
 - Use the normal Windows installer/update batch files or Unix installer/update
   scripts to prepare that environment. They provision local Python without
   changing system Python or PATH and install frontend and Matte dependencies
   together. Setup tools and managed Python live under ignored `.runtime/`.
+
+Python 3.13 qualification is available through
+`sh setup_runtime.sh --qualify-python313` on Linux/macOS or
+`powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\setup_runtime.ps1 --qualify-python313`
+on Windows. It builds an isolated `.runtime/qualification/python313/venv` and
+records installation evidence in the neighbouring `report.json`. The desktop
+and Matte worker share that interpreter when launched explicitly from it.
+Linux installers select Python 3.13 through `runtime_python_linux.txt`.
+Windows/macOS retain Python 3.12 through `runtime_python.txt` until their
+native acceptance is complete. The normal Linux `run_shotbox_frontend.sh`
+launches the migrated frontend `venv`; no special command is needed. See
+[Python 3.13 qualification](toolbox/shotbox_matte/docs/PYTHON313_QUALIFICATION.md)
+for launch commands, results, pending checks and the promotion procedure.
 
 An older frontend `venv` is moved to `.runtime/backups` before migration. The
 new environment is created directly at its final path, verified, and restored
@@ -169,7 +182,7 @@ shows model padding and the provisional output folder; extra model frames are
 trimmed before export. **Generate Now** keeps progress and cancellation in the
 popup while Shotbox remains usable. **Add to Queue** is reserved for future work.
 
-Matte shares Shotbox's main Python 3.12 environment, including its background
+Matte shares Shotbox's main environment (Python 3.13 on Linux), including its background
 workers; there is no separate Matte launcher or runtime preparation. In
 **Settings → Plugins → Shotbox Matte / Nuke**, choose an external model library,
 save configuration and install the Nuke integration. Restart Nuke after

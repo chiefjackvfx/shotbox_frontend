@@ -138,8 +138,8 @@ def load_job(path: Path) -> JobOptions:
     for name in ("frame_skip", "frame_cap", "generation_width", "generation_height", "seed",
                  "first_frame", "padding", "source_start", "source_end"):
         _integer(data[name], name, 0 if name in ("frame_skip", "frame_cap", "seed") else 1)
-    if data["source_start"] != 1 or not 1 <= data["source_end"] <= 250:
-        raise ValueError("Captured source range must be 1..N with 1–250 frames.")
+    if data["source_start"] != 1 or data["source_end"] < 1:
+        raise ValueError("Captured source range must be 1..N with at least one frame.")
     for name, expected in (("frame_skip", 0), ("frame_cap", 0), ("first_frame", 1),
                            ("padding", 4), ("suffix", "_matte"), ("existing", "version-up"), ("sequence", None)):
         if data[name] != expected:
@@ -300,7 +300,7 @@ def probe(request: Path | str) -> dict:
                         raise ValueError("Invalid capture storage estimate request.")
                     width, height, count = (_integer(capture.get(key), f"capture.{key}", 1)
                                             for key in ("width", "height", "count"))
-                    if count > 250 or capture.get("precision", "half") not in ("half", "float"):
+                    if capture.get("precision", "half") not in ("half", "float"):
                         raise ValueError("Invalid capture count/precision for disk estimate.")
                     # Inputs + output + staged output; overhead and no compression savings.
                     estimate = count * (width * height * (12 + 2 * (6 if capture.get("precision", "half") == "half" else 12))
@@ -370,7 +370,7 @@ def validate(attempt: Path | str, progress: Progress | None = None) -> dict:
     start = _integer(capture.get("start"), "capture.start")
     end = _integer(capture.get("end"), "capture.end")
     count = _integer(capture.get("count"), "capture.count", 1)
-    if (count != end - start + 1 or count != options.source_end or count > 250
+    if (count != end - start + 1 or count != options.source_end
             or capture.get("fps") != options.fps or capture.get("pixel_aspect") != 1.0
             or not isinstance(capture.get("view"), str) or not capture["view"]):
         raise ValueError("Capture range/FPS/PAR/frame map mismatch.")
