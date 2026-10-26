@@ -1,0 +1,427 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "evidence": "Actual Nuke-written capture EXRs; controlled constant-matte inference adapter, not native model inference",
+  "orientation": "EXR raster row 0 corresponds to Nuke y=11 (top); row 11 to Nuke y=0 (bottom). Green/corner/channel values checked against evaluated expression + Grade.",
+  "cases": [
+    {
+      "range": [
+        1001,
+        1003
+      ],
+      "attempt": "/tmp/shotbox-bridge-host-wnzq6k3q/range_1001_1003",
+      "preflight": {
+        "count": 3,
+        "geometry": {
+          "x": 0,
+          "y": 0,
+          "width": 16,
+          "height": 12,
+          "full_x": 0,
+          "full_y": 0,
+          "full_width": 16,
+          "full_height": 12,
+          "pixel_aspect_ratio": 1.0
+        }
+      },
+      "corners": [
+        {
+          "timeline_frame": 1001,
+          "raster_top_left": [
+            2002.0,
+            1.8333333730697632,
+            0.5
+          ],
+          "raster_top_right": [
+            2003.875,
+            1.8333333730697632,
+            1.5
+          ],
+          "raster_bottom_left": [
+            2002.0,
+            0.0,
+            0.5
+          ],
+          "raster_bottom_right": [
+            2003.875,
+            0.0,
+            1.5
+          ]
+        },
+        {
+          "timeline_frame": 1002,
+          "raster_top_left": [
+            2004.0,
+            1.8333333730697632,
+            0.5
+          ],
+          "raster_top_right": [
+            2005.875,
+            1.8333333730697632,
+            1.5
+          ],
+          "raster_bottom_left": [
+            2004.0,
+            0.0,
+            0.5
+          ],
+          "raster_bottom_right": [
+            2005.875,
+            0.0,
+            1.5
+          ]
+        },
+        {
+          "timeline_frame": 1003,
+          "raster_top_left": [
+            2006.0,
+            1.8333333730697632,
+            0.5
+          ],
+          "raster_top_right": [
+            2007.875,
+            1.8333333730697632,
+            1.5
+          ],
+          "raster_bottom_left": [
+            2006.0,
+            0.0,
+            0.5
+          ],
+          "raster_bottom_right": [
+            2007.875,
+            0.0,
+            1.5
+          ]
+        }
+      ],
+      "validation": {
+        "valid": true,
+        "count": 3,
+        "outputs": [
+          {
+            "path": "capture_matte_v001/capture_matte_v001.0001.exr",
+            "size": 390,
+            "sha256": "df1499f7b88093a0675ee50201d658017b55eff209534dcc7b30d333693dcd76",
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 12,
+              "full_x": 0,
+              "full_y": 0,
+              "full_width": 16,
+              "full_height": 12,
+              "pixel_aspect_ratio": 1.0
+            },
+            "precision": "half"
+          },
+          {
+            "path": "capture_matte_v001/capture_matte_v001.0002.exr",
+            "size": 390,
+            "sha256": "df1499f7b88093a0675ee50201d658017b55eff209534dcc7b30d333693dcd76",
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 12,
+              "full_x": 0,
+              "full_y": 0,
+              "full_width": 16,
+              "full_height": 12,
+              "pixel_aspect_ratio": 1.0
+            },
+            "precision": "half"
+          },
+          {
+            "path": "capture_matte_v001/capture_matte_v001.0003.exr",
+            "size": 390,
+            "sha256": "df1499f7b88093a0675ee50201d658017b55eff209534dcc7b30d333693dcd76",
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 12,
+              "full_x": 0,
+              "full_y": 0,
+              "full_width": 16,
+              "full_height": 12,
+              "pixel_aspect_ratio": 1.0
+            },
+            "precision": "half"
+          }
+        ],
+        "geometry": {
+          "x": 0,
+          "y": 0,
+          "width": 16,
+          "height": 12,
+          "full_x": 0,
+          "full_y": 0,
+          "full_width": 16,
+          "full_height": 12,
+          "pixel_aspect_ratio": 1.0
+        },
+        "output_dir": "capture_matte_v001",
+        "backend_manifest": "backend_jobs/ad2ca8252cfe4aff9936900cac57dde5/_shotbox_job.json",
+        "source_snapshot_verified": true,
+        "freshness": "not assessed by backend validation"
+      }
+    },
+    {
+      "range": [
+        -2,
+        0
+      ],
+      "attempt": "/tmp/shotbox-bridge-host-wnzq6k3q/range_-2_0",
+      "preflight": {
+        "count": 3,
+        "geometry": {
+          "x": 0,
+          "y": 0,
+          "width": 16,
+          "height": 12,
+          "full_x": 0,
+          "full_y": 0,
+          "full_width": 16,
+          "full_height": 12,
+          "pixel_aspect_ratio": 1.0
+        }
+      },
+      "corners": [
+        {
+          "timeline_frame": -2,
+          "raster_top_left": [
+            0.0,
+            1.8333333730697632,
+            0.5
+          ],
+          "raster_top_right": [
+            0.0,
+            1.8333333730697632,
+            1.5
+          ],
+          "raster_bottom_left": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "raster_bottom_right": [
+            0.0,
+            0.0,
+            1.5
+          ]
+        },
+        {
+          "timeline_frame": -1,
+          "raster_top_left": [
+            0.0,
+            1.8333333730697632,
+            0.5
+          ],
+          "raster_top_right": [
+            0.0,
+            1.8333333730697632,
+            1.5
+          ],
+          "raster_bottom_left": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "raster_bottom_right": [
+            0.0,
+            0.0,
+            1.5
+          ]
+        },
+        {
+          "timeline_frame": 0,
+          "raster_top_left": [
+            0.0,
+            1.8333333730697632,
+            0.5
+          ],
+          "raster_top_right": [
+            1.875,
+            1.8333333730697632,
+            1.5
+          ],
+          "raster_bottom_left": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "raster_bottom_right": [
+            1.875,
+            0.0,
+            1.5
+          ]
+        }
+      ],
+      "validation": {
+        "valid": true,
+        "count": 3,
+        "outputs": [
+          {
+            "path": "capture_matte_v001/capture_matte_v001.0001.exr",
+            "size": 390,
+            "sha256": "df1499f7b88093a0675ee50201d658017b55eff209534dcc7b30d333693dcd76",
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 12,
+              "full_x": 0,
+              "full_y": 0,
+              "full_width": 16,
+              "full_height": 12,
+              "pixel_aspect_ratio": 1.0
+            },
+            "precision": "half"
+          },
+          {
+            "path": "capture_matte_v001/capture_matte_v001.0002.exr",
+            "size": 390,
+            "sha256": "df1499f7b88093a0675ee50201d658017b55eff209534dcc7b30d333693dcd76",
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 12,
+              "full_x": 0,
+              "full_y": 0,
+              "full_width": 16,
+              "full_height": 12,
+              "pixel_aspect_ratio": 1.0
+            },
+            "precision": "half"
+          },
+          {
+            "path": "capture_matte_v001/capture_matte_v001.0003.exr",
+            "size": 390,
+            "sha256": "df1499f7b88093a0675ee50201d658017b55eff209534dcc7b30d333693dcd76",
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 12,
+              "full_x": 0,
+              "full_y": 0,
+              "full_width": 16,
+              "full_height": 12,
+              "pixel_aspect_ratio": 1.0
+            },
+            "precision": "half"
+          }
+        ],
+        "geometry": {
+          "x": 0,
+          "y": 0,
+          "width": 16,
+          "height": 12,
+          "full_x": 0,
+          "full_y": 0,
+          "full_width": 16,
+          "full_height": 12,
+          "pixel_aspect_ratio": 1.0
+        },
+        "output_dir": "capture_matte_v001",
+        "backend_manifest": "backend_jobs/e6d25cdd2b024e969008a4657f88b9b6/_shotbox_job.json",
+        "source_snapshot_verified": true,
+        "freshness": "not assessed by backend validation"
+      }
+    },
+    {
+      "range": [
+        0,
+        0
+      ],
+      "attempt": "/tmp/shotbox-bridge-host-wnzq6k3q/range_0_0",
+      "preflight": {
+        "count": 1,
+        "geometry": {
+          "x": 0,
+          "y": 0,
+          "width": 16,
+          "height": 12,
+          "full_x": 0,
+          "full_y": 0,
+          "full_width": 16,
+          "full_height": 12,
+          "pixel_aspect_ratio": 1.0
+        }
+      },
+      "corners": [
+        {
+          "timeline_frame": 0,
+          "raster_top_left": [
+            0.0,
+            1.8333333730697632,
+            0.5
+          ],
+          "raster_top_right": [
+            1.875,
+            1.8333333730697632,
+            1.5
+          ],
+          "raster_bottom_left": [
+            0.0,
+            0.0,
+            0.5
+          ],
+          "raster_bottom_right": [
+            1.875,
+            0.0,
+            1.5
+          ]
+        }
+      ],
+      "validation": {
+        "valid": true,
+        "count": 1,
+        "outputs": [
+          {
+            "path": "capture_matte_v001/capture_matte_v001.0001.exr",
+            "size": 390,
+            "sha256": "df1499f7b88093a0675ee50201d658017b55eff209534dcc7b30d333693dcd76",
+            "geometry": {
+              "x": 0,
+              "y": 0,
+              "width": 16,
+              "height": 12,
+              "full_x": 0,
+              "full_y": 0,
+              "full_width": 16,
+              "full_height": 12,
+              "pixel_aspect_ratio": 1.0
+            },
+            "precision": "half"
+          }
+        ],
+        "geometry": {
+          "x": 0,
+          "y": 0,
+          "width": 16,
+          "height": 12,
+          "full_x": 0,
+          "full_y": 0,
+          "full_width": 16,
+          "full_height": 12,
+          "pixel_aspect_ratio": 1.0
+        },
+        "output_dir": "capture_matte_v001",
+        "backend_manifest": "backend_jobs/9754b29eb1b34d92828556832a03a5c2/_shotbox_job.json",
+        "source_snapshot_verified": true,
+        "freshness": "not assessed by backend validation"
+      }
+    }
+  ],
+  "bridge": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/shotbox_matte/nuke_bridge.py"
+}

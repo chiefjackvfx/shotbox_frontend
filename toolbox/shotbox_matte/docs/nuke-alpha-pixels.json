@@ -1,0 +1,92 @@
+{
+  "inspection": "independent OpenImageIO arrays; every pixel, exact equality",
+  "native_gpu_inference": false,
+  "frames": [
+    {
+      "frame": 1001,
+      "file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v05/bam030_alpha_only_v05.1001.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "alpha_exact": true,
+      "backend_bytes_unchanged": true
+    },
+    {
+      "frame": 1002,
+      "file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v05/bam030_alpha_only_v05.1002.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "alpha_exact": true,
+      "backend_bytes_unchanged": true
+    },
+    {
+      "frame": 1003,
+      "file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v05/bam030_alpha_only_v05.1003.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "alpha_exact": true,
+      "backend_bytes_unchanged": true
+    },
+    {
+      "frame": 1001,
+      "file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v06/bam030_alpha_only_v06.1001.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "alpha_exact": true,
+      "backend_bytes_unchanged": true
+    },
+    {
+      "frame": 1002,
+      "file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v06/bam030_alpha_only_v06.1002.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "alpha_exact": true,
+      "backend_bytes_unchanged": true
+    },
+    {
+      "frame": 1003,
+      "file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v06/bam030_alpha_only_v06.1003.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "alpha_exact": true,
+      "backend_bytes_unchanged": true
+    }
+  ],
+  "status": "passed",
+  "passed": [
+    "all six final images contain exactly one A channel with every pixel equal to the explicit replay fixture",
+    "all final EXR sizes and SHA-256 hashes exactly equal original backend files; no second encode",
+    "GUI and fresh-process standalone Read renders remain alpha-only and pixel-exact",
+    "Group RGB preview equals alpha everywhere in both preview choices, after intermediate cleanup",
+    "legacy RGBA renders remain exact on every channel/pixel"
+  ]
+}

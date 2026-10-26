@@ -1,0 +1,15 @@
+{
+  "status": "passed",
+  "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-readback-network.png",
+  "method": "QScreen.grabWindow(native Nuke window ID)",
+  "nodes": [
+    "ShotBoxMatte_bam030",
+    "Read_bam030_alpha",
+    "UpstreamGrade",
+    "ExistingDownstream",
+    "ExistingTwoSlots",
+    "PrecompReview"
+  ],
+  "script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-readback/shot/nuke/bam030.nk",
+  "exit_code": 0
+}

@@ -1,0 +1,75 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "fixture": "native synthetic source/mattes; no inference",
+  "passed": [
+    "two native publications produce EXR-only version folders, private job cleanup leaves only receipts and previous files remain unchanged",
+    "compact receipt validates after source/matte/backend deletion; native Read, Group, matte-only view and explicit Reload retain original RGB, generated alpha and auxiliary depth",
+    "same-size corruption of a published EXR is rejected by the retained checksum receipt",
+    "save/reopen and explicit farm preflight/render work after cleanup with external interpreter unavailable and no inference imports",
+    "a saved legacy script referring to the removed public integration.json reopens, previews, Reloads and renders through its external alias/receipt with every original final EXR unchanged"
+  ],
+  "status": "passed",
+  "script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/nuke/clean.nk",
+  "versions": [
+    {
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/cache/547012b9-fd6a-44b9-a474-d7427f56fa72/51a6e09b-f5d5-4970-b1e5-ab579b11f0ab/integration.json",
+      "output_directory": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/renders/precomp/clean_subject_v01",
+      "files_sha256": {
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/renders/precomp/clean_subject_v01/clean_subject_v01.1001.exr": "259c304007fb4cb18bfbecca8edf48e98a9ca483c1cc297aec2752365d58e8e7",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/renders/precomp/clean_subject_v01/clean_subject_v01.1002.exr": "98d28028c88cde608408de05daaaa5da5ff16430c620e8acb695cef80fd621bb",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/renders/precomp/clean_subject_v01/clean_subject_v01.1003.exr": "0e76b87e1262ee5031f244c6822c684bc9680eb6deb9478cdda666f76528670e"
+      }
+    },
+    {
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/cache/547012b9-fd6a-44b9-a474-d7427f56fa72/f5e7e240-d412-42b1-b795-baa162b5bbdc/integration.json",
+      "output_directory": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/renders/precomp/clean_subject_v02",
+      "files_sha256": {
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/renders/precomp/clean_subject_v02/clean_subject_v02.1001.exr": "3e549f754526a1d88b5f4e2c603e3e6471fe8000c28f7e4fe4fba956561efb24",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/renders/precomp/clean_subject_v02/clean_subject_v02.1002.exr": "d4ec08dbf4e2af051651d9e6380eceb4d61c7c16ff44ba1451ee4c5a6a6b9eed",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/shot/renders/precomp/clean_subject_v02/clean_subject_v02.1003.exr": "cf78d5c44f0668e879a85ae26c97ce2961e90b3bcb58e3e486556f49b4856102"
+      }
+    }
+  ],
+  "read_render": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/verification/read.%04d.exr",
+  "group_render": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/verification/group.%04d.exr",
+  "legacy_migration": {
+    "legacy_script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/legacy-saved.nk",
+    "old_manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/legacy-project/renders/precomp/legacy_precomp_v01/integration.json",
+    "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/cache/receipts/547012b9-fd6a-44b9-a474-d7427f56fa72/5bf531a4-a8b1-4ba2-8afe-8854765276fa/integration.json",
+    "files_sha256": {
+      "legacy_precomp_v01.1001.exr": "491fa88c8055ae1def92a7a3de9e239ace6a1a23953b3a7b79c8905253647905",
+      "legacy_precomp_v01.1002.exr": "01707f7484b2c7126ca7879eead35c17e56e2107819a51f20a1d05bd766af166",
+      "legacy_precomp_v01.1003.exr": "644a042dfa45ab5ffe1dedc4238727f5d0512218b5d6698e84ed3e5882540f6e"
+    },
+    "migration": {
+      "folder": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/legacy-project/renders/precomp/legacy_precomp_v01",
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp-host/case-3iv53wrk/cache/receipts/547012b9-fd6a-44b9-a474-d7427f56fa72/5bf531a4-a8b1-4ba2-8afe-8854765276fa/integration.json",
+      "removed": [
+        "integration.json",
+        "capture_v001",
+        "backend_jobs",
+        "source_v001",
+        "capture_matte_v001",
+        "worker.json"
+      ],
+      "remaining": [
+        "legacy_precomp_v01.1001.exr",
+        "legacy_precomp_v01.1002.exr",
+        "legacy_precomp_v01.1003.exr"
+      ],
+      "exrs_unchanged": true,
+      "exr_sha256": {
+        "legacy_precomp_v01.1001.exr": "491fa88c8055ae1def92a7a3de9e239ace6a1a23953b3a7b79c8905253647905",
+        "legacy_precomp_v01.1002.exr": "01707f7484b2c7126ca7879eead35c17e56e2107819a51f20a1d05bd766af166",
+        "legacy_precomp_v01.1003.exr": "644a042dfa45ab5ffe1dedc4238727f5d0512218b5d6698e84ed3e5882540f6e"
+      }
+    }
+  }
+}

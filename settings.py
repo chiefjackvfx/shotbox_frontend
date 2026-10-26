@@ -596,6 +596,9 @@ class SettingsPage(QWidget):
         plugins_layout.addRow("Destination:", self.houdini_destination_label)
         plugins_layout.addRow("", self.install_houdini_plugin_btn)
         plugins_layout.addRow("", self.houdini_status_label)
+        from toolbox.shotbox_matte.settings_widget import MatteSettingsWidget
+        self.matte_settings = MatteSettingsWidget()
+        plugins_layout.addRow("Shotbox Matte / Nuke:", self.matte_settings)
         container_layout.addWidget(plugins_group)
         
         # === Debug Modes Section ===

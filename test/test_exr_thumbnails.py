@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import hashlib
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -83,6 +85,78 @@ class EXRThumbnailTests(unittest.TestCase):
             self.path.write_bytes(b"changed")
             exr_preview_proxy.cached_proxy_frame(self.path, directory)
             self.assertEqual(read.call_count, 2)
+            cached_files = list(directory.rglob("*.jpg"))
+            self.assertEqual(len(cached_files), 1)
+            self.assertRegex(cached_files[0].name, r"^plate\.1001_[0-9a-f]{16}\.jpg$")
+            self.assertEqual(cached_files[0].parent, directory / "Other")
+            metadata = json.loads(QImage(str(cached_files[0])).text("shotbox-source"))
+            self.assertEqual(metadata["size"], len(b"changed"))
+
+    def test_proxy_paths_use_only_job_folders_and_unique_names_across_platforms(self):
+        directory = Path(self.temporary.name) / "proxy-cache"
+        targets = []
+        for root in ("/Volumes/projects/PROJECTS", "/mnt/projects/PROJECTS", "Z:/PROJECTS"):
+            source = root + "/C2255_Bamboo_HR/VFX/BAMBOO_HR/bam050/renders/precomp/bam050_DN_v001/bam050_DN_v001_1001.exr"
+            target = exr_preview_proxy.proxy_frame_path(source, directory)
+            self.assertEqual(target.parent, directory / "C2255_Bamboo_HR")
+            self.assertRegex(target.name, r"^bam050_DN_v001_1001_[0-9a-f]{16}\.jpg$")
+            targets.append(target)
+        windows_source = r"Z:\PROJECTS\C2255_Bamboo_HR\VFX\BAMBOO_HR\bam050\renders\precomp\bam050_DN_v001\bam050_DN_v001_1001.exr"
+        targets.append(exr_preview_proxy.proxy_frame_path(windows_source, directory))
+        self.assertEqual(len(set(targets)), 1)
+
+    def test_matching_frame_names_from_jobs_shots_and_sequences_stay_separate(self):
+        directory = Path(self.temporary.name) / "proxy-cache"
+        targets = set()
+        for job, timeline, shot, sequence in (("JobA", "EditA", "sh010", "plate"),
+                                            ("JobB", "EditA", "sh010", "plate"),
+                                            ("JobA", "EditB", "sh010", "plate"),
+                                            ("JobA", "EditA", "sh020", "plate"),
+                                            ("JobA", "EditA", "sh010", "other_plate")):
+            source = Path(self.temporary.name) / "PROJECTS" / job / "VFX" / timeline / shot / "renders" / "precomp" / sequence / "plate.1001.exr"
+            source.parent.mkdir(parents=True)
+            source.touch()
+            with mock.patch.object(exr_thumbnails, "read_thumbnail", return_value=self.image()) as read:
+                exr_preview_proxy.cached_proxy_frame(source, directory)
+                exr_preview_proxy.cached_proxy_frame(source, directory)
+                read.assert_called_once()
+            target = exr_preview_proxy.proxy_frame_path(source, directory)
+            self.assertTrue(target.is_file())
+            self.assertEqual(target.parent, directory / job)
+            targets.add(target)
+        self.assertEqual(len(targets), 5)
+
+    def test_nested_proxy_moves_into_job_folder_without_decoding_exr(self):
+        directory = Path(self.temporary.name) / "proxy-cache"
+        nested = exr_preview_proxy._nested_proxy_frame_path(self.path, directory)
+        with mock.patch.object(exr_preview_proxy, "proxy_frame_path", return_value=nested), \
+             mock.patch.object(exr_thumbnails, "read_thumbnail", return_value=self.image()):
+            exr_preview_proxy.cached_proxy_frame(self.path, directory)
+        self.assertTrue(nested.exists())
+        with mock.patch.object(exr_thumbnails, "read_thumbnail") as decode:
+            image = exr_preview_proxy.cached_proxy_frame(self.path, directory)
+            self.assertFalse(image.isNull())
+            target = exr_preview_proxy.proxy_frame_path(self.path, directory)
+            self.assertTrue(target.exists())
+            self.assertFalse(nested.exists())
+            self.assertEqual(list(target.parent.iterdir()), [target])
+            decode.assert_not_called()
+
+    def test_existing_hashed_proxy_migrates_without_decoding_exr(self):
+        directory = Path(self.temporary.name) / "proxy-cache"
+        directory.mkdir()
+        stat = self.path.stat()
+        signature = f"{self.path}\0{stat.st_mtime_ns}\0{stat.st_size}"
+        legacy = directory / (hashlib.sha256(signature.encode()).hexdigest() + ".jpg")
+        self.image().save(str(legacy), "JPG", 50)
+        with mock.patch.object(exr_thumbnails, "read_thumbnail") as read:
+            image = exr_preview_proxy.cached_proxy_frame(self.path, directory)
+            self.assertFalse(image.isNull())
+            target = exr_preview_proxy.proxy_frame_path(self.path, directory)
+            self.assertTrue(target.exists())
+            self.assertFalse(legacy.exists())
+            exr_preview_proxy.cached_proxy_frame(self.path, directory)
+            read.assert_not_called()
 
     def test_cache_clear_waits_for_cancelled_proxy_writes_before_deleting(self):
         import app_cache
@@ -118,7 +192,7 @@ class EXRThumbnailTests(unittest.TestCase):
             self.wait_for(lambda: bool(results))
             self.loader.finish_cache_clear()
             self.assertEqual(results[0]["errors"], [])
-            self.assertEqual(list(root.iterdir()), [])
+            self.assertEqual([path for path in root.iterdir() if path.name != ".lease.lock"], [])
             self.assertFalse(self.loader._proxies.suspended)
             ready.assert_not_called()
             self.assertTrue(label.pixmap().isNull())
@@ -133,12 +207,13 @@ class EXRThumbnailTests(unittest.TestCase):
     def test_disk_proxy_cache_removes_oldest_files_to_stay_bounded(self):
         directory = Path(self.temporary.name) / "proxy-cache"
         directory.mkdir()
-        paths = [directory / f"{index}.jpg" for index in range(3)]
+        paths = [directory / f"Job{index}" / "shot" / f"{index}.jpg" for index in range(3)]
         for index, path in enumerate(paths):
+            path.parent.mkdir(parents=True)
             path.write_bytes(b"0123456789")
             os.utime(path, ns=(index + 1, index + 1))
         exr_preview_proxy.prune_proxy_cache(directory, max_bytes=15)
-        self.assertEqual(list(directory.glob("*.jpg")), paths[-1:])
+        self.assertEqual(list(directory.rglob("*.jpg")), paths[-1:])
 
     def test_long_sequence_proxy_samples_frames_and_preserves_source_duration(self):
         frames = tuple(f"plate.{index}.exr" for index in range(1001))

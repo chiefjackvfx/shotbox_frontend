@@ -1076,6 +1076,20 @@ class MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Persist UI state and stop worker threads when closing the application."""
+        toolbox = getattr(self, "page_toolbox", None)
+        matte_settings = getattr(getattr(self, "page_settings", None), "matte_settings", None)
+        if matte_settings is not None and matte_settings.is_busy():
+            QtWidgets.QMessageBox.information(self, "Matte setup is running",
+                "Wait for Matte runtime preparation to finish before closing Shotbox.")
+            event.ignore()
+            return
+        if toolbox is not None and toolbox.has_busy_tools():
+            QtWidgets.QMessageBox.information(self, "Matte is busy",
+                "Finish or cancel Matte's active work before closing Shotbox.")
+            event.ignore()
+            return
+        if toolbox is not None:
+            toolbox.close_tools()
         process = getattr(self, "_automatic_update_process", None)
         if process is not None and process.state() != QProcess.ProcessState.NotRunning:
             self._automatic_update_check_finished = True

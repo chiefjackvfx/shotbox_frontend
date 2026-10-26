@@ -1,0 +1,83 @@
+{
+  "ok": true,
+  "verified_at": "2026-10-21T15:34:50.054386+00:00",
+  "app_version": "0.1.0",
+  "build_id": "18c814bd87ed",
+  "source_sha256": "18c814bd87ed1025ed7641ed0795b5ddd07cc408698be34d8e57c419c14eb54b",
+  "source_files": {
+    "shotbox_matte/__init__.py": "e69c752c4e033defcdb9c7a2a60565690574ab0f690ed009b774e47e7892fca7",
+    "shotbox_matte/__main__.py": "307299fda7b77d22c64cb51430ec75e5f59d78e9c948786afb3b2544fe45e4b7",
+    "shotbox_matte/_windows.py": "83ee1363f395a20147131e315be9fda66b4241dca77750bae9ac25136c0598e0",
+    "shotbox_matte/batch.py": "5e03f979bf055368894b89f45beb9ef0b684ee63c161d6bfdd1b9ab3c583ae4a",
+    "shotbox_matte/build_info.py": "371d3e6326890d4bedb90a6ad037c44969c98f8a25d3fc655e2fac9d14e18052",
+    "shotbox_matte/cli.py": "323a59a09b9a42c38147a23c01ea8e0ffb853e71086c08136b8c633f6e41d4de",
+    "shotbox_matte/core.py": "3361d7b218ea63992a64a83bbc895a124aef321b52eccc6e203ef42b79f6272e",
+    "shotbox_matte/diagnostics.py": "539df2483739f115892b48ad8b18094b877db6185570c465cb9c7109fd4d288b",
+    "shotbox_matte/export.py": "79c14cd65f31a741c99d75038ad49438d13eda0a4d64a8e00b8ed33aabef3887",
+    "shotbox_matte/gui.py": "011f533a5129833b957ab089d01ae865d724d778b2c3451c23890f379355c505",
+    "shotbox_matte/imaging.py": "2af86f8eaba9527ba92468ed3cb253770042bb54f46d50bd59871752549c9cd0",
+    "shotbox_matte/media.py": "6be7fb8c787fe6b94f5827af68dcbf48e7222430f14877cf03e23f2a6487e727",
+    "shotbox_matte/models.py": "2c7454b8b5ee5be183fd48fe48d19681cd34456367704fdc1ee254143f799324",
+    "shotbox_matte/native.py": "464d129e168647e37d1fdd7f6fe5dc06724f7dc70a695b8fdd4697cc3a5d5388",
+    "shotbox_matte/presets.py": "a9c21f98d9ad7524860bffb120bd190b1b3e26dc9476d0f16f54e94b7b7f4ceb",
+    "shotbox_matte/qc_preview.py": "9b2238ea129070da392bbaedb57b2ab93c571ab9a0f537ae24fabc9a1844a27b",
+    "shotbox_matte/queueing.py": "3b762335dd7378954fcf8431abc74822363b71b361b9da124be0a523352df880",
+    "shotbox_matte/sequences.py": "e05b5d2f18b326e58537739c71740dae179c3b3be3fd617d2b8f8fa507803cc7",
+    "shotbox_matte/timing.py": "d085b35ac3563058355a18d2741d3488503eb9675b21e934bd1cad08806cb3d9",
+    "windows_bootstrap.py": "bb173a84897f5b1d97d68d977e386c1196d51945984b1268e7bec981db000669"
+  },
+  "host": "linux",
+  "windows_execution_tested": false,
+  "inference_repeated": false,
+  "tests_passed": 214,
+  "subtests_passed": 13,
+  "suite_seconds": 12.42,
+  "checks": {
+    "ruff": "passed",
+    "compileall": "passed",
+    "actual_queue_viewport_mixed_drop": "passed",
+    "bulk_add_without_single_shot": "passed",
+    "source_error_preserves_valid_peers": "passed",
+    "pending_source_deduplication": "passed",
+    "packaged_backend_dry_runs": "passed"
+  },
+  "packaged_ui": {
+    "queued_count": 4,
+    "source_types": [
+      "video",
+      "video",
+      "sequence",
+      "sequence"
+    ],
+    "selected_counts": [
+      8,
+      12,
+      4,
+      20
+    ],
+    "padded_counts": [
+      9,
+      17,
+      9,
+      25
+    ],
+    "input_path_empty": true,
+    "no_worker_started": true,
+    "primary_action": "Start batch",
+    "source_code": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/dist/ShotBoxMatte-Windows/shotbox_matte/gui.py"
+  },
+  "update_zip": {
+    "path": "dist/ShotBoxMatte-Windows-update.zip",
+    "bytes": 110262,
+    "sha256": "ca30c2f1d59ad7e7d129d281e395eda09f7f72b31fe8ad998d6957bdeb69bdc1"
+  },
+  "packaging_audit": "test-runs/batch-windows-update-validation.json",
+  "screenshots": [
+    "docs/batch-ui-1290x940.png",
+    "docs/batch-ui-960x730.png"
+  ],
+  "limitations": [
+    "New Windows build not executed on Windows here.",
+    "Synthetic and supplied source files inspected without new GPU inference."
+  ]
+}

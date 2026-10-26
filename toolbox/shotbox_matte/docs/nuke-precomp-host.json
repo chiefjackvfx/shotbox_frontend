@@ -1,0 +1,371 @@
+{
+  "status": "passed",
+  "fixture": "synthetic host mattes, no inference",
+  "cases": [
+    {
+      "range": [
+        1001,
+        1003
+      ],
+      "bounds": [
+        0,
+        0,
+        16,
+        12
+      ],
+      "result": {
+        "pattern": "precomp_v01.%04d.exr",
+        "first": 1001,
+        "last": 1003,
+        "files": [
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              0,
+              0,
+              16,
+              12
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.1001.exr",
+            "size": 1359,
+            "sha256": "3ce3d6691d64734baac3be23e7b300c9d1346997c70d8beb3cc21c9d74047d0f"
+          },
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              0,
+              0,
+              16,
+              12
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.1002.exr",
+            "size": 1383,
+            "sha256": "7a6721641ae79dcd938d989ac3f3d57822a51d0c733f6e3cd4990523f3080a8a"
+          },
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              0,
+              0,
+              16,
+              12
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.1003.exr",
+            "size": 1383,
+            "sha256": "758c30c21c7733dc8a476a63f71e92fe0cfb6b95dd23447a4a8e36b1313cd2cd"
+          }
+        ],
+        "channels": [
+          "precompaux.depth",
+          "rgba.alpha",
+          "rgba.blue",
+          "rgba.green",
+          "rgba.red"
+        ],
+        "precision": "float",
+        "state": "complete"
+      }
+    },
+    {
+      "range": [
+        -2,
+        0
+      ],
+      "bounds": [
+        3,
+        2,
+        12,
+        10
+      ],
+      "result": {
+        "pattern": "precomp_v01.%04d.exr",
+        "first": -2,
+        "last": 0,
+        "files": [
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              2,
+              1,
+              13,
+              11
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.-002.exr",
+            "size": 1079,
+            "sha256": "76894dbf8c78808988b04a3327b44446b6316d3a5a1795f4d63da7737e9f935e"
+          },
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              2,
+              1,
+              13,
+              11
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.-001.exr",
+            "size": 1071,
+            "sha256": "08c0a74e6b0d48cb29fc4018f725305db2fb620c4e2256cc97263ed62c337b1d"
+          },
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              2,
+              1,
+              13,
+              11
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.0000.exr",
+            "size": 1087,
+            "sha256": "8b1eaa071d2be8f0079ff24658b255e7adf44bae34ff720bae99ed659a3420f2"
+          }
+        ],
+        "channels": [
+          "precompaux.depth",
+          "rgba.alpha",
+          "rgba.blue",
+          "rgba.green",
+          "rgba.red"
+        ],
+        "precision": "float",
+        "state": "complete"
+      }
+    },
+    {
+      "range": [
+        0,
+        1
+      ],
+      "bounds": [
+        -3,
+        -2,
+        20,
+        15
+      ],
+      "result": {
+        "pattern": "precomp_v01.%04d.exr",
+        "first": 0,
+        "last": 1,
+        "files": [
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              -4,
+              -3,
+              21,
+              16
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.0000.exr",
+            "size": 1760,
+            "sha256": "914118702238d51d52b3bc6eb85c1ea83e2b23dc48bcf9ceb896805f1671a2cb"
+          },
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              -4,
+              -3,
+              21,
+              16
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.0001.exr",
+            "size": 1760,
+            "sha256": "cfc314212e482c742e718580d61a8d7006515823b321075f9bd3459d8b7cad66"
+          }
+        ],
+        "channels": [
+          "precompaux.depth",
+          "rgba.alpha",
+          "rgba.blue",
+          "rgba.green",
+          "rgba.red"
+        ],
+        "precision": "float",
+        "state": "complete"
+      }
+    },
+    {
+      "range": [
+        7,
+        9
+      ],
+      "bounds": [
+        3,
+        2,
+        12,
+        10
+      ],
+      "result": {
+        "pattern": "precomp_v01.%04d.exr",
+        "first": 7,
+        "last": 9,
+        "files": [
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              2,
+              1,
+              13,
+              11
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.0007.exr",
+            "size": 1079,
+            "sha256": "0658e285a3050525a0047b8da3a867b622a7fa47b6669ed60e9e6289d691d2b2"
+          },
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              3,
+              1,
+              13,
+              11
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.0008.exr",
+            "size": 1079,
+            "sha256": "cb3640cc332d3b515bbe6f19b1dfb2bf548fcbdf8ca8335bd44a982ca876e1b0"
+          },
+          {
+            "geometry": {
+              "width": 16,
+              "height": 12
+            },
+            "box": [
+              4,
+              1,
+              13,
+              11
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "precompaux.depth",
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red"
+            ],
+            "path": "precomp_v01.0009.exr",
+            "size": 1079,
+            "sha256": "59ed119680177bfe69bf2821caddda021a26902b498ca151e3baa53ca1732e03"
+          }
+        ],
+        "channels": [
+          "precompaux.depth",
+          "rgba.alpha",
+          "rgba.blue",
+          "rgba.green",
+          "rgba.red"
+        ],
+        "precision": "float",
+        "state": "complete"
+      }
+    }
+  ]
+}

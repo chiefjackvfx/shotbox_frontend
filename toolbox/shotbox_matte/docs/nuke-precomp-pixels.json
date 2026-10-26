@@ -1,0 +1,146 @@
+{
+  "inspection": "OpenImageIO float pixel arrays; exact equality, every pixel",
+  "frames": [
+    {
+      "frame": 1001,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/bam030_alpha_v04.1001.exr",
+      "matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/capture_matte_v001/capture_matte_v001.0001.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1001.exr",
+      "rendered": null,
+      "gui_rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/first/precomp.1001.exr",
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ],
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true
+    },
+    {
+      "frame": 1002,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/bam030_alpha_v04.1002.exr",
+      "matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/capture_matte_v001/capture_matte_v001.0002.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1002.exr",
+      "rendered": null,
+      "gui_rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/first/precomp.1002.exr",
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ],
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true
+    },
+    {
+      "frame": 1003,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/bam030_alpha_v04.1003.exr",
+      "matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/capture_matte_v001/capture_matte_v001.0003.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1003.exr",
+      "rendered": null,
+      "gui_rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/first/precomp.1003.exr",
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ],
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true
+    },
+    {
+      "frame": 1001,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/bam030_alpha_v05.1001.exr",
+      "matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0001.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1001.exr",
+      "rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/nuke/cached-render/verify.1001.exr",
+      "gui_rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/regenerate/precomp.1001.exr",
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ],
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true
+    },
+    {
+      "frame": 1002,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/bam030_alpha_v05.1002.exr",
+      "matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0002.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1002.exr",
+      "rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/nuke/cached-render/verify.1002.exr",
+      "gui_rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/regenerate/precomp.1002.exr",
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ],
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true
+    },
+    {
+      "frame": 1003,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/bam030_alpha_v05.1003.exr",
+      "matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0003.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1003.exr",
+      "rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/nuke/cached-render/verify.1003.exr",
+      "gui_rendered": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/regenerate/precomp.1003.exr",
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ],
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true
+    }
+  ],
+  "status": "passed",
+  "passed": [
+    "every RGB pixel of both generated versions is bit exact to source ACEScg EXR",
+    "every alpha pixel is bit exact to corresponding native backend matte red",
+    "auxiliary channel preserved at42 over every pixel",
+    "actual GUI Write output exactly matches published precomp on every frame",
+    "upstream grade changes preserve frozen precomp; bypass renders changed live RGB and preserves source alpha",
+    "every channel/pixel in fresh cached farm render is bit exact to published final version"
+  ]
+}

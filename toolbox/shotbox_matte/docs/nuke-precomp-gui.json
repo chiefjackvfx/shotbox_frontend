@@ -1,0 +1,529 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "platform": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+  "gui": true,
+  "fixture": "actual ACEScg user footage with auxiliary channel; real native GPU and actual Nuke GUI",
+  "native_gpu_inference": true,
+  "cache_root": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp",
+  "passed": [
+    "new node passes live original input including alpha and auxiliary channel before Generate",
+    "first: native GPU complete automatically switches to full RGBA/auxiliary precomp Read in project renders/precomp version folder",
+    "first: actual GUI Write renders full selected range, frozen precomp after upstream edit, and live bypass for independent every-pixel inspection",
+    "regenerate: native GPU complete automatically switches to full RGBA/auxiliary precomp Read in project renders/precomp version folder",
+    "regenerate: actual GUI Write renders full selected range, frozen precomp after upstream edit, and live bypass for independent every-pixel inspection",
+    "regeneration allocates a distinct next version and preserves all prior EXR byte hashes"
+  ],
+  "attempts": [],
+  "processes": [
+    {
+      "terminal": "probe",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "probe",
+        "--request",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/runtime.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04",
+      "pid": 1790068
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/worker.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04",
+      "pid": 1790222
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "-m",
+        "shotbox_matte",
+        "--worker",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/worker.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04",
+      "pid": 1790413
+    },
+    {
+      "terminal": "validation",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "validate",
+        "--attempt",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/integration.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04",
+      "pid": 1792259
+    },
+    {
+      "terminal": "probe",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "probe",
+        "--request",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/runtime.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05",
+      "pid": 1794359
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/worker.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05",
+      "pid": 1795323
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "-m",
+        "shotbox_matte",
+        "--worker",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/worker.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05",
+      "pid": 1795653
+    },
+    {
+      "terminal": "validation",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "validate",
+        "--attempt",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/integration.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05",
+      "pid": 1797366
+    }
+  ],
+  "stage_events": [
+    {
+      "attempt": "59a081b7-653b-44ed-9822-9b3e28a9fc87",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "59a081b7-653b-44ed-9822-9b3e28a9fc87",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "59a081b7-653b-44ed-9822-9b3e28a9fc87",
+      "stage": "generating"
+    },
+    {
+      "attempt": "59a081b7-653b-44ed-9822-9b3e28a9fc87",
+      "stage": "validating"
+    },
+    {
+      "attempt": "1f5e5640-c198-4725-ad40-98d9e290135c",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "1f5e5640-c198-4725-ad40-98d9e290135c",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "1f5e5640-c198-4725-ad40-98d9e290135c",
+      "stage": "generating"
+    },
+    {
+      "attempt": "1f5e5640-c198-4725-ad40-98d9e290135c",
+      "stage": "validating"
+    }
+  ],
+  "source_directory": "/home/gambit/Desktop/-----------/bam030_DN_v001",
+  "source_pattern": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_%04d.exr",
+  "source_color": "acescg",
+  "range": [
+    1001,
+    1003
+  ],
+  "source_dimensions": [
+    4096,
+    2850
+  ],
+  "review_script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/nuke/bam030.nk",
+  "published_versions": [
+    {
+      "manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/integration.json",
+      "precomp": {
+        "pattern": "bam030_alpha_v04.%04d.exr",
+        "first": 1001,
+        "last": 1003,
+        "files": [
+          {
+            "geometry": {
+              "width": 4096,
+              "height": 2850
+            },
+            "box": [
+              0,
+              0,
+              4096,
+              2850
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red",
+              "shotboxAux.value"
+            ],
+            "path": "bam030_alpha_v04.1001.exr",
+            "size": 76150916,
+            "sha256": "8acc28d90a89ad657d5eddc64c186a639576d3555c3f7c6c5aafbee1618107e8"
+          },
+          {
+            "geometry": {
+              "width": 4096,
+              "height": 2850
+            },
+            "box": [
+              0,
+              0,
+              4096,
+              2850
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red",
+              "shotboxAux.value"
+            ],
+            "path": "bam030_alpha_v04.1002.exr",
+            "size": 78227558,
+            "sha256": "f9b484cfc40aa14bdf088671d2392d594d8d0f737a339520999b600f42f18435"
+          },
+          {
+            "geometry": {
+              "width": 4096,
+              "height": 2850
+            },
+            "box": [
+              0,
+              0,
+              4096,
+              2850
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red",
+              "shotboxAux.value"
+            ],
+            "path": "bam030_alpha_v04.1003.exr",
+            "size": 78935473,
+            "sha256": "a3dee5fd0122472518082ecf31f1f257c1def26cc1ccfb82d96dd411ab5b0a0a"
+          }
+        ],
+        "channels": [
+          "rgba.alpha",
+          "rgba.blue",
+          "rgba.green",
+          "rgba.red",
+          "shotboxAux.value"
+        ],
+        "precision": "float",
+        "state": "complete"
+      },
+      "files_sha256": {
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/bam030_alpha_v04.1001.exr": "8acc28d90a89ad657d5eddc64c186a639576d3555c3f7c6c5aafbee1618107e8",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/bam030_alpha_v04.1002.exr": "f9b484cfc40aa14bdf088671d2392d594d8d0f737a339520999b600f42f18435",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v04/bam030_alpha_v04.1003.exr": "a3dee5fd0122472518082ecf31f1f257c1def26cc1ccfb82d96dd411ab5b0a0a"
+      },
+      "rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/first/precomp.%04d.exr",
+      "frozen_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/first/frozen.%04d.exr",
+      "bypass_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/first/bypass.%04d.exr"
+    },
+    {
+      "manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/integration.json",
+      "precomp": {
+        "pattern": "bam030_alpha_v05.%04d.exr",
+        "first": 1001,
+        "last": 1003,
+        "files": [
+          {
+            "geometry": {
+              "width": 4096,
+              "height": 2850
+            },
+            "box": [
+              0,
+              0,
+              4096,
+              2850
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red",
+              "shotboxAux.value"
+            ],
+            "path": "bam030_alpha_v05.1001.exr",
+            "size": 76150916,
+            "sha256": "6ec21512e3a81fd0f219c5ab4ecce30cbdc76500d6f7980107ff0c1665f943a6"
+          },
+          {
+            "geometry": {
+              "width": 4096,
+              "height": 2850
+            },
+            "box": [
+              0,
+              0,
+              4096,
+              2850
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red",
+              "shotboxAux.value"
+            ],
+            "path": "bam030_alpha_v05.1002.exr",
+            "size": 78227558,
+            "sha256": "b80e1b82c18f320aba93b39a7662cc2d55f79232bf9a3ef511f37c3d3b217931"
+          },
+          {
+            "geometry": {
+              "width": 4096,
+              "height": 2850
+            },
+            "box": [
+              0,
+              0,
+              4096,
+              2850
+            ],
+            "pixel_aspect": 1.0,
+            "channels": [
+              "rgba.alpha",
+              "rgba.blue",
+              "rgba.green",
+              "rgba.red",
+              "shotboxAux.value"
+            ],
+            "path": "bam030_alpha_v05.1003.exr",
+            "size": 78935473,
+            "sha256": "bbe559b88d33571d79a2b2cb2b393596f138dce86795537ea5de8839127c4367"
+          }
+        ],
+        "channels": [
+          "rgba.alpha",
+          "rgba.blue",
+          "rgba.green",
+          "rgba.red",
+          "shotboxAux.value"
+        ],
+        "precision": "float",
+        "state": "complete"
+      },
+      "files_sha256": {
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/bam030_alpha_v05.1001.exr": "6ec21512e3a81fd0f219c5ab4ecce30cbdc76500d6f7980107ff0c1665f943a6",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/bam030_alpha_v05.1002.exr": "b80e1b82c18f320aba93b39a7662cc2d55f79232bf9a3ef511f37c3d3b217931",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/bam030_alpha_v05.1003.exr": "bbe559b88d33571d79a2b2cb2b393596f138dce86795537ea5de8839127c4367"
+      },
+      "rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/regenerate/precomp.%04d.exr",
+      "frozen_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/regenerate/frozen.%04d.exr",
+      "bypass_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/acceptance/regenerate/bypass.%04d.exr"
+    }
+  ],
+  "quality": "Technical workflow acceptance; no production matte quality claim",
+  "probe": {
+    "ready": true,
+    "errors": [],
+    "python": {
+      "executable": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/.venv/bin/python",
+      "version": "3.12.13 (main, Jul 10 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]",
+      "platform": "linux"
+    },
+    "dependencies": {
+      "numpy": {
+        "version": "2.5.4",
+        "available": true
+      },
+      "Pillow": {
+        "version": "12.3.0",
+        "available": true
+      },
+      "OpenImageIO": {
+        "version": "3.2.1.3",
+        "available": true
+      },
+      "av": {
+        "version": "19.0.2",
+        "available": true
+      },
+      "torch": {
+        "version": "2.11.0+cu130",
+        "available": true
+      },
+      "ltx-core": {
+        "version": "1.5.0",
+        "available": true
+      },
+      "ltx-pipelines": {
+        "version": "1.5.0",
+        "available": true
+      }
+    },
+    "models": {
+      "transformer": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+      "text_encoder": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+      "video_vae": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/vae/ltx-2.5-video-vae-bf16.safetensors",
+      "audio_vae": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/vae/ltx-2.5-audio-vae-bf16.safetensors",
+      "spatial_upsampler": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+      "alpha_lora": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/loras/ltx-2.5-22b-ic-lora-alpha-gen-0.9.safetensors"
+    },
+    "model_identities": {
+      "transformer": {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+        "size": 42018190584,
+        "mtime_ns": 1792589411856667236,
+        "identity_method": "path-size-mtime_ns; header validation; no full checksum"
+      },
+      "text_encoder": {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+        "size": 26263858182,
+        "mtime_ns": 1792589459762790746,
+        "identity_method": "path-size-mtime_ns; header validation; no full checksum"
+      },
+      "video_vae": {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/vae/ltx-2.5-video-vae-bf16.safetensors",
+        "size": 1472223346,
+        "mtime_ns": 1792589482384849069,
+        "identity_method": "path-size-mtime_ns; header validation; no full checksum"
+      },
+      "audio_vae": {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/vae/ltx-2.5-audio-vae-bf16.safetensors",
+        "size": 364866540,
+        "mtime_ns": 1792589483741852568,
+        "identity_method": "path-size-mtime_ns; header validation; no full checksum"
+      },
+      "spatial_upsampler": {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors",
+        "size": 995778752,
+        "mtime_ns": 1792589485210856355,
+        "identity_method": "path-size-mtime_ns; header validation; no full checksum"
+      },
+      "alpha_lora": {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models/loras/ltx-2.5-22b-ic-lora-alpha-gen-0.9.safetensors",
+        "size": 1308787472,
+        "mtime_ns": 1792589486893860694,
+        "identity_method": "path-size-mtime_ns; header validation; no full checksum"
+      }
+    },
+    "model_validation": {
+      "valid": true,
+      "errors": []
+    },
+    "cuda": {
+      "available": true,
+      "bf16": true,
+      "torch_cuda": "13.0",
+      "devices": [
+        {
+          "index": 0,
+          "name": "NVIDIA GeForce RTX 5090",
+          "total_memory": 33668202496
+        }
+      ]
+    },
+    "backend": {
+      "app_version": "0.1.0",
+      "build_id": "2d3b2a12b7a2",
+      "source_sha256": "2d3b2a12b7a2ac8a059b7173b8fd7161347e272e309f0c046a1285cc2e2af091",
+      "source_files": {
+        "shotbox_matte/__init__.py": "e69c752c4e033defcdb9c7a2a60565690574ab0f690ed009b774e47e7892fca7",
+        "shotbox_matte/__main__.py": "307299fda7b77d22c64cb51430ec75e5f59d78e9c948786afb3b2544fe45e4b7",
+        "shotbox_matte/_windows.py": "83ee1363f395a20147131e315be9fda66b4241dca77750bae9ac25136c0598e0",
+        "shotbox_matte/batch.py": "72f0cb8225207175e59ed3ddf8fa769c0fdd4737eb7c48f49bd6a85b4069b9c8",
+        "shotbox_matte/build_info.py": "371d3e6326890d4bedb90a6ad037c44969c98f8a25d3fc655e2fac9d14e18052",
+        "shotbox_matte/cli.py": "78e0d921ce5a84e7926a5f434aed9774accc43313efbad21f6074de02cdca3f6",
+        "shotbox_matte/core.py": "c29fc825348a129201774664c60ff981f4eebafd2387f1b53bed731c9fcd4a24",
+        "shotbox_matte/diagnostics.py": "539df2483739f115892b48ad8b18094b877db6185570c465cb9c7109fd4d288b",
+        "shotbox_matte/export.py": "79c14cd65f31a741c99d75038ad49438d13eda0a4d64a8e00b8ed33aabef3887",
+        "shotbox_matte/gui.py": "e9bc007192f6894d1d3feeecb7b4eefed971ac03c30667f30ee036fde80c5fe1",
+        "shotbox_matte/imaging.py": "2af86f8eaba9527ba92468ed3cb253770042bb54f46d50bd59871752549c9cd0",
+        "shotbox_matte/media.py": "cc7a826a2bf56c67d6f6bd4d6bd5eec777c1f1b80fbb3115844f7c78285de05e",
+        "shotbox_matte/models.py": "2c7454b8b5ee5be183fd48fe48d19681cd34456367704fdc1ee254143f799324",
+        "shotbox_matte/native.py": "9b6161ceb75aabfd5ebda20e36fd3de5fec54816776936deb3ebea00569e912a",
+        "shotbox_matte/nuke_bridge.py": "e02824dc43f77fc8bb2211b27088085427fe32a3f5c9b306644ff59cea2e3cb7",
+        "shotbox_matte/presets.py": "b5fe3f3b9b39a75c4b6794595abf56b03a4dba0be249d8b287d28f5c27cd815b",
+        "shotbox_matte/qc_preview.py": "9b2238ea129070da392bbaedb57b2ab93c571ab9a0f537ae24fabc9a1844a27b",
+        "shotbox_matte/queueing.py": "3b762335dd7378954fcf8431abc74822363b71b361b9da124be0a523352df880",
+        "shotbox_matte/sequences.py": "3f71e19284cf63c4c409bbd50303ae6b328e831e76cdc6e2f15323bb4b1297c9",
+        "shotbox_matte/temporal.py": "41f54af156c406ad36d1a90d7ef695f29cdc8f109e7365b4c15ace7b05e74123",
+        "shotbox_matte/timing.py": "0a9b2fbcc041b68e91023d2a34cade98d4656fcadd7c2272475094f11919f1d6",
+        "windows_bootstrap.py": "bb173a84897f5b1d97d68d977e386c1196d51945984b1268e7bec981db000669"
+      }
+    },
+    "ltx_revision": "e98f6d927d83c92ef2be6aec76c8440b19306e39",
+    "disk": {
+      "root": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05",
+      "free": 875393187840,
+      "total": 3992392294400,
+      "writable": true,
+      "estimated_required_bytes": 2951184384
+    }
+  },
+  "worker_result": {
+    "output_dir": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001",
+    "frame_count": 3,
+    "first_source": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_v001/capture.0001.exr",
+    "first_output": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0001.exr",
+    "source_preview": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/backend_jobs/d87bd9dc7015445db0cc7fde3b73701e/_shotbox_source.png",
+    "matte_preview": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/backend_jobs/d87bd9dc7015445db0cc7fde3b73701e/_shotbox_matte.png",
+    "manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/backend_jobs/d87bd9dc7015445db0cc7fde3b73701e/_shotbox_job.json",
+    "job_dir": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/backend_jobs/d87bd9dc7015445db0cc7fde3b73701e",
+    "status": "complete"
+  },
+  "generation": {
+    "source_width": 4096,
+    "source_height": 2850,
+    "resized_width": 552,
+    "resized_height": 384,
+    "width": 576,
+    "height": 384,
+    "left": 12,
+    "top": 0
+  },
+  "status": "passed",
+  "elapsed_seconds": 92.336,
+  "launcher": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "exit_code": 0,
+    "elapsed_seconds": 104.711,
+    "startup": "temporary NUKE_PATH/menu.py with PySide6 QTimer",
+    "previous_failed_report": "/tmp/shotbox-gui-failed-40f3zhs_.json"
+  }
+}

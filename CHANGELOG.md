@@ -6,6 +6,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-26T14:01:56+00:00] Added cached Matte export and cross-volume recovery regressions.
+- [2026-10-26T13:23:54+00:00] Added Linux GPU and Nuke integration verification report.
+- [2026-10-26T13:12:00+00:00] Added owned Matte pop-out with isolated GPU worker configuration.
+- [2026-10-26T13:12:00+00:00] Added Shotbox-managed Nuke installation and shared model settings.
+- [2026-10-26T13:12:00+00:00] Added cross-process cache protection and integration regression coverage.
 - [2026-10-26T10:55:14+00:00] Added Precomp folder menus with open and copy actions.
 - [2026-10-26T11:14:58+00:00] Added Assets-style corner menu arrow to Precomp.
 - [2026-10-26T11:17:30+00:00] Added Roto placeholder for Precomp folders containing EXR sequences.
@@ -19,9 +24,11 @@ All notable frontend publish changes should be documented in this file.
 - [2026-10-26T12:21:38+00:00] Added cache clearing, running task protection, and Settings regression coverage.
 - [2026-10-26T12:29:20+00:00] Added Settings button opening the frontend cache folder.
 - [2026-10-26T12:40:07+00:00] Added centred loading spinner to Precomp EXR preview panels.
+- [2026-10-26T13:52:45+00:00] Added proxy naming, migration, invalidation, and nested cleanup regressions.
 
 ### Changed
 
+- [2026-10-26T14:14:05+00:00] Defaulted Matte exports to Version up on every launch.
 - [2026-10-26T11:40:53+00:00] Shared EXR pixel decoding between playback and menu previews.
 - [2026-10-26T12:10:57+00:00] Used small local proxies for realtime Precomp preview playback.
 - [2026-10-26T12:10:57+00:00] Bounded preview caches and released closed menu playback images.
@@ -31,9 +38,12 @@ All notable frontend publish changes should be documented in this file.
 - [2026-10-26T12:27:49+00:00] Reduced Precomp previews to 10fps with fewer proxy frames.
 - [2026-10-26T12:27:49+00:00] Updated preview sampling and timing regressions for 10fps playback.
 - [2026-10-26T12:40:07+00:00] Updated preview regressions to verify spinner loading and cleanup.
+- [2026-10-26T13:52:45+00:00] Flattened Precomp JPEG caches into job folders with unique suffixes.
+- [2026-10-26T13:52:45+00:00] Preserved existing proxy caches through automatic filename migration.
 
 ### Fixed
 
+- [2026-10-26T14:01:56+00:00] Kept Toolbox Matte staging, backups and locks inside .cache.
 - [2026-10-26T11:15:51+00:00] Restored Assets left-click opening folders; retained right-click matchmove options.
 - [2026-10-26T11:52:13+00:00] Recognized mixed EXR versions and incomplete sequences for previews.
 

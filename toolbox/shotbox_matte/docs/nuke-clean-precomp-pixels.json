@@ -1,0 +1,133 @@
+{
+  "inspection": "independent OpenImageIO arrays; exact equality, every pixel/channel",
+  "frames": [
+    {
+      "frame": 1001,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/renders/precomp/bam030_clean_v01/bam030_clean_v01.1001.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1001.exr",
+      "expected_replay_source_matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0001.exr",
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true,
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ]
+    },
+    {
+      "frame": 1002,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/renders/precomp/bam030_clean_v01/bam030_clean_v01.1002.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1002.exr",
+      "expected_replay_source_matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0002.exr",
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true,
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ]
+    },
+    {
+      "frame": 1003,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/renders/precomp/bam030_clean_v01/bam030_clean_v01.1003.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1003.exr",
+      "expected_replay_source_matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0003.exr",
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true,
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ]
+    },
+    {
+      "frame": 1001,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/renders/precomp/bam030_clean_v02/bam030_clean_v02.1001.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1001.exr",
+      "expected_replay_source_matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0001.exr",
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true,
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ]
+    },
+    {
+      "frame": 1002,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/renders/precomp/bam030_clean_v02/bam030_clean_v02.1002.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1002.exr",
+      "expected_replay_source_matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0002.exr",
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true,
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ]
+    },
+    {
+      "frame": 1003,
+      "precomp": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/renders/precomp/bam030_clean_v02/bam030_clean_v02.1003.exr",
+      "source": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_1003.exr",
+      "expected_replay_source_matte": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0003.exr",
+      "rgb_exact": true,
+      "alpha_exact": true,
+      "auxiliary_exact": true,
+      "dimensions": [
+        4096,
+        2850
+      ],
+      "channels": [
+        "R",
+        "G",
+        "B",
+        "A",
+        "shotboxAux.value"
+      ]
+    }
+  ],
+  "status": "passed",
+  "passed": [
+    "every RGB pixel in both clean versions exactly matches original ACEScg source",
+    "every alpha pixel exactly matches the explicitly replayed/resampled native-matte fixture",
+    "auxiliary channel preserved at 42 everywhere",
+    "actual GUI Read/Group renders exactly match final precomp after intermediate deletion",
+    "fresh headless Read/Group renders and matte-only views match every pixel after cleanup"
+  ]
+}

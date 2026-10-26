@@ -1,0 +1,160 @@
+{
+  "verified_at": "2026-10-21T13:40:14+01:00",
+  "status": "complete",
+  "input_dir": "/home/gambit/Desktop/-----------/bed030_DN_v001",
+  "source_count": 290,
+  "source_dimensions": [
+    4096,
+    2830
+  ],
+  "selected_source_range": [
+    1001,
+    1020
+  ],
+  "selected_count": 20,
+  "model_frames": 25,
+  "model_dimensions": [
+    512,
+    384
+  ],
+  "source_color": "linear-srgb",
+  "fps": 24,
+  "seed": 42,
+  "output_dir": "/home/gambit/Desktop/-----------/bed030_DN_roto_test_v001",
+  "output_count": 20,
+  "output_dimensions": [
+    4096,
+    2830
+  ],
+  "precision": "half",
+  "channels": [
+    "R",
+    "G",
+    "B"
+  ],
+  "compression": "zip",
+  "output_checks": "All 20 EXRs reopened: expected dimensions, finite equal RGB, half precision, ZIP compression, no partials or lock.",
+  "frames": [
+    {
+      "file": "bed030_DN_roto_test_v001.1001.exr",
+      "min": -0.007328033447265625,
+      "max": 1.0107421875,
+      "bytes": 3676180
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1002.exr",
+      "min": -0.007335662841796875,
+      "max": 1.0078125,
+      "bytes": 3836747
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1003.exr",
+      "min": -0.0075531005859375,
+      "max": 1.0078125,
+      "bytes": 3769439
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1004.exr",
+      "min": -0.01100921630859375,
+      "max": 1.0078125,
+      "bytes": 3769135
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1005.exr",
+      "min": -0.01100921630859375,
+      "max": 1.0078125,
+      "bytes": 3737716
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1006.exr",
+      "min": -0.0112152099609375,
+      "max": 1.0078125,
+      "bytes": 3821601
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1007.exr",
+      "min": -0.0112152099609375,
+      "max": 1.0078125,
+      "bytes": 3808245
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1008.exr",
+      "min": -0.0112152099609375,
+      "max": 1.0078125,
+      "bytes": 3854805
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1009.exr",
+      "min": -0.01100921630859375,
+      "max": 1.0107421875,
+      "bytes": 3609904
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1010.exr",
+      "min": -0.0077972412109375,
+      "max": 1.0078125,
+      "bytes": 3928062
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1011.exr",
+      "min": -0.00390625,
+      "max": 1.0107421875,
+      "bytes": 3859313
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1012.exr",
+      "min": -0.00390625,
+      "max": 1.0078125,
+      "bytes": 3914373
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1013.exr",
+      "min": -0.00390625,
+      "max": 1.0078125,
+      "bytes": 3919632
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1014.exr",
+      "min": -0.00390625,
+      "max": 1.01171875,
+      "bytes": 3897339
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1015.exr",
+      "min": -0.007495880126953125,
+      "max": 1.0078125,
+      "bytes": 3881830
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1016.exr",
+      "min": -0.007411956787109375,
+      "max": 1.01171875,
+      "bytes": 3947379
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1017.exr",
+      "min": -0.00762176513671875,
+      "max": 1.01171875,
+      "bytes": 3713433
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1018.exr",
+      "min": -0.01427459716796875,
+      "max": 1.0078125,
+      "bytes": 3945977
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1019.exr",
+      "min": -0.019287109375,
+      "max": 1.0078125,
+      "bytes": 3889934
+    },
+    {
+      "file": "bed030_DN_roto_test_v001.1020.exr",
+      "min": -0.007541656494140625,
+      "max": 1.0078125,
+      "bytes": 3964713
+    }
+  ],
+  "regression_tests_passed": 83
+}

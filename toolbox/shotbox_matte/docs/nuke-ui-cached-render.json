@@ -1,0 +1,27 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "review_script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/nuke/bam030.nk",
+  "external_interpreter": "deliberately unavailable",
+  "native_gpu_inference": false,
+  "status": "passed",
+  "range": [
+    1001,
+    1003
+  ],
+  "rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/nuke/cached-render/verify.%04d.exr",
+  "passed": [
+    "saved precomp automatically reopens active in exact Nuke 17.1v2 headless process",
+    "saving and reopening an artist-selected live bypass preserves the false toggle and Bypass state",
+    "strict cache checksums and Nuke image decoding pass",
+    "disconnected live input does not block validated precomp render",
+    "all selected timeline frames render using published RGBA+auxiliary Read with external interpreter unavailable",
+    "no ShotBox backend, Torch, PyQt or process adapter imported"
+  ]
+}

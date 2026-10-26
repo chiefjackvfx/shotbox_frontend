@@ -67,7 +67,7 @@ class SettingsAutosaveTests(unittest.TestCase):
                 QTest.qWait(10)
             self.assertIsNone(self.page._cache_clear_task)
             self.assertTrue(self.page.clear_cache_btn.isEnabled())
-            self.assertEqual(list(root.iterdir()), [])
+            self.assertEqual([path for path in root.iterdir() if path.name != ".lease.lock"], [])
             self.assertEqual(self.page.cache_status_label.text(), "Cache cleared.")
             self.manager.save.assert_not_called()
 

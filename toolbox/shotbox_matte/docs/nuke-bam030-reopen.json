@@ -1,0 +1,26 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "review_script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-bam030/bam030_review.nk",
+  "external_interpreter": "deliberately unavailable",
+  "native_gpu_inference": false,
+  "status": "passed",
+  "fingerprint": "0573cc559b4155f48f39e9c21cf9fe59f54d93f0a3e477332597f8df1b658cba",
+  "rendered_frame": 1001,
+  "rendered_file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-bam030/cached-render/verify.1001.exr",
+  "passed": [
+    "saved review comp reopens with final package and matching input freshness",
+    "all cached files/hash identities and Nuke decoding validate",
+    "explicit farm preflight and cached frame render with external interpreter unavailable",
+    "no ShotBox backend, torch, PyQt or process adapter imported",
+    "external full-pixel comparison: cached rendered RGB exactly equals source RGB and rendered alpha exactly equals backend matte red on frame1001"
+  ],
+  "full_render_rgb_bit_exact": true,
+  "full_render_alpha_bit_exact": true
+}

@@ -1,0 +1,415 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "platform": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+  "gui": true,
+  "fixture": "controlled deterministic CPU engine; actual Nuke capture, QProcess, preflight, CLI export, bridge validation and activation",
+  "native_gpu_inference": false,
+  "cache_root": "/tmp/shotbox-gui-cpu-74e8ez3j",
+  "passed": [
+    "duplicate Generate and second-node Generate rejected while busy",
+    "actual GUI QProcess probe/capture/preflight/worker/validate/activation",
+    "capture matches evaluated graded and retimed RGB at negative timeline frames",
+    "original RGB preserved and three deterministic matte frames aligned",
+    "raw negative matte value and zero alpha outside processed range",
+    "proxy/frame restored and node rename retains controller ownership",
+    "strict Nuke cache validation",
+    "worker nonzero/error regeneration retains prior active result and releases session lock",
+    "cooperative worker cancellation retains prior active cache and releases session lock",
+    "upstream change during worker leaves validated completed attempt inactive and retains previous cache",
+    "30-second force-stop offer and owned QProcess terminate/kill of resistant worker retain previous active cache",
+    "node deletion reaps resistant owned child; undo restores cache with fresh UUID and no controller",
+    "File New/normal GUI exit reaps exact resistant owned worker PID, verified by parent process"
+  ],
+  "attempts": [
+    {
+      "phase": "success",
+      "state": "complete",
+      "manifest": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588/integration.json"
+    },
+    {
+      "phase": "failure",
+      "state": "failed",
+      "manifest": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/2e342c8a-eb56-45e5-92ee-a45dddf896fd/integration.json"
+    },
+    {
+      "phase": "cancel",
+      "state": "cancelled",
+      "manifest": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/8543385c-5f6a-4ec6-a01d-959411494455/integration.json"
+    },
+    {
+      "phase": "stale",
+      "state": "complete",
+      "manifest": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df/integration.json"
+    },
+    {
+      "phase": "force",
+      "state": "cancelled",
+      "manifest": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/1e6d17c5-c8f3-47d9-a053-9243808be56e/integration.json"
+    },
+    {
+      "phase": "delete",
+      "state": "cancelled",
+      "manifest": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/b98e991e-c9fe-4430-af4c-833ae793d661/integration.json"
+    }
+  ],
+  "processes": [
+    {
+      "terminal": "probe",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "probe",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588/runtime.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588",
+      "pid": 1621858
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588",
+      "pid": 1621898
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "worker",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588",
+      "pid": 1622089
+    },
+    {
+      "terminal": "validation",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "validate",
+        "--attempt",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588/integration.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/e9ffd366-3639-4267-a813-c7dc28680588",
+      "pid": 1622408
+    },
+    {
+      "terminal": "probe",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "probe",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/2e342c8a-eb56-45e5-92ee-a45dddf896fd/runtime.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/2e342c8a-eb56-45e5-92ee-a45dddf896fd",
+      "pid": 1622644
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/2e342c8a-eb56-45e5-92ee-a45dddf896fd/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/2e342c8a-eb56-45e5-92ee-a45dddf896fd",
+      "pid": 1622645
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "worker",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/2e342c8a-eb56-45e5-92ee-a45dddf896fd/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/2e342c8a-eb56-45e5-92ee-a45dddf896fd",
+      "pid": 1622900
+    },
+    {
+      "terminal": "probe",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "probe",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/8543385c-5f6a-4ec6-a01d-959411494455/runtime.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/8543385c-5f6a-4ec6-a01d-959411494455",
+      "pid": 1623218
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/8543385c-5f6a-4ec6-a01d-959411494455/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/8543385c-5f6a-4ec6-a01d-959411494455",
+      "pid": 1623219
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "worker",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/8543385c-5f6a-4ec6-a01d-959411494455/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/8543385c-5f6a-4ec6-a01d-959411494455",
+      "pid": 1623410
+    },
+    {
+      "terminal": "probe",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "probe",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df/runtime.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df",
+      "pid": 1623475
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df",
+      "pid": 1623477
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "worker",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df",
+      "pid": 1623668
+    },
+    {
+      "terminal": "validation",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "validate",
+        "--attempt",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df/integration.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/ddd5172c-a9a5-4352-9741-9d72559a74df",
+      "pid": 1624031
+    },
+    {
+      "terminal": "probe",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "probe",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/1e6d17c5-c8f3-47d9-a053-9243808be56e/runtime.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/1e6d17c5-c8f3-47d9-a053-9243808be56e",
+      "pid": 1624222
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/1e6d17c5-c8f3-47d9-a053-9243808be56e/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/1e6d17c5-c8f3-47d9-a053-9243808be56e",
+      "pid": 1624223
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "worker",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/1e6d17c5-c8f3-47d9-a053-9243808be56e/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/1e6d17c5-c8f3-47d9-a053-9243808be56e",
+      "pid": 1624414
+    },
+    {
+      "terminal": "probe",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "probe",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/b98e991e-c9fe-4430-af4c-833ae793d661/runtime.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/b98e991e-c9fe-4430-af4c-833ae793d661",
+      "pid": 1626779
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/b98e991e-c9fe-4430-af4c-833ae793d661/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/b98e991e-c9fe-4430-af4c-833ae793d661",
+      "pid": 1626780
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "worker",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/b98e991e-c9fe-4430-af4c-833ae793d661/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/e1b20d8b-0226-421b-a9ec-5a84a05057da/b98e991e-c9fe-4430-af4c-833ae793d661",
+      "pid": 1626972
+    },
+    {
+      "terminal": "probe",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "probe",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/38c18ae5-0abe-465d-9eef-b92a7e2790e7/9cfa8492-9c7a-4665-bfec-695d530a9f90/runtime.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/38c18ae5-0abe-465d-9eef-b92a7e2790e7/9cfa8492-9c7a-4665-bfec-695d530a9f90",
+      "pid": 1627393
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/38c18ae5-0abe-465d-9eef-b92a7e2790e7/9cfa8492-9c7a-4665-bfec-695d530a9f90/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/38c18ae5-0abe-465d-9eef-b92a7e2790e7/9cfa8492-9c7a-4665-bfec-695d530a9f90",
+      "pid": 1627395
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/controlled_worker.py",
+        "worker",
+        "/tmp/shotbox-gui-cpu-74e8ez3j/38c18ae5-0abe-465d-9eef-b92a7e2790e7/9cfa8492-9c7a-4665-bfec-695d530a9f90/worker.json"
+      ],
+      "attempt": "/tmp/shotbox-gui-cpu-74e8ez3j/38c18ae5-0abe-465d-9eef-b92a7e2790e7/9cfa8492-9c7a-4665-bfec-695d530a9f90",
+      "pid": 1627588
+    }
+  ],
+  "stage_events": [
+    {
+      "attempt": "e9ffd366-3639-4267-a813-c7dc28680588",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "e9ffd366-3639-4267-a813-c7dc28680588",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "e9ffd366-3639-4267-a813-c7dc28680588",
+      "stage": "generating"
+    },
+    {
+      "attempt": "e9ffd366-3639-4267-a813-c7dc28680588",
+      "stage": "validating"
+    },
+    {
+      "attempt": "2e342c8a-eb56-45e5-92ee-a45dddf896fd",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "2e342c8a-eb56-45e5-92ee-a45dddf896fd",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "2e342c8a-eb56-45e5-92ee-a45dddf896fd",
+      "stage": "generating"
+    },
+    {
+      "attempt": "8543385c-5f6a-4ec6-a01d-959411494455",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "8543385c-5f6a-4ec6-a01d-959411494455",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "8543385c-5f6a-4ec6-a01d-959411494455",
+      "stage": "generating"
+    },
+    {
+      "attempt": "ddd5172c-a9a5-4352-9741-9d72559a74df",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "ddd5172c-a9a5-4352-9741-9d72559a74df",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "ddd5172c-a9a5-4352-9741-9d72559a74df",
+      "stage": "generating"
+    },
+    {
+      "attempt": "ddd5172c-a9a5-4352-9741-9d72559a74df",
+      "stage": "validating"
+    },
+    {
+      "attempt": "1e6d17c5-c8f3-47d9-a053-9243808be56e",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "1e6d17c5-c8f3-47d9-a053-9243808be56e",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "1e6d17c5-c8f3-47d9-a053-9243808be56e",
+      "stage": "generating"
+    },
+    {
+      "attempt": "b98e991e-c9fe-4430-af4c-833ae793d661",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "b98e991e-c9fe-4430-af4c-833ae793d661",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "b98e991e-c9fe-4430-af4c-833ae793d661",
+      "stage": "generating"
+    },
+    {
+      "attempt": "9cfa8492-9c7a-4665-bfec-695d530a9f90",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "9cfa8492-9c7a-4665-bfec-695d530a9f90",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "9cfa8492-9c7a-4665-bfec-695d530a9f90",
+      "stage": "generating"
+    }
+  ],
+  "status": "passed",
+  "closing_worker_pid": 1627588,
+  "elapsed_seconds": 38.124,
+  "launcher": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "exit_code": 0,
+    "elapsed_seconds": 56.157,
+    "startup": "temporary NUKE_PATH/menu.py with PySide6 QTimer"
+  }
+}

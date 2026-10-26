@@ -2,9 +2,11 @@
 
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import json
 import math
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import posixpath
 import tempfile
 import threading
 
@@ -12,10 +14,48 @@ from PyQt6 import sip
 from PyQt6.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QImage
 from app_cache import cache_directory
+from path_mapping import comparison_path
 
 
 PREVIEW_FPS = 10
 SOURCE_FPS = 24
+_SOURCE_METADATA = "shotbox-source"
+
+
+def proxy_frame_path(path, directory):
+    """Store readable frame names directly under each job, with stable IDs."""
+    previous = _nested_proxy_frame_path(path, directory)
+    relative = previous.relative_to(directory)
+    job = relative.parts[0] if len(relative.parts) > 1 else "Other"
+    unique_id = hashlib.sha256(comparison_path(str(path)).encode()).hexdigest()[:16]
+    return Path(directory) / job / f"{previous.stem}_{unique_id}.jpg"
+
+
+def _nested_proxy_frame_path(path, directory):
+    """Locate proxies written by the earlier nested-folder layout."""
+    source = PurePosixPath(posixpath.normpath(str(path).replace("\\", "/")))
+    parents = source.parts[:-1]
+    vfx = next((index for index, part in enumerate(parents)
+                if index > 0 and part.casefold() == "vfx"), None)
+    if vfx is not None:
+        relative = (parents[vfx - 1], *parents[vfx + 1:])
+    else:
+        roots = [index for index, part in enumerate(parents)
+                 if part.casefold() in {"projects", "projects b"}]
+        relative = parents[roots[-1] + 1:] if roots else ("Other", *parents)
+
+    folders = []
+    index = 0
+    while index < len(relative):
+        part = relative[index]
+        if (part.casefold() == "renders" and index + 1 < len(relative)
+                and relative[index + 1].casefold() == "precomp"):
+            index += 2
+            continue
+        if part not in {"", ".", "..", "/", "//"} and not part.endswith(":"):
+            folders.append(part)
+        index += 1
+    return Path(directory).joinpath(*folders, source.with_suffix(".jpg").name)
 
 
 def cached_proxy_frame(path, directory):
@@ -23,20 +63,45 @@ def cached_proxy_frame(path, directory):
 
     path = Path(path)
     stat = path.stat()
-    signature = f"{path}\0{stat.st_mtime_ns}\0{stat.st_size}"
-    target = directory / (hashlib.sha256(signature.encode()).hexdigest() + ".jpg")
+    signature = json.dumps({"source": os.path.normcase(os.path.abspath(path)),
+                            "mtime_ns": stat.st_mtime_ns, "size": stat.st_size}, sort_keys=True)
+    target = proxy_frame_path(path, directory)
     image = QImage(str(target))
-    if not image.isNull():
+    if not image.isNull() and image.text(_SOURCE_METADATA) == signature:
         return image
-    image = read_thumbnail(path)
+    legacy_signature = f"{path}\0{stat.st_mtime_ns}\0{stat.st_size}"
+    old_hash = Path(directory) / (hashlib.sha256(legacy_signature.encode()).hexdigest() + ".jpg")
+    old_nested = _nested_proxy_frame_path(path, directory)
+    migrated = None
+    for legacy in (old_nested, old_hash):
+        image = QImage(str(legacy))
+        if image.isNull():
+            continue
+        if legacy == old_nested and image.text(_SOURCE_METADATA) != signature:
+            continue
+        migrated = legacy
+        break
+    if migrated is None:
+        image = read_thumbnail(path)
+    image = image.copy()
+    image.setText(_SOURCE_METADATA, signature)
     # A failed cache write should still allow an in-memory preview.
     temporary = None
     try:
-        directory.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(dir=directory, suffix=".tmp", delete=False) as handle:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(dir=target.parent, suffix=".tmp", delete=False) as handle:
             temporary = Path(handle.name)
         if image.save(str(temporary), "JPG", 50):
             os.replace(temporary, target)
+            if migrated is not None:
+                migrated.unlink(missing_ok=True)
+                parent = migrated.parent
+                while parent not in {Path(directory), target.parent}:
+                    try:
+                        parent.rmdir()
+                    except OSError:
+                        break
+                    parent = parent.parent
     except OSError:
         pass
     finally:
@@ -50,7 +115,7 @@ def cached_proxy_frame(path, directory):
 
 def prune_proxy_cache(directory, max_bytes=128 * 1024 * 1024):
     entries = []
-    for path in directory.glob("*.jpg"):
+    for path in directory.rglob("*.jpg"):
         try:
             stat = path.stat()
             entries.append((stat.st_mtime_ns, stat.st_size, path))

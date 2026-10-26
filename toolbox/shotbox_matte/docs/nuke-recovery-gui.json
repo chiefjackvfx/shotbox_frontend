@@ -1,0 +1,995 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "native_gpu_inference": false,
+  "fixture": "tiny native synthetic alpha fixtures; controlled probe response and native capture cancellation exception; no worker inference",
+  "passed": [
+    "new Read avoids occupied graph positions; updating an existing Read preserves the artist's position",
+    "Find selects/frames the root Read; View chooses existing or free Viewer input, displays alpha and preserves all unrelated inputs",
+    "Find and View work inside the nested parent network without changing the root Viewer's connections",
+    "Relink recovers moved/renamed alpha EXRs; same-size corruption is refused without changing the prior receipt, Group or Read",
+    "one native Undo restores both Group receipt and Read sequence; one Redo restores the verified moved sequence",
+    "Open log chooses the latest pending attempt rather than the older active result",
+    "the actual native nuke.CancelledError during capture records cancelled, reaps the attempt, removes bulk files and keeps the prior active Read",
+    "after cleanup Open log reports the latest failed receipt instead of the older successful result",
+    "actual 650/480-pixel native properties panels retain visible controls within their window in idle, running, successful and failed states"
+  ],
+  "screenshots": [
+    {
+      "state": "idle",
+      "width": 650,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-idle-650-shotbox.png",
+      "actual_width": 650,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Render",
+          "enabled": true,
+          "x": 117,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": false,
+          "x": 199,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Find Read",
+          "enabled": false,
+          "x": 117,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "View Matte",
+          "enabled": false,
+          "x": 199,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "enabled": false,
+          "x": 117,
+          "y": 334,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 379,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 465,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 551,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "idle",
+      "width": 480,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-idle-480-shotbox.png",
+      "actual_width": 480,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Render",
+          "enabled": true,
+          "x": 117,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": false,
+          "x": 199,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Find Read",
+          "enabled": false,
+          "x": 117,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "View Matte",
+          "enabled": false,
+          "x": 199,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "enabled": false,
+          "x": 117,
+          "y": 334,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 209,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 295,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 381,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "success",
+      "width": 650,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-success-650-shotbox.png",
+      "actual_width": 650,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Render",
+          "enabled": true,
+          "x": 117,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": false,
+          "x": 199,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Find Read",
+          "enabled": true,
+          "x": 117,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "View Matte",
+          "enabled": true,
+          "x": 199,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "enabled": true,
+          "x": 117,
+          "y": 334,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 379,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 465,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 551,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "success",
+      "width": 650,
+      "tab": "Advanced",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-success-650-advanced.png",
+      "actual_width": 650,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Reload result",
+          "enabled": true,
+          "x": 147,
+          "y": 179,
+          "width": 83,
+          "height": 23
+        },
+        {
+          "text": "Validate files",
+          "enabled": true,
+          "x": 232,
+          "y": 179,
+          "width": 81,
+          "height": 23
+        },
+        {
+          "text": "Relink EXRs\u2026",
+          "enabled": true,
+          "x": 147,
+          "y": 204,
+          "width": 86,
+          "height": 23
+        },
+        {
+          "text": "Tile reference VAE",
+          "enabled": true,
+          "x": 147,
+          "y": 338,
+          "width": 124,
+          "height": 18
+        },
+        {
+          "text": "Latest job log",
+          "enabled": true,
+          "x": 147,
+          "y": 445,
+          "width": 85,
+          "height": 23
+        },
+        {
+          "text": "Preferences\u2026",
+          "enabled": true,
+          "x": 147,
+          "y": 470,
+          "width": 86,
+          "height": 23
+        },
+        {
+          "text": "Preview rendered matte",
+          "enabled": true,
+          "x": 147,
+          "y": 525,
+          "width": 157,
+          "height": 18
+        },
+        {
+          "text": "Force stop worker",
+          "enabled": false,
+          "x": 147,
+          "y": 601,
+          "width": 108,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 379,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 465,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 551,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "success",
+      "width": 480,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-success-480-shotbox.png",
+      "actual_width": 480,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Render",
+          "enabled": true,
+          "x": 117,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": false,
+          "x": 199,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Find Read",
+          "enabled": true,
+          "x": 117,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "View Matte",
+          "enabled": true,
+          "x": 199,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "enabled": true,
+          "x": 117,
+          "y": 334,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 209,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 295,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 381,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "success",
+      "width": 480,
+      "tab": "Advanced",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-success-480-advanced.png",
+      "actual_width": 480,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Reload result",
+          "enabled": true,
+          "x": 147,
+          "y": 179,
+          "width": 83,
+          "height": 23
+        },
+        {
+          "text": "Validate files",
+          "enabled": true,
+          "x": 232,
+          "y": 179,
+          "width": 81,
+          "height": 23
+        },
+        {
+          "text": "Relink EXRs\u2026",
+          "enabled": true,
+          "x": 147,
+          "y": 204,
+          "width": 86,
+          "height": 23
+        },
+        {
+          "text": "Tile reference VAE",
+          "enabled": true,
+          "x": 147,
+          "y": 338,
+          "width": 124,
+          "height": 18
+        },
+        {
+          "text": "Latest job log",
+          "enabled": true,
+          "x": 147,
+          "y": 445,
+          "width": 85,
+          "height": 23
+        },
+        {
+          "text": "Preferences\u2026",
+          "enabled": true,
+          "x": 147,
+          "y": 470,
+          "width": 86,
+          "height": 23
+        },
+        {
+          "text": "Preview rendered matte",
+          "enabled": true,
+          "x": 147,
+          "y": 525,
+          "width": 157,
+          "height": 18
+        },
+        {
+          "text": "Force stop worker",
+          "enabled": false,
+          "x": 147,
+          "y": 601,
+          "width": 108,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 209,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 295,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 381,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "running",
+      "width": 650,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-running-650-shotbox.png",
+      "actual_width": 650,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Render",
+          "enabled": false,
+          "x": 117,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 199,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Find Read",
+          "enabled": true,
+          "x": 117,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "View Matte",
+          "enabled": true,
+          "x": 199,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "enabled": true,
+          "x": 117,
+          "y": 334,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 379,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 465,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 551,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "running",
+      "width": 480,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-running-480-shotbox.png",
+      "actual_width": 480,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Render",
+          "enabled": false,
+          "x": 117,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 199,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Find Read",
+          "enabled": true,
+          "x": 117,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "View Matte",
+          "enabled": true,
+          "x": 199,
+          "y": 309,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "enabled": true,
+          "x": 117,
+          "y": 334,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 209,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 295,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 381,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "failed",
+      "width": 650,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-failed-650-shotbox.png",
+      "actual_width": 650,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Render",
+          "enabled": true,
+          "x": 117,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": false,
+          "x": 199,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Find Read",
+          "enabled": true,
+          "x": 117,
+          "y": 328,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "View Matte",
+          "enabled": true,
+          "x": 199,
+          "y": 328,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "enabled": true,
+          "x": 117,
+          "y": 353,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 379,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 465,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 551,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "state": "failed",
+      "width": 480,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-recovery-failed-480-shotbox.png",
+      "actual_width": 480,
+      "height": 700,
+      "buttons": [
+        {
+          "text": "Render",
+          "enabled": true,
+          "x": 117,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": false,
+          "x": 199,
+          "y": 225,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Find Read",
+          "enabled": true,
+          "x": 117,
+          "y": 328,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "View Matte",
+          "enabled": true,
+          "x": 199,
+          "y": 328,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "enabled": true,
+          "x": 117,
+          "y": 353,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "enabled": true,
+          "x": 209,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "enabled": true,
+          "x": 295,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "enabled": true,
+          "x": 381,
+          "y": 671,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    }
+  ],
+  "states": {
+    "idle": {
+      "sb_generate": {
+        "label": "Render",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_cancel": {
+        "label": "Cancel",
+        "enabled": false,
+        "visible": true
+      },
+      "sb_find": {
+        "label": "Find Read",
+        "enabled": false,
+        "visible": true
+      },
+      "sb_view": {
+        "label": "View Matte",
+        "enabled": false,
+        "visible": true
+      },
+      "sb_log": {
+        "label": "Latest job log",
+        "enabled": false,
+        "visible": true
+      },
+      "sb_relink": {
+        "label": "Relink EXRs\u2026",
+        "enabled": false,
+        "visible": true
+      }
+    },
+    "success": {
+      "sb_generate": {
+        "label": "Render",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_cancel": {
+        "label": "Cancel",
+        "enabled": false,
+        "visible": true
+      },
+      "sb_find": {
+        "label": "Find Read",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_view": {
+        "label": "View Matte",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_log": {
+        "label": "Latest job log",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_relink": {
+        "label": "Relink EXRs\u2026",
+        "enabled": true,
+        "visible": true
+      }
+    },
+    "running": {
+      "sb_generate": {
+        "label": "Render",
+        "enabled": false,
+        "visible": true
+      },
+      "sb_cancel": {
+        "label": "Cancel",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_find": {
+        "label": "Find Read",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_view": {
+        "label": "View Matte",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_log": {
+        "label": "Latest job log",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_relink": {
+        "label": "Relink EXRs\u2026",
+        "enabled": false,
+        "visible": true
+      }
+    },
+    "failed": {
+      "sb_generate": {
+        "label": "Render",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_cancel": {
+        "label": "Cancel",
+        "enabled": false,
+        "visible": true
+      },
+      "sb_find": {
+        "label": "Find Read",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_view": {
+        "label": "View Matte",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_log": {
+        "label": "Latest job log",
+        "enabled": true,
+        "visible": true
+      },
+      "sb_relink": {
+        "label": "Relink EXRs\u2026",
+        "enabled": true,
+        "visible": true
+      }
+    }
+  },
+  "navigation": [
+    {
+      "nested": false,
+      "read": "Read_recovery_alpha",
+      "viewer": "Viewer1",
+      "active_input": 5,
+      "channels": "alpha",
+      "selected": true,
+      "zoom": 1.0
+    },
+    {
+      "nested": false,
+      "read": "Read_recovery_alpha",
+      "viewer": "Viewer1",
+      "active_input": 2,
+      "channels": "alpha",
+      "selected": true,
+      "zoom": 1.0
+    },
+    {
+      "nested": true,
+      "read": "NestedArtistNetwork.Read_nested_recovery_alpha",
+      "viewer": "NestedArtistNetwork.Viewer1",
+      "active_input": 0,
+      "channels": "alpha",
+      "selected": false,
+      "zoom": 1.0
+    }
+  ],
+  "corrupt_relink_error": "Published precomp checksum mismatch: artist_alpha.1002.exr",
+  "moved_sequence": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/artist-moved-and-renamed/artist_alpha.%04d.exr",
+  "relinked_receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/jobs/relinks/daf02c16-86f4-4bf5-bf6d-8d5ddc417311/52b54a88-06a8-49b6-980e-c39f9e0acbdb/integration.json",
+  "original_receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/jobs/daf02c16-86f4-4bf5-bf6d-8d5ddc417311/a48faaf0-eaf5-47aa-b3dc-cbb26043251c/integration.json",
+  "output_read_id": "4883de18-2539-4cb4-996e-2f86fb571e78",
+  "probe_launches": [
+    {
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/jobs/.jobs/daf02c16-86f4-4bf5-bf6d-8d5ddc417311/4601bb7b-2148-4534-a58d-0f310b58914d",
+      "terminal": "probe"
+    },
+    {
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/jobs/.jobs/daf02c16-86f4-4bf5-bf6d-8d5ddc417311/ad1dddfb-744c-44e5-ada2-29d80fa070b9",
+      "terminal": "probe"
+    }
+  ],
+  "native_cancelled_error": {
+    "class": "<class '_nuke.CancelledError'>",
+    "state": "cancelled",
+    "message": "Native acceptance capture abort"
+  },
+  "script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/shot/nuke/recovery.nk",
+  "status": "passed",
+  "exit_code": 0
+}

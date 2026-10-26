@@ -11,6 +11,11 @@ PyQt6 desktop frontend for ShotBox.
 Runtime caches and disposable working files live in `.cache` beside `main.py`,
 including on Windows and macOS. EXR preview proxies use `.cache/exr-previews-v1`;
 thumbnail uploads, exports, and Nuke/3DE requests use `.cache/temp`.
+Proxy JPEGs sit directly inside each job folder, named
+`original_frame_name_<unique_id>.jpg`. The stable suffix identifies the source
+path, keeping matching names from different shots and sequences separate.
+Source-change checks are stored inside the JPEG metadata. Existing hashed or
+nested proxies migrate when their sequences reopen.
 Precomp EXR previews sample at 10 fps to reduce preparation work while retaining
 the shot's normal timing.
 
@@ -106,3 +111,29 @@ support arrow-key selection without triggering Review playback shortcuts.
 Install the updated `requirements.txt` for the OpenColorIO Python bindings.
 The pipeline uses the official [OCIO viewing API](https://opencolorio.readthedocs.io/en/latest/api/apphelpers.html)
 and [OpenEXR Python reader](https://openexr.com/en/latest/python.html).
+
+
+## Shotbox Matte Toolbox and Nuke integration
+
+Open **Toolbox → Open Shotbox Matte** for the owned Matte pop-out. Its source
+and backend live in `toolbox/shotbox_matte/`; the Nuke host integration lives in
+`plugins/nuke/`. Both ship with the frontend, without model weights or a copied
+inference environment.
+
+In **Settings → Plugins → Shotbox Matte / Nuke**, prepare the separate GPU
+runtime, choose an external model library, save configuration and install the
+Nuke integration. Restart Nuke after installation or integration updates.
+The installer preserves unrelated startup code and shares runtime/model settings
+with Nuke. Shotbox remains open while Matte or runtime preparation is busy.
+
+Matte's worker files, staged EXRs, overwrite backups and export locks use
+`.cache/temp/shotbox-matte/`, including retained partial frames after cancellation
+or failure. Exporting to another drive or network mount copies files from this
+cache to the final output. Setup downloads and default Nuke jobs also use
+`.cache/temp/`; active desktop and Nuke sessions protect their files during
+Settings → Cache → Clear Cache. `.cache/.lease.lock` is retained as coordination
+metadata. Final mattes are written to the chosen production output locations.
+See [Matte setup](toolbox/shotbox_matte/README.md) and
+[Nuke installation](plugins/nuke/README.md).
+
+[Linux integration verification](toolbox/shotbox_matte/docs/SHOTBOX_INTEGRATION_VERIFICATION.md) records the relocated runtime checks and platform limits.

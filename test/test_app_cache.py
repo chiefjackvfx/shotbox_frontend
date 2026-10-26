@@ -35,7 +35,7 @@ class AppCacheTests(unittest.TestCase):
         (app_cache.cache_directory("temp") / "request.json").touch()
         result = app_cache.clear_cache_files()
         self.assertEqual(result["errors"], [])
-        self.assertEqual(list(self.root.iterdir()), [])
+        self.assertEqual([path for path in self.root.iterdir() if path.name != ".lease.lock"], [])
         self.assertEqual(outside.read_text(encoding="utf-8"), "settings")
 
     def test_clear_does_not_follow_symlinks_outside_cache(self):
@@ -86,7 +86,7 @@ class AppCacheTests(unittest.TestCase):
             operation()
         result = app_cache.clear_cache_files()
         self.assertFalse(result["active_temp"])
-        self.assertEqual(list(self.root.iterdir()), [])
+        self.assertEqual([path for path in self.root.iterdir() if path.name != ".lease.lock"], [])
 
     def test_reports_files_that_cannot_be_removed(self):
         category = app_cache.cache_directory("exr-previews-v1")

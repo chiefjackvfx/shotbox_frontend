@@ -1,0 +1,595 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "gui": true,
+  "screenshots": [
+    {
+      "requested_width": 650,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-ui-650-shotbox.png",
+      "panel": {
+        "class": "MultiPanel",
+        "name": "ShotBoxMatte",
+        "title": "Properties",
+        "width": 650,
+        "height": 650,
+        "visible": true
+      },
+      "buttons": [
+        {
+          "text": "Use rendered precomp",
+          "x": 116,
+          "y": 247,
+          "width": 150,
+          "height": 18
+        },
+        {
+          "text": "Generate",
+          "x": 116,
+          "y": 345,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "x": 198,
+          "y": 345,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "x": 116,
+          "y": 370,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Open log",
+          "x": 233,
+          "y": 370,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "x": 393,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "x": 479,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "x": 565,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "requested_width": 650,
+      "tab": "Precomp",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-ui-650-precomp.png",
+      "panel": {
+        "class": "MultiPanel",
+        "name": "ShotBoxMatte",
+        "title": "Properties",
+        "width": 650,
+        "height": 650,
+        "visible": true
+      },
+      "buttons": [
+        {
+          "text": "Reload result",
+          "x": 133,
+          "y": 207,
+          "width": 83,
+          "height": 23
+        },
+        {
+          "text": "Validate files",
+          "x": 218,
+          "y": 207,
+          "width": 81,
+          "height": 23
+        },
+        {
+          "text": "Relink precomp\u2026",
+          "x": 133,
+          "y": 232,
+          "width": 107,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "x": 393,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "x": 479,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "x": 565,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "requested_width": 650,
+      "tab": "Advanced",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-ui-650-advanced.png",
+      "panel": {
+        "class": "MultiPanel",
+        "name": "ShotBoxMatte",
+        "title": "Properties",
+        "width": 650,
+        "height": 650,
+        "visible": true
+      },
+      "buttons": [
+        {
+          "text": "Tile reference VAE",
+          "x": 147,
+          "y": 171,
+          "width": 124,
+          "height": 18
+        },
+        {
+          "text": "Preferences\u2026",
+          "x": 147,
+          "y": 384,
+          "width": 86,
+          "height": 23
+        },
+        {
+          "text": "Force stop worker",
+          "x": 147,
+          "y": 437,
+          "width": 108,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "x": 393,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "x": 479,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "x": 565,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "requested_width": 480,
+      "tab": "ShotBox",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-ui-480-shotbox.png",
+      "panel": {
+        "class": "MultiPanel",
+        "name": "ShotBoxMatte",
+        "title": "Properties",
+        "width": 480,
+        "height": 650,
+        "visible": true
+      },
+      "buttons": [
+        {
+          "text": "Use rendered precomp",
+          "x": 116,
+          "y": 247,
+          "width": 150,
+          "height": 18
+        },
+        {
+          "text": "Generate",
+          "x": 116,
+          "y": 345,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "x": 198,
+          "y": 345,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Open output folder",
+          "x": 116,
+          "y": 370,
+          "width": 115,
+          "height": 23
+        },
+        {
+          "text": "Open log",
+          "x": 233,
+          "y": 370,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "x": 223,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "x": 309,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "x": 395,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "requested_width": 480,
+      "tab": "Precomp",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-ui-480-precomp.png",
+      "panel": {
+        "class": "MultiPanel",
+        "name": "ShotBoxMatte",
+        "title": "Properties",
+        "width": 480,
+        "height": 650,
+        "visible": true
+      },
+      "buttons": [
+        {
+          "text": "Reload result",
+          "x": 133,
+          "y": 207,
+          "width": 83,
+          "height": 23
+        },
+        {
+          "text": "Validate files",
+          "x": 218,
+          "y": 207,
+          "width": 81,
+          "height": 23
+        },
+        {
+          "text": "Relink precomp\u2026",
+          "x": 133,
+          "y": 232,
+          "width": 107,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "x": 223,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "x": 309,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "x": 395,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    },
+    {
+      "requested_width": 480,
+      "tab": "Advanced",
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-ui-480-advanced.png",
+      "panel": {
+        "class": "MultiPanel",
+        "name": "ShotBoxMatte",
+        "title": "Properties",
+        "width": 480,
+        "height": 650,
+        "visible": true
+      },
+      "buttons": [
+        {
+          "text": "Tile reference VAE",
+          "x": 147,
+          "y": 171,
+          "width": 124,
+          "height": 18
+        },
+        {
+          "text": "Preferences\u2026",
+          "x": 147,
+          "y": 384,
+          "width": 86,
+          "height": 23
+        },
+        {
+          "text": "Force stop worker",
+          "x": 147,
+          "y": 437,
+          "width": 108,
+          "height": 23
+        },
+        {
+          "text": "Revert",
+          "x": 223,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Cancel",
+          "x": 309,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        },
+        {
+          "text": "Close",
+          "x": 395,
+          "y": 620,
+          "width": 80,
+          "height": 23
+        }
+      ]
+    }
+  ],
+  "passed": [
+    "actual floating native properties panel captured at650and480pixels across all three ShotBox tabs",
+    "visible button geometry remains within the properties window at both widths"
+  ],
+  "top_level_widgets": [
+    {
+      "class": "Foundry::UI::Chart",
+      "name": "",
+      "title": "",
+      "width": 380,
+      "height": 380,
+      "visible": true
+    },
+    {
+      "class": "Foundry::UI::Chart",
+      "name": "",
+      "title": "",
+      "width": 380,
+      "height": 380,
+      "visible": true
+    },
+    {
+      "class": "Foundry::UI::DockMainWindow",
+      "name": "NukeMainWindow",
+      "title": "Untitled [modified] - Nuke",
+      "width": 2560,
+      "height": 1387,
+      "visible": true
+    },
+    {
+      "class": "Foundry::UI::Chart",
+      "name": "",
+      "title": "",
+      "width": 380,
+      "height": 380,
+      "visible": true
+    },
+    {
+      "class": "Foundry::UI::Chart",
+      "name": "",
+      "title": "",
+      "width": 380,
+      "height": 380,
+      "visible": true
+    },
+    {
+      "class": "MultiPanel",
+      "name": "ShotBoxMatte",
+      "title": "Properties",
+      "width": 696,
+      "height": 539,
+      "visible": true
+    },
+    {
+      "class": "QMainWindow",
+      "name": "",
+      "title": "Viewer1",
+      "width": 2560,
+      "height": 1415,
+      "visible": true
+    }
+  ],
+  "floating_window": {
+    "class": "MultiPanel",
+    "name": "ShotBoxMatte",
+    "title": "Properties",
+    "width": 696,
+    "height": 539,
+    "visible": true
+  },
+  "tab_bars": [
+    [
+      "ShotBox",
+      "Precomp",
+      "Advanced",
+      "Node"
+    ]
+  ],
+  "buttons": [
+    {
+      "text": "Color",
+      "visible": false,
+      "class": "KnobColorButton"
+    },
+    {
+      "text": "Hide Input",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Cached",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Disable",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Dope Sheet",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Bookmark",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Postage Stamp",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Use Lifetime",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Show Group View",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Disable Group View",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "export as gizmo...",
+      "visible": false,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "lock all connections",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Tile reference VAE",
+      "visible": false,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Preferences\u2026",
+      "visible": false,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Force stop worker",
+      "visible": false,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Reload result",
+      "visible": false,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Validate files",
+      "visible": false,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Relink precomp\u2026",
+      "visible": false,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Use rendered precomp",
+      "visible": true,
+      "class": "AnimatedCheckButton"
+    },
+    {
+      "text": "Generate",
+      "visible": true,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Cancel",
+      "visible": true,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Open output folder",
+      "visible": true,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Open log",
+      "visible": true,
+      "class": "KnobScriptButton"
+    },
+    {
+      "text": "Revert",
+      "visible": true,
+      "class": "QPushButton"
+    },
+    {
+      "text": "Cancel",
+      "visible": true,
+      "class": "QPushButton"
+    },
+    {
+      "text": "Close",
+      "visible": true,
+      "class": "QPushButton"
+    }
+  ],
+  "status": "passed",
+  "exit_code": 0
+}

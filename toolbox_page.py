@@ -40,6 +40,7 @@ class ToolboxPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._tool_windows = {}
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -158,6 +159,41 @@ class ToolboxPage(QWidget):
         self.copy_speed_ramps_status.setTextFormat(Qt.TextFormat.PlainText)
         speed_ramps_layout.addWidget(self.copy_speed_ramps_status)
         content_layout.addWidget(speed_ramps_group)
+
+        from toolbox.registry import TOOLS
+        content_layout.addSpacing(20)
+        for tool in TOOLS:
+            group = QGroupBox(tool.title)
+            tool_layout = QVBoxLayout(group)
+            description = QLabel(tool.description)
+            description.setWordWrap(True)
+            tool_layout.addWidget(description)
+            button = QPushButton("Open " + tool.title)
+            button.setObjectName("open_" + tool.id)
+            button.clicked.connect(lambda _checked=False, entry=tool: self._open_tool(entry))
+            tool_layout.addWidget(button)
+            content_layout.addWidget(group)
+
+    def _open_tool(self, tool):
+        window = self._tool_windows.get(tool.id)
+        if window is None:
+            try:
+                window = tool.open(self.window())
+            except Exception as exc:
+                QMessageBox.warning(self, tool.title, f"Could not open {tool.title}: {exc}\nCheck Settings → Plugins.")
+                return
+            self._tool_windows[tool.id] = window
+            window.destroyed.connect(lambda _object=None, key=tool.id: self._tool_windows.pop(key, None))
+        window.showNormal()
+        window.raise_()
+        window.activateWindow()
+
+    def has_busy_tools(self):
+        return any(window.is_busy() for window in self._tool_windows.values())
+
+    def close_tools(self):
+        for window in list(self._tool_windows.values()):
+            window.close()
 
     def _copy_speed_ramps_up(self) -> None:
         title = "Copy Speed Ramps Up"

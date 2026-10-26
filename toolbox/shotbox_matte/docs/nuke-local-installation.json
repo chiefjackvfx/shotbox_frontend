@@ -1,0 +1,106 @@
+{
+  "installed_at": "2026-10-23T11:38:03+01:00",
+  "plugin_path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke",
+  "startup_file": "/home/gambit/.nuke/init.py",
+  "startup_backup": "/home/gambit/.nuke/init.py.shotbox-backup-20261023T113803985075",
+  "original_sha256": "44f8d96f29e665423a7f0ca8f5e93d427dc3293ea5ba7feda59a8e8b610d7dae",
+  "installed_sha256": "a8d6e397fa9636be009fed529cfe0e45c65895e4f115e428abeea7983948ca7d",
+  "existing_startup_preserved": true,
+  "preferences_file": "/home/gambit/.nuke/shotbox_preferences.json",
+  "preferences_backup": null,
+  "preferences": {
+    "schema_version": 1,
+    "application_root": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha",
+    "interpreter": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/.venv/bin/python",
+    "model_root": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models",
+    "model_config": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/models.local.json",
+    "cache_root": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/.shotbox-cache"
+  },
+  "verification": {
+    "headless": {
+      "status": "passed",
+      "nuke": "17.1v2",
+      "gui": false,
+      "automatically_registered": true,
+      "module": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/shotbox_nuke/__init__.py",
+      "preferences_loaded": true,
+      "backend_not_imported": true
+    },
+    "gui": {
+      "status": "passed",
+      "nuke": "17.1v2",
+      "gui": true,
+      "menu": "Nodes > ShotBox > ShotBoxMatte",
+      "menu_created_native_group": true,
+      "preferences_applied": true,
+      "module": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/shotbox_nuke/__init__.py"
+    },
+    "runtime": {
+      "ready": true,
+      "cuda": {
+        "available": true,
+        "bf16": true,
+        "torch_cuda": "13.0",
+        "devices": [
+          {
+            "index": 0,
+            "name": "NVIDIA GeForce RTX 5090",
+            "total_memory": 33668202496
+          }
+        ]
+      },
+      "model_validation": {
+        "valid": true,
+        "errors": []
+      }
+    }
+  },
+  "latest_update": {
+    "verified_at": "2026-10-23T15:37:18+01:00",
+    "status": "passed",
+    "nuke": "17.1v2",
+    "automatically_loaded_from_user_startup": true,
+    "module": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/shotbox_nuke/__init__.py",
+    "ui_revision": "4",
+    "tabs": [
+      "ShotBox",
+      "Advanced"
+    ],
+    "project_precomp_default": true,
+    "native_precomp_read_present": true,
+    "separate_button_rows": true,
+    "wrapped_status_display": true,
+    "precomp_name_prompt_installed": true,
+    "new_precomp_name_blank": true,
+    "standalone_read_installer_available": true,
+    "styled_naming_dialog_installed": true,
+    "live_underscore_naming_installed": true,
+    "naming_ui_verification": "docs/nuke-naming-ui.json",
+    "startup_changes_needed": false,
+    "recovery_verification": "docs/nuke-recovery-gui.json",
+    "simplified_controls_installed": true,
+    "find_view_matte_installed": true,
+    "moved_exr_relink_installed": true,
+    "native_capture_cancellation_installed": true,
+    "latest_attempt_diagnostics_installed": true,
+    "collision_aware_read_placement_installed": true,
+    "alpha_verification": [
+      "docs/nuke-alpha-host.json",
+      "docs/nuke-alpha-gui.json",
+      "docs/nuke-alpha-reopen.json",
+      "docs/nuke-alpha-pixels.json"
+    ],
+    "alpha_only_publication_installed": true,
+    "input_colour_default": "acescg",
+    "no_post_inference_nuke_bake": true,
+    "exr_only_publication_installed": true,
+    "working_image_cleanup_installed": true,
+    "published_alpha_preview_installed": true,
+    "legacy_receipt_alias_installed": true,
+    "recovery_reports": [
+      "docs/nuke-recovery-gui.json",
+      "docs/nuke-recovery-reopen.json",
+      "docs/nuke-recovery-pixels.json"
+    ]
+  }
+}

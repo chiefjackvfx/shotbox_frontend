@@ -1,0 +1,28 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "native_gpu_inference": false,
+  "passed": [
+    "scene opens twice, Reload works and one raw alpha-only Read retains its identity and downstream connection",
+    "cached Group previews render in both preview choices after cleanup with external interpreter unavailable",
+    "standalone alpha Read renders after deleting the generator Group without loading inference/process modules",
+    "a retained legacy RGBA precomp still activates and renders original RGB, generated alpha and auxiliary channels"
+  ],
+  "status": "passed",
+  "range": [
+    1001,
+    1003
+  ],
+  "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/integration.json",
+  "rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/nuke/alpha-reopened-render/standalone-alpha.%04d.exr",
+  "matte_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/nuke/alpha-reopened-render/matte-preview.%04d.exr",
+  "legacy_choice_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/nuke/alpha-reopened-render/legacy-choice-preview.%04d.exr",
+  "legacy_rgba_receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/jobs/.jobs/62bd3542-593b-4276-b6a2-947765735a71/72412909-b4d4-438e-8b41-b49f371f714a/integration.json",
+  "legacy_rgba_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/nuke/alpha-reopened-render/legacy-rgba.%04d.exr"
+}

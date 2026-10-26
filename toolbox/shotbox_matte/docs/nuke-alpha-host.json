@@ -1,0 +1,53 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "fixture": "native synthetic alpha EXRs; no inference",
+  "passed": [
+    "new nodes default to ACEScg and Matte only",
+    "one RGB capture pass creates no full-source snapshot",
+    "direct alpha promotion performs no Nuke execution and preserves every original backend EXR byte hash",
+    "normal raw Read contains alpha only; negative and above-one float alpha remain unclamped; Group shows matte for both output choices",
+    "two clean versions preserve previous EXRs, compact receipts validate and Reload works after cleanup",
+    "native save/reopen, farm preflight and actual cached Read/Group renders work with interpreter unavailable and no inference imports"
+  ],
+  "status": "passed",
+  "versions": [
+    {
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/jobs/7f2bc66e-48dd-4bc4-b9e8-6161787d1854/8afb9eb2-09dc-4c73-9e5f-c7c2119f7f17/integration.json",
+      "output_directory": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/renders/precomp/alpha_subject_v01",
+      "files_sha256": {
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/renders/precomp/alpha_subject_v01/alpha_subject_v01.1001.exr": "87fa06e2ddda712ea5848bb0709874e9abb7dbaa621b0768063144bc73b85ad7",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/renders/precomp/alpha_subject_v01/alpha_subject_v01.1002.exr": "c0ebb9e58652e8ebe812b4e7e79fff5ff7b3cdb1c53d06d654ddb620d92e46ab",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/renders/precomp/alpha_subject_v01/alpha_subject_v01.1003.exr": "02ad71f505dc66023ff2e7e2a28e9137a12a857cccaea647b7557b3f8b9ce372"
+      },
+      "backend_sha256": [
+        "87fa06e2ddda712ea5848bb0709874e9abb7dbaa621b0768063144bc73b85ad7",
+        "c0ebb9e58652e8ebe812b4e7e79fff5ff7b3cdb1c53d06d654ddb620d92e46ab",
+        "02ad71f505dc66023ff2e7e2a28e9137a12a857cccaea647b7557b3f8b9ce372"
+      ]
+    },
+    {
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/jobs/7f2bc66e-48dd-4bc4-b9e8-6161787d1854/fb118c83-0587-493b-95e5-10f42d535e65/integration.json",
+      "output_directory": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/renders/precomp/alpha_subject_v02",
+      "files_sha256": {
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/renders/precomp/alpha_subject_v02/alpha_subject_v02.1001.exr": "87fa06e2ddda712ea5848bb0709874e9abb7dbaa621b0768063144bc73b85ad7",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/renders/precomp/alpha_subject_v02/alpha_subject_v02.1002.exr": "c0ebb9e58652e8ebe812b4e7e79fff5ff7b3cdb1c53d06d654ddb620d92e46ab",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/renders/precomp/alpha_subject_v02/alpha_subject_v02.1003.exr": "02ad71f505dc66023ff2e7e2a28e9137a12a857cccaea647b7557b3f8b9ce372"
+      },
+      "backend_sha256": [
+        "87fa06e2ddda712ea5848bb0709874e9abb7dbaa621b0768063144bc73b85ad7",
+        "c0ebb9e58652e8ebe812b4e7e79fff5ff7b3cdb1c53d06d654ddb620d92e46ab",
+        "02ad71f505dc66023ff2e7e2a28e9137a12a857cccaea647b7557b3f8b9ce372"
+      ]
+    }
+  ],
+  "script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/shot/nuke/alpha.nk",
+  "read_render": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/renders/standalone.%04d.exr",
+  "group_render": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha-host/case-dasz3c6w/renders/group.%04d.exr"
+}

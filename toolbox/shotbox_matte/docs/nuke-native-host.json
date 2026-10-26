@@ -1,0 +1,79 @@
+{
+  "cases": {
+    "frames_3": {
+      "host": {
+        "executable": "/opt/Nuke17.1v2/Nuke17.1",
+        "nuke": "17.1v2",
+        "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+        "pyside": "6.5.3",
+        "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+        "edition": "Nuke"
+      },
+      "manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-native/20261023T101413Z-short-18640f3b/integration.json",
+      "source": "actual native worker cache; input reconstructed from frozen Nuke captures",
+      "passed": [
+        "full cache SHA-256 validation",
+        "Nuke image decode and geometry",
+        "real worker matte frame map",
+        "original snapshot RGB equality",
+        "alpha equals raw worker red",
+        "zero alpha outside range"
+      ],
+      "sampled_alpha_min": -6.22868537902832e-05,
+      "sampled_alpha_max": 0.10894775390625,
+      "quality_review": "Not performed; tiny synthetic coordinate fixture is not representative footage",
+      "freshness": "Original live graph not reconstructed; no current-input freshness claim"
+    },
+    "frames_250": {
+      "host": {
+        "executable": "/opt/Nuke17.1v2/Nuke17.1",
+        "nuke": "17.1v2",
+        "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+        "pyside": "6.5.3",
+        "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+        "edition": "Nuke"
+      },
+      "manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-native/20261023T101501Z-segmented-33b47748/integration.json",
+      "source": "actual native worker cache; input reconstructed from frozen Nuke captures",
+      "frame_count": 250,
+      "passed": [
+        "full cache SHA-256 validation",
+        "Nuke image decode and geometry",
+        "real worker matte frame map",
+        "original snapshot RGB equality",
+        "alpha equals raw worker red",
+        "zero alpha outside range"
+      ],
+      "sampled_alpha_min": -0.0022716522216796875,
+      "sampled_alpha_max": 0.75439453125,
+      "quality_review": "Not performed; tiny synthetic coordinate fixture is not representative footage",
+      "freshness": "Original live graph not reconstructed; no current-input freshness claim"
+    },
+    "frames_250_full-range": {
+      "host": {
+        "executable": "/opt/Nuke17.1v2/Nuke17.1",
+        "nuke": "17.1v2",
+        "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+        "pyside": "6.5.3",
+        "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+        "edition": "Nuke"
+      },
+      "manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-native/20261023T101617Z-full-range-ff424c57/integration.json",
+      "temporal_mode": "full-range",
+      "source": "actual native worker cache; input reconstructed from frozen Nuke captures",
+      "frame_count": 250,
+      "passed": [
+        "full cache SHA-256 validation",
+        "Nuke image decode and geometry",
+        "real worker matte frame map",
+        "original snapshot RGB equality",
+        "alpha equals raw worker red",
+        "zero alpha outside range"
+      ],
+      "sampled_alpha_min": 0.0,
+      "sampled_alpha_max": 0.278564453125,
+      "quality_review": "Not performed; tiny synthetic coordinate fixture is not representative footage",
+      "freshness": "Original live graph not reconstructed; no current-input freshness claim"
+    }
+  }
+}

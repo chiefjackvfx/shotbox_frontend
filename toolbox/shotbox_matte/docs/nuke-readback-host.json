@@ -1,0 +1,25 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "fixture": "native synthetic source/matte; no inference",
+  "passed": [
+    "native standalone Read is created in root network with raw RGBA, original timeline range and every existing downstream input slot rewired",
+    "regeneration reuses the owned Read, preserves its artist-edited name/position, updates its sequence, preserves previous EXRs and respects artist-changed connections",
+    "deleting the external Read allows safe recreation on the next result installation",
+    "a generating Group inside another Group gets its standalone Read in that parent network and reconnects the parent Output",
+    "native standalone Read renders all selected frames and save/reopen preserves both root/nested Reads without duplicates"
+  ],
+  "status": "passed",
+  "script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-readback-host/readback.nk",
+  "standalone_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-readback-host/standalone.%04d.exr",
+  "reads": [
+    "NestedParent.Read_05f58a82_c431_4571_9726_be02ce5ec960",
+    "Read_469aa275_9c01_470f_bea7_62645148ca19"
+  ]
+}

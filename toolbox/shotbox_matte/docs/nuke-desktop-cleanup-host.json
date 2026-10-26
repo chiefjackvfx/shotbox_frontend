@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "nuke": "17.1v2",
+  "checks": [
+    {
+      "version": "ShotBoxMatte_v01",
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/.shotbox-cache/receipts/6607e003-c551-40fe-a2c5-3b87436c49c0/b70fb4c6-2439-4483-89e1-232e56cc75cf/integration.json",
+      "first_last_rgba_and_matte_preview": "passed"
+    },
+    {
+      "version": "ShotBoxMatte_v02",
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/.shotbox-cache/receipts/6607e003-c551-40fe-a2c5-3b87436c49c0/3a3c8ab9-4c22-4820-8697-8481280526b1/integration.json",
+      "first_last_rgba_and_matte_preview": "passed"
+    },
+    {
+      "version": "ShotBoxMatte_v03",
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/.shotbox-cache/receipts/6607e003-c551-40fe-a2c5-3b87436c49c0/c75acda3-e2e6-4147-ae1f-2f4a08585192/integration.json",
+      "first_last_rgba_and_matte_preview": "passed"
+    },
+    {
+      "version": "ShotBoxMatte_v05",
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/.shotbox-cache/receipts/f7fc3f2c-8ff5-4e22-b6ed-20cc1f65e55e/6a419481-1c9c-43a0-ab5c-b36e39bbb2c4/integration.json",
+      "first_last_rgba_and_matte_preview": "passed"
+    }
+  ],
+  "inference_imports": false
+}

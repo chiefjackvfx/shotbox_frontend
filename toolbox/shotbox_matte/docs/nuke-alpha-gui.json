@@ -1,0 +1,388 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "platform": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+  "gui": true,
+  "fixture": "actual Nuke RGB-only capture, CLI/export, direct alpha promotion and Read; explicit CPU replay, no new inference",
+  "native_gpu_inference": false,
+  "cache_root": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha",
+  "passed": [
+    "new node passes live original input including alpha and auxiliary channel before Generate",
+    "first: one foreground RGB capture, no source snapshot or post-inference Nuke execution; alpha EXRs promoted byte-for-byte and normal Read installed",
+    "regenerate: one foreground RGB capture, no source snapshot or post-inference Nuke execution; alpha EXRs promoted byte-for-byte and normal Read installed",
+    "regeneration keeps previous final-file hashes and reuses the normal raw alpha Read"
+  ],
+  "attempts": [],
+  "processes": [
+    {
+      "terminal": "probe",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "probe",
+        "--request",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/runtime.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf",
+      "pid": 2160925
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/worker.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf",
+      "pid": 2161203
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/replay_worker.py",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/worker.json",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/integration.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf",
+      "pid": 2161396
+    },
+    {
+      "terminal": "validation",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "validate",
+        "--attempt",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/integration.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf",
+      "pid": 2161840
+    },
+    {
+      "terminal": "probe",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "probe",
+        "--request",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/runtime.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641",
+      "pid": 2162211
+    },
+    {
+      "terminal": "plan",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "preflight",
+        "--job",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/worker.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641",
+      "pid": 2162350
+    },
+    {
+      "terminal": "result",
+      "arguments": [
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/integrations/nuke/tests_nuke/replay_worker.py",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/worker.json",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/integration.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641",
+      "pid": 2162581
+    },
+    {
+      "terminal": "validation",
+      "arguments": [
+        "-m",
+        "shotbox_matte.nuke_bridge",
+        "validate",
+        "--attempt",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/integration.json"
+      ],
+      "attempt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641",
+      "pid": 2163335
+    }
+  ],
+  "stage_events": [
+    {
+      "attempt": "ed8ef968-992c-4441-867f-0f0adff0eedf",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "ed8ef968-992c-4441-867f-0f0adff0eedf",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "ed8ef968-992c-4441-867f-0f0adff0eedf",
+      "stage": "generating"
+    },
+    {
+      "attempt": "ed8ef968-992c-4441-867f-0f0adff0eedf",
+      "stage": "validating"
+    },
+    {
+      "attempt": "22913e7a-6103-47e8-8cfb-4e49a820a641",
+      "stage": "capturing"
+    },
+    {
+      "attempt": "22913e7a-6103-47e8-8cfb-4e49a820a641",
+      "stage": "preflight"
+    },
+    {
+      "attempt": "22913e7a-6103-47e8-8cfb-4e49a820a641",
+      "stage": "generating"
+    },
+    {
+      "attempt": "22913e7a-6103-47e8-8cfb-4e49a820a641",
+      "stage": "validating"
+    }
+  ],
+  "source_directory": "/home/gambit/Desktop/-----------/bam030_DN_v001",
+  "source_pattern": "/home/gambit/Desktop/-----------/bam030_DN_v001/bam030_DN_v001_%04d.exr",
+  "source_color": "acescg",
+  "range": [
+    1001,
+    1003
+  ],
+  "source_dimensions": [
+    4096,
+    2850
+  ],
+  "review_script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/nuke/bam030.nk",
+  "published_versions": [],
+  "quality": "Technical workflow acceptance; no production matte quality claim",
+  "completed_versions": [
+    {
+      "phase": "first",
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/integration.json",
+      "output_directory": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v05",
+      "files_sha256": {
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v05/bam030_alpha_only_v05.1001.exr": "6d5704c923e22b89e9d680bef8b3d891c31a546f3b4b9d14c888b1aca1864b36",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v05/bam030_alpha_only_v05.1002.exr": "744e2e250b360f354ea2858cf9ed2e7eb347f844a5ec26e02d8780938cbcb388",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v05/bam030_alpha_only_v05.1003.exr": "608cda89d415478001dca8245d3e4b2a452b9633eef11a9608bdc97af597a42c"
+      },
+      "rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/acceptance/first/read.%04d.exr",
+      "matte_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/acceptance/first/group-matte.%04d.exr",
+      "legacy_choice_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/acceptance/first/group-legacy-choice.%04d.exr",
+      "backend_outputs": [
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/capture_matte_v001/capture_matte_v001.0001.exr",
+          "sha256": "6d5704c923e22b89e9d680bef8b3d891c31a546f3b4b9d14c888b1aca1864b36",
+          "size": 39435653
+        },
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/capture_matte_v001/capture_matte_v001.0002.exr",
+          "sha256": "744e2e250b360f354ea2858cf9ed2e7eb347f844a5ec26e02d8780938cbcb388",
+          "size": 40728176
+        },
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/capture_matte_v001/capture_matte_v001.0003.exr",
+          "sha256": "608cda89d415478001dca8245d3e4b2a452b9633eef11a9608bdc97af597a42c",
+          "size": 40142450
+        }
+      ],
+      "kind": "alpha",
+      "channels": [
+        "A"
+      ],
+      "remaining_job_files": [
+        "integration.json"
+      ]
+    },
+    {
+      "phase": "regenerate",
+      "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/integration.json",
+      "output_directory": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v06",
+      "files_sha256": {
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v06/bam030_alpha_only_v06.1001.exr": "feede3dfdd3de6d4ed3dd2d0076e8ba1227ee5a81f603ead3f3bfe9153b2946f",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v06/bam030_alpha_only_v06.1002.exr": "2a6fa8d278d0c90c79b26d916f125319c9757d3c739ba96b09bd461c03f8f710",
+        "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v06/bam030_alpha_only_v06.1003.exr": "c89739e71f11ba0e59fcf39e8976915788a669d954a5842cbc330cbff3e391e2"
+      },
+      "rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/acceptance/regenerate/read.%04d.exr",
+      "matte_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/acceptance/regenerate/group-matte.%04d.exr",
+      "legacy_choice_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/acceptance/regenerate/group-legacy-choice.%04d.exr",
+      "backend_outputs": [
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/capture_matte_v001/capture_matte_v001.0001.exr",
+          "sha256": "feede3dfdd3de6d4ed3dd2d0076e8ba1227ee5a81f603ead3f3bfe9153b2946f",
+          "size": 39435653
+        },
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/capture_matte_v001/capture_matte_v001.0002.exr",
+          "sha256": "2a6fa8d278d0c90c79b26d916f125319c9757d3c739ba96b09bd461c03f8f710",
+          "size": 40728176
+        },
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/capture_matte_v001/capture_matte_v001.0003.exr",
+          "sha256": "c89739e71f11ba0e59fcf39e8976915788a669d954a5842cbc330cbff3e391e2",
+          "size": 40142450
+        }
+      ],
+      "kind": "alpha",
+      "channels": [
+        "A"
+      ],
+      "remaining_job_files": [
+        "integration.json"
+      ]
+    }
+  ],
+  "capture_calls": [
+    {
+      "phase": "first",
+      "mode": "alpha",
+      "files": [
+        "capture_v001/capture.0001.exr",
+        "capture_v001/capture.0002.exr",
+        "capture_v001/capture.0003.exr"
+      ],
+      "source_snapshot_created": false
+    },
+    {
+      "phase": "regenerate",
+      "mode": "alpha",
+      "files": [
+        "capture_v001/capture.0001.exr",
+        "capture_v001/capture.0002.exr",
+        "capture_v001/capture.0003.exr"
+      ],
+      "source_snapshot_created": false
+    }
+  ],
+  "execute_calls": [
+    {
+      "phase": "first",
+      "node": "ShotBoxCaptureWrite",
+      "stage": "capturing",
+      "channels": "rgb"
+    },
+    {
+      "phase": "regenerate",
+      "node": "ShotBoxCaptureWrite",
+      "stage": "capturing",
+      "channels": "rgb"
+    }
+  ],
+  "backend_outputs": [
+    [
+      {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/capture_matte_v001/capture_matte_v001.0001.exr",
+        "sha256": "6d5704c923e22b89e9d680bef8b3d891c31a546f3b4b9d14c888b1aca1864b36",
+        "size": 39435653
+      },
+      {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/capture_matte_v001/capture_matte_v001.0002.exr",
+        "sha256": "744e2e250b360f354ea2858cf9ed2e7eb347f844a5ec26e02d8780938cbcb388",
+        "size": 40728176
+      },
+      {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/ed8ef968-992c-4441-867f-0f0adff0eedf/capture_matte_v001/capture_matte_v001.0003.exr",
+        "sha256": "608cda89d415478001dca8245d3e4b2a452b9633eef11a9608bdc97af597a42c",
+        "size": 40142450
+      }
+    ],
+    [
+      {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/capture_matte_v001/capture_matte_v001.0001.exr",
+        "sha256": "feede3dfdd3de6d4ed3dd2d0076e8ba1227ee5a81f603ead3f3bfe9153b2946f",
+        "size": 39435653
+      },
+      {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/capture_matte_v001/capture_matte_v001.0002.exr",
+        "sha256": "2a6fa8d278d0c90c79b26d916f125319c9757d3c739ba96b09bd461c03f8f710",
+        "size": 40728176
+      },
+      {
+        "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/jobs/.jobs/249cafde-fa4b-433f-9a4c-d34e51513d11/22913e7a-6103-47e8-8cfb-4e49a820a641/capture_matte_v001/capture_matte_v001.0003.exr",
+        "sha256": "c89739e71f11ba0e59fcf39e8976915788a669d954a5842cbc330cbff3e391e2",
+        "size": 40142450
+      }
+    ]
+  ],
+  "replay_provenance": [
+    {
+      "fixture": "CPU replay of previously verified native GPU outputs; no inference in this attempt",
+      "source_manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/integration.json",
+      "source_gui_report": "docs/nuke-precomp-gui.json",
+      "resampling": "full-size cached matte -> fitted/padded model raster -> normal CLI full-size restoration/export",
+      "spatial": {
+        "source_width": 4096,
+        "source_height": 2850,
+        "resized_width": 552,
+        "resized_height": 384,
+        "width": 576,
+        "height": 384,
+        "left": 12,
+        "top": 0
+      },
+      "source_outputs": [
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0001.exr",
+          "sha256": "c0a2c59b55d69ff17b25fe84d478f3bf379f8526ceeee58172494acc3a021417"
+        },
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0002.exr",
+          "sha256": "7b26ccdf43503c2b7ab756f78c62fe86b15696a79d8277cf00f692a8eb859b75"
+        },
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0003.exr",
+          "sha256": "c02aff3c1dd96b12f3fc4dcea8a6a398e8a33bb3ef7a1693aa95156664b20879"
+        }
+      ]
+    },
+    {
+      "fixture": "CPU replay of previously verified native GPU outputs; no inference in this attempt",
+      "source_manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/integration.json",
+      "source_gui_report": "docs/nuke-precomp-gui.json",
+      "resampling": "full-size cached matte -> fitted/padded model raster -> normal CLI full-size restoration/export",
+      "spatial": {
+        "source_width": 4096,
+        "source_height": 2850,
+        "resized_width": 552,
+        "resized_height": 384,
+        "width": 576,
+        "height": 384,
+        "left": 12,
+        "top": 0
+      },
+      "source_outputs": [
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0001.exr",
+          "sha256": "c0a2c59b55d69ff17b25fe84d478f3bf379f8526ceeee58172494acc3a021417"
+        },
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0002.exr",
+          "sha256": "7b26ccdf43503c2b7ab756f78c62fe86b15696a79d8277cf00f692a8eb859b75"
+        },
+        {
+          "path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/capture_matte_v001/capture_matte_v001.0003.exr",
+          "sha256": "c02aff3c1dd96b12f3fc4dcea8a6a398e8a33bb3ef7a1693aa95156664b20879"
+        }
+      ]
+    }
+  ],
+  "replay_source_manifest": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-precomp/shot/renders/precomp/bam030_alpha_v05/integration.json",
+  "external_read": {
+    "name": "Read_bam030_alpha_only",
+    "id": "dba3a138-75f1-460a-a2f7-2f709f9fb6ac",
+    "file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-alpha/shot/renders/precomp/bam030_alpha_only_v06/bam030_alpha_only_v06.%04d.exr"
+  },
+  "status": "passed",
+  "elapsed_seconds": 20.936,
+  "launcher": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "exit_code": 0,
+    "elapsed_seconds": 32.47,
+    "startup": "temporary NUKE_PATH/menu.py with PySide6 QTimer"
+  }
+}

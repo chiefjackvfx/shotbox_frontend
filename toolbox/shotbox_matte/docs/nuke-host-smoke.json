@@ -1,0 +1,63 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "platform": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+  "fixture": "synthetic Nuke matte; no inference",
+  "passed": [
+    "idempotent registration",
+    "positive/negative/zero frame mapping",
+    "capture host-state restore",
+    "RGB preservation",
+    "raw out-of-unit matte values",
+    "zero alpha outside range",
+    "matte-only view",
+    "cosmetic edits ignored",
+    "upstream grade stale detection",
+    "Nuke cache decoding",
+    "retimed evaluated capture",
+    "four-corner orientation",
+    "tight bbox black fill",
+    "original bbox preservation",
+    "auxiliary channel preservation",
+    "Read sequence media identities",
+    "media mtime change stale detection",
+    "retimed Read tracks consumed frames outside capture range",
+    "custom OCIO config identity",
+    "indexed socket topology changes",
+    "upstream ShotBox view/cache identity changes",
+    "custom/recursive root expression dependencies",
+    "unreferenced root controls and GUI frame ignored",
+    "non-square pixels rejected",
+    "native capture cancellation restores host"
+  ],
+  "cases": [
+    {
+      "range": [
+        1001,
+        1003
+      ],
+      "manifest": "/tmp/shotbox-nuke-17.1v2-aw80pnuy/a25cf51a-fa71-4d11-bef4-315e3f843b01/4fc9c30e-39f9-4c58-ae9c-e5aab7419c2c/integration.json"
+    },
+    {
+      "range": [
+        -2,
+        0
+      ],
+      "manifest": "/tmp/shotbox-nuke-17.1v2-aw80pnuy/a25cf51a-fa71-4d11-bef4-315e3f843b01/4c9a743b-df6d-4b9f-8a88-29e174705efc/integration.json"
+    },
+    {
+      "range": [
+        0,
+        0
+      ],
+      "manifest": "/tmp/shotbox-nuke-17.1v2-aw80pnuy/a25cf51a-fa71-4d11-bef4-315e3f843b01/d7bff64a-7833-4b15-a633-172fe6d8d5c7/integration.json"
+    }
+  ],
+  "saved_script": "/tmp/shotbox-nuke-17.1v2-aw80pnuy/cached.nk"
+}

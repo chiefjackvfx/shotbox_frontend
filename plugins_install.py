@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 import tempfile
 
+from app_cache import temporary_cache_task
+
 
 @dataclass
 class InstallResult:
@@ -120,4 +122,95 @@ def install_houdini_plugin(folder: str) -> InstallResult:
     _install_files([(source / name, destination / "shotbox_3de_import" / name) for name in runtime], result)
     if not result.failures:
         _install_files([(package, destination / "packages" / package.name)], result)
+    return result
+
+
+NUKE_BLOCK_START = "# BEGIN SHOTBOX MANAGED NUKE PLUGINS"
+NUKE_BLOCK_END = "# END SHOTBOX MANAGED NUKE PLUGINS"
+
+
+def nuke_startup_text(original, source):
+    """Replace only our managed block or a recognized standalone legacy call."""
+    import ast
+    text = original
+    if text.count(NUKE_BLOCK_START) != text.count(NUKE_BLOCK_END) or text.count(NUKE_BLOCK_START) > 1:
+        raise ValueError("Malformed Shotbox startup block; correct init.py before installing.")
+    if NUKE_BLOCK_START in text:
+        start, end = text.index(NUKE_BLOCK_START), text.index(NUKE_BLOCK_END) + len(NUKE_BLOCK_END)
+        text = text[:start] + text[end:].lstrip("\r\n")
+    try:
+        tree = ast.parse(text)
+    except SyntaxError as exc:
+        raise ValueError("Nuke init.py has invalid Python; correct it before installing.") from exc
+    lines = text.splitlines(keepends=True)
+    remove = set()
+    top_level = {id(node) for node in tree.body}
+    for expression in ast.walk(tree):
+        if not isinstance(expression, ast.Expr) or not isinstance(expression.value, ast.Call):
+            continue
+        call = expression.value
+        if not (isinstance(call.func, ast.Attribute) and call.func.attr == "pluginAddPath"):
+            continue
+        if not call.args or not isinstance(call.args[0], ast.Constant) or not isinstance(call.args[0].value, str):
+            continue
+        value = call.args[0].value.replace("\\", "/").rstrip("/").lower()
+        recognized = "shotbox" in value and (value.endswith("/integrations/nuke") or value.endswith("/plugins/nuke"))
+        if not recognized:
+            continue
+        if (id(expression) not in top_level or not isinstance(call.func.value, ast.Name)
+                or call.func.value.id != "nuke" or ";" in lines[expression.lineno - 1]):
+            raise ValueError("Custom Shotbox plugin registration found. Remove that registration manually, then retry.")
+        remove.update(range(expression.lineno - 1, expression.end_lineno))
+    preserved = "".join(line for index, line in enumerate(lines) if index not in remove)
+    block = (NUKE_BLOCK_START + "\nimport nuke\nnuke.pluginAddPath(" + repr(str(source)) + ")\n"
+             + NUKE_BLOCK_END + "\n")
+    return preserved.rstrip("\r\n") + ("\n\n" if preserved.strip() else "") + block
+
+
+def nuke_plugin_status(nuke_home=None):
+    destination = Path(nuke_home) if nuke_home else Path.home() / ".nuke"
+    path = destination / "init.py"
+    if not path.exists():
+        return "Not installed. Install the integration, then restart Nuke."
+    text = path.read_text(encoding="utf-8-sig")
+    source = Path(__file__).resolve().parent / "plugins" / "nuke"
+    expected = "nuke.pluginAddPath(" + repr(str(source)) + ")"
+    if NUKE_BLOCK_START in text and expected in text:
+        return "Managed integration registered. Restart Nuke after plugin updates."
+    return "Not registered for this frontend. Install / Update to register it."
+
+
+@temporary_cache_task
+def install_nuke_plugin(nuke_home=None, configuration=None):
+    import json
+    from app_cache import cache_directory
+    from toolbox.shotbox_matte.configuration import APPLICATION_ROOT, load_configuration
+    source = Path(__file__).resolve().parent / "plugins" / "nuke"
+    for relative in ("init.py", "menu.py", "shotbox_nuke/__init__.py"):
+        if not (source / relative).is_file():
+            raise FileNotFoundError(f"Bundled Nuke integration is missing: {source / relative}")
+    destination = Path(nuke_home) if nuke_home else Path.home() / ".nuke"
+    startup = destination / "init.py"
+    original = startup.read_bytes() if startup.exists() else b""
+    updated = nuke_startup_text(original.decode("utf-8-sig"), source)
+    preferences = destination / "shotbox_preferences.json"
+    values = json.loads(preferences.read_text(encoding="utf-8")) if preferences.exists() else {"schema_version": 1}
+    if not isinstance(values, dict) or values.get("schema_version") != 1:
+        raise ValueError("Unsupported existing Nuke preferences; correct them before installation.")
+    values.update(configuration if configuration is not None else load_configuration())
+    values.update(schema_version=1, application_root=str(APPLICATION_ROOT))
+    result = InstallResult(destination)
+    with tempfile.TemporaryDirectory(prefix="nuke-install-", dir=cache_directory("temp")) as directory:
+        work = Path(directory)
+        startup_source, preferences_source = work / "init.py", work / "shotbox_preferences.json"
+        startup_source.write_text(updated, encoding="utf-8")
+        preferences_source.write_text(json.dumps(values, indent=2) + "\n", encoding="utf-8")
+        if original and original != updated.encode("utf-8") and not (destination / "init.py.shotbox-backup").exists():
+            backup = work / "backup"
+            backup.write_bytes(original)
+            _install_files([(backup, destination / "init.py.shotbox-backup")], result)
+        if not result.failures:
+            _install_files([(preferences_source, preferences)], result)
+        if not result.failures:
+            _install_files([(startup_source, startup)], result)
     return result

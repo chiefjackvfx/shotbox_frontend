@@ -1,0 +1,87 @@
+{
+  "verified_at": "2026-10-21T13:12:47+01:00",
+  "status": "complete",
+  "exit_code": 0,
+  "ltx_revision": "e98f6d927d83c92ef2be6aec76c8440b19306e39",
+  "environment": {
+    "python": "3.12.13",
+    "torch": "2.11.0+cu130",
+    "cuda": "13.0",
+    "transformers": "5.14.1",
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "driver": "590.48.01"
+  },
+  "input": {
+    "kind": "synthetic display-RGB EXR sequence",
+    "selected_frames": 7,
+    "width": 83,
+    "height": 59,
+    "source_color": "srgb"
+  },
+  "model": {
+    "padded_frames": 9,
+    "added_copies": 2,
+    "width": 128,
+    "height": 96,
+    "request_width": 256,
+    "request_height": 192,
+    "prompt": "",
+    "adapter_strength": 1.0,
+    "skip_stage_2": true,
+    "offload": "cpu",
+    "low_vram": true
+  },
+  "output": {
+    "frames": 7,
+    "width": 83,
+    "height": 59,
+    "channels": [
+      "R",
+      "G",
+      "B"
+    ],
+    "precision": "half",
+    "compression": "zip",
+    "manifest_status": "complete",
+    "remaining_partial_directories": 0,
+    "remaining_lock": false,
+    "frame_values": [
+      {
+        "file": "source_roto_v003.1001.exr",
+        "min": 0.09320068359375,
+        "max": 0.61376953125
+      },
+      {
+        "file": "source_roto_v003.1002.exr",
+        "min": 0.09918212890625,
+        "max": 0.61474609375
+      },
+      {
+        "file": "source_roto_v003.1003.exr",
+        "min": 0.099853515625,
+        "max": 0.61572265625
+      },
+      {
+        "file": "source_roto_v003.1004.exr",
+        "min": 0.0933837890625,
+        "max": 0.61083984375
+      },
+      {
+        "file": "source_roto_v003.1005.exr",
+        "min": 0.09368896484375,
+        "max": 0.61474609375
+      },
+      {
+        "file": "source_roto_v003.1006.exr",
+        "min": 0.0931396484375,
+        "max": 0.611328125
+      },
+      {
+        "file": "source_roto_v003.1007.exr",
+        "min": 0.09246826171875,
+        "max": 0.60986328125
+      }
+    ]
+  },
+  "quality_assessment": "Not performed; execution and file validation only."
+}

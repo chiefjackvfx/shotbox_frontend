@@ -1,0 +1,28 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "native_gpu_inference": false,
+  "external_interpreter": "deliberately unavailable",
+  "status": "passed",
+  "receipt": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/jobs/.jobs/62bd3542-593b-4276-b6a2-947765735a71/72412909-b4d4-438e-8b41-b49f371f714a/integration.json",
+  "range": [
+    1001,
+    1003
+  ],
+  "group_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/nuke/post-cleanup-render/group.%04d.exr",
+  "matte_rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/nuke/post-cleanup-render/matte-only.%04d.exr",
+  "rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-clean-precomp/shot/nuke/post-cleanup-render/standalone-read.%04d.exr",
+  "passed": [
+    "saved scene opens twice and explicit Reload validates compact receipt with no intermediate files",
+    "native Read identity and downstream connection persist without duplicate Reads",
+    "explicit farm preflight and all-frame Group/matte-only renders work after cleanup",
+    "standalone Read renders after deleting generator Group with external interpreter unavailable",
+    "no inference backend, Torch, PyQt or process adapter imported; receipt-only job folder remains unchanged"
+  ]
+}

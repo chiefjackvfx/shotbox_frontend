@@ -1,0 +1,81 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "native_gpu_inference": false,
+  "cases": [
+    {
+      "selected_input": true,
+      "nested": false,
+      "native": {
+        "position": [
+          1200,
+          824
+        ],
+        "source_connected": true,
+        "inserted": true
+      },
+      "shotbox": {
+        "position": [
+          1200,
+          824
+        ],
+        "source_connected": true,
+        "inserted": true
+      },
+      "status": "passed"
+    },
+    {
+      "selected_input": false,
+      "nested": false,
+      "native": {
+        "position": [
+          292,
+          197
+        ],
+        "source_connected": false,
+        "inserted": false
+      },
+      "shotbox": {
+        "position": [
+          324,
+          213
+        ],
+        "source_connected": false,
+        "inserted": false
+      },
+      "status": "passed"
+    },
+    {
+      "selected_input": true,
+      "nested": true,
+      "native": {
+        "position": [
+          1200,
+          824
+        ],
+        "source_connected": true,
+        "inserted": true
+      },
+      "shotbox": {
+        "position": [
+          1200,
+          824
+        ],
+        "source_connected": true,
+        "inserted": true
+      },
+      "status": "passed"
+    }
+  ],
+  "status": "passed",
+  "one_step_undo_redo": true,
+  "no_temporary_nodes": true,
+  "properties_open": true,
+  "acescg_default": true
+}

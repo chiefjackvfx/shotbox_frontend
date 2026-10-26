@@ -1,0 +1,28 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "external_interpreter": "deliberately unavailable",
+  "native_gpu_inference": false,
+  "status": "passed",
+  "review_script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-readback/shot/nuke/bam030.nk",
+  "range": [
+    1001,
+    1003
+  ],
+  "rendered_pattern": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-readback/shot/nuke/standalone-render/verify.%04d.exr",
+  "read": "Read_bam030_alpha",
+  "read_id": "e5467445-61d1-49d0-aa7e-0af7b0a8fbcd",
+  "passed": [
+    "actual GPU review comp opens twice without duplicate external Reads or changed read identity",
+    "existing downstream inputs and Viewer remain connected to the standalone raw Read",
+    "deleting the generating Group leaves the native Read independently usable",
+    "all selected frames render through standalone Read with external interpreter unavailable",
+    "no inference backend, Torch, PyQt or process adapter imported"
+  ]
+}

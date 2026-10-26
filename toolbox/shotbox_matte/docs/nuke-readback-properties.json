@@ -1,0 +1,45 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "inference": false,
+  "tabs": [
+    [
+      "Read",
+      "OCIO",
+      "Sequence",
+      "Metadata",
+      "ShotBox",
+      "Node"
+    ]
+  ],
+  "visible_tabs": [
+    [
+      "Read",
+      "OCIO",
+      "Sequence",
+      "Metadata",
+      "ShotBox",
+      "Node"
+    ]
+  ],
+  "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-readback-properties.png",
+  "read": "Read_bam030_alpha",
+  "raw": true,
+  "file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-readback/shot/renders/precomp/bam030_alpha_v04/bam030_alpha_v04.%04d.exr",
+  "metadata_visible": {
+    "sb_read_owner": false,
+    "sb_read_id": false,
+    "sb_read_manifest": false,
+    "sb_read_pattern": false
+  },
+  "informational_note": "This Read uses the rendered EXR sequence.<br>Use ShotBoxMatte to generate another version.",
+  "info_image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-readback-properties-info.png",
+  "status": "passed",
+  "exit_code": 0
+}

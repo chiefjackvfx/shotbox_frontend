@@ -1,0 +1,65 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "gui": false,
+  "passed": [
+    "old native knob layout migrates and reapplies idempotently with all control values, animations, expressions, hidden references and action commands preserved",
+    "migrated native script saves and reopens with identical knob data and live bypass choice",
+    "opening an actual never-generated previous-layout script automatically applies the new properties layout without losing values"
+  ],
+  "status": "passed",
+  "legacy_script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-ui/legacy-layout.nk",
+  "migrated_script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-ui/migrated-layout.nk",
+  "snapshot": {
+    "values": {
+      "sb_start": "{root.ui_frame_start}",
+      "sb_end": "1025",
+      "sb_height": "384",
+      "sb_width": "505",
+      "sb_color": "acescg",
+      "sb_output": "Original RGB + generated alpha",
+      "sb_cache_root": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-ui/custom cache",
+      "sb_seed": "{curve x1001 101 x1025 202}",
+      "sb_offload": "cpu",
+      "sb_precision": "float",
+      "sb_temporal": "segmented",
+      "sb_low_vram": "true",
+      "sb_schema": "1",
+      "sb_version": "0.1.0",
+      "sb_uuid": "aa3b7895-c07f-4c8a-9146-3e4f7d9a9aa7",
+      "sb_active_manifest": "",
+      "sb_active_attempt": "",
+      "sb_active_start": "0",
+      "sb_active_end": "0",
+      "sb_pending_manifest": "",
+      "sb_active_capture": "{\"fixture\": \"preserve hidden values\", \"start\": 1001}",
+      "sb_storage": "Custom cache",
+      "sb_precomp_name": "preserve_ui_values",
+      "sb_precomp_path": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-ui/custom cache/<node>/<attempt>/precomp.%04d.exr",
+      "sb_use_precomp": "false",
+      "sb_precomp_template": ""
+    },
+    "commands": {
+      "sb_generate": "",
+      "sb_cancel": "",
+      "sb_reload": "",
+      "sb_validate": "",
+      "sb_relink": "",
+      "sb_folder": "",
+      "sb_log": "",
+      "sb_preferences": "",
+      "sb_force": ""
+    },
+    "expressions": {
+      "SBRange": "{\"frame >= parent.sb_active_start && frame <= parent.sb_active_end\"}",
+      "SBOutputChoice": "{parent.sb_output}",
+      "SBPrecompSwitch": "{parent.sb_use_precomp}"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "script": "/tmp/shotbox-nuke-17.1v2-aw80pnuy/cached.nk",
+  "passed": [
+    "saved/reopened cache",
+    "native production Write",
+    "no external Python/GPU",
+    "no inference/Qt process adapter imports",
+    "ungenerated render rejects",
+    "unrelated Write succeeds",
+    "static bypass",
+    "animated bypass over range",
+    "missing frame rejects",
+    "stale input rejects",
+    "unrelated invalid node ignored",
+    "UUID collision reconciliation",
+    "nested Groups ignore unused invalid tools",
+    "expression dependency guards",
+    "native copy/paste ownership",
+    "native delete/undo identity retirement"
+  ],
+  "background": {
+    "command": "NUKE_PATH=<repo>/integrations/nuke SHOTBOX_PYTHON=/deliberately-unavailable-shotbox-python /opt/Nuke17.1v2/Nuke17.1 -x -X FixtureWrite -F 0 <cached.nk>",
+    "valid_exit": 0,
+    "missing_cache_exit": 1,
+    "missing_integration_import_exit": 1,
+    "details": "Actual independent background processes. Missing cache .nk retained native Read path; validator rejected active manifest."
+  }
+}

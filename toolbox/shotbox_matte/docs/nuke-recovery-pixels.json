@@ -1,0 +1,57 @@
+{
+  "inspection": "independent OpenImageIO, every pixel/channel",
+  "fixture": "native synthetic alpha, no inference",
+  "frames": [
+    {
+      "frame": 1001,
+      "moved_file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/artist-moved-and-renamed/artist_alpha.1001.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        16,
+        12
+      ],
+      "original_sha256_preserved": true,
+      "alpha_exact": true,
+      "reopened_read_exact": true,
+      "reopened_group_preview_exact": true
+    },
+    {
+      "frame": 1002,
+      "moved_file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/artist-moved-and-renamed/artist_alpha.1002.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        16,
+        12
+      ],
+      "original_sha256_preserved": true,
+      "alpha_exact": true,
+      "reopened_read_exact": true,
+      "reopened_group_preview_exact": true
+    },
+    {
+      "frame": 1003,
+      "moved_file": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-recovery/case-ytw9ox37/artist-moved-and-renamed/artist_alpha.1003.exr",
+      "channels": [
+        "A"
+      ],
+      "dimensions": [
+        16,
+        12
+      ],
+      "original_sha256_preserved": true,
+      "alpha_exact": true,
+      "reopened_read_exact": true,
+      "reopened_group_preview_exact": true
+    }
+  ],
+  "status": "passed",
+  "passed": [
+    "moved and renamed alpha EXRs retain every original byte hash and unclamped synthetic alpha value",
+    "actual fresh-process Read renders remain A-only and match every pixel",
+    "actual fresh-process Group RGB previews equal alpha everywhere with opaque preview alpha"
+  ]
+}

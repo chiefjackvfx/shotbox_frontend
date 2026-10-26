@@ -1,0 +1,114 @@
+{
+  "host": {
+    "executable": "/opt/Nuke17.1v2/Nuke17.1",
+    "nuke": "17.1v2",
+    "python": "3.11.11 (remotes/origin/foundry/v3.11.11:42e60506bdd, Apr 10 2026, 11:10:19) [GCC 11.2.1 20220127 (Red Hat 11.2.1-9)]",
+    "pyside": "6.5.3",
+    "os": "Linux-5.14.0-687.33.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "edition": "Nuke"
+  },
+  "gui": true,
+  "native_gpu_inference": false,
+  "passed": [
+    "actual Generate opens the new dialog; Cancel leaves the saved name, pending attempt, session and output filesystem unchanged",
+    "actual Qt keyboard events cover Space, typing, middle insertion, cursor position, Backspace, Delete and Ctrl+V paste with live ASCII sanitization",
+    "empty and underscore-only names keep the dialog open with an inline error, Generate disabled and no attempt allocation",
+    "filename and full path update live; an existing v001 directory advances the preview to v002 without reserving or creating that version",
+    "Enter accepts a valid normalized name, trims outer underscores and updates the node through the actual prompt API without starting generation"
+  ],
+  "screenshots": [
+    {
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-naming-ui-620.png",
+      "width": 620,
+      "height": 344,
+      "buttons": [
+        {
+          "text": "Cancel",
+          "x": 410,
+          "y": 294,
+          "width": 80,
+          "height": 32
+        },
+        {
+          "text": "Generate",
+          "x": 502,
+          "y": 295,
+          "width": 98,
+          "height": 29
+        }
+      ]
+    },
+    {
+      "image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-naming-ui-480.png",
+      "width": 480,
+      "height": 344,
+      "buttons": [
+        {
+          "text": "Cancel",
+          "x": 270,
+          "y": 294,
+          "width": 80,
+          "height": 32
+        },
+        {
+          "text": "Generate",
+          "x": 362,
+          "y": 295,
+          "width": 98,
+          "height": 29
+        }
+      ]
+    }
+  ],
+  "keyboard_events": [
+    {
+      "action": "Space maps immediately to underscore",
+      "text": "hero_",
+      "cursor": 5
+    },
+    {
+      "action": "typing continues after underscore",
+      "text": "hero_matte",
+      "cursor": 10
+    },
+    {
+      "action": "Space insertion in middle",
+      "text": "hero__matte",
+      "cursor": 5
+    },
+    {
+      "action": "Backspace preserves cursor and existing text",
+      "text": "hero_matte",
+      "cursor": 4
+    },
+    {
+      "action": "Delete edits at current cursor",
+      "text": "heromatte",
+      "cursor": 4
+    },
+    {
+      "action": "continued typing at middle cursor",
+      "text": "hero_bluematte",
+      "cursor": 9
+    },
+    {
+      "action": "paste sanitizes spaces punctuation slash and non-ASCII immediately",
+      "text": "A_B__C__9",
+      "cursor": 9
+    },
+    {
+      "action": "leading and trailing underscores remain while editing",
+      "text": "__hero_matte__",
+      "cursor": 14
+    }
+  ],
+  "invalid_name_message": "Please enter a precomp name.",
+  "invalid_name_image": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/docs/nuke-naming-ui-invalid.png",
+  "script": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-naming-ui/case-zzbgl6ch/shot/nuke/bam030.nk",
+  "fixture_directory": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-naming-ui/case-zzbgl6ch",
+  "preview_v001": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-naming-ui/case-zzbgl6ch/shot/renders/precomp/bam030_subject_v001/bam030_subject_v001.####.exr",
+  "preview_v002": "/home/gambit/Nextcloud/01_projects/Shotbox_alpha/test-runs/nuke-naming-ui/case-zzbgl6ch/shot/renders/precomp/bam030_subject_v002/bam030_subject_v002.####.exr",
+  "accepted_name": "hero_matte",
+  "status": "passed",
+  "exit_code": 0
+}

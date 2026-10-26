@@ -12,6 +12,7 @@ opencolorio>=2.5,<3
 # XML / image helpers
 opencv-python
 Pillow
+OpenImageIO>=3.0,<4
 pyperclip
 OpenEXR
 openpyxl
