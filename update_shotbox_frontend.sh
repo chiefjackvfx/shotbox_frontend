@@ -38,14 +38,5 @@ fi
 
 git pull --ff-only origin "$BRANCH"
 
-if [[ -x "$REPO_DIR/venv/bin/python" ]]; then
-  PYTHON_BIN="$REPO_DIR/venv/bin/python"
-elif [[ -x "$REPO_DIR/../.venv/bin/python" ]]; then
-  PYTHON_BIN="$REPO_DIR/../.venv/bin/python"
-else
-  echo "No supported virtual environment was found."
-  exit 1
-fi
-
-"$PYTHON_BIN" -m pip install -r "$REPO_DIR/requirements.txt"
-nohup "$PYTHON_BIN" "$REPO_DIR/main.py" >/dev/null 2>&1 &
+sh "$REPO_DIR/setup_runtime.sh"
+nohup "$REPO_DIR/venv/bin/python" "$REPO_DIR/main.py" >/dev/null 2>&1 &

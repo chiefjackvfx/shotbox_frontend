@@ -1,5 +1,6 @@
 """Create Matte as an owned window in Shotbox's existing Qt application."""
 from pathlib import Path
+import sys
 
 from .configuration import APPLICATION_ROOT, load_configuration
 
@@ -13,7 +14,7 @@ def _host_context():
     state = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.GenericDataLocation)) / "ShotBox" / "Matte"
     state.mkdir(parents=True, exist_ok=True)
     temporary = cache_directory("temp") / "shotbox-matte"
-    runtime = RuntimeConfig(APPLICATION_ROOT, Path(values["interpreter"]), values["model_root"],
+    runtime = RuntimeConfig(APPLICATION_ROOT, Path(sys.executable), values["model_root"],
                             state, temporary, values["model_config"])
     settings = QSettings(str(state / "settings.ini"), QSettings.Format.IniFormat)
     return settings, runtime

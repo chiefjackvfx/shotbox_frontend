@@ -25,31 +25,6 @@ if errorlevel 1 (
 echo [Info] Git detected.
 echo.
 
-set "STEP=Checking Python"
-echo [Step] !STEP!
-set "PYTHON_CMD="
-
-where py >nul 2>&1
-if not errorlevel 1 (
-    py -3.11 --version >nul 2>&1 && set "PYTHON_CMD=py -3.11"
-    if not defined PYTHON_CMD (
-        py -3 --version >nul 2>&1 && set "PYTHON_CMD=py -3"
-    )
-)
-
-if not defined PYTHON_CMD (
-    where python >nul 2>&1
-    if not errorlevel 1 set "PYTHON_CMD=python"
-)
-
-if not defined PYTHON_CMD (
-    set "FAIL_MSG=Could not find a usable Python installation via 'py' or 'python'."
-    goto :fail
-)
-
-echo [Info] Selected Python command: !PYTHON_CMD!
-echo.
-
 set "MODE="
 set "REPO_DIR="
 
@@ -172,34 +147,14 @@ if errorlevel 1 (
 echo [Info] Repo is up to date on origin/%PUBLISHED_BRANCH%.
 echo.
 
-set "STEP=Preparing virtual environment"
+set "STEP=Preparing ShotBox Python 3.12 and dependencies"
 echo [Step] !STEP!
-if not exist "!REPO_DIR!\venv\Scripts\python.exe" (
-    echo [Info] Creating virtual environment at "!REPO_DIR!\venv"
-    !PYTHON_CMD! -m venv "!REPO_DIR!\venv"
-    if errorlevel 1 (
-        set "FAIL_MSG=Virtual environment creation failed."
-        goto :fail
-    )
-) else (
-    echo [Info] Reusing existing virtual environment at "!REPO_DIR!\venv"
-)
-echo.
-
-set "STEP=Installing Python requirements"
-echo [Step] !STEP!
-call "!REPO_DIR!\venv\Scripts\activate.bat"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "!REPO_DIR!\setup_runtime.ps1"
 if errorlevel 1 (
-    set "FAIL_MSG=Could not activate the virtual environment."
+    set "FAIL_MSG=Environment setup failed. Review the error above and retry."
     goto :fail
 )
-
-python -m pip install -r "!REPO_DIR!\requirements.txt"
-if errorlevel 1 (
-    set "FAIL_MSG=Requirements install failed. Review the pip output above."
-    goto :fail
-)
-echo [Info] Requirements install completed.
+echo [Info] Shared ShotBox and Matte environment is ready.
 echo.
 
 set "STEP=Final run prompt"

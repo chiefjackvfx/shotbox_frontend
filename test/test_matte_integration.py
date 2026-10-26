@@ -83,7 +83,7 @@ def test_owned_window_reuse_and_cache_protection(app, isolated, monkeypatch):
         page.close()
 
 
-def test_worker_uses_configured_interpreter_directory_and_environment(app, isolated):
+def test_worker_uses_host_interpreter_directory_and_environment(app, isolated):
     application = isolated / "application with spaces"
     package = application / "shotbox_matte"
     package.mkdir(parents=True)
@@ -108,9 +108,10 @@ def test_worker_uses_configured_interpreter_directory_and_environment(app, isola
     before = Path.cwd()
     try:
         assert window._start_job(options)
+        assert window._worker.process.program() == sys.executable
         wait(app, lambda: window._process is None)
         received = json.loads(record.read_text())
-        assert received["python"] == sys.executable
+        assert received["python"] == os.path.abspath(sys.executable)
         assert received["cwd"] == str(application)
         assert received["path"] is None
         assert Path(received["job"]).is_relative_to(temporary)
@@ -196,3 +197,65 @@ def test_shared_configuration_saves_external_paths_and_preserves_other_values(is
     assert saved["model_root"] == "/external/models"
     assert saved["application_root"] == str(configuration.APPLICATION_ROOT)
     assert configuration.load_configuration()["interpreter"] == "/external/runtime/python"
+
+
+@pytest.mark.parametrize("saved_python", ["", "/external/custom/python", str(configuration.APPLICATION_ROOT / ".venv/bin/python")])
+def test_host_uses_current_python_regardless_of_saved_nuke_override(app, isolated, saved_python):
+    from toolbox.shotbox_matte import plugin
+
+    path = configuration.preferences_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"schema_version": 1, "interpreter": saved_python}))
+    _settings, runtime = plugin._host_context()
+    assert runtime.worker_python == Path(sys.executable)
+
+
+@pytest.mark.parametrize("application, interpreter", [
+    ("/old/shotbox/toolbox/shotbox_matte", "/old/shotbox/toolbox/shotbox_matte/.venv/bin/python"),
+    (r"C:\old Shotbox\toolbox\shotbox_matte", r"C:\old Shotbox\toolbox\shotbox_matte\.venv-windows\Scripts\python.exe"),
+    (str(configuration.APPLICATION_ROOT), str(configuration.APPLICATION_ROOT / ".venv-linux/bin/python")),
+])
+def test_legacy_private_runtime_migrates_without_touching_files(isolated, application, interpreter):
+    path = configuration.preferences_path()
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"schema_version": 1, "application_root": application, "interpreter": interpreter,
+                                "model_root": "/existing/models", "studio_note": "keep"}))
+    assert configuration.load_configuration()["interpreter"] == ""
+    configuration.save_configuration({"cache_root": "/cache"})
+    saved = json.loads(path.read_text())
+    assert saved["interpreter"] == ""
+    assert saved["model_root"] == "/existing/models"
+    assert saved["studio_note"] == "keep"
+
+
+def test_settings_only_exposes_models_and_cache_and_preserves_nuke_override(app, isolated):
+    from toolbox.shotbox_matte.settings_widget import MatteSettingsWidget
+    from PyQt6.QtWidgets import QPushButton
+
+    configuration.save_configuration({"interpreter": "/custom/nuke/python", "model_root": "/models"})
+    widget = MatteSettingsWidget()
+    try:
+        assert set(widget.fields) == {"model_root", "model_config", "cache_root"}
+        assert not any("Runtime" in button.text() for button in widget.findChildren(QPushButton))
+        widget.fields["model_root"].setText("/new/models")
+        assert widget.save()
+        values = configuration.load_configuration()
+        assert values["interpreter"] == "/custom/nuke/python"
+        assert values["model_root"] == "/new/models"
+    finally:
+        widget.close()
+
+
+@pytest.mark.parametrize("override", ["/custom/nuke/python", "legacy"])
+def test_nuke_registration_preserves_custom_override_and_migrates_managed_runtime(isolated, override):
+    home = isolated / ".nuke"
+    home.mkdir(parents=True)
+    old_application = "/old/shotbox/toolbox/shotbox_matte"
+    saved_python = old_application + "/.venv/bin/python" if override == "legacy" else override
+    (home / "shotbox_preferences.json").write_text(json.dumps({
+        "schema_version": 1, "application_root": old_application, "interpreter": saved_python, "studio_note": "keep"}))
+    result = plugins_install.install_nuke_plugin(home, {"model_root": "/models"})
+    assert not result.failures
+    saved = json.loads((home / "shotbox_preferences.json").read_text())
+    assert saved["interpreter"] == ("" if override == "legacy" else override)
+    assert saved["studio_note"] == "keep"

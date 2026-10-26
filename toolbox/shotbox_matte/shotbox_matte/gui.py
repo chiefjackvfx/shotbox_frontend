@@ -1,7 +1,7 @@
-"""Optional PyQt6 desktop interface.
+"""Shotbox Toolbox Matte window.
 
-Importing this module never imports Qt. ``create_window`` and ``main`` are the
-only entry points that load the desktop dependency; the CLI stays headless.
+Importing this module never imports Qt. ``create_window`` loads the desktop
+dependency inside Shotbox; internal command entry points stay headless.
 """
 
 from __future__ import annotations
@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
-import sys
 from typing import Any
 import uuid
 
@@ -164,8 +163,8 @@ def _build_qt_types() -> dict[str, Any]:
         )
     except ImportError as exc:
         raise RuntimeError(
-            "The desktop interface requires PyQt6. Install the GUI dependencies with "
-            "'python -m pip install -e \".[desktop]\"', then run 'shotbox-matte --gui'."
+            "The Matte window requires Shotbox frontend dependencies. "
+            "Run the Shotbox frontend installer or updater, then open Toolbox → Shotbox Matte."
         ) from exc
 
     class TaskSignals(QObject):
@@ -1418,7 +1417,7 @@ def _build_qt_types() -> dict[str, Any]:
                 return False
             self._active_options = json.loads(json.dumps(options))
             if self.runtime is not None and not self.runtime.worker_python.is_file():
-                self._worker_error = "Matte runtime is missing. Open Settings → Plugins and prepare the Matte runtime."
+                self._worker_error = "Shotbox's Python is missing. Run the Shotbox installer or updater."
                 self.stage_label.setText(self._worker_error)
                 return False
             from .worker import MatteWorker
@@ -1830,21 +1829,3 @@ QToolTip { background: #272b33; color: #e6e8ed; border: 1px solid #555d6c; paddi
 def create_window(settings: Any = None, *, runtime: Any = None) -> Any:
     """Create a window; a QApplication must already exist on the calling thread."""
     return _build_qt_types()["MainWindow"](settings=settings, runtime=runtime)
-
-
-def main(input_path: str | None = None) -> int:
-    """Launch the optional desktop application."""
-    try:
-        types = _build_qt_types()
-    except RuntimeError as exc:
-        print(str(exc), file=sys.stderr)
-        return 2
-    QApplication = types["QApplication"]
-    app = QApplication.instance() or QApplication([sys.argv[0]])
-    app.setApplicationName("ShotBox Matte")
-    app.setOrganizationName("ShotBox")
-    window = create_window()
-    window.show()
-    if input_path:
-        window.load_input(input_path)
-    return app.exec()

@@ -1,122 +1,40 @@
-# Shotbox Toolbox integration
+# Shotbox Matte
 
-This folder contains the complete Matte application/backend and standalone
-launchers. The Nuke host integration lives in `../../plugins/nuke/` and is
-installed and configured through Shotbox's **Settings → Plugins** panel.
+Matte is part of the Shotbox frontend. Open **Toolbox → Open Shotbox Matte**
+for the full window, or right-click **Precomp → sequence folder → Roto** for
+compact generation. Both use the frontend's main Python 3.12 `venv` and the
+same installed dependencies. Generation runs in a background process using
+that exact Python, keeping Shotbox responsive and releasing GPU memory when
+it exits. There is no standalone Matte launcher or private runtime setup.
 
-Open **Toolbox → Open Shotbox Matte** for one owned pop-out window. Repeated
-clicks restore it. Shotbox stays open while Matte has active work; finish or
-cancel that work before quitting. Selecting a Shotbox shot does not
-implicitly change Matte's source.
+Run the normal Shotbox installer or updater to install or update dependencies.
+It automatically migrates an older frontend environment to Python 3.12,
+retains its backup for rollback, and verifies imports before restarting.
+Managed Python and setup tools live under the frontend's `.runtime`; download
+caches and working files live under `.cache/temp`. System Python and PATH are
+unchanged. Legacy shared parent environments and old private Matte environments
+are left untouched and are not used by the integrated feature.
 
-The frontend uses Python 3.11+ with PyQt6, NumPy, Pillow, PyAV and OpenImageIO.
-Inference stays in its own pinned Python 3.12/3.13 environment. Run **Prepare
-Matte Runtime** in Settings, or use `launch.sh --setup-only` / `launch.bat
---setup-only` from this folder. Virtual environments must be created at their
-final location, rather than copied between installations.
+Generation requires Windows/Linux x86_64, a compatible NVIDIA GPU with BF16
+support and a driver supporting CUDA 13.0. The pinned Linux Qt build requires
+glibc 2.34 or newer. macOS retains the frontend features
+without installing CUDA inference dependencies.
 
-Model weights are external and excluded from this source payload. Configure
-an existing model library in Settings; no extra 68 GB model copy is needed.
-The `models/manifest.json` records expected components. `models.local.json` is
-an optional example using relative paths; a live external configuration should
-resolve its component paths against its own location.
+Configure an external model folder in **Settings → Plugins → Shotbox Matte /
+Nuke**, then save. No model weights are downloaded or copied by setup. The
+`models/manifest.json` identifies the six required components; the optional
+`models.local.json` example resolves relative paths against its own location.
 
-Shared runtime/model configuration lives in `~/.nuke/shotbox_preferences.json`.
-Window preferences and session logs use the per-user `ShotBox/Matte` application
-data directory. Disposable worker files and setup download caches live under
-frontend `.cache/temp/`, protected while active. The small `.cache/.lease.lock`
-coordinates cache clearing with independently running Nuke sessions.
+Shared model/Nuke configuration lives in `~/.nuke/shotbox_preferences.json`.
+Window preferences and session logs use the per-user `ShotBox/Matte` data
+folder. Worker files use frontend `.cache/temp/shotbox-matte/`, protected from
+cache clearing while active. Final EXRs remain at their production output paths.
 
-The original standalone workflow notes below describe bundled model copies.
-For the integrated frontend, the external configuration above takes precedence.
-Existing verification reports are historical; they do not certify this move.
-
----
-
-# ShotBox Matte
-
-A standalone Python application that generates RGB grayscale matte EXRs from
-image sequences or MOV/MP4/MXF using Lightricks' native **LTX-2.5 distilled + Alpha Gen IC-LoRA**.
-The PyQt6 desktop and headless CLI share the same processing backend.
-
-The six required model files are stored in this project's `models/` directory.
-The app loads these independent local copies by default. There are no automatic
-model downloads, video intermediates, or copies of source EXRs.
-
-## Start the app
-
-**Windows 10/11 x64:** copy this project folder, including `models/`, onto the
-Windows PC and double-click **`launch.bat`**. It obtains local Python 3.12 when
-needed, creates `.venv-windows`, installs the desktop and CUDA inference
-dependencies, and opens the app. Python and Git do not need to be installed
-separately. A compatible existing Windows `.venv` is also supported.
-
-**Linux:** run **`./launch.sh`** (or `sh launch.sh`). It reuses the existing
-`.venv` when ready, or creates and prepares one using local Python 3.12.
-Automatic CUDA setup targets Linux and Windows; macOS is not supported.
-
-The first setup needs internet access and enough disk space for Python and the
-CUDA libraries. Later launches reuse the environment without reinstalling or
-downloading anything when it passes the dependency check. Generation requires
-a compatible NVIDIA GPU and driver supporting the CUDA 13.0 runtime.
-
-Setup uses [uv's local installer](https://docs.astral.sh/uv/reference/installer/)
-and [managed Python](https://docs.astral.sh/uv/concepts/python-versions/), with
-tools, Python and download caches inside `.launcher/`. It does not change the
-system Python, PATH, shell profiles or Windows Python registry entries. Library
-versions and the two official LTX source archives are pinned in
-`launcher-requirements.txt`; model weights are read from `models/` and are never
-downloaded by the launcher.
-
-Windows ignores Linux environments and installs Windows packages in its own
-venv. You can omit `.venv`, `.venv-linux`, `.venv-windows`, `.launcher` and `build`
-when copying to another PC; the appropriate environment is recreated locally.
-Keep `models/`, all application/launcher files, and `settings.ini` if present.
-Settings and logs created by these launchers stay inside this project folder.
-The old `dist` EXE distribution has been removed; no EXE build is needed.
-
-Both scripts accept an optional source path and `--setup-only` to prepare/check
-dependencies without opening the UI:
-
-```bat
-launch.bat "D:\shots\plate_v001"
-launch.bat --setup-only
-```
-
-```bash
-./launch.sh /shots/plate_v001
-./launch.sh --setup-only
-```
-
-Windows launcher execution and CUDA inference still need verification on a
-Windows PC; this development host runs Linux.
-
-For an already prepared environment, the direct Python entry point remains:
-
-```bash
-python launch_ui.py
-```
-
-`launch_ui.py` automatically uses this project's native venv. You can also pass an
-image-sequence folder/frame or movie: `python launch_ui.py /shots/bam190_DN_v001`.
-
-Validate the existing local weights:
-
-```bash
-.venv/bin/python -m shotbox_matte --validate-models \
-  --model-root models
-```
-
-The desktop accepts EXR/image-sequence folders or frames and MOV/MP4/MXF files.
-One source dropped onto **Single shot** loads it for setup and review; dropping
-several sources adds them to **Batch queue**. Choose a source if several are
-found in a single-shot input. Its preview and plan load in background threads;
-generation runs in a separate process. The processing and export controls,
-model paths, and window geometry persist between sessions. A source/matte
-preview and **Open output folder** are available after completion.
-
-Alpha Gen selects its subject automatically from the source footage. Inference
-uses the supported empty-prompt recipe; text prompt controls are not exposed.
+The full window accepts EXR/image-sequence folders or frames and MOV/MP4/MXF
+files. A single dropped source loads it for setup and review; several sources
+add a batch. Preview and planning run in background threads. Source/matte
+review and **Open output folder** are available after completion. Alpha Gen
+selects its subject automatically using its fixed empty-prompt recipe.
 
 ## Nuke integration
 
@@ -190,65 +108,32 @@ covers the dialog and main-graph output.
   **Copy log** copies the saved session log; **Open logs** opens the app's log
   directory. Matte result folders continue to contain results only.
 
-## Installation
+## Dependencies
 
-Target: Linux or Windows, Python **3.12**, NVIDIA CUDA with BF16 support.
-The native source is pinned to LTX-2 revision
-`e98f6d927d83c92ef2be6aec76c8440b19306e39` (packages 1.5.0).
-See [native implementation and environment details](docs/INFERENCE.md) for the
-verified interfaces, memory options, and upstream dependency differences.
+The frontend dependency configuration owns the tested desktop and inference
+pins, including CUDA 13.0 PyTorch and LTX revision
+`e98f6d927d83c92ef2be6aec76c8440b19306e39`. Use the frontend installer/updater
+rather than creating another environment here. Both EXR preparation and GPU
+inference use that shared environment. See [native implementation details](docs/INFERENCE.md)
+for the model recipe and memory behavior.
 
-Create an isolated environment and install the desktop and test dependencies:
+## Internal worker and diagnostics
 
-```bash
-uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python -e '.[desktop,dev]'
-```
-
-Install the CUDA build of PyTorch before the native extra. This project's Linux
-environment uses PyTorch 2.11.0 / CUDA 13.0, torchvision 0.26.0,
-torchaudio 2.11.0, and transformers 5.14.1:
-
-```bash
-uv pip install --python .venv/bin/python \
-  'torch==2.11.0' 'torchvision==0.26.0' 'torchaudio==2.11.0' \
-  --index-url https://download.pytorch.org/whl/cu130
-uv pip install --python .venv/bin/python -e '.[desktop,dev,inference]' \
-  'torch==2.11.0' 'torchvision==0.26.0' 'torchaudio==2.11.0' 'transformers==5.14.1'
-```
-
-These commands install Python libraries, not model weights. Use a compatible
-NVIDIA driver. The pinned upstream repository also declares a newer CUDA 13.2
-environment; consult the native notes before choosing a different stack.
-No optional NATTEN or compiled custom CUDA kernels are required by this app.
-
-On Windows PowerShell, substitute `.venv\Scripts\python.exe` for
-`.venv/bin/python` in the commands, for example:
-
-```powershell
-uv venv --python 3.12 .venv
-uv pip install --python .venv\Scripts\python.exe -e '.[desktop,dev]'
-.venv\Scripts\python.exe -m shotbox_matte --gui
-```
-
-Install the native extra after installing a matching CUDA PyTorch stack as
-above. Windows support is implemented but has not been exercised on a Windows
-host. For a CLI-only installation, omit `desktop`. Qt and a display server are
-unnecessary for processing and planning.
-
-## CLI
+Run the following diagnostics from this Matte source folder, using the main
+frontend interpreter (`../../venv/Scripts/python.exe` on Windows). The internal
+CLI remains available for Shotbox and Nuke workers; it does not launch a GUI.
 
 Inspect a sequence without loading models or creating output folders:
 
 ```bash
-.venv/bin/python -m shotbox_matte /shots/bam190_DN_v001 \
+../../venv/bin/python -m shotbox_matte /shots/bam190_DN_v001 \
   --dry-run --source-color linear-srgb --resolution 960x544
 ```
 
 Generate a matte with local weights:
 
 ```bash
-.venv/bin/python -m shotbox_matte /shots/bam190_DN_v001 \
+../../venv/bin/python -m shotbox_matte /shots/bam190_DN_v001 \
   --model-root models \
   --source-color linear-srgb --fps 24 --frame-cap 20 \
   --resolution 960x544 --seed 42 --suffix _alpha \
@@ -258,15 +143,15 @@ Generate a matte with local weights:
 Other useful options:
 
 ```bash
-shotbox-matte /shots/frames --list-sequences
-shotbox-matte /shots/frames --sequence 'beauty.#.exr' --dry-run
-shotbox-matte /shots/frames --first-frame 1001 --padding 4 --existing overwrite
-shotbox-matte /shots/frames --models-config models.local.json --json-progress
-shotbox-matte /shots/plate_v001.mov --frame-cap 20 --source-color auto
-shotbox-matte /shots/camera_v001.mxf --source-in 1 --source-out 20 --fps 25
-shotbox-matte /shots/frames --source-in 1040 --source-out 1099 --frame-skip 1
-shotbox-matte /shots/plate_v001.mov --source-in 41 --source-out 100 --dry-run
-shotbox-matte --help
+../../venv/bin/python -m shotbox_matte /shots/frames --list-sequences
+../../venv/bin/python -m shotbox_matte /shots/frames --sequence 'beauty.#.exr' --dry-run
+../../venv/bin/python -m shotbox_matte /shots/frames --first-frame 1001 --padding 4 --existing overwrite
+../../venv/bin/python -m shotbox_matte /shots/frames --models-config models.local.json --json-progress
+../../venv/bin/python -m shotbox_matte /shots/plate_v001.mov --frame-cap 20 --source-color auto
+../../venv/bin/python -m shotbox_matte /shots/camera_v001.mxf --source-in 1 --source-out 20 --fps 25
+../../venv/bin/python -m shotbox_matte /shots/frames --source-in 1040 --source-out 1099 --frame-skip 1
+../../venv/bin/python -m shotbox_matte /shots/plate_v001.mov --source-in 41 --source-out 100 --dry-run
+../../venv/bin/python -m shotbox_matte --help
 ```
 
 `--source-in` and `--source-out` select an inclusive range before skip/cap.
@@ -394,11 +279,10 @@ bam190_DN_alpha_v001/
     ...
 ```
 
-Generated output folders contain the matte EXR sequence. Job manifests and PNG
-previews are saved separately in the app's `logs/jobs/<job-id>/` folder; in the
-Windows portable build this is beside the EXE. Set `SHOTBOX_JOB_DIR` to override
-the job-storage root if needed. The desktop still loads source/matte previews
-from that separate storage. CLI results include their paths and the manifest path.
+Generated output folders contain the matte EXR sequence. Shotbox stores job
+manifests and preview PNGs separately in frontend `.cache/temp/shotbox-matte/jobs/`.
+Session logs use the per-user Matte data folder. Internal CLI jobs can use
+`SHOTBOX_JOB_DIR` to override job storage. Results include preview and manifest paths.
 
 The first number comes from the selected source sequence when unambiguous,
 otherwise 1001. Set `--first-frame` and `--padding` to override it. Folders
@@ -418,37 +302,37 @@ replacement and exact-sequence stale-frame cleanup happen only after all new
 frames have exported. Unrelated files and other versions remain intact. Caught
 commit failures roll replaced files back. Multi-file replacement cannot be
 atomic across sudden power loss; the manifest records its committing state and
-staging contains backups for recovery. In standalone mode, staging is a hidden
-sibling of the output folder, on the same volume for atomic frame replacement.
-When opened from Shotbox Toolbox, staging, overwrite backups and export locks
-instead live under the frontend's `.cache/temp/shotbox-matte/`. The host sets
+staging contains backups for recovery. Shotbox staging, overwrite backups and export locks
+live under the frontend's `.cache/temp/shotbox-matte/`. The host sets
 `SHOTBOX_TEMP_DIR` for this worker only. Cross-volume exports copy files between
 the cache and output, preserving backups for rollback on caught commit failures.
 On a successful overwrite, older ShotBox manifests and preview PNGs in the
 results folder are archived into the new job's `previous-export/` directory.
 
 Every reserved job has a manifest in app storage. Only a successful commit marks
-it `complete`. Failed or cancelled jobs retain a sibling `.shotbox-partial-*`
-directory outside the output folder; the manifest records its path and status.
-Toolbox jobs retain these partial frames in the cache instead of a sibling folder.
+it `complete`. Failed or cancelled Shotbox jobs retain partial frames under the
+frontend cache, outside the final output folder; the manifest records their
+path and status.
 Unfinished frames and recovery backups remain outside the results. Existing
 successful overwrite output stays intact until commit. Cancellation is checked
 between preparation, native denoising, decoding and export operations. After
 the commit point, a successful export is reported as complete even if a late
 cancel request arrives.
 
-The desktop asks its worker to cancel, then forcibly stops it after a timeout
+Shotbox asks its worker to cancel, then forcibly stops it after a timeout
 if a native operation cannot return. A forced stop can leave a running job manifest
-and stale sibling `.shotbox-lock` directory. Inspect the indicated partial output before
-removing that lock and retrying. GPU memory is released when the worker exits.
-For Toolbox jobs the stale lock is in the cache; its manifest records the path.
+and stale export lock in the cache. Inspect the indicated partial output before
+removing that lock and retrying; its manifest records the path. GPU memory is
+released when the worker exits.
 
 ## Verification
 
+From the frontend root, using the main environment with development tools installed:
+
 ```bash
-.venv/bin/python -m pytest -q
-.venv/bin/ruff check shotbox_matte tests
-.venv/bin/python -m compileall -q shotbox_matte
+venv/bin/python -m pytest -q toolbox/shotbox_matte/tests
+venv/bin/python -m pytest -q test/test_runtime_setup.py test/test_matte_integration.py test/test_roto_dialog.py
+venv/bin/python -m ruff check toolbox/shotbox_matte/shotbox_matte
 ```
 
 Tests exercise real OpenImageIO files and Qt offscreen where installed, with

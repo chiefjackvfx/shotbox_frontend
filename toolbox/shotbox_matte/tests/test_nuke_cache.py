@@ -140,8 +140,8 @@ def test_attempt_allocation_is_exclusive(tmp_path):
 
 
 def test_preferences_preserve_venv_symlink_and_explicit_override(tmp_path):
-    root = tmp_path / "application"
-    executable = root / ".venv/bin/python"
+    root = tmp_path / "frontend" / "toolbox" / "shotbox_matte"
+    executable = tmp_path / "frontend" / "venv/bin/python"
     executable.parent.mkdir(parents=True)
     executable.symlink_to(sys.executable)
     assert resolve_interpreter(root) == executable
@@ -151,3 +151,44 @@ def test_preferences_preserve_venv_symlink_and_explicit_override(tmp_path):
     assert load(preferences)["model_root"] == "模型"
     assert suggested_cache_root(None) is None
     assert suggested_cache_root(tmp_path / "comp.nk") == tmp_path / ".shotbox-cache"
+
+
+@pytest.mark.parametrize("windows,suffix", [(False, "bin/python"), (True, "Scripts/python.exe")])
+def test_nuke_uses_main_environment_and_ignores_old_private_runtime(tmp_path, windows, suffix):
+    root = tmp_path / "frontend" / "toolbox" / "shotbox_matte"
+    main = tmp_path / "frontend" / "venv" / suffix
+    main.parent.mkdir(parents=True)
+    main.touch()
+    private = root / ".venv" / suffix
+    private.parent.mkdir(parents=True)
+    private.write_text("old private runtime")
+    assert resolve_interpreter(root, windows=windows) == main
+    assert resolve_interpreter(root, override=private, windows=windows) == main
+    assert private.read_text() == "old private runtime"
+    external = tmp_path / "custom" / suffix
+    external.parent.mkdir(parents=True)
+    external.touch()
+    assert resolve_interpreter(root, override=external, windows=windows) == external
+
+
+def test_nuke_preferences_migrate_managed_runtime_and_preserve_other_fields(tmp_path):
+    preferences = tmp_path / "preferences.json"
+    preferences.write_text(json.dumps({
+        "schema_version": 1, "application_root": "/old/shotbox/toolbox/shotbox_matte",
+        "interpreter": "/old/shotbox/toolbox/shotbox_matte/.venv/bin/python",
+        "model_root": "/external/models", "studio_note": "keep"}))
+    assert load(preferences)["interpreter"] == ""
+    save({"cache_root": "/cache"}, preferences)
+    saved = json.loads(preferences.read_text())
+    assert saved["interpreter"] == ""
+    assert saved["model_root"] == "/external/models"
+    assert saved["studio_note"] == "keep"
+
+
+def test_nuke_missing_shared_runtime_does_not_fall_back_to_private_environment(tmp_path):
+    root = tmp_path / "frontend" / "toolbox" / "shotbox_matte"
+    private = root / ".venv/bin/python"
+    private.parent.mkdir(parents=True)
+    private.touch()
+    with pytest.raises(ProtocolError, match="main Shotbox installer"):
+        resolve_interpreter(root, windows=False)

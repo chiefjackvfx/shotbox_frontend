@@ -40,15 +40,6 @@ if not exist "%REPO_DIR%\.git" (
 echo [Info] Git checkout detected.
 echo.
 
-set "STEP=Checking virtual environment"
-echo [Step] !STEP!
-if not exist "%REPO_DIR%\venv\Scripts\python.exe" (
-    set "FAIL_MSG=Missing virtual environment at %REPO_DIR%\venv"
-    goto :fail
-)
-echo [Info] Virtual environment detected.
-echo.
-
 set "STEP=Checking published branch"
 echo [Step] !STEP!
 set "CURRENT_BRANCH="
@@ -95,24 +86,14 @@ if errorlevel 1 (
 echo [Info] Repo is up to date on origin/%BRANCH%.
 echo.
 
-set "STEP=Activating virtual environment"
+set "STEP=Preparing ShotBox Python 3.12 and dependencies"
 echo [Step] !STEP!
-call "%REPO_DIR%\venv\Scripts\activate.bat"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%REPO_DIR%\setup_runtime.ps1"
 if errorlevel 1 (
-    set "FAIL_MSG=Could not activate the virtual environment."
+    set "FAIL_MSG=Environment setup failed. Review the error above and retry."
     goto :fail
 )
-echo [Info] Virtual environment activated.
-echo.
-
-set "STEP=Installing Python requirements"
-echo [Step] !STEP!
-python -m pip install -r "%REPO_DIR%\requirements.txt"
-if errorlevel 1 (
-    set "FAIL_MSG=Requirements install failed. Review the pip output above."
-    goto :fail
-)
-echo [Info] Requirements install completed.
+echo [Info] Shared ShotBox and Matte environment is ready.
 echo.
 
 set "STEP=Restarting ShotBox"

@@ -1,4 +1,76 @@
-# Shotbox integration verification
+# Shared Shotbox / Matte Python 3.12 integration
+
+Verified on 2026-10-26 (Europe/London). Matte now uses frontend `venv` for both
+its host UI and background generation. Standalone launchers, private runtime
+preparation and portable EXE packaging have been removed. Existing model
+libraries, old private environments and the legacy parent environment are
+preserved.
+
+## Setup and migration
+
+- Ran the actual frontend `setup_runtime.sh` from a fresh canonical environment.
+  It provisioned local Python **3.12.14** under `.runtime/tools/python`, created
+  frontend `venv` and installed the combined **78-package** application stack.
+  Import/version checks passed, including OpenImageIO and CUDA 13 PyTorch.
+- Dependency resolution passed for Windows x86_64 (60 packages), Linux x86_64
+  glibc ≥2.34 (78), and macOS ARM (20, without inference/CUDA packages).
+- A disposable real Python 3.11 environment migrated at its final path to
+  **3.12.14**, retained an inactive rollback backup, and was reused on another
+  setup run. Its activation script contains the final environment path.
+- A second real migration deliberately failed during dependency installation.
+  The original **Python 3.11.13** environment and its marker were restored at
+  the original path. The shared parent environment's configuration was unchanged.
+- Controlled migration tests additionally exercise interrupted recovery,
+  concurrent setup exclusion, process identity, child termination before
+  rollback, symlinks/junctions, download cache protection and paths with spaces.
+- Main environment compatibility check passed after installing test tools:
+  **82 packages checked; all installed packages are compatible**.
+
+## Generation and application boundaries
+
+- Actual Precomp/Roto button generation used the same executable as the host:
+  `shotbox_frontend/venv/bin/python` (**Python 3.12.14**).
+- The real NVIDIA GPU worker exported three 16×16 RGB grayscale EXRs in
+  **22.409 seconds**, with **924 UI timer callbacks** during processing.
+  Dimensions, finite pixels, equal RGB channels and unchanged source hashes
+  passed inspection. A second actual button-launched worker was cancelled;
+  the completed output remained intact.
+- Native model files were read from the existing external library. No model
+  weights were downloaded or copied.
+- Saved managed Matte interpreter paths migrate to the frontend default.
+  Explicit custom Nuke overrides, external model paths and unrelated settings
+  are preserved. Nuke's preference/default lookup remains free of frontend Qt
+  and inference imports.
+
+## Automated validation
+
+- Full remaining Matte/backend suite: **773 passed, 25 subtests passed**.
+- Focused frontend setup, integration, Roto, shutdown, cache, updater and plugin
+  group: **109 passed** on the canonical Python 3.12 environment.
+- Broader frontend coverage ran all **52 test modules in separate processes**:
+  **744 passed, 141 subtests passed**, with no crashes or timeouts. One existing
+  test expects the username `Jack` and fails for this machine's `gambit` user;
+  the identical failure was reproduced on unchanged HEAD.
+- A single-process full frontend run still segfaults during combined Qt tests,
+  as previously observed before this integration; that execution mode is not
+  certified. The isolated module results above cover the full frontend suite.
+- Ruff passed for the new setup code, Matte package and Nuke preferences;
+  shell syntax and Git whitespace checks passed. Broader frontend lint still
+  reports existing style findings outside those checked modules.
+
+Windows/macOS dependency resolution and controlled platform branches were
+checked; actual Windows/macOS installation and native generation were not run.
+Tiny synthetic GPU inputs establish integration mechanics, not production matte
+quality. Transient acceptance scripts, EXRs, resolver manifests and JSON reports
+are under frontend `.cache/temp` and can be cleared when no jobs are active.
+
+---
+
+The following sections are historical records of the earlier split-runtime
+implementation. They describe the software as it existed at the time and are
+not current setup instructions.
+
+# Earlier Shotbox integration verification
 
 Verified on 2026-10-26T13:23:54+00:00 (Europe/London).
 

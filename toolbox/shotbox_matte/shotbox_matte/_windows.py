@@ -1,4 +1,4 @@
-"""DLL search paths for the portable Windows runtime, including CLI workers.
+"""DLL search paths for Shotbox's active Windows environment, including workers.
 
 Only standard-library modules are imported here. Directory handles must survive
 for the process lifetime: closing or collecting them removes the search paths.
@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import sys
 from threading import Lock
 
 
@@ -15,8 +16,8 @@ _DLL_HANDLES: dict[str, object] = {}
 _DLL_LOCK = Lock()
 
 
-def configure_dlls(root: Path | str) -> tuple[Path, ...]:
-    """Register existing bundled DLL directories once and retain their handles.
+def configure_dlls(prefix: Path | str | None = None) -> tuple[Path, ...]:
+    """Register active environment DLL directories once and retain their handles.
 
     The no-op on platforms without ``os.add_dll_directory`` keeps source-level
     tooling and the headless CLI portable. Missing optional wheel directories
@@ -25,10 +26,11 @@ def configure_dlls(root: Path | str) -> tuple[Path, ...]:
     add_directory = getattr(os, "add_dll_directory", None)
     if add_directory is None:
         return ()
-    runtime = Path(root).expanduser().resolve() / "windows_runtime"
+    runtime = Path(sys.prefix if prefix is None else prefix).expanduser().resolve()
     site_packages = runtime / "Lib" / "site-packages"
     candidates = (
         runtime,
+        runtime / "Scripts",
         site_packages / "torch" / "lib",
         site_packages / "PyQt6" / "Qt6" / "bin",
         site_packages / "OpenImageIO" / "bin",

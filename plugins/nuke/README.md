@@ -22,13 +22,13 @@ macOS inference, stereo and deep inputs are outside this release's scope.
 ## Installation and configuration through Shotbox
 
 The authoritative integration source lives in `shotbox_frontend/plugins/nuke/`.
-Matte's application and backend live separately in `toolbox/shotbox_matte/`.
+Matte's backend source lives in `toolbox/shotbox_matte/` and uses the frontend's
+main Python 3.12 environment.
 
 1. Open **Shotbox → Settings → Plugins → Shotbox Matte / Nuke**.
-2. Choose **Prepare Matte Runtime** to build the separate Python 3.12/CUDA
-   environment. First setup needs internet access; no model weights download.
+2. Run the normal Shotbox installer/updater to prepare frontend `venv` with
+   Python 3.12 and the tested CUDA dependencies. No model weights download.
 3. Select your external model folder and optional model configuration. Save.
-   A compatible existing external worker interpreter can also be selected.
 4. Choose **Install / Update Nuke Integration**, then restart Nuke.
 
 Shotbox preserves unrelated `~/.nuke/init.py` code, backs it up before the first
@@ -39,8 +39,10 @@ correction. Reinstall after relocating the frontend to refresh its registration
 and backend application path.
 
 Shared settings remain in `~/.nuke/shotbox_preferences.json`. Shotbox configures
-the relocated application root, external interpreter, external model paths and
-optional persistent Nuke cache override. Nuke's advanced Preferences edit the
+the relocated backend root, external model paths and optional persistent Nuke
+cache override. By default, Nuke runs workers with frontend `venv`. Recognized
+old managed Matte interpreter paths migrate to that default; explicit custom
+Nuke interpreter overrides remain supported. Nuke's advanced Preferences edit the
 same file. Nuke reads settings for the next generation job and works without
 Shotbox running. It never installs dependencies or imports the frontend's Qt.
 
@@ -264,7 +266,7 @@ guard animated disables and command-line ranges differing from project limits.
 
 ## Troubleshooting and tests
 
-- **Environment/model/CUDA error:** run setup-only outside Nuke, check the six
+- **Environment/model/CUDA error:** run the Shotbox installer/updater outside Nuke, check the six
   local model paths and NVIDIA driver, then confirm Preferences. Probe never
   loads weights; a successful probe cannot guarantee VRAM fit.
 - **Capture failed/cancelled:** confirm a stable square-pixel flat RGB format
@@ -277,7 +279,7 @@ guard animated disables and command-line ranges differing from project limits.
 - **Worker crash/OOM:** use Open log for the retained error message; reduce generation
   dimensions or use segmented processing. Full-range errors do not trigger fallback.
 
-Run ordinary automated tests with `.venv/bin/python -m pytest -q`. Native host
+Run ordinary automated tests from the frontend with `venv/bin/python -m pytest -q toolbox/shotbox_matte/tests`. Native host
 fixtures are outside pytest collection:
 
 ```bash

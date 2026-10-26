@@ -184,7 +184,7 @@ def nuke_plugin_status(nuke_home=None):
 def install_nuke_plugin(nuke_home=None, configuration=None):
     import json
     from app_cache import cache_directory
-    from toolbox.shotbox_matte.configuration import APPLICATION_ROOT, load_configuration
+    from toolbox.shotbox_matte.configuration import APPLICATION_ROOT, load_configuration, _legacy_interpreter
     source = Path(__file__).resolve().parent / "plugins" / "nuke"
     for relative in ("init.py", "menu.py", "shotbox_nuke/__init__.py"):
         if not (source / relative).is_file():
@@ -198,6 +198,8 @@ def install_nuke_plugin(nuke_home=None, configuration=None):
     if not isinstance(values, dict) or values.get("schema_version") != 1:
         raise ValueError("Unsupported existing Nuke preferences; correct them before installation.")
     values.update(configuration if configuration is not None else load_configuration())
+    if _legacy_interpreter(values.get("interpreter", ""), values.get("application_root", ""), APPLICATION_ROOT):
+        values["interpreter"] = ""
     values.update(schema_version=1, application_root=str(APPLICATION_ROOT))
     result = InstallResult(destination)
     with tempfile.TemporaryDirectory(prefix="nuke-install-", dir=cache_directory("temp")) as directory:

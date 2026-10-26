@@ -4,12 +4,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ -x "$SCRIPT_DIR/venv/bin/python" ]]; then
-  PYTHON_BIN="$SCRIPT_DIR/venv/bin/python"
-elif [[ -x "$SCRIPT_DIR/../.venv/bin/python" ]]; then
-  PYTHON_BIN="$SCRIPT_DIR/../.venv/bin/python"
-else
-  PYTHON_BIN="$(command -v python3 || command -v python)"
+PYTHON_BIN="$SCRIPT_DIR/venv/bin/python"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  echo "Missing Shotbox environment. Run the Shotbox installer or sh setup_runtime.sh first." >&2
+  exit 1
 fi
 
 cd "$SCRIPT_DIR"

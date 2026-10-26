@@ -43,18 +43,6 @@ fail() {
   exit 1
 }
 
-resolve_python_cmd() {
-  if command -v python3.11 >/dev/null 2>&1; then
-    PYTHON_CMD="python3.11"
-  elif command -v python3 >/dev/null 2>&1; then
-    PYTHON_CMD="python3"
-  elif command -v python >/dev/null 2>&1; then
-    PYTHON_CMD="python"
-  else
-    return 1
-  fi
-}
-
 is_macos() {
   [[ "$(uname -s 2>/dev/null || true)" == "Darwin" ]]
 }
@@ -111,16 +99,6 @@ if ! command -v git >/dev/null 2>&1; then
   fail
 fi
 echo "[Info] Git detected."
-echo
-
-STEP="Checking Python"
-echo "[Step] $STEP"
-PYTHON_CMD=""
-if ! resolve_python_cmd; then
-  FAIL_MSG="Could not find a usable Python installation via 'python3.11', 'python3', or 'python'."
-  fail
-fi
-echo "[Info] Selected Python command: $PYTHON_CMD"
 echo
 
 MODE=""
@@ -239,26 +217,13 @@ fi
 echo "[Info] Repo is up to date on origin/$PUBLISHED_BRANCH."
 echo
 
-STEP="Preparing virtual environment"
+STEP="Preparing ShotBox Python 3.12 and dependencies"
 echo "[Step] $STEP"
-if [[ ! -x "$REPO_DIR/venv/bin/python" ]]; then
-  echo "[Info] Creating virtual environment at \"$REPO_DIR/venv\""
-  if ! "$PYTHON_CMD" -m venv "$REPO_DIR/venv"; then
-    FAIL_MSG="Virtual environment creation failed."
-    fail
-  fi
-else
-  echo "[Info] Reusing existing virtual environment at \"$REPO_DIR/venv\""
-fi
-echo
-
-STEP="Installing Python requirements"
-echo "[Step] $STEP"
-if ! "$REPO_DIR/venv/bin/python" -m pip install -r "$REPO_DIR/requirements.txt"; then
-  FAIL_MSG="Requirements install failed. Review the pip output above."
+if ! sh "$REPO_DIR/setup_runtime.sh"; then
+  FAIL_MSG="Environment setup failed. Review the error above and retry."
   fail
 fi
-echo "[Info] Requirements install completed."
+echo "[Info] Shared ShotBox and Matte environment is ready."
 echo
 
 STEP="Final run prompt"

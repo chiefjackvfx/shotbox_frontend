@@ -1,4 +1,4 @@
-"""The sole application entry point, including the desktop worker protocol."""
+"""Internal command entry point for Shotbox workers and Nuke integration."""
 
 from __future__ import annotations
 
@@ -35,7 +35,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("input", nargs="?", help="image-sequence folder, sequence frame, or MOV/MP4/MXF file")
     parser.add_argument("--input", dest="input_option", metavar="PATH", help="alternative to positional input")
-    parser.add_argument("--gui", action="store_true", help="open the PyQt6 desktop application")
     parser.add_argument("--sequence", help="sequence ID reported by --list-sequences")
     parser.add_argument("--list-sequences", action="store_true", help="list detected image sequences and MOV/MP4/MXF movies, then exit")
     parser.add_argument("--source-color", choices=("auto", "linear-srgb", "srgb", "acescg"), default="auto",
@@ -202,10 +201,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             return execute(JobOptions(**payload), reporter, args.cancel_file or Path(str(args.worker) + ".cancel"))
         if args.input and args.input_option:
             parser.error("Provide either positional input or --input, not both.")
-        if args.gui:
-            from .gui import main as gui_main
-
-            return int(gui_main(input_path=args.input_option or args.input) or 0)
         if args.validate_models:
             from .models import ModelConfig, validate_models
 
@@ -218,7 +213,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return 1 if errors else 0
         input_path = args.input_option or args.input
         if not input_path:
-            parser.error("An image-sequence or MOV/MP4/MXF input path is required, or use --gui / --validate-models.")
+            parser.error("An image-sequence or MOV/MP4/MXF input path is required, or use --validate-models.")
         if args.list_sequences:
             from .sequences import discover_sequences
 

@@ -30,6 +30,24 @@ def default_path() -> Path:
     return Path.home() / ".nuke" / "shotbox_preferences.json"
 
 
+def _legacy_interpreter(value, *application_roots):
+    """Recognize the old managed runtime without changing custom overrides."""
+    import ntpath
+
+    def normalized(path):
+        value = str(path)
+        if "\\" in value or ntpath.splitdrive(value)[0]:
+            return ntpath.normcase(ntpath.normpath(value))
+        return os.path.normcase(os.path.abspath(os.path.expanduser(value)))
+
+    return bool(value) and any(
+        normalized(value) == normalized(str(root).rstrip("/\\") + "/" + name + "/" + suffix)
+        for root in application_roots if root
+        for name in (".venv", ".venv-windows", ".venv-linux")
+        for suffix in ("Scripts/python.exe", "bin/python")
+    )
+
+
 def load(path: str | Path | None = None) -> dict:
     path = Path(path) if path is not None else default_path()
     if not path.exists():
@@ -42,37 +60,45 @@ def load(path: str | Path | None = None) -> dict:
         raise ProtocolError("Unsupported ShotBox preferences schema.")
     if any(not isinstance(data.get(key, ""), str) for key in PREFERENCE_KEYS):
         raise ProtocolError("ShotBox preference paths must be strings.")
-    return {"schema_version": 1, **{key: data.get(key, "") for key in PREFERENCE_KEYS}}
+    values = {"schema_version": 1, **dict.fromkeys(PREFERENCE_KEYS, ""), **data}
+    if _legacy_interpreter(values["interpreter"], values["application_root"], application_root()):
+        values["interpreter"] = ""
+    return values
 
 
 def save(preferences: dict, path: str | Path | None = None) -> None:
-    data = {"schema_version": 1}
+    data = load(path)
     for key in PREFERENCE_KEYS:
-        value = preferences.get(key, "")
+        value = preferences.get(key, data.get(key, ""))
         if not isinstance(value, str):
             raise ProtocolError("ShotBox preference paths must be strings.")
         data[key] = value
+    if _legacy_interpreter(data["interpreter"], data["application_root"], application_root()):
+        data["interpreter"] = ""
     atomic_write_json(path or default_path(), data)
 
 
 def interpreter_candidates(application_root: str | Path, *, windows: bool | None = None) -> list[Path]:
     windows = os.name == "nt" if windows is None else windows
     root = Path(application_root).expanduser()
-    names = (".venv-windows", ".venv") if windows else (".venv", ".venv-linux")
+    if root.name == "shotbox_matte" and root.parent.name == "toolbox":
+        root = root.parents[1]
     suffix = Path("Scripts/python.exe") if windows else Path("bin/python")
-    return [root / name / suffix for name in names]
+    return [root / "venv" / suffix]
 
 
 def resolve_interpreter(application_root: str | Path, override: str | Path | None = None,
                         *, windows: bool | None = None) -> Path:
+    if _legacy_interpreter(override, application_root):
+        override = None
     candidates = [Path(override).expanduser()] if override else interpreter_candidates(application_root, windows=windows)
     for candidate in candidates:
         if candidate.is_file():
             # A venv's executable is commonly a symlink to system Python.
             # Preserve its invoked location so Python discovers pyvenv.cfg.
             return Path(os.path.abspath(candidate))
-    raise ProtocolError("ShotBox Python was not found. Run launch.bat --setup-only or ./launch.sh --setup-only, "
-                        "then set the application directory or interpreter override.")
+    raise ProtocolError("Shotbox Python was not found. Run the main Shotbox installer or updater, "
+                        "then install/update the Nuke integration from Shotbox Settings → Plugins.")
 
 
 def suggested_cache_root(script_path: str | Path | None, preferred: str = "") -> Path | None:

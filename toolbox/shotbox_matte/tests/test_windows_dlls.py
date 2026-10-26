@@ -1,4 +1,4 @@
-"""Portable Windows startup unit checks; these do not execute Windows binaries."""
+"""Active Windows environment startup checks without executing Windows binaries."""
 
 from __future__ import annotations
 
@@ -15,10 +15,10 @@ from shotbox_matte import _windows
 
 
 def runtime_directories(root: Path) -> tuple[Path, ...]:
-    runtime = root / "windows_runtime"
+    runtime = root
     site = runtime / "Lib" / "site-packages"
     directories = (
-        runtime, site / "torch" / "lib", site / "PyQt6" / "Qt6" / "bin",
+        runtime, runtime / "Scripts", site / "torch" / "lib", site / "PyQt6" / "Qt6" / "bin",
         site / "OpenImageIO" / "bin", site / "numpy.libs", site / "av.libs",
     )
     for directory in directories:
@@ -63,7 +63,7 @@ def test_registration_is_idempotent_and_adds_new_wheel_directories(tmp_path, dll
     assert len(_windows.configure_dlls(tmp_path)) == len(expected)
     assert _windows.configure_dlls(tmp_path / ".") == ()
     assert len(calls) == len(expected)
-    late_wheel = tmp_path / "windows_runtime" / "Lib" / "site-packages" / "later.libs"
+    late_wheel = tmp_path / "Lib" / "site-packages" / "later.libs"
     late_wheel.mkdir()
     assert _windows.configure_dlls(tmp_path) == (late_wheel,)
     assert calls[-1] == str(late_wheel)
@@ -71,7 +71,7 @@ def test_registration_is_idempotent_and_adds_new_wheel_directories(tmp_path, dll
 
 def test_missing_optional_directories_and_non_windows_are_noops(tmp_path, dll_registration, monkeypatch):
     calls, _handles = dll_registration
-    assert _windows.configure_dlls(tmp_path) == ()
+    assert _windows.configure_dlls(tmp_path / "absent-venv") == ()
     assert not calls
     runtime_directories(tmp_path)
     monkeypatch.delattr(_windows.os, "add_dll_directory")
@@ -80,8 +80,7 @@ def test_missing_optional_directories_and_non_windows_are_noops(tmp_path, dll_re
 
 
 def test_failed_registration_can_be_retried(tmp_path, dll_registration, monkeypatch):
-    runtime = tmp_path / "windows_runtime"
-    runtime.mkdir()
+    runtime = tmp_path
     register = _windows.os.add_dll_directory
 
     def denied(path):
@@ -95,7 +94,7 @@ def test_failed_registration_can_be_retried(tmp_path, dll_registration, monkeypa
     assert _windows.configure_dlls(tmp_path) == (runtime,)
 
 
-def test_portable_windows_worker_entry_registers_before_cli_without_native_imports(tmp_path):
+def test_windows_worker_registers_active_environment_before_cli_without_portable_flag(tmp_path):
     """Run real package/__main__ startup; stub only the CLI's execution boundary."""
     expected = runtime_directories(tmp_path)
     script = r'''
@@ -112,15 +111,17 @@ sys.meta_path.insert(0, NoNativeImports())
 windows_os = types.ModuleType('os')
 windows_os.__dict__.update(os.__dict__)
 windows_os.name = 'nt'
-windows_os.environ = dict(os.environ, SHOTBOX_PORTABLE_DIR=root)
+windows_os.environ = dict(os.environ)
+windows_os.environ.pop('SHOTBOX_PORTABLE_DIR', None)
 windows_os.add_dll_directory = lambda path: calls.append(path) or object()
 sys.modules['os'] = windows_os
+sys.prefix = root
 cli = types.ModuleType('shotbox_matte.cli')
 def main():
     assert sys.argv[1:] == ['--worker', 'job.json']
     assert calls, 'worker CLI started before DLL setup'
     from shotbox_matte._windows import configure_dlls
-    assert configure_dlls(root) == (), 'bootstrap repeated registrations'
+    assert configure_dlls() == (), 'startup repeated registrations'
     print(json.dumps(calls))
     return 0
 cli.main = main

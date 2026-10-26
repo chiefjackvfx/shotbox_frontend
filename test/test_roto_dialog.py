@@ -177,9 +177,11 @@ def controlled_worker(monkeypatch, script):
 def test_worker_completion_uses_reserved_result_and_cleans_temporary_job(app, dialog, monkeypatch):
     dialog.seed.setValue(12345)
     wait(app, lambda: dialog._plan is not None)
+    interpreter_record = dialog.runtime.state_directory / "worker-python.txt"
     controlled_worker(monkeypatch,
         "import json,sys,time; from pathlib import Path; "
         "p=Path(sys.argv[-1]); o=json.loads(p.read_text()); "
+        f"Path({str(interpreter_record)!r}).write_text(sys.executable); "
         "print(json.dumps({'type':'progress','stage':'export','current':1,'total':77}),flush=True); "
         "time.sleep(.2); "
         "print(json.dumps({'type':'result','result':{'output_dir':str(p.parent/'reserved_v004'),'frame_count':77}}))")
@@ -188,12 +190,14 @@ def test_worker_completion_uses_reserved_result_and_cleans_temporary_job(app, di
     dialog.generate_button.click()
     assert not errors, [(kind.__name__, str(error)) for kind, error, _ in errors]
     job = dialog._worker.path
+    assert dialog._worker.process.program() == sys.executable
     assert job.is_relative_to(dialog.runtime.temporary_directory)
     assert json.loads(job.read_text())["input_path"] == dialog.source_frame
     assert json.loads(job.read_text())["seed"] == 12345
     assert not dialog.controls.isEnabled()
     assert dialog.is_busy()
     wait(app, lambda: dialog._worker is None)
+    assert interpreter_record.read_text() == os.path.abspath(sys.executable)
     assert not job.exists()
     assert "77 RGB matte frames" in dialog.stage_label.text()
     assert "COMPLETED EXPORT" in dialog.output_title.text()

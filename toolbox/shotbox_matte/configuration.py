@@ -1,5 +1,6 @@
 """Shared desktop/Nuke configuration. No Qt or inference imports."""
 import json
+import os
 from pathlib import Path
 
 APPLICATION_ROOT = Path(__file__).resolve().parent
@@ -9,8 +10,26 @@ def preferences_path():
     return Path.home() / ".nuke" / "shotbox_preferences.json"
 
 def default_interpreter():
-    from .launcher import environment_path, environment_python
-    return environment_python(environment_path(APPLICATION_ROOT))
+    suffix = "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    return APPLICATION_ROOT.parents[1] / "venv" / suffix
+
+
+def _legacy_interpreter(value, *application_roots):
+    """Recognize only the old managed runtime, never arbitrary overrides."""
+    import ntpath
+
+    def normalized(path):
+        value = str(path)
+        if "\\" in value or ntpath.splitdrive(value)[0]:
+            return ntpath.normcase(ntpath.normpath(value))
+        return os.path.normcase(os.path.abspath(os.path.expanduser(value)))
+
+    return bool(value) and any(
+        normalized(value) == normalized(str(root).rstrip("/\\") + "/" + name + "/" + suffix)
+        for root in application_roots if root
+        for name in (".venv", ".venv-windows", ".venv-linux")
+        for suffix in ("Scripts/python.exe", "bin/python")
+    )
 
 def load_configuration():
     path = preferences_path()
@@ -22,9 +41,10 @@ def load_configuration():
         if any(not isinstance(saved.get(key, ""), str) for key in KEYS):
             raise ValueError(f"Matte paths must be strings: {path}")
         values.update(saved)
+    if _legacy_interpreter(values["interpreter"], values["application_root"], APPLICATION_ROOT):
+        values["interpreter"] = ""
     # The shipped application is authoritative after moving the frontend.
     values["application_root"] = str(APPLICATION_ROOT)
-    values["interpreter"] = values["interpreter"] or str(default_interpreter())
     return values
 
 def save_configuration(values):
@@ -36,7 +56,9 @@ def save_configuration(values):
         path = preferences_path()
         path.parent.mkdir(parents=True, exist_ok=True)
         current = load_configuration()
-        current.update({key: str(values.get(key, "")).strip() for key in KEYS})
+        current.update({key: str(values[key]).strip() for key in KEYS if key in values})
+        if _legacy_interpreter(current["interpreter"], current["application_root"], APPLICATION_ROOT):
+            current["interpreter"] = ""
         current.update(schema_version=1, application_root=str(APPLICATION_ROOT))
         temporary = None
         try:

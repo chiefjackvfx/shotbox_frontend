@@ -314,7 +314,7 @@ class RotoDialog(QDialog):
             if missing and not self._model_error:
                 self._model_error = "Missing Matte weights: " + ", ".join(missing) + "."
             if not self.runtime.worker_python.is_file():
-                self._model_error = "Matte runtime is missing. Prepare it in Settings → Plugins."
+                self._model_error = "Shotbox's Python is missing. Run the Shotbox installer or updater."
             if self._model_error:
                 self.stage_label.setText(self._model_error + " Check Settings → Plugins or Toolbox → Shotbox Matte.")
             self.controls.setEnabled(True)

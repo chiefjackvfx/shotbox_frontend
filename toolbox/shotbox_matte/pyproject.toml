@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "shotbox-matte"
 version = "0.1.0"
-description = "Standalone native LTX Alpha Gen matte generation from EXR sequences"
+description = "Shotbox frontend native LTX Alpha Gen matte backend"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "numpy>=1.26,<3",
@@ -21,9 +21,6 @@ inference = [
     "ltx-core @ git+https://github.com/Lightricks/LTX-2.git@e98f6d927d83c92ef2be6aec76c8440b19306e39#subdirectory=packages/ltx-core",
     "ltx-pipelines @ git+https://github.com/Lightricks/LTX-2.git@e98f6d927d83c92ef2be6aec76c8440b19306e39#subdirectory=packages/ltx-pipelines",
 ]
-
-[project.scripts]
-shotbox-matte = "shotbox_matte.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["shotbox_matte*"]

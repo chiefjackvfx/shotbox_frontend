@@ -10,6 +10,15 @@ import platform
 import importlib
 from pathlib import Path
 
+if __name__ == "__main__":
+    try:
+        from startup_banner import print_banner
+
+        print_banner()
+    except Exception:
+        # Terminal diagnostics must never prevent the desktop app from opening.
+        pass
+
 from PyQt6 import QtWidgets
 from PyQt6.QtCore import QProcess, QTimer, Qt, qInstallMessageHandler
 from PyQt6.QtGui import QIcon
@@ -1077,12 +1086,6 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Persist UI state and stop worker threads when closing the application."""
         toolbox = getattr(self, "page_toolbox", None)
-        matte_settings = getattr(getattr(self, "page_settings", None), "matte_settings", None)
-        if matte_settings is not None and matte_settings.is_busy():
-            QtWidgets.QMessageBox.information(self, "Matte setup is running",
-                "Wait for Matte runtime preparation to finish before closing Shotbox.")
-            event.ignore()
-            return
         if toolbox is not None and toolbox.has_busy_tools():
             QtWidgets.QMessageBox.information(self, "Matte is busy",
                 "Finish or cancel Matte's active work before closing Shotbox.")

@@ -276,7 +276,7 @@ def probe(request: Path | str) -> dict:
                                 "identity_method": "path-size-mtime_ns; header validation; no full checksum"}
     versions, errors = _dependencies()
     if not (3, 12) <= sys.version_info[:2] < (3, 14):
-        errors.append("ShotBox's external interpreter requires Python 3.12 or 3.13.")
+        errors.append("Shotbox's Python requires version 3.12 or 3.13. Run the Shotbox installer or updater.")
     errors.extend(model_errors)
     cuda = _cuda_report()
     if not cuda["available"] or not cuda["bf16"]:

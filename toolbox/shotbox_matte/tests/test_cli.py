@@ -78,26 +78,17 @@ def test_processing_mode_survives_worker_serialization():
         parser.parse_args(["frames", "--temporal-mode", "unknown"])
 
 
-@pytest.mark.parametrize("argv,expected", [
-    (["--gui", "C:/plates/shot"], "C:/plates/shot"),
-    (["--gui", "--input", "C:/plates/shot.mov"], "C:/plates/shot.mov"),
-    (["--gui"], None),
-])
-def test_cli_gui_forwards_selected_input_without_loading_qt(monkeypatch, argv, expected):
-    from types import SimpleNamespace
-
-    received = []
-    monkeypatch.setitem(sys.modules, "shotbox_matte.gui", SimpleNamespace(main=lambda input_path=None: received.append(input_path) or 0))
-    assert cli.main(argv) == 0
-    assert received == [expected]
-
-
-def test_gui_rejects_ambiguous_input_options(monkeypatch):
-    from types import SimpleNamespace
-
-    monkeypatch.setitem(sys.modules, "shotbox_matte.gui", SimpleNamespace(main=lambda **_kwargs: pytest.fail("ambiguous inputs opened GUI")))
+def test_standalone_gui_entry_is_removed():
+    parser = cli.build_parser()
+    assert "--gui" not in parser.format_help()
     with pytest.raises(SystemExit) as exc:
-        cli.main(["--gui", "one", "--input", "two"])
+        cli.main(["--gui"])
+    assert exc.value.code == 2
+
+
+def test_command_rejects_ambiguous_input_options():
+    with pytest.raises(SystemExit) as exc:
+        cli.main(["one", "--input", "two"])
     assert exc.value.code == 2
 
 

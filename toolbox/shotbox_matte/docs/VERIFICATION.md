@@ -1,4 +1,9 @@
-# Verification — 21 October 2026
+# Historical verification — 21 October 2026
+
+This report records the earlier standalone application, including packaging and
+launcher checks that no longer apply to the integrated frontend. For current
+setup and test commands, use [the Matte guide](../README.md#verification).
+The original commands below are retained as historical evidence.
 
 ## Available checks
 

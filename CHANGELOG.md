@@ -6,9 +6,22 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-26T16:08:38+00:00] Added logo-derived terminal banner with runtime and dependency versions.
+- [2026-10-26T16:08:38+00:00] Added startup banner layout, colour and failure regression coverage.
+- [2026-10-26T16:00:40+00:00] Added automatic Python 3.12 migration with recoverable environment backups.
+- [2026-10-26T16:00:40+00:00] Added shared-runtime setup, rollback and interpreter regression coverage.
+
 ### Changed
 
+- [2026-10-26T16:08:38+00:00] Documented startup diagnostics and terminal colour behaviour.
+- [2026-10-26T16:00:40+00:00] Unified Shotbox and Matte dependencies in the main environment.
+- [2026-10-26T16:00:40+00:00] Removed standalone Matte launchers, private setup and Windows packaging.
+- [2026-10-26T16:00:40+00:00] Updated Nuke defaults while preserving custom interpreters and models.
+- [2026-10-26T16:00:40+00:00] Documented shared setup, migration recovery and platform requirements.
+
 ### Fixed
+
+- [2026-10-26T16:00:40+00:00] Fixed Matte workers using a different Python than Shotbox.
 
 ## 4.5.0 - 2026-10-26
 

@@ -11,9 +11,6 @@ def source_manifest(root: Path | None = None) -> dict:
     """Fingerprint app sources by portable relative names and their exact bytes."""
     root = Path(root) if root is not None else Path(__file__).resolve().parent.parent
     paths = sorted((root / "shotbox_matte").glob("*.py"))
-    bootstrap = root / "windows_bootstrap.py"
-    if bootstrap.is_file():
-        paths.append(bootstrap)
     files = {path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
              for path in sorted(paths)}
     digest = hashlib.sha256()

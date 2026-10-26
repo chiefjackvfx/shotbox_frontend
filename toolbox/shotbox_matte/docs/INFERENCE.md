@@ -32,41 +32,18 @@ pinned library's declared dependency ranges. The app does not require the newer
 optional compiled NATTEN/Blackwell kernels.
 
 The native dependency source is pinned; upstream does not ship a `uv.lock` at
-this revision. For its intended dependency indexes and platform markers:
+this revision. The frontend's dependency configuration records the immutable
+source archives and the tested compatible package versions.
 
-```bash
-git clone https://github.com/Lightricks/LTX-2.git
-cd LTX-2
-git checkout e98f6d927d83c92ef2be6aec76c8440b19306e39
-uv sync --package ltx-pipelines --python 3.12
-uv pip install 'transformers==5.14.1'
-uv pip install -e '/absolute/path/to/Shotbox_alpha[desktop]'
-```
-
-Run ShotBox with that repository's `.venv/bin/shotbox-matte` on Linux or
-`.venv\Scripts\shotbox-matte.exe` on Windows. The editable app path can instead
-be replaced with a wheel. The source checkout is the inference library, not
-ComfyUI. Upstream offers optional NATTEN acceleration on supported Linux/CUDA
-systems. ShotBox selects its `CHUNKED_EAGER` layout with the official
-`EAGER_SDPA` attention backend and torch implementations of optional fused
-operations. This compatibility path does not need NATTEN, Python development
-headers or a CUDA compiler. Merely importing Triton does not prove that its
-launcher can compile, so ShotBox avoids automatically selecting it.
-
-When installing the two packages with pip rather than upstream UV, pin **both**
-source packages and arrange a compatible Torch/torchvision/torchaudio CUDA
-installation first. Pip does not use upstream's `[tool.uv.sources]` indexes:
-
-```bash
-python -m pip install \
-  'ltx-core @ git+https://github.com/Lightricks/LTX-2.git@e98f6d927d83c92ef2be6aec76c8440b19306e39#subdirectory=packages/ltx-core' \
-  'ltx-pipelines @ git+https://github.com/Lightricks/LTX-2.git@e98f6d927d83c92ef2be6aec76c8440b19306e39#subdirectory=packages/ltx-pipelines' \
-  'transformers==5.14.1'
-```
+Shotbox installs the pinned inference dependencies into its main frontend
+Python 3.12 `venv`. Use the frontend installer/updater and open Matte through
+Toolbox or the Precomp Roto action. Generation uses a background process with
+the same interpreter; there is no standalone Matte executable or private venv.
 
 ## Existing local files
 
-The application defaults to this project's `models/` directory. Its six model
+Configure an existing external model directory through Shotbox Settings.
+The backend also accepts an explicit model-root path for internal CLI jobs. Its six model
 files occupy approximately 67.4 GiB. Discovery accepts this split-pack directory,
 its parent, or a flat
 directory with the six released filenames:

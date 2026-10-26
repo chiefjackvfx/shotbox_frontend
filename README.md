@@ -4,13 +4,37 @@ PyQt6 desktop frontend for ShotBox.
 
 ## Entry Point
 
-- Run the app from `main.py`.
+- Run the app from `main.py` using frontend `venv` (Python 3.12).
+- Use the normal Windows installer/update batch files or Unix installer/update
+  scripts to prepare that environment. They provision local Python without
+  changing system Python or PATH and install frontend and Matte dependencies
+  together. Setup tools and managed Python live under ignored `.runtime/`.
+
+An older frontend `venv` is moved to `.runtime/backups` before migration. The
+new environment is created directly at its final path, verified, and restored
+from backup if migration fails. Successful backups remain available for manual
+rollback: close Shotbox and restore the backup to its original `venv` path;
+virtual environments must not be run from renamed backup directories. A legacy
+parent `../.venv` is preserved, because another application may share it.
+Interrupted setup is recovered on the next installer/update run.
+
+At startup, the terminal shows an ASCII version of the Shotbox logo alongside
+Shotbox, Python, OS, Qt, media and Matte package versions, followed by the active
+Python executable path. Versions come from the running environment's installed
+metadata without loading inference libraries or probing the GPU. Missing packages
+show `not installed`; unreadable metadata shows `unknown`.
+Supported terminals use orange and light grey; set `NO_COLOR` to disable colour.
+Redirected output is plain text, terminals below 80 columns omit the logo, and
+launches without a console skip the banner.
 
 ## Cache and temporary files
 
 Runtime caches and disposable working files live in `.cache` beside `main.py`,
 including on Windows and macOS. EXR preview proxies use `.cache/exr-previews-v1`;
-thumbnail uploads, exports, and Nuke/3DE requests use `.cache/temp`.
+thumbnail uploads, exports, and Nuke/3DE requests use `.cache/temp`. Runtime
+setup downloads and disposable installation files also use `.cache/temp`,
+protected while setup runs. Persistent Python, setup tools and environment
+backups live under `.runtime` and are not deleted by Clear Cache.
 Proxy JPEGs sit directly inside each job folder, named
 `original_frame_name_<unique_id>.jpg`. The stable suffix identifies the source
 path, keeping matching names from different shots and sequences separate.
@@ -129,11 +153,15 @@ shows model padding and the provisional output folder; extra model frames are
 trimmed before export. **Generate Now** keeps progress and cancellation in the
 popup while Shotbox remains usable. **Add to Queue** is reserved for future work.
 
-In **Settings → Plugins → Shotbox Matte / Nuke**, prepare the separate GPU
-runtime, choose an external model library, save configuration and install the
-Nuke integration. Restart Nuke after installation or integration updates.
-The installer preserves unrelated startup code and shares runtime/model settings
-with Nuke. Shotbox remains open while Matte or runtime preparation is busy.
+Matte shares Shotbox's main Python 3.12 environment, including its background
+workers; there is no separate Matte launcher or runtime preparation. In
+**Settings → Plugins → Shotbox Matte / Nuke**, choose an external model library,
+save configuration and install the Nuke integration. Restart Nuke after
+integration updates. Nuke defaults to frontend `venv`; advanced custom Nuke
+interpreter overrides remain supported. Shotbox stays open while Matte is busy.
+CUDA generation requires a supported Windows/Linux NVIDIA GPU (Linux glibc
+2.34 or newer for the pinned Qt build); macOS retains
+the frontend without CUDA inference dependencies.
 
 Matte's worker files, staged EXRs, overwrite backups and export locks use
 `.cache/temp/shotbox-matte/`, including retained partial frames after cancellation
