@@ -6,52 +6,60 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-26T14:43:49+00:00] Added compact Precomp Roto popup with seed and generation controls.
-- [2026-10-26T14:43:49+00:00] Added Roto planning, export, cancellation and lifecycle regression coverage.
-- [2026-10-26T14:01:56+00:00] Added cached Matte export and cross-volume recovery regressions.
-- [2026-10-26T13:23:54+00:00] Added Linux GPU and Nuke integration verification report.
-- [2026-10-26T13:12:00+00:00] Added owned Matte pop-out with isolated GPU worker configuration.
-- [2026-10-26T13:12:00+00:00] Added Shotbox-managed Nuke installation and shared model settings.
-- [2026-10-26T13:12:00+00:00] Added cross-process cache protection and integration regression coverage.
-- [2026-10-26T10:55:14+00:00] Added Precomp folder menus with open and copy actions.
-- [2026-10-26T11:14:58+00:00] Added Assets-style corner menu arrow to Precomp.
-- [2026-10-26T11:17:30+00:00] Added Roto placeholder for Precomp folders containing EXR sequences.
-- [2026-10-26T11:40:53+00:00] Added cached EXR previews beside open folder submenus.
-- [2026-10-26T11:40:53+00:00] Added preview tests covering hovering, caching, refresh, failures, and deletion.
-- [2026-10-26T11:52:13+00:00] Added preview detection regressions for mixed versions, gaps, and sidecars.
-- [2026-10-26T11:56:18+00:00] Added looping EXR sequence playback in Precomp preview panels.
-- [2026-10-26T11:56:18+00:00] Added playback regressions covering looping, cancellation, failures, and stale frames.
-- [2026-10-26T12:10:57+00:00] Added proxy cache, timing, cancellation, and decoder fallback regressions.
-- [2026-10-26T12:21:38+00:00] Added Settings button clearing caches and unused temporary files.
-- [2026-10-26T12:21:38+00:00] Added cache clearing, running task protection, and Settings regression coverage.
-- [2026-10-26T12:29:20+00:00] Added Settings button opening the frontend cache folder.
-- [2026-10-26T12:40:07+00:00] Added centred loading spinner to Precomp EXR preview panels.
-- [2026-10-26T13:52:45+00:00] Added proxy naming, migration, invalidation, and nested cleanup regressions.
-
 ### Changed
-
-- [2026-10-26T15:03:33+00:00] Clarified maximum Roto height and quality versus generation time.
-- [2026-10-26T14:59:22+00:00] Changed Roto lifecycle regressions to exercise Generate Now clicks.
-- [2026-10-26T14:43:49+00:00] Shared Matte worker transport and documented compact Roto workflow.
-- [2026-10-26T14:14:05+00:00] Defaulted Matte exports to Version up on every launch.
-- [2026-10-26T11:40:53+00:00] Shared EXR pixel decoding between playback and menu previews.
-- [2026-10-26T12:10:57+00:00] Used small local proxies for realtime Precomp preview playback.
-- [2026-10-26T12:10:57+00:00] Bounded preview caches and released closed menu playback images.
-- [2026-10-26T12:21:38+00:00] Centralized disposable runtime files under frontend .cache; ignored in Git.
-- [2026-10-26T12:21:38+00:00] Documented frontend cache location and Settings cleanup behavior.
-- [2026-10-26T12:23:56+00:00] Documented mandatory .cache rule for coding agents and human developers.
-- [2026-10-26T12:27:49+00:00] Reduced Precomp previews to 10fps with fewer proxy frames.
-- [2026-10-26T12:27:49+00:00] Updated preview sampling and timing regressions for 10fps playback.
-- [2026-10-26T12:40:07+00:00] Updated preview regressions to verify spinner loading and cleanup.
-- [2026-10-26T13:52:45+00:00] Flattened Precomp JPEG caches into job folders with unique suffixes.
-- [2026-10-26T13:52:45+00:00] Preserved existing proxy caches through automatic filename migration.
 
 ### Fixed
 
-- [2026-10-26T14:59:22+00:00] Fixed Generate Now crashing when Qt forwarded button state.
-- [2026-10-26T14:01:56+00:00] Kept Toolbox Matte staging, backups and locks inside .cache.
-- [2026-10-26T11:15:51+00:00] Restored Assets left-click opening folders; retained right-click matchmove options.
-- [2026-10-26T11:52:13+00:00] Recognized mixed EXR versions and incomplete sequences for previews.
+## 4.5.0 - 2026-10-26
+
+### Added
+
+- Added compact Precomp Roto popup with seed and generation controls.
+- Added Roto planning, export, cancellation and lifecycle regression coverage.
+- Added cached Matte export and cross-volume recovery regressions.
+- Added Linux GPU and Nuke integration verification report.
+- Added owned Matte pop-out with isolated GPU worker configuration.
+- Added Shotbox-managed Nuke installation and shared model settings.
+- Added cross-process cache protection and integration regression coverage.
+- Added Precomp folder menus with open and copy actions.
+- Added Assets-style corner menu arrow to Precomp.
+- Added Roto placeholder for Precomp folders containing EXR sequences.
+- Added cached EXR previews beside open folder submenus.
+- Added preview tests covering hovering, caching, refresh, failures, and deletion.
+- Added preview detection regressions for mixed versions, gaps, and sidecars.
+- Added looping EXR sequence playback in Precomp preview panels.
+- Added playback regressions covering looping, cancellation, failures, and stale frames.
+- Added proxy cache, timing, cancellation, and decoder fallback regressions.
+- Added Settings button clearing caches and unused temporary files.
+- Added cache clearing, running task protection, and Settings regression coverage.
+- Added Settings button opening the frontend cache folder.
+- Added centred loading spinner to Precomp EXR preview panels.
+- Added proxy naming, migration, invalidation, and nested cleanup regressions.
+
+### Changed
+
+- Clarified maximum Roto height and quality versus generation time.
+- Changed Roto lifecycle regressions to exercise Generate Now clicks.
+- Shared Matte worker transport and documented compact Roto workflow.
+- Defaulted Matte exports to Version up on every launch.
+- Shared EXR pixel decoding between playback and menu previews.
+- Used small local proxies for realtime Precomp preview playback.
+- Bounded preview caches and released closed menu playback images.
+- Centralized disposable runtime files under frontend .cache; ignored in Git.
+- Documented frontend cache location and Settings cleanup behavior.
+- Documented mandatory .cache rule for coding agents and human developers.
+- Reduced Precomp previews to 10fps with fewer proxy frames.
+- Updated preview sampling and timing regressions for 10fps playback.
+- Updated preview regressions to verify spinner loading and cleanup.
+- Flattened Precomp JPEG caches into job folders with unique suffixes.
+- Preserved existing proxy caches through automatic filename migration.
+
+### Fixed
+
+- Fixed Generate Now crashing when Qt forwarded button state.
+- Kept Toolbox Matte staging, backups and locks inside .cache.
+- Restored Assets left-click opening folders; retained right-click matchmove options.
+- Recognized mixed EXR versions and incomplete sequences for previews.
 
 ## 4.4.5 - 2026-10-23
 
