@@ -3,6 +3,7 @@ from fractions import Fraction
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import xml.etree.ElementTree as ET
+from app_cache import cache_directory, temporary_cache_task
 
 
 __all__ = ["run"]
@@ -273,6 +274,7 @@ def action_result(
     }
 
 
+@temporary_cache_task
 def _run(resolve):
     if not resolve:
         return action_result(False, "Could not connect to Resolve.")
@@ -297,7 +299,7 @@ def _run(resolve):
     except Exception as error:
         return action_result(False, f"Could not prepare the new timeline: {error}")
 
-    with TemporaryDirectory(prefix="resolve_copy_ramps_") as temp_dir:
+    with TemporaryDirectory(prefix="resolve_copy_ramps_", dir=cache_directory("temp")) as temp_dir:
         xml_path = Path(temp_dir) / "timeline.fcpxml"
         try:
             exported = timeline.Export(

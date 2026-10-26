@@ -301,9 +301,10 @@ def setup_shot_card_ui(widget):
     
     widget.horizontalLayout_3.addWidget(widget.btn_open_assets)
     
-    widget.btn_open_precomp = QPushButton(widget.shot_btns)
+    widget.btn_open_precomp = QToolButton(widget.shot_btns)
     widget.btn_open_precomp.setObjectName("btn_open_precomp")
     widget.btn_open_precomp.setText("Precomp")
+    widget.btn_open_precomp.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
     
     widget.horizontalLayout_3.addWidget(widget.btn_open_precomp)
     

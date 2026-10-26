@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from app_cache import cache_directory, temporary_cache_task
+
 from PyQt6.QtCore import QPoint, QRect, QSize, Qt, pyqtSignal
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
@@ -788,12 +790,13 @@ else:
 """
 
 
+@temporary_cache_task
 def run_headless_3de(
     request: ProjectBuildRequest,
     log_callback,
 ) -> HeadlessRunResult:
     three_de_path = shared_matchmove.resolve_3de_executable()
-    temp_dir = tempfile.gettempdir()
+    temp_dir = cache_directory("temp")
 
     runtime_script_fd, runtime_script_path = tempfile.mkstemp(
         prefix="shotbox_3de_",

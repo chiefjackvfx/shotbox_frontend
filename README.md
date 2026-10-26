@@ -6,6 +6,25 @@ PyQt6 desktop frontend for ShotBox.
 
 - Run the app from `main.py`.
 
+## Cache and temporary files
+
+Runtime caches and disposable working files live in `.cache` beside `main.py`,
+including on Windows and macOS. EXR preview proxies use `.cache/exr-previews-v1`;
+thumbnail uploads, exports, and Nuke/3DE requests use `.cache/temp`.
+Precomp EXR previews sample at 10 fps to reduce preparation work while retaining
+the shot's normal timing.
+
+Use **Settings → Cache → Clear Cache** to remove cached previews and unused
+temporary files. The button clears in the background, stops preview preparation,
+and keeps temporary files needed by running exports or external applications.
+Previews rebuild when opened again. The `.cache` directory is ignored by Git.
+**Open Cache Folder** opens that directory in your system's file browser.
+
+**Development rule for Codex, other coding agents, and human developers:** all
+new runtime temporary files and disk caches must use the shared `app_cache`
+helpers and the frontend `.cache` folder. Follow the cleanup requirements in
+[AGENTS.md](AGENTS.md#runtime-cache-and-temporary-files).
+
 ## Main Live Modules
 
 - `main.py` wires the application tabs and startup behavior.

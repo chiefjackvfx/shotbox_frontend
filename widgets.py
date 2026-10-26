@@ -49,6 +49,7 @@ import project_load_profiler
 from nuke_lock_utils import parse_lock_info
 from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
+from exr_thumbnails import EXRMenuPreview, find_exr_preview_frames
 from flow_layout import FlowLayout
 from masonry_layout import MasonryLayout
 from v02_cards import apply_shot_width, preferred_shot_width, set_shot_presentation, set_task_presentation
@@ -1369,8 +1370,21 @@ class ShotCard(QWidget):
         self._assets_menu = QMenu(self)
         self._assets_menu.aboutToShow.connect(self._on_assets_menu_about_to_show)
         self.btn_open_assets.setMenu(self._assets_menu)
-        self.btn_open_assets.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.btn_open_assets.setPopupMode(QToolButton.ToolButtonPopupMode.DelayedPopup)
+        self.btn_open_assets.clicked.connect(self._open_shot_assets)
+        self.btn_open_assets.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.btn_open_assets.customContextMenuRequested.connect(
+            lambda pos: self._show_assets_matchmove_menu(self.btn_open_assets.mapToGlobal(pos))
+        )
+        self._precomp_menu = QMenu(self)
+        self._precomp_menu.aboutToShow.connect(
+            lambda: self._populate_precomp_menu(self._precomp_menu)
+        )
+        self.btn_open_precomp.setMenu(self._precomp_menu)
+        self.btn_open_precomp.setPopupMode(QToolButton.ToolButtonPopupMode.DelayedPopup)
         self.btn_open_precomp.clicked.connect(lambda: self.filesIO.openFileLocation(Path(self.shot_dir) / "renders" / "precomp" ))
+        self.btn_open_precomp.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.btn_open_precomp.customContextMenuRequested.connect(self._on_precomp_context_menu)
 
         self._set_render_file_state()
         self._set_render_button_text()
@@ -1545,6 +1559,56 @@ class ShotCard(QWidget):
     def _shot_assets_dir(self) -> Path:
         return Path(build_shot_assets_directory(self._normalized_shot_dir()))
 
+    def _on_precomp_context_menu(self, pos) -> None:
+        menu = QMenu(self)
+        try:
+            self._populate_precomp_menu(menu)
+            menu.exec(self.btn_open_precomp.mapToGlobal(pos))
+        finally:
+            menu.deleteLater()
+
+    def _populate_precomp_menu(self, menu: QMenu) -> None:
+        menu.clear()
+        shot_root = self._normalized_shot_dir()
+        folders = []
+        empty_message = "No precomp folders found"
+        if shot_root:
+            precomp_dir = Path(shot_root) / "renders" / "precomp"
+            try:
+                folders = sorted(
+                    (entry for entry in precomp_dir.iterdir() if entry.is_dir()),
+                    key=lambda entry: (entry.name.casefold(), entry.name),
+                )
+            except FileNotFoundError:
+                empty_message = "No renders/precomp folder found"
+            except OSError:
+                empty_message = "Could not read precomp folders"
+        else:
+            empty_message = "No shot folder configured"
+
+        for folder in folders:
+            folder_menu = menu.addMenu(folder.name)
+            open_folder = folder_menu.addAction("Open Folder")
+            open_folder.triggered.connect(
+                lambda checked=False, path=folder: self.filesIO.openFileLocation(path)
+            )
+            copy_path = folder_menu.addAction("Copy Path")
+            copy_path.triggered.connect(
+                lambda checked=False, path=folder: self._copy_to_clipboard(str(path))
+            )
+            try:
+                preview_frames = find_exr_preview_frames(folder)
+            except OSError:
+                preview_frames = ()
+            if preview_frames:
+                folder_menu.addSeparator()
+                EXRMenuPreview(folder_menu, preview_frames)
+                roto = folder_menu.addAction("Roto")
+                roto.setEnabled(False)
+        if not folders:
+            empty_action = menu.addAction(empty_message)
+            empty_action.setEnabled(False)
+
     def _default_matchmove_dir(self) -> str:
         return build_shot_matchmove_directory(self._normalized_shot_dir())
 
@@ -1579,10 +1643,10 @@ class ShotCard(QWidget):
         if has_matchmove:
             project_path = str(latest_project)
             self.btn_open_assets.setToolTip(
-                f"Matchmove: {latest_project.name}\n{project_path}\nClick for asset options"
+                f"Matchmove: {latest_project.name}\n{project_path}\nClick to open assets · Right-click for options"
             )
         else:
-            self.btn_open_assets.setToolTip("Open assets and matchmove options")
+            self.btn_open_assets.setToolTip("Open assets folder · Right-click for matchmove options")
 
     def _refresh_matchmove_state(self):
         latest_project = None
@@ -2391,7 +2455,7 @@ class ShotCard(QWidget):
             self.btn_open_assets.setVisible(not self._compact_mode)
         if hasattr(self, "btn_open_precomp") and self.btn_open_precomp:
             #self.btn_open_precomp.setText("Pre" if self._compact_mode else "Precomp folder")
-            self.btn_open_precomp.setToolTip("Open precomp folder")
+            self.btn_open_precomp.setToolTip("Open precomp folder · Right-click to browse folders")
             self.btn_open_precomp.setVisible(not self._compact_mode)
 
         self._set_hide_button_label()

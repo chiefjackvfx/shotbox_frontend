@@ -194,17 +194,19 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             self.assertEqual(fake_folders.opened_locations[-1], shot_root / "Shot_Assets")
             self.assertTrue((shot_root / "Shot_Assets").is_dir())
 
-    def test_assets_control_is_an_instant_popup_tool_button(self):
+    def test_assets_control_opens_folder_with_delayed_popup(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
             shot_root.mkdir(parents=True)
-            card, _fake_folders = self._make_card(str(shot_root))
+            card, fake_folders = self._make_card(str(shot_root))
 
             self.assertIsInstance(card.btn_open_assets, QToolButton)
             self.assertEqual(
                 card.btn_open_assets.popupMode(),
-                QToolButton.ToolButtonPopupMode.InstantPopup,
+                QToolButton.ToolButtonPopupMode.DelayedPopup,
             )
+            card.btn_open_assets.click()
+            self.assertEqual(fake_folders.opened_locations, [shot_root / "Shot_Assets"])
 
     def test_assets_menu_first_action_opens_assets_in_file_browser(self):
         with tempfile.TemporaryDirectory() as tmpdir:

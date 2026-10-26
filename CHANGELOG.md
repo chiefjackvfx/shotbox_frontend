@@ -6,9 +6,36 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-26T10:55:14+00:00] Added Precomp folder menus with open and copy actions.
+- [2026-10-26T11:14:58+00:00] Added Assets-style corner menu arrow to Precomp.
+- [2026-10-26T11:17:30+00:00] Added Roto placeholder for Precomp folders containing EXR sequences.
+- [2026-10-26T11:40:53+00:00] Added cached EXR previews beside open folder submenus.
+- [2026-10-26T11:40:53+00:00] Added preview tests covering hovering, caching, refresh, failures, and deletion.
+- [2026-10-26T11:52:13+00:00] Added preview detection regressions for mixed versions, gaps, and sidecars.
+- [2026-10-26T11:56:18+00:00] Added looping EXR sequence playback in Precomp preview panels.
+- [2026-10-26T11:56:18+00:00] Added playback regressions covering looping, cancellation, failures, and stale frames.
+- [2026-10-26T12:10:57+00:00] Added proxy cache, timing, cancellation, and decoder fallback regressions.
+- [2026-10-26T12:21:38+00:00] Added Settings button clearing caches and unused temporary files.
+- [2026-10-26T12:21:38+00:00] Added cache clearing, running task protection, and Settings regression coverage.
+- [2026-10-26T12:29:20+00:00] Added Settings button opening the frontend cache folder.
+- [2026-10-26T12:40:07+00:00] Added centred loading spinner to Precomp EXR preview panels.
+
 ### Changed
 
+- [2026-10-26T11:40:53+00:00] Shared EXR pixel decoding between playback and menu previews.
+- [2026-10-26T12:10:57+00:00] Used small local proxies for realtime Precomp preview playback.
+- [2026-10-26T12:10:57+00:00] Bounded preview caches and released closed menu playback images.
+- [2026-10-26T12:21:38+00:00] Centralized disposable runtime files under frontend .cache; ignored in Git.
+- [2026-10-26T12:21:38+00:00] Documented frontend cache location and Settings cleanup behavior.
+- [2026-10-26T12:23:56+00:00] Documented mandatory .cache rule for coding agents and human developers.
+- [2026-10-26T12:27:49+00:00] Reduced Precomp previews to 10fps with fewer proxy frames.
+- [2026-10-26T12:27:49+00:00] Updated preview sampling and timing regressions for 10fps playback.
+- [2026-10-26T12:40:07+00:00] Updated preview regressions to verify spinner loading and cleanup.
+
 ### Fixed
+
+- [2026-10-26T11:15:51+00:00] Restored Assets left-click opening folders; retained right-click matchmove options.
+- [2026-10-26T11:52:13+00:00] Recognized mixed EXR versions and incomplete sequences for previews.
 
 ## 4.4.5 - 2026-10-23
 

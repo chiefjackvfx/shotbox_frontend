@@ -18,6 +18,7 @@ class ImageLoader(QObject):
         self._cache: OrderedDict[str, QPixmap] = OrderedDict()
         self._max_items = max(1, int(max_items))
         self._in_flight: dict[str, list] = {}
+        self._generation = 0
 
     @classmethod
     def instance(cls) -> "ImageLoader":
@@ -42,7 +43,11 @@ class ImageLoader(QObject):
         self._in_flight[url] = [callback]
         request = QNetworkRequest(QUrl(url))
         reply = self._manager.get(request)
-        reply.finished.connect(lambda: self._on_reply(url, reply))
+        reply.finished.connect(lambda generation=self._generation: self._on_reply(url, reply, generation))
+
+    def clear_cache(self):
+        self._generation += 1
+        self._cache.clear()
 
     def _cache_get(self, url: str) -> QPixmap | None:
         if url not in self._cache:
@@ -57,7 +62,7 @@ class ImageLoader(QObject):
         while len(self._cache) > self._max_items:
             self._cache.popitem(last=False)
 
-    def _on_reply(self, url: str, reply: QNetworkReply) -> None:
+    def _on_reply(self, url: str, reply: QNetworkReply, generation=None) -> None:
         pixmap = None
         try:
             if reply.error() == QNetworkReply.NetworkError.NoError:
@@ -66,7 +71,8 @@ class ImageLoader(QObject):
                     candidate = QPixmap()
                     if candidate.loadFromData(data):
                         pixmap = candidate
-                        self._cache_set(url, pixmap)
+                        if generation is None or generation == self._generation:
+                            self._cache_set(url, pixmap)
         finally:
             callbacks = self._in_flight.pop(url, [])
             for cb in callbacks:

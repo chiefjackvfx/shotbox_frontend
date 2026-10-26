@@ -22,12 +22,13 @@ from PyQt6.QtWidgets import (
     QPushButton, QScrollArea, QFrame, QSizePolicy, QMessageBox, QFileDialog,
     QButtonGroup, QRadioButton, QApplication, QTextBrowser
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer, QSignalBlocker
-from PyQt6.QtGui import QFont, QIcon, QWheelEvent
+from PyQt6.QtCore import QObject, QRunnable, QThreadPool, Qt, pyqtSignal, QSize, QTimer, QSignalBlocker, QUrl
+from PyQt6.QtGui import QDesktopServices, QFont, QIcon, QWheelEvent
 
 import app_update
 import plugins_install
 from app_version import UPDATE_BRANCH
+from app_cache import CACHE_ROOT, cache_directory, clear_cache_files
 
 
 # Get the directory where this script is located
@@ -322,6 +323,27 @@ class SettingsManager:
     def get_auto_refresh_interval_ms(self) -> int:
         """Get auto refresh interval in milliseconds (for internal use)."""
         return int(self.get("auto_refresh_interval", 5) * 1000)
+
+
+class _CacheClearSignals(QObject):
+    finished = pyqtSignal(object)
+
+
+class _CacheClearTask(QRunnable):
+    def __init__(self, preview_loader):
+        super().__init__()
+        self.preview_loader = preview_loader
+        self.signals = _CacheClearSignals()
+
+    def run(self):
+        try:
+            if self.preview_loader is not None:
+                self.preview_loader._pool.waitForDone()
+                self.preview_loader._proxies.pool.waitForDone()
+            result = clear_cache_files()
+        except Exception as exc:
+            result = {"errors": [str(exc)], "active_temp": False}
+        self.signals.finished.emit(result)
 
 
 class SettingsPage(QWidget):
@@ -789,6 +811,29 @@ class SettingsPage(QWidget):
 
         container_layout.addWidget(notif_group)
 
+        # === Cache Section ===
+        cache_group = self._create_group_box("Cache")
+        cache_layout = QFormLayout(cache_group)
+        self.cache_path_label = QLabel(str(CACHE_ROOT))
+        self.cache_path_label.setWordWrap(True)
+        self.cache_path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        cache_layout.addRow("Cache Folder:", self.cache_path_label)
+        cache_buttons = QHBoxLayout()
+        cache_buttons.setSpacing(8)
+        self.open_cache_btn = QPushButton("Open Cache Folder")
+        self.open_cache_btn.setToolTip("Open the cache folder in your file browser.")
+        cache_buttons.addWidget(self.open_cache_btn)
+        self.clear_cache_btn = QPushButton("Clear Cache")
+        self.clear_cache_btn.setToolTip("Remove cached previews and unused temporary files.")
+        cache_buttons.addWidget(self.clear_cache_btn)
+        cache_layout.addRow("", cache_buttons)
+        self.cache_status_label = QLabel("Preview files rebuild when needed.")
+        self.cache_status_label.setWordWrap(True)
+        cache_layout.addRow("", self.cache_status_label)
+        self._cache_clear_task = None
+        self._cache_preview_loader = None
+        container_layout.addWidget(cache_group)
+
         # === App Updates Section ===
         self.updates_group = self._create_group_box("App Updates")
         updates_layout = QFormLayout(self.updates_group)
@@ -861,7 +906,7 @@ class SettingsPage(QWidget):
         self._settings_columns_layout.setSpacing(24)
         self._settings_columns = []
         for groups in (
-            (system_group, server_group, polling_group, preview_group, plugins_group, self.updates_group),
+            (system_group, server_group, polling_group, preview_group, plugins_group, cache_group, self.updates_group),
             (appearance_group, startup_group, session_group, notif_group, debug_group),
         ):
             column = QWidget()
@@ -1205,6 +1250,8 @@ class SettingsPage(QWidget):
 
     def _connect_signals(self):
         """Connect UI signals to handlers."""
+        self.open_cache_btn.clicked.connect(self._open_cache_folder)
+        self.clear_cache_btn.clicked.connect(self._clear_app_cache)
         self.nuke_lock_auto_release_check.toggled.connect(self.nuke_lock_release_grace_spin.setEnabled)
         self.clear_stale_nuke_locks_btn.clicked.connect(lambda: self._request_nuke_lock_clear_preview(True))
         self.clear_all_nuke_locks_btn.clicked.connect(lambda: self._request_nuke_lock_clear_preview(False))
@@ -1296,6 +1343,51 @@ class SettingsPage(QWidget):
         self.nuke_lock_cleanup_status.setText(message)
         if errors:
             QMessageBox.warning(self, "Nuke Lock Cleanup", message + "\n\n" + "\n".join(errors))
+
+    def _open_cache_folder(self):
+        try:
+            folder = cache_directory()
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))):
+                raise OSError("The file browser could not open the cache folder.")
+            self.cache_status_label.setText("Cache folder opened.")
+            self.cache_status_label.setToolTip("")
+        except OSError as exc:
+            self.cache_status_label.setText("Could not open cache folder.")
+            self.cache_status_label.setToolTip(str(exc))
+
+    def _clear_app_cache(self):
+        from exr_thumbnails import EXRThumbnailLoader
+        from image_loader import ImageLoader
+
+        if self._cache_clear_task is not None:
+            return
+        self.clear_cache_btn.setEnabled(False)
+        self.cache_status_label.setText("Clearing cache…")
+        self.cache_status_label.setToolTip("")
+        self._cache_preview_loader = EXRThumbnailLoader._instance
+        if self._cache_preview_loader is not None:
+            self._cache_preview_loader.begin_cache_clear()
+        if ImageLoader._instance is not None:
+            ImageLoader._instance.clear_cache()
+        task = _CacheClearTask(self._cache_preview_loader)
+        self._cache_clear_task = task
+        task.signals.finished.connect(self._cache_clear_finished)
+        QThreadPool.globalInstance().start(task)
+
+    def _cache_clear_finished(self, result):
+        if self._cache_preview_loader is not None:
+            self._cache_preview_loader.finish_cache_clear()
+        self._cache_preview_loader = None
+        self._cache_clear_task = None
+        self.clear_cache_btn.setEnabled(True)
+        message = "Cache cleared."
+        if result.get("active_temp"):
+            message += " Temporary files for running tasks were kept."
+        errors = result.get("errors", [])
+        if errors:
+            message = "Some cache files could not be cleared."
+            self.cache_status_label.setToolTip("\n".join(errors))
+        self.cache_status_label.setText(message)
 
     def _save_all_settings(self, checked=False, *, automatic=False):
         """Save the form; automatic saves report status without modal dialogs."""

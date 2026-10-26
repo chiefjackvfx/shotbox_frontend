@@ -881,7 +881,7 @@ QPushButton#btn_edit_shot_notes:hover {
 /* Action Buttons Row */
 QPushButton#btn_open_nuke,
 QToolButton#btn_open_assets,
-QPushButton#btn_open_precomp,
+QToolButton#btn_open_precomp,
 QPushButton#btn_latest_render {
     background-color: #2F3542;
     color: #D4D4D4;
@@ -897,7 +897,7 @@ QPushButton#btn_latest_render {
 
 QPushButton#btn_open_nuke:hover,
 QToolButton#btn_open_assets:hover,
-QPushButton#btn_open_precomp:hover,
+QToolButton#btn_open_precomp:hover,
 QPushButton#btn_latest_render:hover {
     background-color: #404754;
     border-color: #FF6B35;
@@ -1775,7 +1775,7 @@ QPushButton#btn_open_nuke[compact="true"],
 QPushButton#btn_latest_render[compact="true"],
 QPushButton#bnt_addTask[compact="true"],
 QToolButton#btn_open_assets[compact="true"],
-QPushButton#btn_open_precomp[compact="true"] {
+QToolButton#btn_open_precomp[compact="true"] {
     padding: 4px 6px;
     font-size: 10px;
     min-height: 24px;
@@ -1866,7 +1866,7 @@ QLabel#label_last_conform[v02="true"] {
 QPushButton#btn_open_nuke[v02="true"],
 QPushButton#btn_latest_render[v02="true"],
 QToolButton#btn_open_assets[v02="true"],
-QPushButton#btn_open_precomp[v02="true"] {
+QToolButton#btn_open_precomp[v02="true"] {
     min-height: 20px;
     padding: 3px 5px;
     font-size: 12px;

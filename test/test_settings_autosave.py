@@ -4,6 +4,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -48,6 +49,42 @@ class SettingsAutosaveTests(unittest.TestCase):
         QTest.qWait(600)
         self.manager.save.assert_not_called()
         self.assertFalse(self.page._autosave_pending)
+
+    def test_clear_cache_button_removes_files_without_saving_settings(self):
+        import app_cache
+        from exr_thumbnails import EXRThumbnailLoader
+        from image_loader import ImageLoader
+
+        root = Path(self.temp.name) / ".cache"
+        with patch.object(app_cache, "CACHE_ROOT", root), \
+             patch.object(EXRThumbnailLoader, "_instance", None), \
+             patch.object(ImageLoader, "_instance", None):
+            (app_cache.cache_directory("exr-previews-v1") / "frame.jpg").touch()
+            self.page.clear_cache_btn.click()
+            self.assertFalse(self.page.clear_cache_btn.isEnabled())
+            deadline = time.monotonic() + 3
+            while self.page._cache_clear_task is not None and time.monotonic() < deadline:
+                QTest.qWait(10)
+            self.assertIsNone(self.page._cache_clear_task)
+            self.assertTrue(self.page.clear_cache_btn.isEnabled())
+            self.assertEqual(list(root.iterdir()), [])
+            self.assertEqual(self.page.cache_status_label.text(), "Cache cleared.")
+            self.manager.save.assert_not_called()
+
+    def test_cache_clear_error_is_visible_and_button_can_retry(self):
+        from exr_thumbnails import EXRThumbnailLoader
+        from image_loader import ImageLoader
+
+        with patch.object(settings, "clear_cache_files", side_effect=PermissionError("locked")), \
+             patch.object(EXRThumbnailLoader, "_instance", None), \
+             patch.object(ImageLoader, "_instance", None):
+            self.page.clear_cache_btn.click()
+            deadline = time.monotonic() + 3
+            while self.page._cache_clear_task is not None and time.monotonic() < deadline:
+                QTest.qWait(10)
+            self.assertTrue(self.page.clear_cache_btn.isEnabled())
+            self.assertIn("could not be cleared", self.page.cache_status_label.text())
+            self.assertIn("locked", self.page.cache_status_label.toolTip())
 
     def test_edits_are_debounced_persisted_and_quiet(self):
         emitted = []

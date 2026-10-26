@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 from nuke_headless_tasks import find_nuke_executable, map_input_colorspace
+from app_cache import cache_directory, temporary_cache_task
 
 
 READ_NODE_LABEL = "Fr. range: [value first] - [value last]\nRes: [value width] * [value height]"
@@ -175,6 +176,7 @@ def _build_process_error(returncode: int, output_lines: list[str]) -> str:
     return f"Nuke exited with code {returncode}"
 
 
+@temporary_cache_task
 def generate_from_template(
     request: GenerateNkRequest | dict,
     nuke_path: Optional[str] = None,
@@ -233,6 +235,7 @@ def generate_from_template(
 
         with tempfile.NamedTemporaryFile(
             mode="w",
+            dir=cache_directory("temp"),
             suffix=".json",
             prefix="shotbox_create_nk_",
             delete=False,

@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import requests
+from app_cache import cache_directory, temporary_cache_task
 
 
 INVALID_SHEET_TITLE_CHARS = re.compile(r"[\[\]:*?/\\]")
@@ -200,6 +201,7 @@ def create_timeline_summary_workbook(
     return workbook
 
 
+@temporary_cache_task
 def export_job_timeline_summary(
     job_data: dict,
     destination: str | Path,
@@ -210,7 +212,7 @@ def export_job_timeline_summary(
     output_path = Path(destination).expanduser()
     if output_path.suffix.lower() != ".xlsx":
         output_path = output_path.with_suffix(".xlsx")
-    with tempfile.TemporaryDirectory(prefix="shotbox_excel_thumbs_") as tmp:
+    with tempfile.TemporaryDirectory(prefix="shotbox_excel_thumbs_", dir=cache_directory("temp")) as tmp:
         workbook = create_timeline_summary_workbook(
             job_data,
             include_hidden=include_hidden,

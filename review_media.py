@@ -60,9 +60,6 @@ class EXRSequenceReader:
         self.duration_ms = int(self.total_frames * 1000 / self.fps)
 
     def read_frame(self, index):
-        import OpenEXR
-        import Imath
-
         number = self.first_frame + index
         path = self.frames.get(number)
         if path is None:
@@ -72,6 +69,15 @@ class EXRSequenceReader:
                 self.frames[number] = path
         if path is None:
             raise FileNotFoundError(f"Render frame {number} is missing.")
+        return self.read_pixels(path)
+
+    @staticmethod
+    def read_pixels(path):
+        """Decode one EXR, including layered channels and cropped data windows."""
+        import OpenEXR
+        import Imath
+
+        path = Path(path)
         source = OpenEXR.InputFile(str(path))
         try:
             header = source.header()

@@ -13,6 +13,7 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
+from app_cache import cache_directory, temporary_cache_task
 
 
 CAMERA_PRESETS = {
@@ -760,12 +761,13 @@ else:
 """
 
 
+@temporary_cache_task
 def run_headless_3de(
     request: MatchmoveProjectRequest,
     log_callback: Callable[[str], None],
 ) -> HeadlessRunResult:
     three_de_path = resolve_3de_executable()
-    temp_dir = tempfile.gettempdir()
+    temp_dir = cache_directory("temp")
 
     runtime_script_fd, runtime_script_path = tempfile.mkstemp(
         prefix="shotbox_3de_",

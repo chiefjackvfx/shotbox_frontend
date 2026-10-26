@@ -9,12 +9,14 @@ from uuid import uuid4
 
 from PyQt6.QtCore import QObject, QRunnable, pyqtSignal
 from PyQt6.QtGui import QImage
+from app_cache import cache_directory, temporary_cache_task
 
 
+@temporary_cache_task
 def upload_thumbnail_image(api, shot_id: int, image: QImage) -> dict:
     if image.isNull():
         raise ValueError("No frame available for the thumbnail.")
-    with TemporaryDirectory(prefix="shotbox_thumbnail_") as directory:
+    with TemporaryDirectory(prefix="shotbox_thumbnail_", dir=cache_directory("temp")) as directory:
         path = Path(directory) / f"shot_{shot_id}_{uuid4().hex}.png"
         if not image.save(str(path), "PNG"):
             raise RuntimeError("Could not save the captured frame.")
