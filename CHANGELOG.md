@@ -6,6 +6,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-26T14:43:49+00:00] Added compact Precomp Roto popup with seed and generation controls.
+- [2026-10-26T14:43:49+00:00] Added Roto planning, export, cancellation and lifecycle regression coverage.
 - [2026-10-26T14:01:56+00:00] Added cached Matte export and cross-volume recovery regressions.
 - [2026-10-26T13:23:54+00:00] Added Linux GPU and Nuke integration verification report.
 - [2026-10-26T13:12:00+00:00] Added owned Matte pop-out with isolated GPU worker configuration.
@@ -28,6 +30,9 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-10-26T15:03:33+00:00] Clarified maximum Roto height and quality versus generation time.
+- [2026-10-26T14:59:22+00:00] Changed Roto lifecycle regressions to exercise Generate Now clicks.
+- [2026-10-26T14:43:49+00:00] Shared Matte worker transport and documented compact Roto workflow.
 - [2026-10-26T14:14:05+00:00] Defaulted Matte exports to Version up on every launch.
 - [2026-10-26T11:40:53+00:00] Shared EXR pixel decoding between playback and menu previews.
 - [2026-10-26T12:10:57+00:00] Used small local proxies for realtime Precomp preview playback.
@@ -43,6 +48,7 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
+- [2026-10-26T14:59:22+00:00] Fixed Generate Now crashing when Qt forwarded button state.
 - [2026-10-26T14:01:56+00:00] Kept Toolbox Matte staging, backups and locks inside .cache.
 - [2026-10-26T11:15:51+00:00] Restored Assets left-click opening folders; retained right-click matchmove options.
 - [2026-10-26T11:52:13+00:00] Recognized mixed EXR versions and incomplete sequences for previews.

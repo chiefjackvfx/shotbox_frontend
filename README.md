@@ -120,6 +120,15 @@ and backend live in `toolbox/shotbox_matte/`; the Nuke host integration lives in
 `plugins/nuke/`. Both ship with the frontend, without model weights or a copied
 inference environment.
 
+For a compact single-sequence workflow, right-click a shot's **Precomp** button,
+choose its sequence folder, then **Roto**. The popup uses the sequence displayed
+in the menu preview. It defaults to 25 FPS, ACEScg, Version up and `_roto`, with
+optional inclusive source In/Out, editable generation bounds and a Seed field
+defaulting to 42. The live summary
+shows model padding and the provisional output folder; extra model frames are
+trimmed before export. **Generate Now** keeps progress and cancellation in the
+popup while Shotbox remains usable. **Add to Queue** is reserved for future work.
+
 In **Settings → Plugins → Shotbox Matte / Nuke**, prepare the separate GPU
 runtime, choose an external model library, save configuration and install the
 Nuke integration. Restart Nuke after installation or integration updates.

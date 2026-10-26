@@ -416,7 +416,7 @@ def test_model_validation_failure_in_real_worker_is_not_complete(app, window, se
 
 def test_completed_previews_live_outside_exr_only_output_and_folder_opens(app, window, sequence, tmp_path, monkeypatch):
     """Exercise real Qt process completion and raster I/O without GPU inference."""
-    from PyQt6.QtCore import QProcess
+    from shotbox_matte.worker import MatteWorker
     from PyQt6.QtGui import QDesktopServices
     from shotbox_matte.export import MANIFEST
     from shotbox_matte.imaging import write_exr, write_preview
@@ -447,16 +447,19 @@ def test_completed_previews_live_outside_exr_only_output_and_folder_opens(app, w
     window._set_busy(True)
     # The controlled worker supplies the real result protocol. Native inference
     # and export correctness are covered independently by the processing tests.
-    process = QProcess(window)
-    window._process = process
-    process.readyReadStandardOutput.connect(window._read_stdout)
-    process.readyReadStandardError.connect(window._read_stderr)
-    process.finished.connect(window._worker_finished)
-    process.errorOccurred.connect(window._process_error)
-    process.start(sys.executable, [
+    worker = MatteWorker(window, window.options())
+    window._worker = worker
+    window._process = worker.process
+    worker.raw_output.connect(window._record_raw)
+    worker.stdout_line.connect(window._handle_worker_line)
+    worker.stderr_line.connect(lambda line: window._append_log(line, persist=False))
+    worker.finished.connect(window._worker_finished)
+    worker.process.setProgram(sys.executable)
+    worker.process.setArguments([
         "-u", "-c", "import sys; print(sys.argv[1], flush=True)",
         json.dumps({"type": "result", "result": result}),
     ])
+    worker.start()
     wait_until(app, lambda: window._process is None and window._matte_preview is not None)
 
     assert window._result == result
@@ -832,12 +835,16 @@ def test_raw_worker_bytes_are_preserved_and_split_unicode_displays_correctly(app
         def readAllStandardOutput(self):
             return self.chunks.pop(0)
 
-    window._process = Chunks()
+    from shotbox_matte.worker import MatteWorker
+    worker = MatteWorker(window, window.options())
+    worker.raw_output.connect(window._record_raw)
+    worker.stdout_line.connect(window._handle_worker_line)
+    worker.process = Chunks()
     try:
-        window._read_stdout()
-        window._read_stdout()
+        worker._read("stdout")
+        worker._read("stdout")
     finally:
-        window._process = None
+        worker.cleanup()
     assert "source café" in window.log.toPlainText()
     assert b"source caf\xc3\xa9\nraw-invalid-byte:\xff\n" in window._log_path.read_bytes()
     window.copy_log.click()

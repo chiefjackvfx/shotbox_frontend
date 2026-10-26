@@ -191,6 +191,33 @@ class ToolboxPage(QWidget):
     def has_busy_tools(self):
         return any(window.is_busy() for window in self._tool_windows.values())
 
+    def open_roto(self, source_frame):
+        from pathlib import Path
+        from toolbox.shotbox_matte.plugin import open_roto
+
+        source_frame = str(Path(source_frame).resolve())
+        window = self._tool_windows.get("shotbox_roto")
+        if window is None:
+            try:
+                window = open_roto(self.window(), source_frame)
+            except Exception as exc:
+                QMessageBox.warning(self, "Generate Roto", f"Could not open Matte: {exc}\nCheck Settings → Plugins.")
+                return
+            self._tool_windows["shotbox_roto"] = window
+            window.destroyed.connect(lambda: self._tool_windows.pop("shotbox_roto", None))
+        elif window.source_frame != source_frame:
+            if window.is_busy():
+                window.showNormal()
+                window.raise_()
+                window.activateWindow()
+                QMessageBox.information(window, "Roto is busy",
+                    "Finish or cancel the current Matte work before choosing another sequence.")
+                return
+            window.load_source(source_frame)
+        window.showNormal()
+        window.raise_()
+        window.activateWindow()
+
     def close_tools(self):
         for window in list(self._tool_windows.values()):
             window.close()

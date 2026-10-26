@@ -6,12 +6,10 @@ only entry points that load the desktop dependency; the CLI stays headless.
 
 from __future__ import annotations
 
-import codecs
 import json
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 import sys
-import tempfile
 from typing import Any
 import uuid
 
@@ -351,12 +349,9 @@ def _build_qt_types() -> dict[str, Any]:
             self._result: dict[str, Any] | None = None
             self._input_path = ""
             self._process: Any = None
+            self._worker: Any = None
             self._worker_directory: Any = None
             self._worker_path: Path | None = None
-            self._stdout_buffer = ""
-            self._stderr_buffer = ""
-            self._stdout_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-            self._stderr_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
             self._worker_result: dict[str, Any] | None = None
             self._worker_error = ""
             self._cancel_requested = False
@@ -1426,17 +1421,18 @@ def _build_qt_types() -> dict[str, Any]:
                 self._worker_error = "Matte runtime is missing. Open Settings → Plugins and prepare the Matte runtime."
                 self.stage_label.setText(self._worker_error)
                 return False
-            self._worker_directory = tempfile.TemporaryDirectory(
-                prefix="shotbox-matte-", dir=str(self.runtime.temporary_directory) if self.runtime else None)
-            self._worker_path = Path(self._worker_directory.name) / "job.json"
-            self._worker_path.write_text(json.dumps(options), encoding="utf-8")
+            from .worker import MatteWorker
+            try:
+                self._worker = MatteWorker(self, options, self.runtime)
+            except OSError as exc:
+                self._worker_error = str(exc)
+                self.stage_label.setText(f"Could not prepare worker: {exc}")
+                return False
+            self._worker_directory = self._worker.directory
+            self._worker_path = self._worker.path
             self._worker_result = None
             self._worker_error = ""
             self._cancel_requested = False
-            self._stdout_buffer = ""
-            self._stderr_buffer = ""
-            self._stdout_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
-            self._stderr_decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
             self._result = None
             self._matte_preview = None
             self.qc_preview.stop()
@@ -1452,28 +1448,12 @@ def _build_qt_types() -> dict[str, Any]:
             self._timing_timer.start()
             self._update_timing()
             self._append_log("Starting native LTX-2.5 Alpha Gen in a separate process.")
-            self._process = QProcess(self)
-            self._process.setProgram(str(self.runtime.worker_python) if self.runtime else sys.executable)
-            if self.runtime is not None:
-                from PyQt6.QtCore import QProcessEnvironment
-                environment = QProcessEnvironment.systemEnvironment()
-                for key in ("PYTHONHOME", "PYTHONPATH", "QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH",
-                            "QML_IMPORT_PATH", "QML2_IMPORT_PATH"):
-                    environment.remove(key)
-                environment.insert("PYTHONUTF8", "1")
-                for key in ("TMPDIR", "TEMP", "TMP"):
-                    environment.insert(key, str(self.runtime.temporary_directory))
-                environment.insert("SHOTBOX_JOB_DIR", str(self.runtime.temporary_directory / "jobs"))
-                environment.insert("SHOTBOX_TEMP_DIR", str(self.runtime.temporary_directory))
-                environment.insert("SHOTBOX_PORTABLE_DIR", str(self.runtime.application_root))
-                self._process.setProcessEnvironment(environment)
-                self._process.setWorkingDirectory(str(self.runtime.application_root))
-            self._process.setArguments(["-u", "-X", "utf8", "-m", "shotbox_matte", "--worker", str(self._worker_path)])
-            self._process.readyReadStandardOutput.connect(self._read_stdout)
-            self._process.readyReadStandardError.connect(self._read_stderr)
-            self._process.finished.connect(self._worker_finished)
-            self._process.errorOccurred.connect(self._process_error)
-            self._process.start()
+            self._process = self._worker.process
+            self._worker.raw_output.connect(self._record_raw)
+            self._worker.stdout_line.connect(self._handle_worker_line)
+            self._worker.stderr_line.connect(lambda line: self._append_log(line, persist=False))
+            self._worker.finished.connect(self._worker_finished)
+            self._worker.start()
             self._render_queue()
             return True
 
@@ -1486,26 +1466,6 @@ def _build_qt_types() -> dict[str, Any]:
             self.cancel_button.setEnabled(busy)
             self.queue_add_current.setEnabled(not busy)
             self._render_queue()
-
-        def _read_stdout(self) -> None:
-            if self._process is None:
-                return
-            raw = bytes(self._process.readAllStandardOutput())
-            self._record_raw(raw)
-            self._stdout_buffer += self._stdout_decoder.decode(raw)
-            while "\n" in self._stdout_buffer:
-                line, self._stdout_buffer = self._stdout_buffer.split("\n", 1)
-                self._handle_worker_line(line)
-
-        def _read_stderr(self) -> None:
-            if self._process is None:
-                return
-            raw = bytes(self._process.readAllStandardError())
-            self._record_raw(raw)
-            self._stderr_buffer += self._stderr_decoder.decode(raw)
-            while "\n" in self._stderr_buffer:
-                line, self._stderr_buffer = self._stderr_buffer.split("\n", 1)
-                self._append_log(line, persist=False)
 
         def _handle_worker_line(self, line: str) -> None:
             event = parse_worker_line(line)
@@ -1548,22 +1508,7 @@ def _build_qt_types() -> dict[str, Any]:
                 self.queue.pause()
                 self._append_log(str(event.get("message", "Processing cancelled")), persist=False)
 
-        def _process_error(self, error: Any) -> None:
-            if error == QProcess.ProcessError.FailedToStart:
-                self._worker_error = self._process.errorString()
-                self._worker_finished(-1, QProcess.ExitStatus.CrashExit)
-
         def _worker_finished(self, code: int, status: Any) -> None:
-            self._read_stdout()
-            self._read_stderr()
-            self._stdout_buffer += self._stdout_decoder.decode(b"", final=True)
-            self._stderr_buffer += self._stderr_decoder.decode(b"", final=True)
-            if self._stdout_buffer:
-                self._handle_worker_line(self._stdout_buffer)
-                self._stdout_buffer = ""
-            if self._stderr_buffer:
-                self._append_log(self._stderr_buffer, persist=False)
-                self._stderr_buffer = ""
             self.progress_bar.setRange(0, 100)
             self._timing.finish()
             self._timing_timer.stop()
@@ -1599,13 +1544,11 @@ def _build_qt_types() -> dict[str, Any]:
                 self._append_log(message, level="error")
                 outcome_message = message
             self._set_busy(False)
-            old_process = self._process
             self._process = None
-            if old_process is not None:
-                old_process.deleteLater()
-            if self._worker_directory is not None:
-                self._worker_directory.cleanup()
-                self._worker_directory = None
+            if self._worker is not None:
+                self._worker.cleanup()
+                self._worker = None
+            self._worker_directory = None
             self._worker_path = None
             for stage, seconds in self._timing.stage_totals.items():
                 self._append_log(f"Stage timing: {stage.replace('_', ' ')} {seconds:.1f}s")
@@ -1656,16 +1599,8 @@ def _build_qt_types() -> dict[str, Any]:
             self.cancel_button.setEnabled(False)
             self.stage_label.setText("Cancelling · waiting for the current operation…")
             self._append_log("Cancellation requested; waiting for native inference to stop.")
-            if self._worker_path is not None:
-                Path(str(self._worker_path) + ".cancel").touch()
-            process = self._process
-
-            def stop_if_needed() -> None:
-                if self._process is process and self._is_running():
-                    self._append_log("Stopping the worker process to release GPU memory.")
-                    process.kill()
-
-            QTimer.singleShot(10000, stop_if_needed)
+            if self._worker is not None:
+                self._worker.cancel()
 
         def _open_output(self) -> None:
             if self._result and self._result.get("output_dir"):
@@ -1765,21 +1700,11 @@ def _build_qt_types() -> dict[str, Any]:
             # paths actually inside a previous portable app are relocated.
             if self._portable_directory is not None:
                 values = _portable_preferences(values, self._portable_directory)
-            if self.runtime is not None and self.runtime.model_root:
-                if values.get("model_root") != self.runtime.model_root:
-                    values["models"] = {}
-                values["model_root"] = self.runtime.model_root
-            if self.runtime is not None and self.runtime.model_config:
-                try:
-                    config_path = Path(self.runtime.model_config).expanduser()
-                    configured = json.loads(config_path.read_text(encoding="utf-8"))
-                    configured = configured.get("models", configured)
-                    if not isinstance(configured, dict):
-                        raise ValueError("Model configuration must be an object.")
-                    values["models"] = {key: str((config_path.parent / value).resolve())
-                                        for key, value in configured.items() if isinstance(value, str) and value}
-                except (OSError, ValueError, AttributeError) as exc:
-                    self._append_log(f"Model configuration needs attention: {exc}")
+            from .runtime import configured_model_preferences
+            try:
+                values = configured_model_preferences(values, self.runtime)
+            except (OSError, ValueError, AttributeError) as exc:
+                self._append_log(f"Model configuration needs attention: {exc}")
             # Each launch starts with Version up, including older preferences
             # that remembered Overwrite. Explicit preset selections still apply.
             values["existing"] = "version-up"

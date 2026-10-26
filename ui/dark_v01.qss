@@ -1367,6 +1367,7 @@ QPushButton#shotAddTaskButton:hover {
     color: #FFFFFF;
 }
 
+QDialog#roto_dialog,
 QDialog#task_create_dialog {
     background-color: #1C1F25;
 }
@@ -1378,6 +1379,10 @@ QDialog#task_create_dialog QLabel#task_field_label {
     letter-spacing: 0.4px;
 }
 
+QDialog#roto_dialog QLineEdit,
+QDialog#roto_dialog QSpinBox,
+QDialog#roto_dialog QDoubleSpinBox,
+QDialog#roto_dialog QComboBox,
 QDialog#task_create_dialog QLineEdit,
 QDialog#task_create_dialog QSpinBox,
 QDialog#task_create_dialog QDoubleSpinBox,
@@ -1390,6 +1395,10 @@ QDialog#task_create_dialog QComboBox {
     min-height: 22px;
 }
 
+QDialog#roto_dialog QLineEdit:focus,
+QDialog#roto_dialog QSpinBox:focus,
+QDialog#roto_dialog QDoubleSpinBox:focus,
+QDialog#roto_dialog QComboBox:focus,
 QDialog#task_create_dialog QLineEdit:focus,
 QDialog#task_create_dialog QSpinBox:focus,
 QDialog#task_create_dialog QDoubleSpinBox:focus,
@@ -1401,6 +1410,38 @@ QFrame#task_dialog_divider {
     color: #2F3542;
     background-color: #2F3542;
     min-height: 1px;
+}
+
+QDialog#roto_dialog QFrame#roto_summary {
+    background-color: #202329;
+    border: 1px solid #30343C;
+    border-radius: 8px;
+}
+
+QDialog#roto_dialog QLabel#roto_frame_summary {
+    font-size: 16px;
+    font-weight: bold;
+    color: #E5E7EB;
+}
+
+QDialog#roto_dialog QLabel#roto_output_title {
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    color: #9CA3AF;
+}
+
+QDialog#roto_dialog QPushButton#roto_generate {
+    background-color: #FF6B35;
+    color: #171A20;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-weight: bold;
+}
+
+QDialog#roto_dialog QPushButton#roto_generate:disabled {
+    background-color: #343B47;
+    color: #919BAC;
 }
 
 QPushButton#task_preset_button {

@@ -1604,10 +1604,20 @@ class ShotCard(QWidget):
                 folder_menu.addSeparator()
                 EXRMenuPreview(folder_menu, preview_frames)
                 roto = folder_menu.addAction("Roto")
-                roto.setEnabled(False)
+                roto.triggered.connect(
+                    lambda checked=False, path=preview_frames[0]: self._open_roto(path)
+                )
         if not folders:
             empty_action = menu.addAction(empty_message)
             empty_action.setEnabled(False)
+
+    def _open_roto(self, source_frame: str) -> None:
+        host = self.window()
+        toolbox = getattr(host, "page_toolbox", None)
+        if toolbox is not None:
+            toolbox.open_roto(source_frame)
+        else:
+            QMessageBox.warning(self, "Generate Roto", "Open this shot in Shotbox to use the Matte tool.")
 
     def _default_matchmove_dir(self) -> str:
         return build_shot_matchmove_directory(self._normalized_shot_dir())
