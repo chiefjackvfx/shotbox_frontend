@@ -6,23 +6,31 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-26T16:25:06+00:00] Added Resolve import isolation and connection error regressions.
-- [2026-10-26T16:23:10+00:00] Added Windows launcher coverage for native and Python failures.
-- [2026-10-26T16:14:32+00:00] Added Qt logging defaults and override regression coverage.
-- [2026-10-26T16:11:12+00:00] Added eight-colour palette strip beneath terminal startup diagnostics.
-
 ### Changed
-
-- [2026-10-26T16:25:06+00:00] Documented deferred Resolve scripting library loading.
-- [2026-10-26T16:23:10+00:00] Enabled Windows startup fault diagnostics and documented crash reporting.
-- [2026-10-26T16:14:32+00:00] Documented optional FFmpeg metadata logging for troubleshooting.
-- [2026-10-26T16:11:12+00:00] Documented palette controls and extended terminal banner rendering coverage.
 
 ### Fixed
 
-- [2026-10-26T16:25:06+00:00] Deferred Resolve native imports to prevent Windows startup crashes.
-- [2026-10-26T16:23:10+00:00] Fixed Windows launcher hiding negative native crash exit codes.
-- [2026-10-26T16:14:32+00:00] Suppressed repeated FFmpeg video metadata dumps by default.
+## 5.0.1 - 2026-10-26
+
+### Added
+
+- Added Resolve import isolation and connection error regressions.
+- Added Windows launcher coverage for native and Python failures.
+- Added Qt logging defaults and override regression coverage.
+- Added eight-colour palette strip beneath terminal startup diagnostics.
+
+### Changed
+
+- Documented deferred Resolve scripting library loading.
+- Enabled Windows startup fault diagnostics and documented crash reporting.
+- Documented optional FFmpeg metadata logging for troubleshooting.
+- Documented palette controls and extended terminal banner rendering coverage.
+
+### Fixed
+
+- Deferred Resolve native imports to prevent Windows startup crashes.
+- Fixed Windows launcher hiding negative native crash exit codes.
+- Suppressed repeated FFmpeg video metadata dumps by default.
 
 ## 5.0.0 - 2026-10-26
 
