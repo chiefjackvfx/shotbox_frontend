@@ -5,9 +5,6 @@ import platform  # System and platform identification
 import os
 import subprocess
 import path_mapping
-try:
-    import DaVinciResolveScript as dvr_script  # DaVinci Resolve scripting API
-except:pass
 from PyQt6.QtWidgets import *  # UI widgets (buttons, tables, etc.)
 
 
@@ -349,6 +346,10 @@ class Folders:
         resolve = None
         
         try:
+            # Resolve's native extension can crash the interpreter while loading.
+            # Load it only for this explicit action, never during Shotbox startup.
+            import DaVinciResolveScript as dvr_script
+
             resolve = dvr_script.scriptapp("Resolve")
         except Exception as e:
             QMessageBox.critical(None, "Error", f"Error connecting to Resolve:\n{e}\nIs Resolve open?")

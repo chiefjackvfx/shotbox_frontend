@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 import unittest
 from unittest import mock
+from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -17,6 +19,51 @@ import filesIO
 
 
 class FilesIOPreviewLogicTests(unittest.TestCase):
+    def test_startup_imports_do_not_load_resolve_native_extension(self):
+        script = """
+import importlib.abc
+import os
+import sys
+
+class NativeResolveImport(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in ('DaVinciResolveScript', 'fusionscript'):
+            print('Unexpected Resolve import during startup', file=sys.stderr, flush=True)
+            os._exit(86)
+sys.meta_path.insert(0, NativeResolveImport())
+import main
+assert 'DaVinciResolveScript' not in sys.modules
+assert 'fusionscript' not in sys.modules
+print('Startup imports completed')
+"""
+        environment = dict(os.environ, QT_QPA_PLATFORM="offscreen")
+        result = subprocess.run([sys.executable, "-B", "-c", script],
+                                cwd=FRONTEND_DIR, env=environment,
+                                capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Startup imports completed", result.stdout)
+
+    def test_push2dvr_loads_resolve_on_request(self):
+        scripting = SimpleNamespace(scriptapp=mock.Mock(return_value=None))
+        with (
+            mock.patch.dict(sys.modules, {"DaVinciResolveScript": scripting}),
+            mock.patch.object(filesIO.QMessageBox, "critical") as critical,
+        ):
+            result = filesIO.Folders().push2dvr("/show/shot_v001.mov")
+        self.assertFalse(result)
+        scripting.scriptapp.assert_called_once_with("Resolve")
+        self.assertIn("Could not connect", critical.call_args.args[2])
+
+    def test_push2dvr_missing_api_reports_connection_error(self):
+        with (
+            mock.patch.dict(sys.modules, {"DaVinciResolveScript": None}),
+            mock.patch.object(filesIO.QMessageBox, "critical") as critical,
+        ):
+            result = filesIO.Folders().push2dvr("/show/shot_v001.mov")
+        self.assertFalse(result)
+        self.assertIn("Error connecting to Resolve", critical.call_args.args[2])
+        self.assertIn("DaVinciResolveScript", critical.call_args.args[2])
+
     def test_convert_path_delegates_to_shared_mapper(self):
         with mock.patch.object(
             filesIO.path_mapping,

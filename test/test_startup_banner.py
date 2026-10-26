@@ -58,13 +58,20 @@ def test_layout_and_complete_executable_path(width, has_logo, monkeypatch):
     assert "Transformers" in text
 
 
-def test_colored_and_plain_layouts_match():
-    plain = startup_banner.render_banner()
-    colored = startup_banner.render_banner(color=True)
+@pytest.mark.parametrize("width", [40, 100])
+def test_colored_and_plain_layouts_match(width):
+    plain = startup_banner.render_banner(width=width)
+    colored = startup_banner.render_banner(color=True, width=width)
     assert "\x1b[38;2;240;90;32m" in colored
-    assert "\x1b[37m" in colored
+    if width >= 80:
+        assert "\x1b[37m" in colored
     assert "\x1b[1mSHOTBOX" in colored
-    assert re.sub(r"\x1b\[[0-9;]*m", "", colored) == plain
+    assert re.sub(r"\x1b\[[0-9;]*m", "", colored).rstrip() == plain.rstrip()
+    palette = colored.splitlines()[-1]
+    for background in range(40, 48):
+        assert f"\x1b[{background}m   " in palette
+    assert palette.endswith("\x1b[0m")
+    assert len(re.sub(r"\x1b\[[0-9;]*m", "", palette)) == (56 if width >= 80 else 24)
 
 
 class TerminalStream(io.StringIO):

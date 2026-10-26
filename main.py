@@ -10,6 +10,13 @@ import platform
 import importlib
 from pathlib import Path
 
+# Qt's FFmpeg backend dumps every video's metadata at info level. Apply this
+# before Qt loads; later user-supplied rules can explicitly re-enable the dump.
+os.environ["QT_LOGGING_RULES"] = (
+    "qt.multimedia.ffmpeg.mediadataholder.info=false;"
+    + os.environ.get("QT_LOGGING_RULES", "")
+)
+
 if __name__ == "__main__":
     try:
         from startup_banner import print_banner

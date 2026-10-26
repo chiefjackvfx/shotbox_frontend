@@ -88,6 +88,11 @@ def render_banner(color: bool = False, width: int = 100) -> str:
         lines = info
 
     lines.extend(("", f"{styled('Python executable:', _ORANGE)} {sys.executable}"))
+    if color:
+        # Standard terminal palette, aligned with the information column.
+        indent = " " * 32 if width >= 80 else ""
+        palette = "".join(f"\x1b[{background}m   " for background in range(40, 48))
+        lines.extend(("", f"{indent}{palette}{_RESET}"))
     return "\n".join(lines)
 
 

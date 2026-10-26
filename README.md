@@ -18,14 +18,30 @@ virtual environments must not be run from renamed backup directories. A legacy
 parent `../.venv` is preserved, because another application may share it.
 Interrupted setup is recovered on the next installer/update run.
 
+On Windows, `windows_run_shotbox.bat` enables unbuffered output and Python fault
+diagnostics. Failed launches show the exit code and pause, including native
+failures with negative Windows exit codes. Copy the error output above the
+prompt when reporting a crash. If using an older launcher, run
+`venv\Scripts\python.exe -u -X faulthandler main.py` from an open Command Prompt
+in the frontend folder, then run `echo Exit code: %ERRORLEVEL%`.
+
+DaVinci Resolve's native scripting library loads only when a Resolve action is
+requested. Normal Shotbox startup does not load or require that library.
+
 At startup, the terminal shows an ASCII version of the Shotbox logo alongside
 Shotbox, Python, OS, Qt, media and Matte package versions, followed by the active
 Python executable path. Versions come from the running environment's installed
 metadata without loading inference libraries or probing the GPU. Missing packages
 show `not installed`; unreadable metadata shows `unknown`.
-Supported terminals use orange and light grey; set `NO_COLOR` to disable colour.
+Supported terminals use orange and light grey, with an eight-colour terminal
+palette strip at the bottom; set `NO_COLOR` to disable colour and the strip.
 Redirected output is plain text, terminals below 80 columns omit the logo, and
 launches without a console skip the banner.
+
+Video previews suppress FFmpeg's repeated input, metadata and stream summaries
+by default, while warnings and playback errors remain enabled. To inspect those
+summaries, launch with
+`QT_LOGGING_RULES="qt.multimedia.ffmpeg.mediadataholder.info=true"`.
 
 ## Cache and temporary files
 
