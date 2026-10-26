@@ -4,7 +4,7 @@ PyQt6 desktop frontend for ShotBox.
 
 ## Entry Point
 
-- Run the app from `main.py` using frontend `venv` (Python 3.13 on Linux; 3.12 on Windows/macOS).
+- Run the app from `main.py` using frontend `venv` (Python 3.13 on Linux, Windows and macOS).
 - Use the normal Windows installer/update batch files or Unix installer/update
   scripts to prepare that environment. They provision local Python without
   changing system Python or PATH and install frontend and Matte dependencies
@@ -16,10 +16,10 @@ Python 3.13 qualification is available through
 on Windows. It builds an isolated `.runtime/qualification/python313/venv` and
 records installation evidence in the neighbouring `report.json`. The desktop
 and Matte worker share that interpreter when launched explicitly from it.
-Linux installers select Python 3.13 through `runtime_python_linux.txt`.
-Windows/macOS retain Python 3.12 through `runtime_python.txt` until their
-native acceptance is complete. The normal Linux `run_shotbox_frontend.sh`
-launches the migrated frontend `venv`; no special command is needed. See
+All installers select Python 3.13 through `runtime_python.txt`. Normal
+installers/updaters migrate older environments with a rollback backup. Existing
+launchers keep using frontend `venv`; no special launch command is needed.
+Windows/macOS dependency resolution passed; native acceptance remains pending. See
 [Python 3.13 qualification](toolbox/shotbox_matte/docs/PYTHON313_QUALIFICATION.md)
 for launch commands, results, pending checks and the promotion procedure.
 
@@ -56,6 +56,22 @@ by default, while warnings and playback errors remain enabled. To inspect those
 summaries, launch with
 `QT_LOGGING_RULES="qt.multimedia.ffmpeg.mediadataholder.info=true"`.
 
+## Make All Previews
+
+**Make All Previews** reuses one headless Nuke process for the batch, loading a
+fresh preview template for each input. Rendering uses up to 16 threads and
+top-down processing. The existing output naming, quality, slate, progress,
+overwrite setting, and per-preview database updates still apply. Cancel stops
+the worker; a failed input is reported before the next input is attempted.
+Single-preview generation keeps its existing launch path.
+
+Worker temporary files and Nuke disk caches live in `.cache/temp/preview-worker-*`,
+protected from Clear Cache until the process stops, then removed automatically.
+The mixed MOV/EXR verification batch took 15.7 seconds versus 30.8 seconds before
+the change, with identical decoded frames. See
+[batch preview verification](docs/PREVIEW_BATCH_VERIFICATION.md) for measurements,
+test commands, and the limits of this comparison.
+
 ## Cache and temporary files
 
 Runtime caches and disposable working files live in `.cache` beside `main.py`,
@@ -70,7 +86,17 @@ path, keeping matching names from different shots and sequences separate.
 Source-change checks are stored inside the JPEG metadata. Existing hashed or
 nested proxies migrate when their sequences reopen.
 Precomp EXR previews sample at 10 fps to reduce preparation work while retaining
-the shot's normal timing.
+the shot's normal timing. Hovering a folder in the right-click Precomp menu
+shows its preview without waiting for the folder submenu to open. The panel
+moves beside the submenu when it opens without restarting preparation.
+Hovering first shows a still from the EXR while the
+playback proxy is prepared, then switches to playback automatically. The still
+loads independently of queued proxy jobs; its loading indicator sits in the
+corner once an image is visible.
+Moving away cancels queued preview work for that folder. Temporary read failures
+retry on the next hover, and an open folder preview resumes after cache clearing.
+See [preview verification](docs/EXR_PREVIEW_VERIFICATION.md) for lifecycle tests
+and the Python 3.11/3.13 comparison.
 
 Use **Settings → Cache → Clear Cache** to remove cached previews and unused
 temporary files. The button clears in the background, stops preview preparation,
@@ -177,12 +203,14 @@ For a compact single-sequence workflow, right-click a shot's **Precomp** button,
 choose its sequence folder, then **Roto**. The popup uses the sequence displayed
 in the menu preview. It defaults to 25 FPS, ACEScg, Version up and `_roto`, with
 optional inclusive source In/Out, editable generation bounds and a Seed field
-defaulting to 42. The live summary
+defaulting to 42. **Frame processing** switches between **Segments · recommended**
+and **Full range · experimental**. It defaults to Segments for each new source;
+switching modes updates the plan and summary. The live summary
 shows model padding and the provisional output folder; extra model frames are
 trimmed before export. **Generate Now** keeps progress and cancellation in the
 popup while Shotbox remains usable. **Add to Queue** is reserved for future work.
 
-Matte shares Shotbox's main environment (Python 3.13 on Linux), including its background
+Matte shares Shotbox's main Python 3.13 environment, including its background
 workers; there is no separate Matte launcher or runtime preparation. In
 **Settings → Plugins → Shotbox Matte / Nuke**, choose an external model library,
 save configuration and install the Nuke integration. Restart Nuke after
@@ -203,3 +231,94 @@ See [Matte setup](toolbox/shotbox_matte/README.md) and
 [Nuke installation](plugins/nuke/README.md).
 
 [Linux integration verification](toolbox/shotbox_matte/docs/SHOTBOX_INTEGRATION_VERIFICATION.md) records the relocated runtime checks and platform limits.
+
+## Background denoise (Windows and Linux)
+
+Click **Denoise** beside **mp4s** to denoise the current job. The confirmation
+shows the clip count. Shotbox queues the latest saved Nuke script for each shot
+across all timelines, including hidden shots, skips shots without saved scripts,
+and avoids duplicate scripts. Clips run one at a time using the same workflow
+as the shot-card action. Progress shows the current clip and batch counts;
+**Cancel** stops the current clip and the remaining queue. Failed clips are
+reported and the next clip continues. A final summary lists completed, failed,
+skipped, and remaining clips. The button is disabled while denoise is running.
+
+Right-click the `.nk` button on a shot card and choose **Denoise**. Shotbox opens
+the saved script on a private display, evaluates its middle frame, runs Neat
+Video **Auto Profile → Apply**, saves the profile into the same `.nk`, and renders
+`WriteDN1` over the full script range. Matching output frames are overwritten.
+Existing filter settings and output paths are preserved. Denoise runs even when
+someone has the script open or the shot is locked, using the last saved script
+on disk. It does not acquire or release shot locks. If the disk script changes
+before the profile is saved, the job stops to preserve that edit. Only one
+denoise job runs at a time.
+The lock monitor identifies supervised denoise workers from their job records
+and excludes them from editing-session detection. Normal Nuke sessions keep
+their existing lock checks.
+
+The target combination is **NukeX 17.1v2 + Neat Video 6.1.2**, with the English
+Neat Video controls at normal scaling. Linux is qualified with native tests;
+the Windows backend is implemented and awaiting native verification. Configure
+the Nuke executable in Settings.
+NukeX and Neat Video must already be installed and licensed. Background Nuke
+starts with `--nukex` so existing ModelBuilder and other NukeX nodes load normally,
+including nodes outside the denoise branch. Other plugin versions,
+unrecognized controls, unexpected dialogs, and failed profiles stop the job.
+
+Denoise uses Nuke's Qt terminal mode with its interactive NukeX license to
+reduce startup time while retaining Neat Video's profiling editor. It uses
+full-frame rendering and up to 16 Nuke rendering threads, limited to half the
+machine's logical CPUs. On the verified 59-frame 4096 × 2850 shot, the complete
+controller workflow took about 21 seconds versus the earlier 43–44 seconds.
+The frame range, resolution, filter settings, and output format were preserved.
+
+On Linux, install the optional display prerequisites before using this action:
+
+```bash
+# Rocky / RHEL / Fedora
+sudo dnf install xorg-x11-server-Xvfb openbox
+# Debian / Ubuntu
+sudo apt install xvfb openbox
+```
+
+Run normal Shotbox runtime setup to install the Linux-only `python-xlib`
+dependency. Each Linux job starts its own authenticated Xvfb server.
+
+On Windows 10/11, denoise uses a separate Windows desktop and a process job to
+contain Nuke and its children. It sends control messages only to that desktop's
+Neat Video window. No desktop switching or global mouse/keyboard input is used.
+Xvfb, Openbox, Xlib, and administrator access are not required. Both the toolbar
+button and shot-card action are enabled on Windows; macOS remains disabled.
+
+To verify the real Windows workflow, open PowerShell in the updated frontend
+folder and run:
+
+```powershell
+.\venv\Scripts\python.exe test\denoise_windows_acceptance.py
+```
+
+The command uses the Nuke path from Settings or automatic discovery; pass
+`--nuke "C:\path\to\Nuke17.1.exe"` to select it explicitly. It generates test clips
+under `.cache/temp`, checks profiling, rendering, cancellation, crash cleanup,
+and two queued clips, and prints PASS/FAIL plus a report path. It does not use
+production shot scripts or contact the database. Windows qualification remains
+pending until this command passes on Windows with the installed Neat Video UI.
+
+The nonmodal progress window shows the current action, eight workflow steps,
+elapsed time, and a timestamped activity history. Profiling shows the frame and
+image size; rendering shows the frame count, percentage, and latest output path.
+It includes **Cancel** and **Open Logs**. Closing it while running cancels the job. Closing
+Shotbox waits for background cleanup. Cancellation after saving
+keeps the profile and any completed frames; rerunning replaces those frames.
+The popup closes automatically after successful rendering and cleanup.
+The Shotbox console also prints timestamped `[Denoise …]` messages for startup,
+Auto Profile and Apply clicks, saving, each rendered frame, Nuke output,
+failures, cancellation, and cleanup, including the job's log directory.
+
+Disposable job files, the original script recovery copy, screenshots, and logs
+live under `.cache/temp/denoise-*`. Active jobs hold a cache lease so **Clear
+Cache** preserves their files. Completed logs and recovery copies can be removed
+by clearing the cache. The supervisor supports `SHOTBOX_DENOISE_XVFB` and
+`SHOTBOX_DENOISE_OPENBOX` executable overrides for isolated testing.
+See [denoise verification](docs/DENOISE_VERIFICATION.md) for the real Nuke
+acceptance command, checked behavior, and platform limits.

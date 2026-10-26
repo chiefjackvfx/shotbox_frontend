@@ -6,9 +6,52 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-26T21:45:34+00:00] Added Windows private-desktop denoise backend and process cleanup.
+- [2026-10-26T21:45:34+00:00] Added Windows denoise regressions and native verification commands.
+- [2026-10-26T21:11:34+00:00] Added Denoise toolbar button for queued job-wide clip processing.
+- [2026-10-26T21:11:34+00:00] Added batch denoise cancellation, failure, and native acceptance coverage.
+- [2026-10-26T21:06:38+00:00] Added batch preview timing, fidelity, cancellation, and failure coverage.
+- [2026-10-26T20:31:14+00:00] Added Qt denoise startup and profile-readiness regression coverage.
+- [2026-10-26T20:15:35+00:00] Added isolated denoise timing and thread-count benchmark coverage.
+- [2026-10-26T20:05:09+00:00] Covered direct folder hovering and repeated native right-click reopening.
+- [2026-10-26T19:54:28+00:00] Added preview lifecycle and Python runtime acceptance coverage.
+- [2026-10-26T19:31:05+00:00] Added coverage for queued proxies and late EXR thumbnails.
+- [2026-10-26T19:14:01+00:00] Added live denoise console stages, Nuke output, and errors.
+- [2026-10-26T18:08:41+00:00] Added background Neat Video denoise from shot-card menus.
+- [2026-10-26T18:08:41+00:00] Added denoise cancellation and Nuke acceptance coverage.
+
+- [2026-10-26T17:46:30+00:00] Added deferred-publication, collision, and cross-volume rollback coverage.
+
+- [2026-10-26T17:38:35+00:00] Added Roto processing-mode selection with live plan summaries.
+- [2026-10-26T17:38:35+00:00] Added Roto mode switching and worker option regressions.
+
+- [2026-10-26T17:32:32+00:00] Added long-sequence GUI, export, and bridge regressions.
+
 ### Changed
 
+- [2026-10-26T21:45:34+00:00] Enabled single and batch denoise actions on Windows.
+- [2026-10-26T21:06:38+00:00] Reused headless Nuke workers for faster batch previews.
+- [2026-10-26T20:31:14+00:00] Halved measured denoise duration with lightweight Qt startup.
+- [2026-10-26T20:15:35+00:00] Documented measured denoise timings and recommended thread settings.
+- [2026-10-26T19:26:57+00:00] Close Denoise popup automatically after successful rendering and cleanup.
+- [2026-10-26T19:21:30+00:00] Show denoise steps, activity history, elapsed time, and rendering progress.
+- [2026-10-26T19:11:49+00:00] Denoise now ignores shot locks and open editing sessions.
+- [2026-10-26T18:08:41+00:00] Documented Linux denoise requirements and Nuke verification.
+
+- [2026-10-26T17:32:32+00:00] Unified Python 3.13 defaults across all desktop platforms.
+- [2026-10-26T17:32:32+00:00] Removed 250-frame restrictions from Matte and Nuke workflows.
+
 ### Fixed
+
+- [2026-10-26T21:48:44+00:00] Preserved native Windows denoise errors in failure reports.
+- [2026-10-26T20:05:09+00:00] Show precomp previews on hover without waiting for submenus.
+- [2026-10-26T19:54:28+00:00] Fixed EXR preview cancellation, retries, and cache clearing recovery.
+- [2026-10-26T19:31:05+00:00] Restored EXR still previews while playback proxies are preparing.
+- [2026-10-26T19:26:11+00:00] Fixed Denoise Close button, Escape, and window dismissal.
+- [2026-10-26T19:24:49+00:00] Excluded verified denoise workers from editing-session lock detection.
+- [2026-10-26T19:15:45+00:00] Avoided hidden autosave recovery prompts before loading denoise scripts.
+- [2026-10-26T19:11:49+00:00] Fixed background NukeX loading and Neat Video Apply detection.
+- [2026-10-26T17:46:30+00:00] Deferred Matte output folders until successful generation completes.
 
 ## 5.1.0 - 2026-10-26
 

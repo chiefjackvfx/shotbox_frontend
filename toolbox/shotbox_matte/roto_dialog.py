@@ -134,6 +134,13 @@ class RotoDialog(QDialog):
         range_row.addWidget(self.source_end)
         form.addRow("Source range", range_row)
         self.range_enabled.toggled.connect(self._range_changed)
+        self.temporal_mode = QComboBox()
+        self.temporal_mode.addItem("Segments · recommended", "segmented")
+        self.temporal_mode.addItem("Full range · experimental", "full-range")
+        form.addRow("Frame processing", self.temporal_mode)
+        self.temporal_mode_hint = self._label(
+            "Long ranges use overlapping segments with blended joins; short ranges run in one pass.")
+        form.addRow("", self.temporal_mode_hint)
         size_row = QHBoxLayout()
         self.generation_width = self._spin(32, 1920, 32)
         self.generation_height = self._spin(32, 1088, 32)
@@ -223,6 +230,7 @@ class RotoDialog(QDialog):
             spin.valueChanged.connect(self._schedule_plan)
         self.generation_height.valueChanged.connect(self._sync_generation_width)
         self.color.currentIndexChanged.connect(self._schedule_plan)
+        self.temporal_mode.currentIndexChanged.connect(self._temporal_mode_changed)
         self.existing.currentIndexChanged.connect(self._schedule_plan)
         self.suffix.textChanged.connect(self._schedule_plan)
 
@@ -264,6 +272,7 @@ class RotoDialog(QDialog):
         # These workflow defaults never write to the full window's preferences.
         self.fps.setValue(25)
         self.color.setCurrentIndex(self.color.findData("acescg"))
+        self.temporal_mode.setCurrentIndex(self.temporal_mode.findData("segmented"))
         self.range_enabled.setChecked(False)
         self.source_start.setEnabled(False)
         self.source_end.setEnabled(False)
@@ -327,6 +336,16 @@ class RotoDialog(QDialog):
         self.source_end.setEnabled(enabled)
         self._schedule_plan()
 
+    def _temporal_mode_changed(self, *_):
+        if self.temporal_mode.currentData() == "full-range":
+            self.temporal_mode_hint.setText(
+                "One pass for the selected range. Experimental: longer clips may leak source colour "
+                "into the matte or run out of GPU memory.")
+        else:
+            self.temporal_mode_hint.setText(
+                "Long ranges use overlapping segments with blended joins; short ranges run in one pass.")
+        self._schedule_plan()
+
     def _sync_generation_width(self, *_):
         if self._source is None:
             return
@@ -341,6 +360,7 @@ class RotoDialog(QDialog):
         return JobOptions(
             input_path=self.source_frame, sequence=self._source.id if self._source else None,
             fps=self.fps.value(), source_color=self.color.currentData(),
+            temporal_mode=self.temporal_mode.currentData(),
             source_start=self.source_start.value() if self.range_enabled.isChecked() else None,
             source_end=self.source_end.value() if self.range_enabled.isChecked() else None,
             generation_width=self.generation_width.value(), generation_height=self.generation_height.value(),
@@ -374,12 +394,14 @@ class RotoDialog(QDialog):
             else:
                 self._plan = plan
                 self.frame_summary.setText(temporal_summary(
-                    plan["selected_count"], plan["padded_count"], plan["chunk_count"], plan["overlap_count"]))
+                    plan["selected_count"], plan["padded_count"], plan["chunk_count"], plan["overlap_count"],
+                    plan["temporal_mode"]))
                 self.output_preview.setText(plan["output_preview"])
                 self.validation_info.setText(
                     f"{plan['source_count']:,} original frames · first export {plan['first_frame']} · "
                     f"RGB grayscale EXR · {plan['source_color']}" +
-                    (" · segmented: review transitions" if plan["chunk_count"] > 1 else ""))
+                    (" · experimental full range" if plan["experimental_full_range"] else
+                     " · segmented: review transitions" if plan["chunk_count"] > 1 else ""))
                 if not self._model_error:
                     self.stage_label.setText("Ready to generate")
             self._update_generate()

@@ -167,6 +167,14 @@ def test_250_frame_temporal_bounds(tmp_path, mode, expected):
     assert plan["selected_count"] == 250
 
 
+@pytest.mark.parametrize("mode,expected", [("segmented", [121, 121, 73]), ("full-range", [281])])
+def test_278_frame_preflight_has_no_shot_length_ceiling(tmp_path, mode, expected):
+    job = make_job(tmp_path, count=278, temporal_mode=mode)
+    result = bridge.preflight(job)
+    assert result["plan"]["selected_count"] == result["capture"]["count"] == 278
+    assert [chunk["padded_count"] for chunk in result["plan"]["temporal_chunks"]] == expected
+
+
 def test_single_frame_preflight_and_cli(tmp_path):
     job = make_job(tmp_path, count=1)
     result = subprocess.run([sys.executable, "-m", "shotbox_matte.nuke_bridge", "preflight", "--job", str(job)],

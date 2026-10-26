@@ -1,4 +1,4 @@
-# Production Python: runtime_python_linux.txt on Linux; runtime_python.txt otherwise.
+# Production Python 3.13 is selected by runtime_python.txt on every platform.
 # Python 3.13 qualification uses these same pins; see setup_runtime --qualify-python313.
 # Windows/Linux x86_64 install with uv --torch-backend cu130.
 # Linux requires glibc >=2.34 for the verified Qt 6.11.2 wheels.
@@ -8,6 +8,7 @@
 PyYAML
 requests
 psutil
+python-xlib==0.33; sys_platform == "linux"
 
 # Review / media
 opencolorio>=2.5,<3

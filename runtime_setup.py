@@ -31,11 +31,8 @@ def python_version_string(version):
     return ".".join(map(str, version))
 
 
-def default_python(root=FRONTEND_ROOT, *, system=sys.platform):
+def default_python(root=FRONTEND_ROOT):
     manifest = root / "runtime_python.txt"
-    linux_manifest = root / "runtime_python_linux.txt"
-    if system == "linux" and linux_manifest.is_file():
-        manifest = linux_manifest
     version = tuple(map(int, manifest.read_text().strip().split(".")))
     python_version_string(version)
     return version

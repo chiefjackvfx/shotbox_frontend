@@ -8,6 +8,7 @@ import os
 import json
 import hashlib
 import time
+import sys
 from pathlib import Path
 
 from PyQt6 import QtWidgets, uic
@@ -492,6 +493,11 @@ class page_nukedash(QMainWindow):
         #self.btn_make_previews = QPushButton("Make All Previews")
         self.btn_make_previews.setToolTip("Generate previews for all shots with original clips or latest renders")
         self.btn_make_previews.clicked.connect(self._on_make_all_previews_clicked)
+        self.btn_denoise.setToolTip("Denoise all shots in this job using each latest saved Nuke script")
+        self.btn_denoise.setEnabled(sys.platform in ("linux", "win32"))
+        if sys.platform not in ("linux", "win32"):
+            self.btn_denoise.setToolTip("Background denoise supports Windows and Linux")
+        self.btn_denoise.clicked.connect(self._on_denoise_all_clicked)
         self._thumbnail_batch_worker = None
         self._thumbnail_batch_progress = None
         self.btn_update_thumbnails.setToolTip(
@@ -636,7 +642,7 @@ class page_nukedash(QMainWindow):
             (self.label_4, self.comboBox_jobs),
             (self.label_3, self.comboBox_preview_size),
             (self.checkBox_refresh,),
-            (self.btn_make_previews, self.btn_update_thumbnails, self.btn_export_excel),
+            (self.btn_denoise, self.btn_make_previews, self.btn_update_thumbnails, self.btn_export_excel),
             (self.checkBox_compact_view,),
             (self.label_loaded_time, self.label_task_loading),
         ])
@@ -2078,6 +2084,83 @@ class page_nukedash(QMainWindow):
         else:
             self.lock_launch_finished.emit(shot_id, True)
 
+    def _ensure_denoise_controller(self):
+        if getattr(self, "_denoise_controller", None) is None:
+            from denoise_controller import DenoiseController
+            self._denoise_controller = DenoiseController(self)
+            self._denoise_controller.busy_changed.connect(self._on_denoise_busy_changed)
+            self._denoise_controller.idle.connect(self._request_api_refresh)
+        return self._denoise_controller
+
+    def _on_denoise_busy_changed(self, busy):
+        self.btn_denoise.setEnabled(not busy and sys.platform in ("linux", "win32"))
+        self.set_auto_refresh_paused(busy, reason="denoise")
+
+    def _handle_denoise_request(self, shot_card: widgets.ShotCard, nk_path: str):
+        if getattr(self, "_shutting_down", False):
+            return
+        self._ensure_denoise_controller().start(dict(shot_card.data or {}), nk_path)
+
+    def _collect_denoise_tasks(self, active_job, files_io):
+        tasks, seen_shots, seen_scripts = [], set(), set()
+        skipped = 0
+        for timeline in active_job.get("timelines", []) or []:
+            for shot in timeline.get("shots", []) or []:
+                shot_dir = str(shot.get("base_path") or "").strip()
+                key = ("id", shot["id"]) if shot.get("id") is not None else ("path", shot_dir or id(shot))
+                if key in seen_shots:
+                    continue
+                seen_shots.add(key)
+                try:
+                    script = files_io.latest_nk(shot_dir) if shot_dir else None
+                    script = Path(script).resolve() if script else None
+                    if script is None or not script.is_file():
+                        skipped += 1
+                        continue
+                except OSError:
+                    skipped += 1
+                    continue
+                script_key = os.path.normcase(str(script))
+                if script_key in seen_scripts:
+                    continue
+                seen_scripts.add(script_key)
+                tasks.append({"shot": dict(shot), "script": str(script)})
+        return tasks, skipped
+
+    def _on_denoise_all_clicked(self):
+        if getattr(self, "_shutting_down", False):
+            return
+        controller = getattr(self, "_denoise_controller", None)
+        if controller and controller.busy:
+            if controller.dialog:
+                controller.dialog.show()
+                controller.dialog.raise_()
+            return
+        if sys.platform not in ("linux", "win32"):
+            QMessageBox.warning(self, "Denoise", "Background denoise supports Windows and Linux.")
+            return
+        job = self._jobs_by_id.get(self._active_job_id)
+        if not job:
+            QMessageBox.information(self, "Denoise", "No job selected.")
+            return
+        tasks, skipped = self._collect_denoise_tasks(job, filesIO.Folders())
+        if not tasks:
+            QMessageBox.information(self, "Denoise", f"No saved Nuke scripts found.\n\nSkipped: {skipped}")
+            return
+        message = (
+            f"Denoise {len(tasks)} clip(s) in {job.get('title', 'this job')}?\n\n"
+            "Uses each shot's latest saved Nuke script across all timelines.\n"
+            "Saves the noise profile into each script and replaces matching WriteDN1 frames.\n"
+            "Clips run one at a time. Cancel stops the current clip and the remaining queue."
+        )
+        if skipped:
+            message += f"\n\nSkipped (no saved script): {skipped}"
+        if QMessageBox.question(self, "Denoise", message,
+                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
+            return
+        self._ensure_denoise_controller().start_batch(tasks, skipped=skipped)
+
     def _populate_filter_dropdowns(self):
         """Populate artist and status filter dropdowns."""
         # Only populate once
@@ -3163,6 +3246,7 @@ class page_nukedash(QMainWindow):
         cancelled = False
         self.set_auto_refresh_paused(True, reason="previews")
         try:
+            generator.begin_preview_batch()
             for i, task in enumerate(preview_tasks):
                 if progress.wasCanceled():
                     break
@@ -3304,8 +3388,11 @@ class page_nukedash(QMainWindow):
                 progress.setValue(batch_progress_maximum)
         finally:
             cancelled = cancelled or progress.wasCanceled()
-            progress.close()
-            self.set_auto_refresh_paused(False, reason="previews")
+            try:
+                generator.end_preview_batch()
+            finally:
+                progress.close()
+                self.set_auto_refresh_paused(False, reason="previews")
 
         # Show summary
         if cancelled:
@@ -3351,6 +3438,9 @@ class page_nukedash(QMainWindow):
         self.fetch_requested.emit()
 
     def shutdown(self) -> bool:
+        denoise = getattr(self, "_denoise_controller", None)
+        if denoise and not denoise.shutdown():
+            return False
         self._shutting_down = True
         for timer in self.findChildren(QTimer):
             timer.stop()

@@ -57,9 +57,11 @@ class CorePlanningTests(unittest.TestCase):
         with patch("shotbox_matte.core.discover_sequences", return_value=[self.sequence(25)]):
             plan = plan_job(JobOptions("unused", fps=2))
             self.assertTrue(all((chunk.padded_count - 1) / 2 <= 6 for chunk in plan.chunks))
-        with patch("shotbox_matte.core.discover_sequences", return_value=[self.sequence(251)]):
-            with self.assertRaisesRegex(ValueError, "250-frame shot limit"):
-                plan_job(JobOptions("unused"))
+        with patch("shotbox_matte.core.discover_sequences", return_value=[self.sequence(278)]):
+            plan = plan_job(JobOptions("unused"))
+            self.assertEqual(plan.selected_count, 278)
+            self.assertEqual(plan.chunks[-1].stop, 278)
+            self.assertTrue(all(chunk.padded_count <= 121 for chunk in plan.chunks))
 
     def test_range_plan_preserves_absolute_indices_numbering_and_provenance(self):
         with patch("shotbox_matte.core.discover_sequences", return_value=[self.sequence(20)]):

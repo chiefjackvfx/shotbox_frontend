@@ -16,7 +16,7 @@ def result_event():
                             "matte_preview", "manifest", "job_dir"), "/owned/path")}}
 
 
-@pytest.mark.parametrize("start,end", [(1001, 1003), (-2, 0), (0, 0), (-249, 0)])
+@pytest.mark.parametrize("start,end", [(1001, 1003), (-2, 0), (0, 0), (-249, 0), (1001, 1278), (-5000, 5000)])
 def test_frame_map_endpoints_and_boundaries(start, end):
     mapping = FrameMap(start, end)
     assert mapping.cache_index(start) == 1
@@ -31,7 +31,7 @@ def test_frame_map_endpoints_and_boundaries(start, end):
             mapping.nuke_frame(index)
 
 
-@pytest.mark.parametrize("start,end", [(0, 250), (1, 0), (True, 5), (1.0, 3)])
+@pytest.mark.parametrize("start,end", [(0, -1), (1, 0), (True, 5), (1.0, 3)])
 def test_invalid_maps(start, end):
     with pytest.raises(ProtocolError):
         FrameMap(start, end)

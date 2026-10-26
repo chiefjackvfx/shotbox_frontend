@@ -2,7 +2,7 @@
 
 Matte is part of the Shotbox frontend. Open **Toolbox → Open Shotbox Matte**
 for the full window, or right-click **Precomp → sequence folder → Roto** for
-compact generation. Both use the frontend's main `venv` (Python 3.13 on Linux; 3.12 elsewhere) and the
+compact generation. Both use the frontend's main Python 3.13 `venv` and the
 same installed dependencies. Generation runs in a background process using
 that exact Python, keeping Shotbox responsive and releasing GPU memory when
 it exits. There is no standalone Matte launcher or private runtime setup.
@@ -17,7 +17,7 @@ are left untouched and are not used by the integrated feature.
 
 Python 3.13 can be installed separately for qualification with the frontend's
 `setup_runtime.sh --qualify-python313` or `setup_runtime.ps1 --qualify-python313`.
-Linux production uses 3.13; Windows/macOS retain 3.12 pending native acceptance. See
+All platform installers now select 3.13; Windows/macOS native acceptance is pending. See
 [qualification instructions and evidence](docs/PYTHON313_QUALIFICATION.md).
 
 Generation requires Windows/Linux x86_64, a compatible NVIDIA GPU with BF16
@@ -73,7 +73,9 @@ covers the dialog and main-graph output.
 - **Frame processing:** choose **Segments · recommended** for automatic overlap
   blending, or **Full range · experimental** to force the entire selected range
   through one model pass. The mode is saved with preferences, presets and each
-  queued job. Both modes accept up to 250 selected frames.
+  queued job. Neither mode imposes an application shot-length limit.
+  The compact **Precomp → Roto** popup offers the same choices, defaults each
+  new source to Segments and leaves the full window's preferences unchanged.
 - **Batch queue:** switch between the dedicated **Single shot** and **Batch
   queue** tabs. Set up a shot and use **Add current**, or use **Add movies / files…**
   to select several movies or sequence frames. **Add sequence folders…** opens
@@ -222,7 +224,7 @@ incompatible files and rejects ComfyUI quantized variants.
    spatial padding, resize to the source dimensions, and export raw matte EXRs.
 
 For example: **20 selected frames → 25 model frames → 20 exported frames**.
-ShotBox accepts **up to 250 selected frames per shot**. By default, selections
+ShotBox imposes **no overall shot-length limit**; a frame cap of zero selects all frames. By default, selections
 exceeding a single pass use overlapping segments of at most 121 model frames, each within
 the six-second limit. At 24 FPS, 250 selected frames use three segments with
 17-frame overlaps: 121 + 121 + 49 model frames produce exactly 250 EXRs.
@@ -235,8 +237,7 @@ counts above 121 produce a warning. Segmentation follows the
 [official recommendation to split longer shots](https://docs.ltx.io/open-source-model/vfx-post-production/alpha-gen).
 The model selects its subject independently in each segment; review joins for
 subject changes, edge differences and seams. Blending cannot guarantee subject
-consistency. Inputs exceeding 250 selected frames require a range, frame cap
-or frame skip; no source frames are silently discarded.
+consistency. Range, frame cap and frame skip remain optional; no source frames are silently discarded.
 
 To attempt a longer single pass, choose **Full range · experimental**, or pass
 `--temporal-mode full-range` in the CLI. This explicitly bypasses the supported
@@ -299,8 +300,11 @@ in the manifest; exported numbering defaults to 1001.
 **Version up** is the default each time the desktop opens. Overwrite is not
 restored from the previous session; choose it explicitly or load a saved preset.
 If the derived target exists, Version up selects the next
-higher matching version and reserves the folder using filesystem locks and
-exclusive creation. The displayed path remains provisional until reservation.
+higher matching version and reserves its name using filesystem locks. The
+final output folder is created only after generation has successfully produced
+the complete staged EXR sequence, immediately before publication. The displayed
+path remains provisional until reservation. Concurrent jobs reserve distinct
+names without creating empty output folders while they run.
 
 **Overwrite** reuses the source-derived target version. Images are staged first;
 replacement and exact-sequence stale-frame cleanup happen only after all new
@@ -317,7 +321,10 @@ results folder are archived into the new job's `previous-export/` directory.
 Every reserved job has a manifest in app storage. Only a successful commit marks
 it `complete`. Failed or cancelled Shotbox jobs retain partial frames under the
 frontend cache, outside the final output folder; the manifest records their
-path and status.
+path and status. Failed or cancelled generation creates no new output folder.
+A caught publication failure removes any newly created folder after restoring
+its EXRs to staging. An unrelated folder that appears at the reserved path is
+preserved and publication fails instead of merging files into it.
 Unfinished frames and recovery backups remain outside the results. Existing
 successful overwrite output stays intact until commit. Cancellation is checked
 between preparation, native denoising, decoding and export operations. After

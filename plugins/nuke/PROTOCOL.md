@@ -132,7 +132,7 @@ staging. It does not change inference precision or worker settings.
 The model paths above are illustrative. Use probe-resolved existing paths.
 Allowed colours are `linear-srgb`, `acescg`, `srgb`; `auto` is forbidden.
 Nuke fixes the sequence/null, skip/0, cap/0, start/1, first/1, padding/4,
-suffix/_matte and existing/version-up values. Inclusive `source_end` is 1–250.
+suffix/_matte and existing/version-up values. Inclusive `source_end` is a positive integer with no shot-length ceiling.
 Precision is half/float, offload none/cpu/disk, low_vram boolean, temporal mode
 segmented/full-range. Seeds are integer 0 through 2^63−1 and FPS is finite and
 positive. Boolean values do not satisfy integer fields.

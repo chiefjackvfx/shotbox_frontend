@@ -28,9 +28,12 @@ def test_extended_native_length_requires_explicit_full_range_opt_in():
     with pytest.raises(ValueError, match="up to 145"):
         _validate_frames(frames, 24)
     assert _validate_frames(frames, 24, force_full_range=True) == (257, 32, 32)
-    for count in [250, 258, 265]:
-        with pytest.raises(ValueError, match="8n\\+1 frames up to 257"):
+    for count in [250, 258]:
+        with pytest.raises(ValueError, match="8n\\+1 frames"):
             _validate_frames(np.zeros((count, 32, 32, 3), np.float32), 24, force_full_range=True)
+    for count in [265, 281, 1001]:
+        assert _validate_frames(np.zeros((count, 32, 32, 3), np.float32), 24,
+                                force_full_range=True) == (count, 32, 32)
     with pytest.raises(ValueError, match="divisible by 32"):
         _validate_frames(np.zeros((257, 33, 32, 3), np.float32), 24, force_full_range=True)
 

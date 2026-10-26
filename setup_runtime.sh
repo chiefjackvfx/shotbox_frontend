@@ -3,9 +3,6 @@
 set -eu
 project=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 version=$(cat "$project/runtime_python.txt")
-if [ "$(uname -s)" = Linux ] && [ -f "$project/runtime_python_linux.txt" ]; then
-    version=$(cat "$project/runtime_python_linux.txt")
-fi
 for argument in "$@"; do
     if [ "$argument" = '--qualify-python313' ]; then version=3.13; fi
 done

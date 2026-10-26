@@ -10,7 +10,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import getpass
+import json
 import ntpath
+from pathlib import Path
 import platform
 import posixpath
 import re
@@ -146,6 +148,27 @@ def _is_frameserver_cmdline(cmdline: list[str]) -> bool:
     )
 
 
+def _is_denoise_process(proc: psutil.Process, started_at: float | None) -> bool:
+    """Exclude only a recorded background child with a matching live identity."""
+    if started_at is None:
+        return False
+    try:
+        from app_cache import CACHE_ROOT
+
+        environment = proc.environ()
+        directory_name = environment.get("SHOTBOX_DENOISE_JOB_DIR")
+        if not directory_name or int(environment.get("SHOTBOX_DENOISE_SUPERVISOR_PID", "0")) <= 0:
+            return False
+        directory = Path(directory_name).resolve()
+        if directory.parent != (CACHE_ROOT / "temp").resolve() or not directory.name.startswith("denoise-"):
+            return False
+        record = json.loads((directory / f"child-{proc.pid}.json").read_text(encoding="utf-8"))
+        return record["pid"] == proc.pid and record["created"] == started_at
+    except (psutil.Error, OSError, ValueError, KeyError, TypeError, AttributeError):
+        # An unreadable marker is no reason to hide a possible editing session.
+        return False
+
+
 def _extract_nk_paths_from_cmdline(
     proc: psutil.Process, *, strict: bool = False, cmdline: list[str] | None = None,
 ) -> list[str]:
@@ -218,7 +241,7 @@ def scan_open_nuke_scripts(
                     if not _username_matches(username, current_user):
                         continue
                 cmdline = _read_process_cmdline(proc, strict=True)
-                if _is_frameserver_cmdline(cmdline):
+                if _is_frameserver_cmdline(cmdline) or _is_denoise_process(proc, started_at):
                     continue
                 candidate_paths = _extract_nk_paths_from_cmdline(proc, strict=True, cmdline=cmdline)
                 source = "cmdline"

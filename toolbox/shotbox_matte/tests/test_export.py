@@ -42,7 +42,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(len({s.job_dir for s in sessions}), 8)
         for session in sessions:
             self.assertEqual(json.loads(session.manifest_path.read_text())["status"], "running")
-            self.assertEqual(list(session.output_dir.iterdir()), [])
+            self.assertFalse(session.output_dir.exists())
             self.assertEqual(session.stage_dir.parent, self.stage_parent)
             session.close()
 
@@ -156,6 +156,69 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(manifest["status"], "complete")
         self.assertEqual(manifest["stage_dir"], str(session.stage_dir))
 
+    def test_new_output_is_absent_until_commit_in_both_modes(self):
+        for existing in ("version-up", "overwrite"):
+            with self.subTest(existing=existing):
+                session = ExportSession.reserve(self.source, "_" + existing, existing)
+                name = frame_filename(session.output_dir, 1001)
+                self.assertFalse(session.output_dir.exists())
+                (session.stage_dir / name).write_text("complete")
+                self.assertFalse(session.output_dir.exists())
+                session.commit([name])
+                self.assertEqual({p.name: p.read_text() for p in session.output_dir.iterdir()}, {name: "complete"})
+
+    def test_new_output_commit_failure_removes_folder_and_keeps_staged_frames(self):
+        session = ExportSession.reserve(self.source, "_roto", "version-up")
+        names = [frame_filename(session.output_dir, number) for number in (1001, 1002)]
+        for name in names:
+            (session.stage_dir / name).write_text(name)
+        move = export._move_file
+
+        def fail_second(source, destination):
+            if source == session.stage_dir / names[1]:
+                raise OSError("publication failed")
+            move(source, destination)
+
+        with patch.object(export, "_move_file", side_effect=fail_second):
+            with self.assertRaisesRegex(OSError, "publication failed"):
+                session.commit(names)
+        self.assertFalse(session.output_dir.exists())
+        self.assertEqual([(session.stage_dir / name).read_text() for name in names], names)
+        self.assertFalse(session.lock_dir.exists())
+
+    def test_late_destination_collision_preserves_external_folder(self):
+        for existing in ("version-up", "overwrite"):
+            with self.subTest(existing=existing):
+                session = ExportSession.reserve(self.source, "_" + existing, existing)
+                name = frame_filename(session.output_dir, 1001)
+                (session.stage_dir / name).write_text("new")
+                session.output_dir.mkdir()
+                sentinel = session.output_dir / "artist-file.txt"
+                sentinel.write_text("preserve")
+                with self.assertRaises(FileExistsError):
+                    session.commit([name])
+                self.assertEqual(list(session.output_dir.iterdir()), [sentinel])
+                self.assertEqual(sentinel.read_text(), "preserve")
+                self.assertEqual((session.stage_dir / name).read_text(), "new")
+
+    def test_new_output_manifest_failure_removes_published_frames_and_folder(self):
+        session = ExportSession.reserve(self.source, "_roto", "version-up")
+        name = frame_filename(session.output_dir, 1001)
+        (session.stage_dir / name).write_text("new")
+        original_write = export._write_json
+
+        def fail_complete(path, payload):
+            if payload["status"] == "complete":
+                raise OSError("metadata write failed")
+            original_write(path, payload)
+
+        with patch.object(export, "_write_json", side_effect=fail_complete):
+            with self.assertRaisesRegex(OSError, "metadata write failed"):
+                session.commit([name])
+        self.assertFalse(session.output_dir.exists())
+        self.assertEqual((session.stage_dir / name).read_text(), "new")
+        self.assertEqual(json.loads(session.manifest_path.read_text())["status"], "failed")
+
     def test_cancel_and_failure_keep_partial_frames_outside_output(self):
         for cancelled in (False, True):
             with self.subTest(cancelled=cancelled):
@@ -163,7 +226,7 @@ class ExportTests(unittest.TestCase):
                 name = frame_filename(session.output_dir, 1001)
                 (session.stage_dir / name).write_text("unfinished")
                 session.fail(RuntimeError("stopped"), cancelled=cancelled)
-                self.assertEqual(list(session.output_dir.iterdir()), [])
+                self.assertFalse(session.output_dir.exists())
                 self.assertEqual((session.stage_dir / name).read_text(), "unfinished")
                 self.assertFalse(session.stage_dir.is_relative_to(session.output_dir))
                 self.assertFalse((session.stage_dir / MANIFEST).exists())
@@ -252,7 +315,7 @@ class ExportTests(unittest.TestCase):
                 session = ExportSession.reserve(self.source, "_roto", "version-up")
                 with self.assertRaisesRegex(ValueError, "explicitly named"):
                     session.commit(invalid)
-                self.assertEqual(list(session.output_dir.iterdir()), [])
+                self.assertFalse(session.output_dir.exists())
                 self.assertEqual(json.loads(session.manifest_path.read_text())["status"], "failed")
 
     def test_duplicate_and_missing_staged_frames_are_rejected(self):
@@ -263,7 +326,7 @@ class ExportTests(unittest.TestCase):
                 (session.stage_dir / name).write_text("new")
             with self.assertRaises(ValueError):
                 session.commit([name, name] if duplicate else [name])
-            self.assertEqual(list(session.output_dir.iterdir()), [])
+            self.assertFalse(session.output_dir.exists())
 
     def test_job_storage_cannot_be_inside_result_folder(self):
         output = output_target(self.source, "_roto")
@@ -333,8 +396,8 @@ class CachedExportTests(ExportTests):
         (session.stage_dir / name).write_text("unfinished")
         self.assertTrue(session.stage_dir.is_relative_to(self.cache))
         self.assertTrue(session.lock_dir.is_relative_to(self.cache))
-        self.assertEqual(set(self.source.parent.iterdir()), {self.source, session.output_dir,
-                                                           self.cache.parents[1], session.job_dir.parent})
+        self.assertFalse(session.output_dir.exists())
+        self.assertEqual(set(self.source.parent.iterdir()), {self.source, self.cache.parents[1], session.job_dir.parent})
         session.fail(RuntimeError("stopped"), cancelled=True)
         self.assertEqual((session.stage_dir / name).read_text(), "unfinished")
         self.assertFalse(session.lock_dir.exists())
@@ -408,6 +471,26 @@ class CrossDeviceExportTests(CachedExportTests):
         self.assertEqual((session.stage_dir / name).read_text(), "new")
         self.assertFalse(session.lock_dir.exists())
         self.assertEqual(json.loads(session.manifest_path.read_text())["status"], "failed")
+
+    def test_partial_copy_failure_leaves_no_new_output_folder(self):
+        session = ExportSession.reserve(self.source, "_roto", "version-up")
+        names = [frame_filename(session.output_dir, number) for number in (1001, 1002)]
+        for name in names:
+            (session.stage_dir / name).write_text(name)
+        copy = export.shutil.copy2
+
+        def fail_copy(source, destination):
+            if source == session.stage_dir / names[1]:
+                Path(destination).write_text("incomplete")
+                raise OSError("copy failed")
+            return copy(source, destination)
+
+        with patch.object(export.shutil, "copy2", side_effect=fail_copy):
+            with self.assertRaisesRegex(OSError, "copy failed"):
+                session.commit(names)
+        self.assertFalse(session.output_dir.exists())
+        self.assertEqual([(session.stage_dir / name).read_text() for name in names], names)
+        self.assertFalse(session.lock_dir.exists())
 
 
 if __name__ == "__main__":

@@ -13,7 +13,7 @@ EXR-to-matte run succeeded on this machine's RTX 5090 (32 GiB, NVIDIA driver
 590.48.01) outside the restricted execution sandbox, using the existing local
 weights and the installed combination below.
 
-Use Python 3.13 on Linux, or 3.12 on Windows, with an NVIDIA CUDA GPU supporting
+Use Python 3.13 on Linux or Windows with an NVIDIA CUDA GPU supporting
 bf16. The [official PyTorch guide](https://docs.ltx.io/open-source-model/integration-tools/pytorch-api)
 lists Python >=3.12, CUDA >=12.7 and PyTorch ~=2.7 as broad requirements.
 The pinned source now selects **PyTorch 2.13 / CUDA 13.2** wheels through its UV
@@ -26,12 +26,12 @@ application. Older Torch 2.7 satisfying the broad dependency range alone does
 not establish compatibility with the newer Gemma4 encoder or VAE.
 
 The same pinned application stack also completed real Linux GPU generation on
-standard CPython 3.13.15. Python 3.13 is now the Linux production default. Windows/macOS retain 3.12;
+standard CPython 3.13.15. Python 3.13 is now the production installer default on all platforms;
 an isolated 3.13 qualification installation remains available on all platforms. See
 [Python 3.13 qualification](PYTHON313_QUALIFICATION.md) for the measured results,
 launch commands and remaining platform acceptance checks.
 
-The locally installed combination used for the successful inference check is
+The earlier Python 3.12 inference check used
 **Python 3.12.13, torch 2.11.0+cu130, torchvision 0.26.0, torchaudio 2.11.0 and
 transformers 5.14.1**. It uses the CUDA 13.0 PyTorch wheels and lies within the
 pinned library's declared dependency ranges. The app does not require the newer
@@ -42,7 +42,7 @@ this revision. The frontend's dependency configuration records the immutable
 source archives and the tested compatible package versions.
 
 Shotbox installs the pinned inference dependencies into its main frontend
-`venv` (Python 3.13 on Linux, 3.12 on Windows). Use the frontend installer/updater and open Matte through
+Python 3.13 `venv`. Use the frontend installer/updater and open Matte through
 Toolbox or the Precomp Roto action. Generation uses a background process with
 the same interpreter; there is no standalone Matte executable or private venv.
 
@@ -107,8 +107,8 @@ checked before accepting output.
 The actual padded canvas is limited to **1920x1088**, dimensions divisible by
 32. The padded temporal length must be `8n+1` and at most **145**. At most 121
 frames is preferred; valid counts 129, 137 and 145 can be less reliable.
-ShotBox extends shot selection to **250 frames** using overlapping segments by
-default; the model's officially supported per-pass limit remains unchanged. Existing short shots
+ShotBox accepts **any shot length**, using overlapping segments by
+default; the model's supported per-pass limit remains unchanged. Short shots
 that fit the frame and six-second limits retain their single-pass recipe: 20
 selected frames still become 25 model frames, then 20 exported frames.
 
@@ -126,7 +126,13 @@ only the shared RGB/matte tails between passes. Each pass releases its native
 pipeline before the next one starts. Progress accounts for all model frames,
 including overlaps and padding. Cancellation, segment failures and incorrect
 decoded counts leave the output uncommitted and preserve an existing sequence.
-Selections above 250 fail during planning; restrict the range, cap or skip.
+There is no application ceiling on selected frames. Range, cap and skip remain optional.
+
+The 278-frame Bed Kingdom source was verified through read-only planning: all
+278 frames are selected in three passes of 121, 121 and 73 model frames. Tests
+cover uncapped GUI/Roto readiness, every-pixel 278-frame export using a controlled
+engine, long Nuke preflight/frame maps and 100,000-frame segmentation planning.
+This does not certify native GPU matte quality for long sequences.
 
 This follows the [official segmenting guidance](https://docs.ltx.io/open-source-model/vfx-post-production/alpha-gen).
 Subject selection remains independent between passes; review join regions for
@@ -135,11 +141,12 @@ automated coverage; 250-frame native GPU matte quality has not been verified.
 
 The optional `temporal_mode="full-range"` (`--temporal-mode full-range`) forces
 one model pass over the entire selection. The native adapter receives an explicit
-`force_full_range=True` opt-in, raising its application-side padded frame ceiling
-from 145 to 257. At 250 selected frames, seven copies of the last source frame
+`force_full_range=True` opt-in, bypassing the application-side padded frame
+ceiling. At 250 selected frames, seven copies of the last source frame
 are appended, all 257 frames are requested together, and only the first 250
-mattes are exported. Frame-grid, RGB and spatial checks still apply; selections
-above 250 remain invalid. No overlap blending or automatic segmented fallback
+mattes are exported. Frame-grid, RGB and spatial checks still apply; there is
+no selected-frame ceiling. Available memory still bounds practical one-pass
+lengths. No overlap blending or automatic segmented fallback
 occurs in this mode. The manifest records the selected mode and experimental flag.
 
 The pinned upstream pipeline's default `chunk_config=None` creates one diffusion

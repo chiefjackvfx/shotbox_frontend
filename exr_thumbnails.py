@@ -9,7 +9,7 @@ import re
 from PyQt6 import sip
 from PyQt6.QtCore import QElapsedTimer, QObject, QPoint, QRectF, QRunnable, QThreadPool, QTimer, Qt, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import QLabel
+from PyQt6.QtWidgets import QLabel, QMenu
 from exr_preview_proxy import PREVIEW_FPS, SOURCE_FPS
 
 
@@ -51,9 +51,11 @@ class EXRMenuPreview(QLabel):
         super().__init__(
             "Loading preview…", menu,
             Qt.WindowType.ToolTip | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowDoesNotAcceptFocus,
+            | Qt.WindowType.WindowDoesNotAcceptFocus | Qt.WindowType.WindowTransparentForInput,
         )
         self._menu = menu
+        parent = menu.parentWidget()
+        self._parent_menu = parent if isinstance(parent, QMenu) else None
         self._frames = (str(frames),) if isinstance(frames, (str, Path)) else tuple(frames)
         self._path = self._frames[0]
         self._frame_index = 0
@@ -78,55 +80,93 @@ class EXRMenuPreview(QLabel):
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         menu.aboutToShow.connect(self._schedule_show)
         menu.aboutToHide.connect(self.hide)
+        if self._parent_menu is not None:
+            self._parent_menu.hovered.connect(self._on_folder_hovered)
+            self._parent_menu.aboutToHide.connect(self.hide)
+
+    def _on_folder_hovered(self, action):
+        if action is self._menu.menuAction():
+            self._schedule_show()
+        elif action in self._parent_menu.actions():
+            # QMenu also forwards signals from actions inside its submenus.
+            self.hide()
+
+    def _preview_anchor(self):
+        if self._parent_menu is not None and self._parent_menu.isVisible():
+            if self._parent_menu.activeAction() is not self._menu.menuAction():
+                return None
+            if not self._menu.isVisible():
+                return self._parent_menu
+        return self._menu if self._menu.isVisible() else None
 
     def _schedule_show(self):
         # Qt places and sizes the submenu after emitting aboutToShow.
         QTimer.singleShot(0, self._show_beside_menu)
 
     def _show_beside_menu(self):
-        if not self._menu.isVisible():
+        anchor = self._preview_anchor()
+        if anchor is None:
             return
-        origin = self._menu.mapToGlobal(QPoint(0, 0))
-        available = self._menu.screen().availableGeometry()
-        x = origin.x() + self._menu.width() + 4
+        if self._loader is None:
+            self._loader = EXRThumbnailLoader.instance()
+            self._loader.ready.connect(self._on_still_ready)
+            self._loader.proxy_poster.connect(self._on_proxy_poster)
+            self._loader.proxy_ready.connect(self._on_proxy_ready)
+            self._loader.cache_cleared.connect(self.hide)
+            self._loader.cache_resumed.connect(self._resume_after_cache_clear)
+        if self._loader.suspended:
+            self.hide()
+            return
+        origin = anchor.mapToGlobal(QPoint(0, 0))
+        available = anchor.screen().availableGeometry()
+        x = origin.x() + anchor.width() + 4
         if x + self.width() > available.right() + 1:
             x = origin.x() - self.width() - 4
         x = max(available.left(), min(x, available.right() - self.width() + 1))
         y = max(available.top(), min(origin.y(), available.bottom() - self.height() + 1))
         self.move(x, y)
+        if self.isVisible():
+            return
         self._set_loading(True)
         self.show()
-        if self._loader is None:
-            self._loader = EXRThumbnailLoader.instance()
-            self._loader.proxy_poster.connect(self._on_proxy_poster)
-            self._loader.proxy_ready.connect(self._on_proxy_ready)
-            self._loader.cache_cleared.connect(self.hide)
         self._frame_index = 0
         self._proxy_pixmaps = ()
         self._playback_timer.stop()
+        # The still has its own worker pool, so another sequence's proxy
+        # preparation cannot leave this menu showing only a spinner.
+        self._loader.load(self._path, self)
         self._loader.prepare(self._frames, self)
 
+    def _resume_after_cache_clear(self):
+        if self._preview_anchor() is not None:
+            self._schedule_show()
+
+    def _on_still_ready(self, label, success):
+        if label is self and not success and self._loading and self.pixmap().isNull():
+            # Other frames may still provide a valid proxy poster.
+            self.clear()
+
     def _next_frame(self):
-        if not self.isVisible() or not self._menu.isVisible() or not self._proxy_pixmaps:
+        if not self.isVisible() or self._preview_anchor() is None or not self._proxy_pixmaps:
             return
         source_index = (self._playback_elapsed.elapsed() * SOURCE_FPS // 1000) % len(self._frames)
         proxy_index = max(0, bisect_right(self._proxy_indices, source_index) - 1)
         index = self._proxy_indices[proxy_index]
         if index == self._frame_index:
             return
-        self._frame_index = index
         pixmap = self._proxy_pixmaps[proxy_index]
         if pixmap is not None:
+            self._frame_index = index
             self._display_pixmap(pixmap)
             self.frame_changed.emit(index)
 
     def _on_proxy_poster(self, label, image):
-        if label is not self or not self.isVisible() or not self._menu.isVisible():
+        if label is not self or not self.isVisible() or self._preview_anchor() is None:
             return
         self._display_pixmap(QPixmap.fromImage(image))
 
     def _on_proxy_ready(self, label, result):
-        if label is not self or not self.isVisible() or not self._menu.isVisible():
+        if label is not self or not self.isVisible() or self._preview_anchor() is None:
             return
         self._set_loading(False)
         if result is None:
@@ -134,15 +174,19 @@ class EXRMenuPreview(QLabel):
         self._proxy_pixmaps = tuple(QPixmap.fromImage(image) if image is not None else None
                                     for image in result["images"])
         self._proxy_indices = result["indices"]
-        poster = next((pixmap for pixmap in self._proxy_pixmaps if pixmap is not None), None)
-        if poster is None:
-            self.setText("Preview unavailable")
+        first_valid = next((index for index, pixmap in enumerate(self._proxy_pixmaps) if pixmap is not None), None)
+        if first_valid is None:
+            if self.pixmap().isNull():
+                self.setText("Preview unavailable")
             return
-        self._display_pixmap(poster)
-        self._frame_index = 0
+        # Cancel the still only when there is a valid replacement. A failed
+        # proxy must not discard a thumbnail that is still being decoded.
+        self._exr_preview_key = None
+        self._display_pixmap(self._proxy_pixmaps[first_valid])
+        self._frame_index = self._proxy_indices[first_valid]
         self._playback_elapsed.start()
-        self.frame_changed.emit(0)
-        if len(self._frames) > 1:
+        self.frame_changed.emit(self._frame_index)
+        if sum(pixmap is not None for pixmap in self._proxy_pixmaps) > 1:
             self._playback_timer.start()
 
     def _display_pixmap(self, pixmap):
@@ -173,7 +217,10 @@ class EXRMenuPreview(QLabel):
             return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        circle = QRectF((self.width() - 18) / 2, (self.height() - 18) / 2, 18, 18)
+        if self.pixmap().isNull():
+            circle = QRectF((self.width() - 18) / 2, (self.height() - 18) / 2, 18, 18)
+        else:
+            circle = QRectF(self.width() - 32, self.height() - 32, 18, 18)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(15, 18, 24, 210))
         painter.drawEllipse(circle.adjusted(-4, -4, 4, 4))
@@ -229,6 +276,8 @@ class _ThumbnailSignals(QObject):
 class _ThumbnailTask(QRunnable):
     def __init__(self, key):
         super().__init__()
+        # Keep task identities alive until their queued completion is handled.
+        self.setAutoDelete(False)
         self.key = key
         self.signals = _ThumbnailSignals()
 
@@ -238,7 +287,7 @@ class _ThumbnailTask(QRunnable):
         except Exception:
             # A missing decoder or unreadable frame must leave menus usable.
             image = None
-        self.signals.finished.emit(self.key, image)
+        self.signals.finished.emit(self, image)
 
 
 class EXRThumbnailLoader(QObject):
@@ -246,6 +295,7 @@ class EXRThumbnailLoader(QObject):
     proxy_poster = pyqtSignal(object, object)
     proxy_ready = pyqtSignal(object, object)
     cache_cleared = pyqtSignal()
+    cache_resumed = pyqtSignal()
     _instance = None
 
     def __init__(self, parent=None, max_items=128, proxy_cache_dir=None):
@@ -254,7 +304,7 @@ class EXRThumbnailLoader(QObject):
         self._max_items = max(1, int(max_items))
         self._pending = {}
         self._tasks = {}
-        self._discarded_keys = set()
+        self._discarded_tasks = set()
         self._pool = QThreadPool(self)
         self._pool.setMaxThreadCount(2)
         from exr_preview_proxy import EXRProxyLoader
@@ -265,20 +315,29 @@ class EXRThumbnailLoader(QObject):
     def prepare(self, frames, label):
         self._proxies.prepare(frames, label)
 
+    @property
+    def suspended(self):
+        return self._proxies.suspended
+
     def begin_cache_clear(self):
         self._proxies.cancel_all()
         self.cache_cleared.emit()
         self._cache.clear()
-        self._discarded_keys.update(self._tasks)
+        self._discarded_tasks.update(self._tasks.values())
         for labels in self._pending.values():
             for label in labels:
                 if not sip.isdeleted(label):
                     label._exr_preview_key = None
         self._pending.clear()
+        for key, task in list(self._tasks.items()):
+            if self._pool.tryTake(task):
+                self._tasks.pop(key)
+                self._discarded_tasks.discard(task)
 
     def finish_cache_clear(self):
         self._cache.clear()
         self._proxies.suspended = False
+        self.cache_resumed.emit()
 
     @classmethod
     def instance(cls):
@@ -287,6 +346,8 @@ class EXRThumbnailLoader(QObject):
         return cls._instance
 
     def load(self, path, label):
+        if self._proxies.suspended:
+            return
         try:
             path = Path(path)
             stat = path.stat()
@@ -315,8 +376,13 @@ class EXRThumbnailLoader(QObject):
     def cancel(self, label):
         self._proxies.cancel(label)
         label._exr_preview_key = None
-        for key, labels in self._pending.items():
-            self._pending[key] = [pending for pending in labels if pending is not label]
+        for key, labels in list(self._pending.items()):
+            remaining = [pending for pending in labels if pending is not label and not sip.isdeleted(pending)]
+            self._pending[key] = remaining
+            task = self._tasks.get(key)
+            if not remaining and task is not None and self._pool.tryTake(task):
+                self._tasks.pop(key)
+                self._pending.pop(key)
 
     def _deliver(self, label, key, pixmap):
         if sip.isdeleted(label) or label._exr_preview_key != key:
@@ -336,14 +402,20 @@ class EXRThumbnailLoader(QObject):
         self.ready.emit(label, True)
 
     @pyqtSlot(object, object)
-    def _finished(self, key, image):
-        if key in self._discarded_keys:
-            self._discarded_keys.discard(key)
-            self._tasks.pop(key, None)
+    def _finished(self, task, image):
+        key = task.key
+        if task in self._discarded_tasks:
+            self._discarded_tasks.discard(task)
+            if self._tasks.get(key) is task:
+                self._tasks.pop(key)
+            return
+        if self._tasks.get(key) is not task:
             return
         pixmap = QPixmap.fromImage(image) if image is not None else None
-        self._cache[key] = pixmap
-        self._cache.move_to_end(key)
+        # A transient read failure must be retried on the next hover.
+        if pixmap is not None and not pixmap.isNull():
+            self._cache[key] = pixmap
+            self._cache.move_to_end(key)
         while len(self._cache) > self._max_items:
             self._cache.popitem(last=False)
         self._tasks.pop(key, None)

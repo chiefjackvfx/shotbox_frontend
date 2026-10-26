@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import re
 import inspect
 import random
@@ -1886,6 +1887,17 @@ class ShotCard(QWidget):
     
     def set_nuke_open_handler(self, handler):
         self._nuke_open_handler = handler
+
+    def _denoise_dashboard(self):
+        owner = getattr(getattr(self, "_nuke_open_handler", None), "__self__", None)
+        if callable(getattr(owner, "_handle_denoise_request", None)):
+            return owner
+        parent = self.parentWidget()
+        while parent is not None:
+            if callable(getattr(parent, "_handle_denoise_request", None)):
+                return parent
+            parent = parent.parentWidget()
+        return None
 
     def set_lock_state(self, lock_state: str, owner_machine: str | None = None, script_name: str | None = None):
         self._lock_state = lock_state or "none"
@@ -3862,6 +3874,15 @@ class ShotCard(QWidget):
                     # Extract filename from path
                     filename = Path(nk_path).name if nk_path else "unknown"
                     copy_name.triggered.connect(lambda: self._copy_to_clipboard(filename))
+                    menu.addSeparator()
+                    denoise = menu.addAction("Denoise")
+                    dashboard = self._denoise_dashboard()
+                    controller = getattr(dashboard, "_denoise_controller", None)
+                    denoise.setEnabled(bool(dashboard) and not bool(controller and controller.busy)
+                                       and sys.platform in ("linux", "win32"))
+                    if sys.platform not in ("linux", "win32"):
+                        denoise.setToolTip("Background denoise supports Windows and Linux.")
+                    denoise.triggered.connect(lambda: dashboard._handle_denoise_request(self, str(nk_path)))
                 else:
                     no_file = menu.addAction("No Nuke file found")
                     no_file.setEnabled(False)

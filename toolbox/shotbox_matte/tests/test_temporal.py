@@ -31,13 +31,12 @@ def test_full_range_keeps_all_250_frames_in_one_padded_pass():
     chunks = temporal_chunks(250, 24, "full-range")
     assert [(chunk.start, chunk.stop, chunk.padded_count) for chunk in chunks] == [(0, 250, 257)]
     assert len(temporal_chunks(25, 2, "full-range")) == 1
-    with pytest.raises(ValueError, match="250-frame shot limit"):
-        temporal_chunks(251, 24, "full-range")
+    assert temporal_chunks(278, 24, "full-range")[0].padded_count == 281
     with pytest.raises(ValueError, match="processing mode"):
         temporal_chunks(250, 24, "unknown")
 
 
-@pytest.mark.parametrize("count", [146, 147, 248, 249, 250])
+@pytest.mark.parametrize("count", [146, 147, 248, 249, 250, 278, 1000])
 @pytest.mark.parametrize("fps", [1, 2, 12, 23.976, 24, 60])
 def test_segments_cover_every_source_frame_and_pass_native_validation(count, fps):
     chunks = temporal_chunks(count, fps)
@@ -50,9 +49,12 @@ def test_segments_cover_every_source_frame_and_pass_native_validation(count, fps
     assert covered == set(range(count))
 
 
-def test_limit_applies_to_selected_frames():
-    with pytest.raises(ValueError, match="250-frame shot limit"):
-        temporal_chunks(251, 24)
+@pytest.mark.parametrize("count", [251, 278, 10000])
+def test_shot_length_has_no_application_ceiling(count):
+    chunks = temporal_chunks(count, 24)
+    assert chunks[0].start == 0 and chunks[-1].stop == count
+    assert all(chunk.padded_count <= 121 for chunk in chunks)
+    assert all(left.stop - right.start == 17 for left, right in zip(chunks, chunks[1:]))
 
 
 @pytest.fixture
@@ -174,6 +176,34 @@ def test_failure_closes_inference_and_preserves_output_without_mode_fallback(lon
     manifests = list((long_sequence.parent / "app-job-data").glob("*/_shotbox_job.json"))
     manifest = json.loads(manifests[0].read_text())
     assert manifest["status"] == ("cancelled" if failure == "cancelled" else "failed")
+
+
+def test_278_frame_export_keeps_every_frame_across_segment_joins(tmp_path, monkeypatch):
+    from shotbox_matte.imaging import read_exr, write_exr
+
+    source = tmp_path / "long_v001"
+    source.mkdir()
+    for index in range(278):
+        write_exr(source / f"source.{1001 + index}.exr", np.full((2, 3, 3), index / 1000, np.float32), "float")
+    calls = []
+
+    class Engine:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def infer(self, frames, **kwargs):
+            calls.append(len(frames))
+            yield from frames
+
+    monkeypatch.setattr("shotbox_matte.native.NativeAlphaEngine", Engine)
+    result = run_job(JobOptions(str(source), source_color="srgb", generation_width=32,
+                               generation_height=32, precision="float"))
+    outputs = sorted(Path(result["output_dir"]).glob("*.exr"))
+    assert calls == [121, 121, 73]
+    assert result["frame_count"] == len(outputs) == 278
+    assert outputs[0].name.endswith(".1001.exr") and outputs[-1].name.endswith(".1278.exr")
+    for index, path in enumerate(outputs):
+        np.testing.assert_allclose(read_exr(path), index / 1000, atol=1e-6)
 
 
 def test_long_movie_range_and_skip_export_exactly_250_selected_frames(tmp_path, monkeypatch):

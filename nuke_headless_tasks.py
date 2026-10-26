@@ -40,6 +40,7 @@ import shutil
 import glob
 import platform
 import re
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Callable, Tuple, List
@@ -989,6 +990,26 @@ class PreviewGenerator:
         """
         self._nuke_path = nuke_path
         self._cached_nuke_exe = None
+        self._preview_worker = None
+
+    def begin_preview_batch(self):
+        """Lazily reuse one headless process until end_preview_batch is called."""
+        if self._preview_worker is None:
+            from preview_batch import PreviewBatchWorker
+            self._preview_worker = PreviewBatchWorker(self.nuke_exe, self.headless_script)
+
+    def end_preview_batch(self):
+        worker, self._preview_worker = self._preview_worker, None
+        if worker is not None:
+            worker.close()
+
+    @contextmanager
+    def preview_batch(self):
+        self.begin_preview_batch()
+        try:
+            yield self._preview_worker
+        finally:
+            self.end_preview_batch()
     
     @property
     def nuke_exe(self) -> Optional[str]:
@@ -1115,6 +1136,8 @@ class PreviewGenerator:
             headless_script=str(self.headless_script)
         )
         
+        if self._preview_worker is not None:
+            cmd = self._preview_worker.command
         # Run the process
         cmd_display = " ".join(f'"{c}"' if " " in c else c for c in cmd)
         output_lines = [
@@ -1126,6 +1149,26 @@ class PreviewGenerator:
         if on_output:
             for line in output_lines:
                 on_output(line)
+        if self._preview_worker is not None:
+            def batch_output(line):
+                output_lines.append(line)
+                if on_output:
+                    on_output(line)
+
+            try:
+                success, error = self._preview_worker.render(
+                    {"input_path": str(input_path), "output_path": str(output_path),
+                     "shot_name": shot_name, "project": project, "artist": artist,
+                     "colourspace": colourspace or "sRGB", "fps": fps, "quality": quality},
+                    on_output=batch_output, check_cancelled=check_cancelled,
+                )
+                return PreviewResult(
+                    success=success, output_path=output_path, version=actual_version,
+                    relative_path=f"{PreviewConfig.PREVIEW_SUBDIR}/{output_path.name}",
+                    error=error, output_lines=output_lines,
+                )
+            except Exception as exc:
+                return PreviewResult(success=False, error=str(exc), output_lines=output_lines)
         try:
             process = subprocess.Popen(
                 cmd,
@@ -1831,6 +1874,7 @@ class PreviewDebugUI:
 def main():
     parser = argparse.ArgumentParser(description='Nuke Headless Tasks')
     subparsers = parser.add_subparsers(dest='command')
+    subparsers.add_parser('preview_worker', help='Render preview requests in one batch process')
     
     # make_preview command
     preview = subparsers.add_parser('make_preview', help='Create preview with slate')
@@ -1853,7 +1897,10 @@ def main():
     
     args = parser.parse_args()
     
-    if args.command == 'make_preview':
+    if args.command == 'preview_worker':
+        from preview_batch import run_worker
+        run_worker(MakePreviewTask)
+    elif args.command == 'make_preview':
         task = MakePreviewTask()
         success = task.run(
             input_path=args.input,

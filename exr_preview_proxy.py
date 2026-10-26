@@ -1,6 +1,6 @@
 """Prepare small local EXR playback proxies without blocking menus."""
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import json
 import math
@@ -140,6 +140,7 @@ class _ProxySignals(QObject):
 class _ProxyTask(QRunnable):
     def __init__(self, frames, directory):
         super().__init__()
+        self.setAutoDelete(False)
         self.frames = frames
         self.directory = directory
         self.cancelled = threading.Event()
@@ -149,7 +150,8 @@ class _ProxyTask(QRunnable):
         if self.cancelled.is_set():
             return None
         try:
-            return cached_proxy_frame(path, self.directory)
+            image = cached_proxy_frame(path, self.directory)
+            return None if image.isNull() else image
         except Exception:
             return None
 
@@ -160,13 +162,15 @@ class _ProxyTask(QRunnable):
         indices = tuple(index * SOURCE_FPS // PREVIEW_FPS
                         for index in range(0, sample_count, stride))
         selected = tuple(self.frames[index] for index in indices)
-        images = []
+        images = [None] * len(selected)
         poster_sent = False
         with ThreadPoolExecutor(max_workers=2) as workers:
-            for image in workers.map(self._read, selected):
+            futures = {workers.submit(self._read, path): index for index, path in enumerate(selected)}
+            for future in as_completed(futures):
                 if self.cancelled.is_set():
                     break
-                images.append(image)
+                image = future.result()
+                images[futures[future]] = image
                 if image is not None and not poster_sent:
                     self.signals.poster.emit(self, image)
                     poster_sent = True
@@ -174,7 +178,8 @@ class _ProxyTask(QRunnable):
             "images": images, "indices": indices, "source_count": len(self.frames),
         }
         self.signals.finished.emit(self, result)
-        prune_proxy_cache(self.directory)
+        if not self.cancelled.is_set():
+            prune_proxy_cache(self.directory)
 
 
 class EXRProxyLoader(QObject):
@@ -200,14 +205,18 @@ class EXRProxyLoader(QObject):
         self.pool.start(task)
 
     def cancel(self, label):
-        for task, target in self._jobs.items():
+        for task, target in list(self._jobs.items()):
             if target is label:
                 task.cancelled.set()
+                if self.pool.tryTake(task):
+                    self._jobs.pop(task)
 
     def cancel_all(self):
         self.suspended = True
-        for task in self._jobs:
+        for task in list(self._jobs):
             task.cancelled.set()
+            if self.pool.tryTake(task):
+                self._jobs.pop(task)
 
     @pyqtSlot(object, object)
     def _poster(self, task, image):

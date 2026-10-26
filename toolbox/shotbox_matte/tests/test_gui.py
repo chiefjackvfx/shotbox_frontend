@@ -228,16 +228,17 @@ def test_source_selection_and_presets_recalculate_generation_width(app, window, 
     wait_until(app, lambda: window._plan is not None)
 
 
-def test_long_shot_limit_and_segmented_plan_are_visible(app, window, tmp_path):
+def test_long_shot_is_enabled_without_cap_and_segmented_plan_is_visible(app, window, tmp_path):
     pytest.importorskip("OpenImageIO")
     Image = pytest.importorskip("PIL.Image")
     folder = tmp_path / "long_source"
     folder.mkdir()
-    for number in range(1001, 1252):
+    for number in range(1001, 1279):
         Image.new("RGB", (8, 5)).save(folder / f"source.{number}.png")
     window.load_input(str(folder))
-    wait_until(app, lambda: "250-frame shot limit" in window.validation_info.text())
-    assert window._plan is None and not window.generate_button.isEnabled()
+    wait_until(app, lambda: window._plan is not None)
+    assert window._plan["selected_count"] == 278
+    assert window.generate_button.isEnabled()
     window.frame_cap.setValue(250)
     wait_until(app, lambda: window._plan is not None)
     assert window._plan["selected_count"] == 250
@@ -804,7 +805,8 @@ def test_open_logs_targets_app_logs_outside_results(app, window, monkeypatch):
     assert window.build_label.text()
 
 
-def test_successful_worker_saves_history_and_matching_next_job_estimates_finish(app, window, sequence, controlled_queue_workers):
+def test_successful_worker_saves_history_and_matching_next_job_estimates_finish(app, window, sequence, controlled_queue_workers,
+                                                                             monkeypatch):
     from shotbox_matte.gui import create_window
 
     assert "Estimated finish unknown (learning)" in window.timing_label.text()
@@ -820,10 +822,17 @@ def test_successful_worker_saves_history_and_matching_next_job_estimates_finish(
         wait_until(app, lambda: not restored._tasks)
     finally:
         restored.close()
+    observed_timing = []
+    update_timing = window._update_timing
+
+    def record_timing():
+        update_timing()
+        observed_timing.append(window.timing_label.text())
+
+    monkeypatch.setattr(window, "_update_timing", record_timing)
     window.generate()
-    wait_until(app, lambda: window._is_running() and "(historical)" in window.timing_label.text())
-    assert "Estimated finish ~" in window.timing_label.text()
     wait_until(app, lambda: window._process is None)
+    assert any("Estimated finish ~" in text and "(historical)" in text for text in observed_timing)
     assert len(controlled_queue_workers) == 2
 
 

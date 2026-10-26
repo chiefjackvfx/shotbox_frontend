@@ -128,10 +128,11 @@ def test_ranges_limits_sizing_and_invalid_suffix(app, dialog, tmp_path):
     assert abs(dialog.generation_width.value() / dialog.generation_height.value() - 32 / 18) < .05
     dialog.suffix.setText("../bad")
     wait(app, lambda: dialog._plan is None and "suffix" in dialog.validation_info.text().lower())
-    frame = source(tmp_path / "long_v001", count=251)
+    frame = source(tmp_path / "long_v001", count=278)
     dialog.load_source(frame)
-    wait(app, lambda: "250-frame" in dialog.validation_info.text())
-    assert not dialog.generate_button.isEnabled()
+    wait(app, lambda: dialog._plan is not None)
+    assert dialog._plan["selected_count"] == 278
+    assert dialog.generate_button.isEnabled()
     dialog.range_enabled.setChecked(True)
     dialog.source_end.setValue(1240)
     wait(app, lambda: dialog._plan is not None)
@@ -163,6 +164,35 @@ def test_stale_plan_cannot_replace_new_settings(app, dialog, monkeypatch):
     assert "_new_" in dialog.output_preview.text()
 
 
+def test_long_clip_can_switch_between_segments_and_experimental_pass(app, dialog, tmp_path):
+    saved = dialog.settings.value("preferences")
+    dialog.load_source(source(tmp_path / "long_v001", count=278))
+    wait(app, lambda: dialog._plan is not None)
+    assert dialog.temporal_mode.currentData() == "segmented"
+    assert dialog._plan["selected_count"] == 278
+    assert dialog._plan["chunk_count"] == 3
+    assert "3 segments" in dialog.frame_summary.text()
+
+    dialog.temporal_mode.setCurrentIndex(dialog.temporal_mode.findData("full-range"))
+    assert not dialog.generate_button.isEnabled()
+    wait(app, lambda: dialog._plan is not None)
+    assert dialog.options().temporal_mode == dialog._plan["temporal_mode"] == "full-range"
+    assert dialog._plan["selected_count"] == 278
+    assert dialog._plan["chunk_count"] == 1
+    assert dialog._plan["padded_count"] == 281
+    assert "one pass" in dialog.frame_summary.text()
+    assert "experimental full range" in dialog.validation_info.text()
+    assert "GPU memory" in dialog.temporal_mode_hint.text()
+    assert dialog.generate_button.isEnabled()
+
+    dialog.temporal_mode.setCurrentIndex(dialog.temporal_mode.findData("segmented"))
+    wait(app, lambda: dialog._plan is not None)
+    assert dialog._plan["chunk_count"] == 3
+    assert "one pass" not in dialog.frame_summary.text()
+    assert "overlapping segments" in dialog.temporal_mode_hint.text()
+    assert dialog.settings.value("preferences") == saved
+
+
 def controlled_worker(monkeypatch, script):
     original = QProcess.start
 
@@ -174,8 +204,10 @@ def controlled_worker(monkeypatch, script):
     monkeypatch.setattr(QProcess, "start", start)
 
 
-def test_worker_completion_uses_reserved_result_and_cleans_temporary_job(app, dialog, monkeypatch):
+@pytest.mark.parametrize("mode", ["segmented", "full-range"])
+def test_worker_completion_uses_reserved_result_and_cleans_temporary_job(app, dialog, monkeypatch, mode):
     dialog.seed.setValue(12345)
+    dialog.temporal_mode.setCurrentIndex(dialog.temporal_mode.findData(mode))
     wait(app, lambda: dialog._plan is not None)
     interpreter_record = dialog.runtime.state_directory / "worker-python.txt"
     controlled_worker(monkeypatch,
@@ -194,7 +226,9 @@ def test_worker_completion_uses_reserved_result_and_cleans_temporary_job(app, di
     assert job.is_relative_to(dialog.runtime.temporary_directory)
     assert json.loads(job.read_text())["input_path"] == dialog.source_frame
     assert json.loads(job.read_text())["seed"] == 12345
+    assert json.loads(job.read_text())["temporal_mode"] == mode
     assert not dialog.controls.isEnabled()
+    assert not dialog.temporal_mode.isEnabled()
     assert dialog.is_busy()
     wait(app, lambda: dialog._worker is None)
     assert interpreter_record.read_text() == os.path.abspath(sys.executable)
@@ -269,15 +303,18 @@ def test_popup_reuse_source_reset_and_busy_source_protection(app, context, tmp_p
         wait(app, lambda: window._plan is not None)
         window.fps.setValue(30)
         window.seed.setValue(17)
+        window.temporal_mode.setCurrentIndex(window.temporal_mode.findData("full-range"))
         page.open_roto(first)
         assert page._tool_windows["shotbox_roto"] is window
         assert window.fps.value() == 30
         assert window.seed.value() == 17
+        assert window.temporal_mode.currentData() == "full-range"
         wait(app, lambda: not window.is_busy() and window._plan is not None)
         page.open_roto(second)
         wait(app, lambda: window._plan is not None)
         assert window.fps.value() == 25
         assert window.seed.value() == 42
+        assert window.temporal_mode.currentData() == "segmented"
         assert window._plan["selected_count"] == 20
         with monkeypatch.context() as busy:
             busy.setattr(window, "is_busy", lambda: True)
@@ -355,7 +392,18 @@ def test_padding_trim_and_version_race_export_real_exrs(app, dialog, monkeypatch
     sentinel.write_text("existing version")
     options = dialog.options()
     options.generation_width, options.generation_height = 64, 64
-    result = run_job(options)
+    final = provisional.with_name("plate_roto_v004")
+    observed_staging = []
+
+    def progress(stage, current, total, message):
+        if stage in {"prepare", "export", "commit"}:
+            assert not final.exists()
+            observed_staging.append(stage)
+        elif stage == "complete":
+            assert len(list(final.glob("*.exr"))) == 77
+
+    result = run_job(options, progress=progress)
+    assert "export" in observed_staging and "commit" in observed_staging
     files = sorted(Path(result["output_dir"]).glob("*.exr"))
     assert captured == [81]
     assert len(files) == result["frame_count"] == 77

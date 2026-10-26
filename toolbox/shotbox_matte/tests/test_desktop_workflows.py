@@ -179,17 +179,18 @@ def test_whole_job_history_learns_persists_and_includes_future_decode():
     assert "unknown (learning)" in reloaded.text(timer)
 
 
-def test_long_shot_history_tracks_all_segments_and_survives_reload():
+@pytest.mark.parametrize("count,padded", [(250, 291), (278, 315)])
+def test_long_shot_history_tracks_all_segments_and_survives_reload(count, padded):
     now = [0.0]
     timer = StageTimer(lambda: now[0])
     history = JobHistory()
     history.start({"fps": 24})
     timer.start()
-    history.observe("prepare", 121, 250)
-    assert history.selected == 250 and history.padded == 291
+    history.observe("prepare", 121, count)
+    assert history.selected == count and history.padded == padded
     history.observe("inference", 8, 24)
-    history.observe("decode", 121, 291)
-    history.observe("export", 104, 250)
+    history.observe("decode", 121, padded)
+    history.observe("export", 104, count)
     assert "inference" not in history.completed
     assert "decode" not in history.completed
     history.observe("inference", 24, 24)
@@ -199,7 +200,7 @@ def test_long_shot_history_tracks_all_segments_and_survives_reload():
     timer.finish()
     assert history.record_success(timer)
     restored = JobHistory(json.loads(json.dumps(history.records)))
-    assert restored.records[history.key]["padded"] == 291
+    assert restored.records[history.key]["padded"] == padded
 
 
 def test_full_range_history_uses_one_pass_and_keeps_mode_estimates_separate():

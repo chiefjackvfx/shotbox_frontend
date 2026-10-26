@@ -160,16 +160,12 @@ class ExportSession:
                     lock.mkdir(exist_ok=False)
                 except FileExistsError:
                     continue
-                try:
-                    target.mkdir(exist_ok=False)
-                    new = True
-                    break
-                except FileExistsError:
+                if target.exists() or target.is_symlink():
                     shutil.rmtree(lock)
                     continue
-                except BaseException:
-                    shutil.rmtree(lock)
-                    raise
+                # The lock reserves the name; generation writes only to staging.
+                new = True
+                break
         else:
             target = output_target(source, suffix)
             lock = _lock_path(target)
@@ -182,8 +178,7 @@ class ExportSession:
                 if target.is_symlink():
                     raise ValueError(f"Refusing to overwrite a symlinked output folder: {target}")
                 new = not target.exists()
-                target.mkdir(exist_ok=True)
-                if not target.is_dir():
+                if not new and not target.is_dir():
                     raise ValueError(f"Output path is not a directory: {target}")
             except BaseException:
                 shutil.rmtree(lock)
@@ -203,7 +198,7 @@ class ExportSession:
             session.mark("running")
             return session
         except BaseException:
-            for empty in (stage, job_dir, target if new else None):
+            for empty in (stage, job_dir):
                 if empty is not None:
                     try:
                         empty.rmdir()
@@ -231,6 +226,7 @@ class ExportSession:
         previous_export = self.job_dir / "previous-export"
         replaced: list[tuple[Path, Path]] = []
         installed: list[Path] = []
+        created_output = False
         try:
             if not names or any(not isinstance(name, str) or not pattern.fullmatch(name) for name in names):
                 raise ValueError("Commit requires explicitly named numbered EXRs belonging to this output sequence.")
@@ -241,11 +237,18 @@ class ExportSession:
                 if not prepared.is_file() or prepared.is_symlink():
                     raise ValueError(f"Missing or non-regular staged EXR: {prepared}")
             expected = {os.path.normcase(name) for name in names}
-            stale = [p for p in self.output_dir.iterdir()
-                     if p.is_file() and pattern.fullmatch(p.name) and os.path.normcase(p.name) not in expected]
             self.mark("ready")
             backup.mkdir()
             self.mark("committing")
+            if self.new_folder:
+                # Recheck ownership at publication: an external process may have
+                # created this path while inference was running. Never merge it.
+                self.output_dir.mkdir(exist_ok=False)
+                created_output = True
+            elif self.output_dir.is_symlink() or not self.output_dir.is_dir():
+                raise ValueError(f"Output folder changed before publication: {self.output_dir}")
+            stale = [p for p in self.output_dir.iterdir()
+                     if p.is_file() and pattern.fullmatch(p.name) and os.path.normcase(p.name) not in expected]
             for prepared in payloads:
                 destination = self.output_dir / prepared.name
                 if destination.exists() or destination.is_symlink():
@@ -280,6 +283,11 @@ class ExportSession:
             for destination, saved in reversed(replaced):
                 if saved.exists():
                     _move_file(saved, destination)
+            if created_output:
+                try:
+                    self.output_dir.rmdir()
+                except OSError:
+                    pass  # Preserve any file added by another process.
             shutil.rmtree(previous_export, ignore_errors=True)
             try:
                 self.mark("failed", str(exc))

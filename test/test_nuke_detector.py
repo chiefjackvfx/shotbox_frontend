@@ -1,15 +1,18 @@
 from __future__ import annotations
 
 import io
+import json
 import os
 from pathlib import Path
 import sys
+import tempfile
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import nuke_detector
+import app_cache
 
 
 class FakeProc:
@@ -23,6 +26,7 @@ class FakeProc:
         open_files: list[str] | None = None,
         cwd: str = "/tmp",
         started_at: float = 1000.0,
+        environment: dict | None = None,
     ):
         self.pid = pid
         self.info = {"pid": pid, "name": name, "username": username}
@@ -30,6 +34,7 @@ class FakeProc:
         self._open_files = open_files or []
         self._cwd = cwd
         self._started_at = started_at
+        self._environment = environment or {}
 
     def create_time(self):
         return self._started_at
@@ -43,8 +48,58 @@ class FakeProc:
     def cwd(self):
         return self._cwd
 
+    def environ(self):
+        return dict(self._environment)
+
 
 class NukeDetectorTests(unittest.TestCase):
+    def test_verified_denoise_is_excluded_while_artist_sessions_remain_detected(self):
+        with app_cache.temporary_cache_lease(), tempfile.TemporaryDirectory(
+            prefix="denoise-detector-", dir=app_cache.cache_directory("temp"),
+        ) as folder:
+            directory = Path(folder)
+            background = FakeProc(pid=102, cmdline=["Nuke17.1", "--nukex", "-q", "-m", "4"],
+                                  environment={"SHOTBOX_DENOISE_JOB_DIR": folder,
+                                               "SHOTBOX_DENOISE_SUPERVISOR_PID": "100"})
+            (directory / "child-102.json").write_text(json.dumps({"pid": 102, "created": 1000.0}))
+            artist = FakeProc(pid=101, cmdline=["Nuke17.1", "--nukex", "/show/editing.nk"])
+            with patch.object(nuke_detector.psutil, "process_iter", return_value=[background, artist]), \
+                    patch.object(nuke_detector.getpass, "getuser", return_value="artist"), \
+                    patch.object(background, "open_files", side_effect=AssertionError("Must skip background scripts")):
+                snapshot = nuke_detector.scan_open_nuke_scripts()
+            self.assertTrue(snapshot.complete, snapshot.errors)
+            self.assertEqual([(item.pid, item.script_path) for item in snapshot.scripts], [(101, "/show/editing.nk")])
+            self.assertEqual(snapshot.process_ids, {101, 102})
+            self.assertFalse(snapshot.sessions_closed({(102, 1000.0)}))
+
+    def test_denoise_environment_alone_or_stale_receipts_do_not_hide_unknown_sessions(self):
+        with app_cache.temporary_cache_lease(), tempfile.TemporaryDirectory(
+            prefix="denoise-detector-", dir=app_cache.cache_directory("temp"),
+        ) as folder:
+            receipt = Path(folder) / "child-102.json"
+            proc = FakeProc(pid=102, environment={"SHOTBOX_DENOISE_JOB_DIR": folder,
+                                                 "SHOTBOX_DENOISE_SUPERVISOR_PID": "100"})
+            for record in (None, {"pid": 999, "created": 1000.0}, {"pid": 102, "created": 900.0}, []):
+                with self.subTest(record=record):
+                    if record is not None:
+                        receipt.write_text(json.dumps(record))
+                    with patch.object(nuke_detector.psutil, "process_iter", return_value=[proc]), \
+                            patch.object(nuke_detector.getpass, "getuser", return_value="artist"):
+                        snapshot = nuke_detector.scan_open_nuke_scripts()
+                    self.assertFalse(snapshot.complete)
+                    self.assertIsInstance(snapshot.errors[0], nuke_detector.UnidentifiedNukeScriptError)
+
+    def test_unreadable_environment_preserves_normal_detection_and_unknown_session_errors(self):
+        artist = FakeProc(pid=101, cmdline=["Nuke17.1", "/show/editing.nk"])
+        unknown = FakeProc(pid=102)
+        with patch.object(nuke_detector.psutil, "process_iter", return_value=[artist, unknown]), \
+                patch.object(nuke_detector.getpass, "getuser", return_value="artist"), \
+                patch.object(artist, "environ", side_effect=nuke_detector.psutil.AccessDenied(101)), \
+                patch.object(unknown, "environ", side_effect=nuke_detector.psutil.AccessDenied(102)):
+            snapshot = nuke_detector.scan_open_nuke_scripts()
+        self.assertEqual([item.pid for item in snapshot.scripts], [101])
+        self.assertIsInstance(snapshot.errors[0], nuke_detector.UnidentifiedNukeScriptError)
+
     def test_debug_output_shows_windows_script_paths_and_partial_scan_errors(self):
         script = nuke_detector.NukeScriptDetection(
             script_name="bam050.nk", script_path=r"Z:\PROJECTS\Bamboo HR\bam050.nk",

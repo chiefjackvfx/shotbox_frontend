@@ -1,11 +1,11 @@
 # Python 3.13 qualification
 
-Python 3.13 is the Linux production default for the frontend and its shared
-Matte worker. The main Linux `venv` was migrated to **3.13.15** on 26 October
-2026, following the user’s request to use the normal launcher. Run
-`./run_shotbox_frontend.sh` as usual. Windows/macOS remain on **3.12** until
-their native acceptance is complete; remaining checks are recorded below. The Django
-backend, its environments and deployment are outside this migration.
+Python 3.13 is the production installer default for the frontend and its shared
+Matte worker on Linux, Windows and macOS. The main Linux `venv` was migrated to
+**3.13.15** on 26 October 2026. The user subsequently requested the same upgrade
+for Windows/macOS, so both now use the shared `runtime_python.txt` default.
+Native Windows/macOS acceptance remains pending; dependency resolution has passed.
+The Django backend, its environments and deployment are outside this migration.
 
 ## Prepare and launch
 
@@ -117,27 +117,24 @@ skips instead of treating a zero-crash module run as full product acceptance.
 Linux was promoted independently at the user’s request. The existing
 3.12.14 environment was preserved under
 `.runtime/backups/venv-b87dfceeb8874a9cbc42290155575551`. Migration verified
-all application imports and the pinned CUDA dependencies. Linux bootstraps and
-Python probes select `runtime_python_linux.txt`; Windows/macOS select
-`runtime_python.txt`. The environment snapshot above records the earlier
-qualification phase, before Linux promotion.
+all application imports and the pinned CUDA dependencies. Following the user’s
+subsequent Windows/macOS upgrade request, all bootstraps and Python probes use
+`runtime_python.txt` set to **3.13**; the separate Linux override was removed.
+The environment snapshot above records the earlier qualification phase.
 
-For the remaining platforms, only after their applicable checks pass:
-
-1. Change frontend `runtime_python.txt` from `3.12` to `3.13` and update the
-   platform-default test expectations. The Linux override is already 3.13.
-2. Rerun native installer/updater migration and rollback acceptance on all
-   platforms, then update current installation documentation to the new default.
-3. Use the normal release workflow; this migration does not publish, tag or bump
-   a version automatically.
+Run the normal installer/updater on Windows/macOS to migrate each local `venv`.
+These native installations cannot be performed from the Linux workstation.
+Complete the applicable checks in the table on those systems and record their
+results before claiming native certification. Releases remain user-controlled;
+this change does not publish, tag or bump a version.
 
 Normal migration backs up `venv`, creates the replacement at its final path
 and restores the backup if installation or verification fails. Successful
 backups remain under `.runtime/backups`. For manual rollback, close Shotbox and
 all its workers, retain the failed candidate separately and restore the chosen
 backup to the original `venv` path. Keep the old managed interpreter available;
-do not run a renamed backup directly. Revert `runtime_python_linux.txt` to 3.12 for Linux, or
-`runtime_python.txt` for other platforms, in the rollback checkout before running another updater, or it will migrate again.
+do not run a renamed backup directly. Revert `runtime_python.txt` to 3.12 in the rollback checkout before running
+another updater, or it will migrate again.
 
 Matte metadata and Nuke bridge compatibility remain Python 3.12–3.13; the Ruff
 target stays `py312`. No model format, worker protocol, backend API or user

@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (QApplication, QDialog, QMainWindow, QMessageBox,
                             QProgressDialog, QStyle, QStyleOptionComboBox)
 
 import filesIO
+import app_cache
 import http_help
 import nuke_headless_tasks
 import page_nukedash as dash
@@ -649,6 +650,8 @@ class NukeDashRegressionTests(unittest.TestCase):
             page._on_make_all_previews_clicked()
         self.assertTrue(info.call_args.args[2].startswith('Cancelled.'))
         self.assertNotIn('previews', page._refresh_pause_reasons)
+        generator.begin_preview_batch.assert_called_once_with()
+        generator.end_preview_batch.assert_called_once_with()
 
     def test_preview_button_uses_overwrite_generator_for_existing_output(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -690,6 +693,70 @@ class NukeDashRegressionTests(unittest.TestCase):
             self.assertTrue(info.call_args.args[2].startswith('Done!'))
             self.assertIn('Completed: 1', info.call_args.args[2])
             self.assertNotIn('previews', page._refresh_pause_reasons)
+            generator.begin_preview_batch.assert_called_once_with()
+            generator.end_preview_batch.assert_called_once_with()
+
+    def test_denoise_button_queues_latest_scripts_across_timelines_and_hidden_shots(self):
+        with tempfile.TemporaryDirectory(dir=app_cache.cache_directory("temp")) as directory:
+            root = Path(directory)
+            for shot in ("SH010", "SH020"):
+                scripts = root / shot / "scripts"
+                scripts.mkdir(parents=True)
+                for version in (1, 2):
+                    (scripts / f"{shot}_v{version:03d}.nk").write_text("test script")
+            first = {"id": 1, "title": "SH010", "base_path": str(root / "SH010")}
+            hidden = {"id": 2, "title": "SH020", "base_path": str(root / "SH020"), "hidden": True}
+            missing = {"id": 3, "title": "SH030", "base_path": str(root / "SH030")}
+            job = {"id": 1, "title": "Current job", "timelines": [
+                {"id": 11, "title": "One", "shots": [first, missing]},
+                {"id": 12, "title": "Two", "shots": [hidden, first, missing]},
+            ]}
+            page = self.page([job])
+            controller = mock.Mock(busy=False)
+            with mock.patch.object(page, "_ensure_denoise_controller", return_value=controller), \
+                    mock.patch.object(dash.QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes) as question:
+                page.btn_denoise.click()
+            self.assertEqual(page.btn_denoise.text(), "Denoise")
+            tasks = controller.start_batch.call_args.args[0]
+            self.assertEqual([task["shot"]["id"] for task in tasks], [1, 2])
+            self.assertEqual([Path(task["script"]).name for task in tasks], ["SH010_v002.nk", "SH020_v002.nk"])
+            self.assertEqual(controller.start_batch.call_args.kwargs, {"skipped": 1})
+            self.assertIn("replaces matching WriteDN1 frames", question.call_args.args[2])
+            # A second shot pointing to the same script must not render it twice.
+            alias = {**first, "id": 99}
+            collected, skipped = page._collect_denoise_tasks({"timelines": [{"shots": [first, alias]}]}, filesIO.Folders())
+            self.assertEqual(len(collected), 1)
+            self.assertEqual(skipped, 0)
+
+    def test_denoise_button_decline_or_missing_scripts_does_not_launch(self):
+        page = self.page(jobs_data())
+        with mock.patch.object(page, "_ensure_denoise_controller") as controller, \
+                mock.patch.object(dash.QMessageBox, "information") as information, \
+                mock.patch.object(dash.QMessageBox, "question", return_value=QMessageBox.StandardButton.No) as question:
+            page.btn_denoise.click()
+            information.assert_called_once()
+            question.assert_not_called()
+            with mock.patch.object(page, "_collect_denoise_tasks", return_value=([{"shot": {}, "script": "/test.nk"}], 0)):
+                page.btn_denoise.click()
+            question.assert_called_once()
+            controller.assert_not_called()
+
+    def test_denoise_controller_keeps_toolbar_and_refresh_in_sync(self):
+        page = self.page(jobs_data())
+        controller = page._ensure_denoise_controller()
+        self.assertIs(page._ensure_denoise_controller(), controller)
+        controller.busy_changed.emit(True)
+        self.assertFalse(page.btn_denoise.isEnabled())
+        self.assertIn("denoise", page._refresh_pause_reasons)
+        controller.busy_changed.emit(False)
+        self.assertTrue(page.btn_denoise.isEnabled())
+        self.assertNotIn("denoise", page._refresh_pause_reasons)
+        with mock.patch.object(dash.sys, "platform", "win32"):
+            controller.busy_changed.emit(False)
+            self.assertTrue(page.btn_denoise.isEnabled())
+        with mock.patch.object(dash.sys, "platform", "darwin"):
+            controller.busy_changed.emit(False)
+            self.assertFalse(page.btn_denoise.isEnabled())
 
 
 

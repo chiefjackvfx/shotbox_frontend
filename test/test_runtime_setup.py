@@ -227,7 +227,6 @@ def test_shell_bootstrap_uses_local_managed_python_without_system_changes(root, 
     source = Path(setup.__file__).with_name("setup_runtime.sh")
     shutil.copy2(source, root / source.name)
     shutil.copy2(source.with_name("runtime_python.txt"), root / "runtime_python.txt")
-    shutil.copy2(source.with_name("runtime_python_linux.txt"), root / "runtime_python_linux.txt")
     tools = root / "test-bin"
     tools.mkdir()
     uname = tools / "uname"
@@ -253,7 +252,7 @@ def test_shell_bootstrap_uses_local_managed_python_without_system_changes(root, 
     result = subprocess.run(["sh", str(root / source.name), *args], env=environment,
                             capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
-    version = "3.13" if qualification or system == "Linux" else "3.12"
+    version = "3.13"
     assert (root / "commands.txt").read_text().strip() == f"python install {version} --no-bin --no-registry"
     recorded = json.loads((root / "result.json").read_text())
     assert recorded["args"] == ["--uv", str(uv), *args]
@@ -396,7 +395,7 @@ def test_313_qualification_migrates_with_requested_probe_and_frontend_requiremen
     assert create[create.index("--python") + 1] == "managed313"
     assert install[install.index("--requirements") + 1] == str(requirements)
     assert len(list((root / ".runtime/backups").iterdir())) == 1
-    assert setup.DEFAULT_PYTHON == ((3, 13) if sys.platform == "linux" else (3, 12))
+    assert setup.DEFAULT_PYTHON == (3, 13)
 
 
 def test_reuses_313_environment_without_backup(root, commands, monkeypatch):
@@ -432,13 +431,13 @@ def test_313_dependency_probe_requests_correct_interpreter(root, monkeypatch):
     assert json.loads(recorded[0][-1])[1] == setup.INFERENCE_VERSIONS
 
 
-@pytest.mark.parametrize("system,expected", [("linux", (3, 13)), ("win32", (3, 12)), ("darwin", (3, 12))])
-def test_production_default_promotes_linux_only(root, system, expected):
-    (root / "runtime_python.txt").write_text("3.12\n")
-    (root / "runtime_python_linux.txt").write_text("3.13\n")
-    assert setup.default_python(root, system=system) == expected
+@pytest.mark.parametrize("system", ["linux", "win32", "darwin"])
+def test_production_default_is_313_on_every_platform(root, monkeypatch, system):
+    (root / "runtime_python.txt").write_text("3.13\n")
+    monkeypatch.setattr(setup.sys, "platform", system)
+    assert setup.default_python(root) == (3, 13)
 
 
-def test_linux_default_falls_back_to_shared_manifest(root):
+def test_shared_manifest_can_restore_312_for_rollback(root):
     (root / "runtime_python.txt").write_text("3.12\n")
-    assert setup.default_python(root, system="linux") == (3, 12)
+    assert setup.default_python(root) == (3, 12)

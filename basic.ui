@@ -176,6 +176,13 @@
               </widget>
              </item>
              <item>
+              <widget class="QPushButton" name="btn_denoise">
+               <property name="text">
+                <string>Denoise</string>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QPushButton" name="btn_make_previews">
                <property name="text">
                 <string>mp4s</string>

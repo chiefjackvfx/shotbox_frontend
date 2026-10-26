@@ -17,13 +17,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np
 import OpenEXR
 from PyQt6 import sip
-from PyQt6.QtGui import QImage
-from PyQt6.QtCore import QPoint, QThreadPool
+from PyQt6.QtGui import QImage, QMouseEvent
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QThreadPool, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QLabel, QMenu
 
 import exr_thumbnails
 import exr_preview_proxy
+import app_cache
 
 
 class EXRThumbnailTests(unittest.TestCase):
@@ -32,7 +33,10 @@ class EXRThumbnailTests(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
 
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory()
+        lease = app_cache.temporary_cache_lease()
+        lease.__enter__()
+        self.addCleanup(lease.__exit__, None, None, None)
+        self.temporary = tempfile.TemporaryDirectory(dir=app_cache.cache_directory("temp"))
         self.path = Path(self.temporary.name) / "plate.1001.exr"
         self.path.touch()
         self.loader = exr_thumbnails.EXRThumbnailLoader(
@@ -56,6 +60,15 @@ class EXRThumbnailTests(unittest.TestCase):
         image = QImage(640, 320, QImage.Format.Format_RGB888)
         image.fill(0x3388FF)
         return image
+
+    def hover_action(self, menu, action):
+        point = menu.actionGeometry(action).center()
+        # Deliver motion without QTest's implicit event processing or shared
+        # offscreen cursor position, so the submenu timer remains pending.
+        self.app.sendEvent(menu, QMouseEvent(
+            QEvent.Type.MouseMove, QPointF(point), QPointF(menu.mapToGlobal(point)),
+            Qt.MouseButton.NoButton, Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+        ))
 
     def test_decodes_real_exr_with_display_gamma_and_preserves_aspect(self):
         pixels = np.full((80, 160), 0.25, dtype=np.float32)
@@ -231,7 +244,7 @@ class EXRThumbnailTests(unittest.TestCase):
         menu = QMenu()
         menu.addAction("Open Folder")
         preview = exr_thumbnails.EXRMenuPreview(menu, tuple(str(index) for index in range(6)))
-        with mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=mock.Mock()):
+        with mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=mock.Mock(suspended=False)):
             try:
                 menu.popup(QPoint(100, 100))
                 self.wait_for(preview.isVisible)
@@ -307,15 +320,155 @@ class EXRThumbnailTests(unittest.TestCase):
             self.wait_for(lambda: not self.loader._pending)
         self.assertEqual(len(self.loader._cache), 1)
 
-    def test_decode_failure_shows_unavailable_and_caches_failure(self):
+    def test_decode_failure_retries_when_hovered_again(self):
         label = QLabel("Loading preview…")
-        with mock.patch.object(exr_thumbnails, "read_thumbnail", side_effect=RuntimeError("bad EXR")) as read:
+        with mock.patch.object(exr_thumbnails, "read_thumbnail", side_effect=[RuntimeError("temporary read failure"), self.image()]) as read:
             self.loader.load(self.path, label)
             self.wait_for(lambda: not self.loader._pending)
+            self.assertTrue(label.pixmap().isNull())
+            self.assertEqual(label.text(), "Preview unavailable")
             self.loader.load(self.path, label)
-            read.assert_called_once()
-        self.assertTrue(label.pixmap().isNull())
-        self.assertEqual(label.text(), "Preview unavailable")
+            self.wait_for(lambda: not label.pixmap().isNull())
+            self.assertEqual(read.call_count, 2)
+
+    def test_cancelled_queued_stills_do_not_delay_the_current_folder(self):
+        release_running, release_abandoned = threading.Event(), threading.Event()
+        started = [threading.Event(), threading.Event()]
+        labels = [QLabel() for _ in range(9)]
+        paths = [self.path.with_name(f"folder{index}.1001.exr") for index in range(9)]
+        for path in paths:
+            path.touch()
+        decoded = []
+        image = self.image()
+
+        def decode(path):
+            index = paths.index(Path(path))
+            decoded.append(index)
+            if index < 2:
+                started[index].set()
+                release_running.wait(5)
+            elif index < 8:
+                release_abandoned.wait(5)
+            return image
+
+        with mock.patch.object(exr_thumbnails, "read_thumbnail", side_effect=decode):
+            try:
+                for index in range(2):
+                    self.loader.load(paths[index], labels[index])
+                self.wait_for(lambda: all(event.is_set() for event in started))
+                for index in range(2, 8):
+                    self.loader.load(paths[index], labels[index])
+                    self.loader.cancel(labels[index])
+                self.loader.load(paths[8], labels[8])
+                release_running.set()
+                self.wait_for(lambda: not labels[8].pixmap().isNull())
+                self.assertFalse(set(decoded) & set(range(2, 8)))
+            finally:
+                release_running.set()
+                release_abandoned.set()
+
+    def test_clear_cache_restarts_a_preview_hovered_during_the_clear(self):
+        menu = QMenu()
+        menu.addAction("Open Folder")
+        preview = exr_thumbnails.EXRMenuPreview(menu, (str(self.path),))
+        with mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=self.loader), \
+             mock.patch.object(exr_thumbnails, "read_thumbnail", return_value=self.image()):
+            try:
+                self.loader.begin_cache_clear()
+                menu.popup(QPoint(100, 100))
+                QTest.qWait(30)
+                self.loader.finish_cache_clear()
+                self.wait_for(lambda: preview.isVisible() and bool(preview._proxy_pixmaps))
+                self.assertFalse(preview._loading)
+            finally:
+                menu.hide()
+
+    def test_old_thumbnail_completion_after_cache_clear_cannot_replace_new_request(self):
+        release, started = threading.Event(), threading.Event()
+        red, blue = self.image(), self.image()
+        red.fill(0xFF0000)
+        blue.fill(0x0000FF)
+        calls = []
+
+        def decode(_path):
+            calls.append(True)
+            if len(calls) == 1:
+                started.set()
+                release.wait(5)
+                return red
+            return blue
+
+        label = QLabel()
+        with mock.patch.object(exr_thumbnails, "read_thumbnail", side_effect=decode):
+            try:
+                self.loader.load(self.path, label)
+                self.assertTrue(started.wait(1))
+                self.loader.begin_cache_clear()
+                release.set()
+                self.assertTrue(self.loader._pool.waitForDone(1000))
+                # Worker signals are queued; the GUI has not handled them yet.
+                self.loader.finish_cache_clear()
+                self.loader.load(self.path, label)
+                self.wait_for(lambda: not label.pixmap().isNull())
+                self.assertEqual(label.pixmap().toImage().pixelColor(0, 0).name(), "#0000ff")
+                self.wait_for(lambda: not self.loader._tasks)
+            finally:
+                release.set()
+
+    def test_cancelled_proxy_jobs_do_not_prune_before_the_current_folder_loads(self):
+        release_read, release_prune, started = threading.Event(), threading.Event(), threading.Event()
+        old, current = QLabel(), QLabel()
+        image = self.image()
+        ready = []
+        self.loader.proxy_ready.connect(lambda label, _: ready.append(label))
+
+        def proxy(path, _directory):
+            if path == "old.exr":
+                started.set()
+                release_read.wait(5)
+            return image
+
+        with mock.patch.object(exr_preview_proxy, "cached_proxy_frame", side_effect=proxy), \
+             mock.patch.object(exr_preview_proxy, "prune_proxy_cache", side_effect=lambda _: release_prune.wait(5)):
+            try:
+                self.loader.prepare(("old.exr",), old)
+                self.assertTrue(started.wait(1))
+                self.loader.cancel(old)
+                self.loader.prepare(("current.exr",), current)
+                release_read.set()
+                self.wait_for(lambda: current in ready)
+                self.assertNotIn(old, ready)
+            finally:
+                release_read.set()
+                release_prune.set()
+
+    def test_proxy_poster_does_not_wait_for_a_slow_first_frame(self):
+        release, started = threading.Event(), threading.Event()
+        posters, results = [], []
+        frames = tuple(f"plate.{index}.exr" for index in range(6))
+        image = self.image()
+        label = QLabel()
+        self.loader.proxy_poster.connect(lambda _, poster: posters.append(poster))
+        self.loader.proxy_ready.connect(lambda _, result: results.append(result))
+
+        def proxy(path, _directory):
+            if path == frames[0]:
+                started.set()
+                release.wait(5)
+            return image
+
+        with mock.patch.object(exr_preview_proxy, "cached_proxy_frame", side_effect=proxy):
+            try:
+                self.loader.prepare(frames, label)
+                self.assertTrue(started.wait(1))
+                self.wait_for(lambda: bool(posters))
+                self.assertFalse(results)
+                release.set()
+                self.wait_for(lambda: bool(results))
+                self.assertEqual(results[0]["indices"], (0, 2, 4))
+                self.assertEqual(len(results[0]["images"]), 3)
+            finally:
+                release.set()
 
     def test_missing_frame_does_not_schedule_work(self):
         self.path.unlink()
@@ -360,7 +513,6 @@ class EXRThumbnailTests(unittest.TestCase):
 
     def test_folder_submenu_shows_separate_preview_panel(self):
         from test.test_shotcard_matchmove import ShotCardMatchmoveTests
-        import widgets
 
         fixture = ShotCardMatchmoveTests()
         self.addCleanup(fixture.doCleanups)
@@ -400,7 +552,7 @@ class EXRThumbnailTests(unittest.TestCase):
             self.assertFalse(label.isVisible())
             folder_menu.popup(QPoint(100, 100))
             self.wait_for(lambda: label.isVisible() and bool(label._proxy_pixmaps))
-            self.assertEqual(read.call_count, 1)
+            self.assertEqual(read.call_count, 2)  # Initial still and proxy, then cache reuse.
             folder_menu.hide()
 
     def test_preview_uses_left_side_when_right_side_has_no_space(self):
@@ -416,6 +568,69 @@ class EXRThumbnailTests(unittest.TestCase):
             self.assertTrue(available.contains(preview.geometry()))
             menu.hide()
             self.assertFalse(preview.isVisible())
+
+    def test_folder_hover_shows_preview_before_submenu_opens(self):
+        menu = QMenu()
+        child = menu.addMenu("Plate")
+        action = child.addAction("Open Folder")
+        preview = exr_thumbnails.EXRMenuPreview(child, str(self.path))
+        loader = mock.Mock(suspended=False)
+        with mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=loader):
+            try:
+                menu.popup(QPoint(100, 100))
+                self.hover_action(menu, child.menuAction())
+                self.app.processEvents()
+                self.assertFalse(child.isVisible())
+                self.assertTrue(preview.isVisible())
+                self.assertFalse(preview.geometry().intersects(menu.geometry()))
+                loader.prepare.assert_called_once_with((str(self.path),), preview)
+                preview._on_proxy_ready(preview, {"images": [self.image()], "indices": (0,)})
+                self.assertFalse(preview.pixmap().isNull())
+                # Opening and browsing the submenu repositions the same panel.
+                child.popup(menu.mapToGlobal(QPoint(menu.width(), 0)))
+                self.app.processEvents()
+                menu.hovered.emit(action)
+                self.assertTrue(preview.isVisible())
+                self.assertFalse(preview.geometry().intersects(child.geometry()))
+                loader.prepare.assert_called_once()
+            finally:
+                menu.close()
+            self.assertFalse(preview.isVisible())
+
+    def test_hovering_another_folder_hides_preview_without_waiting_for_submenu(self):
+        menu = QMenu()
+        first = menu.addMenu("Plate")
+        first.addAction("Open Folder")
+        second = menu.addMenu("Empty folder")
+        second.addAction("Open Folder")
+        preview = exr_thumbnails.EXRMenuPreview(first, str(self.path))
+        loader = mock.Mock(suspended=False)
+        with mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=loader):
+            try:
+                menu.popup(QPoint(100, 100))
+                self.hover_action(menu, first.menuAction())
+                self.app.processEvents()
+                self.assertTrue(preview.isVisible())
+                self.hover_action(menu, second.menuAction())
+                self.assertFalse(preview.isVisible())
+                loader.cancel.assert_called_with(preview)
+                self.app.processEvents()
+                self.assertFalse(preview.isVisible())
+            finally:
+                menu.close()
+
+    def test_closing_parent_menu_cancels_deferred_folder_preview(self):
+        menu = QMenu()
+        child = menu.addMenu("Plate")
+        child.addAction("Open Folder")
+        preview = exr_thumbnails.EXRMenuPreview(child, str(self.path))
+        with mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance") as loader:
+            menu.popup(QPoint(100, 100))
+            self.hover_action(menu, child.menuAction())
+            menu.close()
+            self.app.processEvents()
+            self.assertFalse(preview.isVisible())
+            loader.assert_not_called()
 
     def test_preview_stays_hidden_when_menu_closes_before_deferred_show(self):
         menu = QMenu()
@@ -450,7 +665,7 @@ class EXRThumbnailTests(unittest.TestCase):
                 self.assertFalse(preview._loading)
                 self.assertFalse(preview._spinner_timer.isActive())
                 self.assertEqual(colors[:4], [0, 2, 1, 0])
-                self.assertEqual(read.call_count, 3)
+                self.assertEqual(read.call_count, 4)  # Three proxy images plus the independent still.
             finally:
                 menu.hide()
             frames_shown = len(colors)
@@ -482,7 +697,7 @@ class EXRThumbnailTests(unittest.TestCase):
                 self.assertTrue(preview._loading)
                 self.assertTrue(preview._spinner_timer.isActive())
                 QTest.qWait(120)
-                self.assertEqual(read.call_count, 2)
+                self.assertEqual(read.call_count, 3)  # Still plus two proxy workers.
                 menu.hide()
             finally:
                 release.set()
@@ -492,7 +707,98 @@ class EXRThumbnailTests(unittest.TestCase):
             self.assertFalse(preview._loading)
             self.assertFalse(preview._spinner_timer.isActive())
             self.assertFalse(preview._playback_timer.isActive())
-            self.assertEqual(read.call_count, 2)
+            self.assertEqual(read.call_count, 3)
+
+    def test_still_appears_while_another_sequence_blocks_the_proxy_queue(self):
+        release, started = threading.Event(), threading.Event()
+        old_path = self.path.with_name("other.1001.exr")
+        old_path.touch()
+        other = QLabel()
+        image = self.image()
+
+        def proxy(path, _directory):
+            if Path(path) == old_path:
+                started.set()
+                release.wait(3)
+            return image
+
+        menu = QMenu()
+        menu.addAction("Open Folder")
+        preview = exr_thumbnails.EXRMenuPreview(menu, (str(self.path),))
+        with mock.patch.object(exr_preview_proxy, "cached_proxy_frame", side_effect=proxy), \
+             mock.patch.object(exr_thumbnails, "read_thumbnail", return_value=image), \
+             mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=self.loader):
+            try:
+                self.loader.prepare((str(old_path),), other)
+                self.assertTrue(started.wait(1))
+                menu.popup(QPoint(100, 100))
+                self.wait_for(lambda: not preview.pixmap().isNull())
+                self.assertTrue(preview._loading)
+                self.assertFalse(preview._proxy_pixmaps)
+                self.assertFalse(preview._playback_timer.isActive())
+                self.assertEqual(preview.pixmap().toImage().pixelColor(0, 0).name(), "#3388ff")
+                release.set()
+                self.wait_for(lambda: not preview._loading)
+                self.assertTrue(preview._proxy_pixmaps)
+            finally:
+                release.set()
+                menu.hide()
+
+    def test_late_still_cannot_replace_the_ready_proxy(self):
+        release, started = threading.Event(), threading.Event()
+        red, blue = self.image(), self.image()
+        red.fill(0xFF0000)
+        blue.fill(0x0000FF)
+
+        def still(_path):
+            started.set()
+            release.wait(3)
+            return red
+
+        menu = QMenu()
+        menu.addAction("Open Folder")
+        preview = exr_thumbnails.EXRMenuPreview(menu, (str(self.path),))
+        with mock.patch.object(exr_preview_proxy, "cached_proxy_frame", return_value=blue), \
+             mock.patch.object(exr_thumbnails, "read_thumbnail", side_effect=still), \
+             mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=self.loader):
+            try:
+                menu.popup(QPoint(100, 100))
+                self.wait_for(started.is_set)
+                self.wait_for(lambda: bool(preview._proxy_pixmaps))
+                self.assertEqual(preview.pixmap().toImage().pixelColor(0, 0).name(), "#0000ff")
+                release.set()
+                self.wait_for(lambda: not self.loader._tasks)
+                self.assertEqual(preview.pixmap().toImage().pixelColor(0, 0).name(), "#0000ff")
+            finally:
+                release.set()
+                menu.hide()
+
+    def test_valid_still_can_finish_after_an_unreadable_proxy(self):
+        release, started = threading.Event(), threading.Event()
+        image = self.image()
+
+        def still(_path):
+            started.set()
+            release.wait(5)
+            return image
+
+        menu = QMenu()
+        menu.addAction("Open Folder")
+        preview = exr_thumbnails.EXRMenuPreview(menu, (str(self.path),))
+        with mock.patch.object(exr_preview_proxy, "cached_proxy_frame", return_value=QImage()), \
+             mock.patch.object(exr_thumbnails, "read_thumbnail", side_effect=still), \
+             mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=self.loader):
+            try:
+                menu.popup(QPoint(100, 100))
+                self.wait_for(started.is_set)
+                self.wait_for(lambda: not preview._loading)
+                release.set()
+                self.wait_for(lambda: not preview.pixmap().isNull())
+                self.assertEqual(preview.pixmap().toImage().pixelColor(0, 0).name(), "#3388ff")
+                self.assertFalse(preview._playback_timer.isActive())
+            finally:
+                release.set()
+                menu.hide()
 
     def test_late_frame_cannot_replace_a_newer_frame_request(self):
         release = threading.Event()
@@ -536,6 +842,6 @@ class EXRThumbnailTests(unittest.TestCase):
                 self.assertFalse(preview._playback_timer.isActive())
                 self.assertEqual(preview.text(), "Preview unavailable")
                 QTest.qWait(100)
-                self.assertEqual(read.call_count, 1)
+                self.assertEqual(read.call_count, 2)  # One still attempt and one sampled proxy frame.
             finally:
                 menu.hide()

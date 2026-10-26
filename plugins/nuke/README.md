@@ -23,11 +23,11 @@ macOS inference, stereo and deep inputs are outside this release's scope.
 
 The authoritative integration source lives in `shotbox_frontend/plugins/nuke/`.
 Matte's backend source lives in `toolbox/shotbox_matte/` and uses the frontend's
-main Python 3.12 environment.
+main Python 3.13 environment.
 
 1. Open **Shotbox → Settings → Plugins → Shotbox Matte / Nuke**.
 2. Run the normal Shotbox installer/updater to prepare frontend `venv` with
-   Python 3.12 and the tested CUDA dependencies. No model weights download.
+   Python 3.13 and the tested CUDA dependencies. No model weights download.
 3. Select your external model folder and optional model configuration. Save.
 4. Choose **Install / Update Nuke Integration**, then restart Nuke.
 
@@ -69,7 +69,7 @@ Saved nodes receive this layout without replacing their values or animations.
    You can connect a source afterwards. Grade, retime or prepare the
    source upstream; capture evaluates the actual connected pixels at each
    original timeline frame.
-2. Set inclusive Frame In/Out, covering 1–250 frames. Negative frames and zero
+2. Set inclusive Frame In/Out, covering any positive number of frames. Negative frames and zero
    are supported. FPS is captured from the project; no frames are skipped.
 3. **Input colour defaults to `acescg`**. Change it for other inputs: `linear-srgb` means linear
    Rec.709; `acescg` means AP1/D60; `srgb` means display-encoded sRGB. This labels
