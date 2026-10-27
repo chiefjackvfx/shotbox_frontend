@@ -696,16 +696,13 @@ class NukeDashRegressionTests(unittest.TestCase):
             generator.begin_preview_batch.assert_called_once_with()
             generator.end_preview_batch.assert_called_once_with()
 
-    def test_denoise_button_queues_latest_scripts_across_timelines_and_hidden_shots(self):
+    def test_denoise_button_queues_sources_without_scripts_including_hidden_shots(self):
         with tempfile.TemporaryDirectory(dir=app_cache.cache_directory("temp")) as directory:
             root = Path(directory)
-            for shot in ("SH010", "SH020"):
-                scripts = root / shot / "scripts"
-                scripts.mkdir(parents=True)
-                for version in (1, 2):
-                    (scripts / f"{shot}_v{version:03d}.nk").write_text("test script")
-            first = {"id": 1, "title": "SH010", "base_path": str(root / "SH010")}
-            hidden = {"id": 2, "title": "SH020", "base_path": str(root / "SH020"), "hidden": True}
+            source = root / "source.mov"
+            source.write_bytes(b"native decoding tested separately")
+            first = {"id": 1, "title": "SH010", "base_path": str(root / "SH010"), "original_clip": str(source)}
+            hidden = {"id": 2, "title": "SH020", "base_path": str(root / "SH020"), "original_clip": str(source), "hidden": True}
             missing = {"id": 3, "title": "SH030", "base_path": str(root / "SH030")}
             job = {"id": 1, "title": "Current job", "timelines": [
                 {"id": 11, "title": "One", "shots": [first, missing]},
@@ -714,31 +711,34 @@ class NukeDashRegressionTests(unittest.TestCase):
             page = self.page([job])
             controller = mock.Mock(busy=False)
             with mock.patch.object(page, "_ensure_denoise_controller", return_value=controller), \
-                    mock.patch.object(dash.QMessageBox, "question", return_value=QMessageBox.StandardButton.Yes) as question:
+                    mock.patch("denoise_controller.choose_output_mode", return_value="overwrite") as choice:
                 page.btn_denoise.click()
-            self.assertEqual(page.btn_denoise.text(), "Denoise")
             tasks = controller.start_batch.call_args.args[0]
             self.assertEqual([task["shot"]["id"] for task in tasks], [1, 2])
-            self.assertEqual([Path(task["script"]).name for task in tasks], ["SH010_v002.nk", "SH020_v002.nk"])
+            self.assertTrue(all(task["media"]["source"] == str(source) for task in tasks))
+            self.assertTrue(all(task["media"]["mode"] == "overwrite" for task in tasks))
             self.assertEqual(controller.start_batch.call_args.kwargs, {"skipped": 1})
-            self.assertIn("replaces matching WriteDN1 frames", question.call_args.args[2])
-            # A second shot pointing to the same script must not render it twice.
+            choice.assert_called_once_with(page, 2, 1)
             alias = {**first, "id": 99}
             collected, skipped = page._collect_denoise_tasks({"timelines": [{"shots": [first, alias]}]}, filesIO.Folders())
             self.assertEqual(len(collected), 1)
             self.assertEqual(skipped, 0)
+            with mock.patch.object(page, "_ensure_denoise_controller", return_value=controller), \
+                    mock.patch("denoise_controller.choose_output_mode", return_value="new"):
+                page._handle_denoise_request(mock.Mock(data=first))
+            self.assertEqual(controller.start_batch.call_args.args[0][0]["media"]["mode"], "new")
 
-    def test_denoise_button_decline_or_missing_scripts_does_not_launch(self):
+    def test_denoise_button_decline_or_missing_sources_does_not_launch(self):
         page = self.page(jobs_data())
         with mock.patch.object(page, "_ensure_denoise_controller") as controller, \
                 mock.patch.object(dash.QMessageBox, "information") as information, \
-                mock.patch.object(dash.QMessageBox, "question", return_value=QMessageBox.StandardButton.No) as question:
+                mock.patch("denoise_controller.choose_output_mode", return_value=None) as choice:
             page.btn_denoise.click()
             information.assert_called_once()
-            question.assert_not_called()
-            with mock.patch.object(page, "_collect_denoise_tasks", return_value=([{"shot": {}, "script": "/test.nk"}], 0)):
+            choice.assert_not_called()
+            with mock.patch.object(page, "_collect_denoise_tasks", return_value=([{"shot": {}, "media": {"source": "/test.mov"}}], 0)):
                 page.btn_denoise.click()
-            question.assert_called_once()
+            choice.assert_called_once()
             controller.assert_not_called()
 
     def test_denoise_controller_keeps_toolbar_and_refresh_in_sync(self):

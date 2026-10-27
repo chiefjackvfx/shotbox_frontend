@@ -33,7 +33,7 @@ def resolve_executable(executable=None):
 
 
 def preflight(executable, directory):
-    from test.denoise_acceptance import host_command
+    from test.denoise_test_support import host_command
     directory.mkdir()
     environment = dict(os.environ)
     for name in ("NUKE_TEMP_DIR", "NUKE_DISK_CACHE", "TMPDIR", "XDG_CACHE_HOME"):
@@ -66,8 +66,7 @@ class Mirror:
 def verify(executable=None):
     if sys.platform != "win32":
         raise RuntimeError("Run this verification on the Windows machine with NukeX and Neat Video installed.")
-    from test.denoise_acceptance import acceptance as single_acceptance
-    from test.denoise_batch_acceptance import acceptance as batch_acceptance
+    from test.denoise_template_acceptance import acceptance as single_acceptance
     with app_cache.temporary_cache_lease():
         directory = Path(tempfile.mkdtemp(prefix="denoise-windows-verification-", dir=app_cache.cache_directory("temp")))
         print(f"Windows denoise verification: {directory}", flush=True)
@@ -85,8 +84,7 @@ def verify(executable=None):
                     report["preflight"] = preflight(executable, directory / "preflight")
                     report["stage"] = "single"
                     report["single"] = single_acceptance(executable, expected_version=TARGET_NUKE)
-                    report["stage"] = "batch"
-                    report["batch"] = batch_acceptance(executable, expected_version=TARGET_NUKE, include_failure=True)
+                    report["batch"] = report["single"].get("batch")
                 report["stage"] = "complete"
                 report["success"] = True
             except Exception as exc:

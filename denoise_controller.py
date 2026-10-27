@@ -10,13 +10,43 @@ import time
 
 from PyQt6.QtCore import QObject, QProcess, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtWidgets import QDialog, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QVBoxLayout
+from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QVBoxLayout
 
 import app_cache
 from nuke_denoise import create_request, parse_event
 from nuke_denoise_display import discover_tools, stop_recorded_children
 from nuke_headless_tasks import find_nuke_executable
 from settings import get_settings_manager
+
+
+def choose_output_mode(parent, count, skipped=0):
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Denoise")
+    layout = QVBoxLayout(dialog)
+    label = QLabel(f"Denoise {count} source clip(s).\nMaximum width: 4096 pixels; smaller footage stays unchanged.")
+    label.setWordWrap(True)
+    layout.addWidget(label)
+    overwrite = QRadioButton("Overwrite", dialog)
+    overwrite.setToolTip("Replace the latest matching denoise version; create v001 if none exists.")
+    overwrite.setChecked(True)
+    new = QRadioButton("Version up", dialog)
+    new.setToolTip("Create the next unused denoise version and keep existing versions.")
+    layout.addWidget(overwrite)
+    layout.addWidget(new)
+    layout.addWidget(QLabel("Overwrite replaces the latest matching denoise version.\nVersion up creates the next unused version.", dialog))
+    if skipped:
+        layout.addWidget(QLabel(f"Skipped (missing source or shot folder): {skipped}", dialog))
+    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, parent=dialog)
+    buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Denoise")
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+    try:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        return "overwrite" if overwrite.isChecked() else "new"
+    finally:
+        dialog.deleteLater()
 
 
 class DenoiseProgress(QDialog):
@@ -138,14 +168,14 @@ class DenoiseController(QObject):
         self._batch_timer.timeout.connect(self._advance_batch)
         self.idle.connect(self._after_idle)
 
-    def start(self, shot, script):
+    def start(self, shot, media):
         if self.busy:
             self._debug("A denoise job is already running.")
             if self.dialog:
                 self.dialog.show()
                 self.dialog.raise_()
             return False
-        return self._start_job(shot, script)
+        return self._start_job(shot, media)
 
     def start_batch(self, tasks, *, skipped=0):
         if self.busy or not tasks:
@@ -167,7 +197,7 @@ class DenoiseController(QObject):
             return
         task = batch["tasks"][batch["index"]]
         batch["index"] += 1
-        if not self._start_job(task["shot"], task["script"]):
+        if not self._start_job(task["shot"], task["media"]):
             self._record_batch_result(self.last_result)
             self._batch_timer.start(0)
 
@@ -178,7 +208,7 @@ class DenoiseController(QObject):
         elif result.get("stage") != "cancelled":
             batch["failed"] += 1
             task = batch["tasks"][batch["index"] - 1]
-            title = task["shot"].get("title") or Path(task["script"]).stem
+            title = task["shot"].get("title") or Path(task["media"]["source"]).stem
             error = f"{title}: {result.get('error', 'Denoise failed')}"
             if self.directory is not None:
                 error += f"\nLogs: {self.directory}"
@@ -203,9 +233,10 @@ class DenoiseController(QObject):
         if not self._closing:
             QMessageBox.information(self.window, "Denoise", summary)
 
-    def _start_job(self, shot, script):
+    def _start_job(self, shot, media):
         self.directory = None
-        self._debug(f"Requested script: {script}")
+        source = media["source"]
+        self._debug(f"Requested input: {source}")
         try:
             discover_tools()
             if sys.platform == "linux" and importlib.util.find_spec("Xlib") is None:
@@ -216,7 +247,7 @@ class DenoiseController(QObject):
             self._lease = app_cache.temporary_cache_lease()
             self._lease.__enter__()
             self.directory = Path(tempfile.mkdtemp(prefix="denoise-", dir=app_cache.cache_directory("temp")))
-            self.request_path = create_request(self.directory, script, executable)
+            self.request_path = create_request(self.directory, media, executable)
         except Exception as exc:
             self._debug(f"Cannot start: {exc}")
             if self._lease:
@@ -236,11 +267,11 @@ class DenoiseController(QObject):
         self._finishing = False
         self._pending_result = None
         self._debug(f"Nuke executable: {executable} (--nukex)")
-        self._debug(f"Job logs and recovery copy: {self.directory}")
-        self._debug("Using the saved script; shot locks and open editing sessions are ignored.")
-        self.dialog = DenoiseProgress(self, shot.get("title") or Path(script).stem)
-        self.dialog.detail.setText(f"Script: {Path(script).name}")
-        self.dialog.detail.setToolTip(str(script))
+        self._debug(f"Job logs and worker files: {self.directory}")
+        self._debug("Using a fresh denoise template.")
+        self.dialog = DenoiseProgress(self, shot.get("title") or Path(source).stem)
+        self.dialog.detail.setText(f"Input: {Path(source).name}")
+        self.dialog.detail.setToolTip(source)
         self.dialog.show()
         if not was_busy:
             self.busy_changed.emit(True)
@@ -284,18 +315,17 @@ class DenoiseController(QObject):
         if self._cancelled:
             return
         labels = {"starting": (1, "Starting NukeX and loading plugins…"),
-                  "loading": (2, "Opening the saved Nuke script…"),
+                  "loading": (2, "Loading the denoise template and source…"),
                   "preparing": (3, "Preparing the middle frame for profiling…"),
                   "profiling": (4, "Opening Prepare Noise Profile…"),
                   "auto_profiling": (4, "Auto Profile is analysing the noise…"),
                   "applying_profile": (5, "Auto Profile finished. Applying the noise profile…"),
-                  "saving": (6, "Saving the noise profile into the Nuke script…"),
-                  "saved": (7, "Profile saved. Starting WriteDN1…")}
+                  "profile_ready": (6, "Noise profile cached. Starting denoised output…")}
         if stage == "rendering":
             detail = str(event.get("output", ""))
             if "frame" in event:
                 detail = f"Rendered frame {int(event['frame'])}\n{detail}"
-            self.dialog.set_status(f"Rendering WriteDN1: {event['completed']}/{event['total']} frames",
+            self.dialog.set_status(f"Rendering denoised output: {event['completed']}/{event['total']} frames",
                                    detail, step=7, frames=(event["completed"], event["total"]))
         elif stage in labels:
             step, message = labels[stage]
@@ -341,7 +371,7 @@ class DenoiseController(QObject):
             except (ValueError, OSError):
                 pass
         if result.get("stage") == "complete" and (exit_code != 0 or exit_status != QProcess.ExitStatus.NormalExit):
-            result = {"stage": "failed", "error": "The denoise supervisor crashed after rendering.", "saved": result.get("saved")}
+            result = {"stage": "failed", "error": "The denoise supervisor crashed after rendering."}
         self._pending_result = result
         self.dialog.set_status("Closing background Nuke and finishing cleanup…", step=8)
         self._cleanup_started = time.monotonic()
@@ -358,13 +388,13 @@ class DenoiseController(QObject):
         self.last_result = result
         stage = result.get("stage")
         if stage == "complete":
-            message = f"Denoise complete. Rendered {result['total']} frames through WriteDN1."
+            message = f"Denoise complete. Rendered {result['total']} frames."
         elif stage == "cancelled":
             message = "Denoise cancelled."
         else:
             message = "Denoise failed. " + str(result.get("error") or "See the job logs.")
-        if stage != "complete" and result.get("saved"):
-            message += " The saved profile and any completed frames have been retained."
+        if stage != "complete":
+            message += " Any completed EXR frames have been retained."
         self._debug(message)
         self._debug(f"Cleanup complete. Logs: {self.directory}")
         self.dialog.label.setText(message)

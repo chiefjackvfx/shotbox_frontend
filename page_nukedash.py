@@ -493,7 +493,7 @@ class page_nukedash(QMainWindow):
         #self.btn_make_previews = QPushButton("Make All Previews")
         self.btn_make_previews.setToolTip("Generate previews for all shots with original clips or latest renders")
         self.btn_make_previews.clicked.connect(self._on_make_all_previews_clicked)
-        self.btn_denoise.setToolTip("Denoise all shots in this job using each latest saved Nuke script")
+        self.btn_denoise.setToolTip("Denoise original source clips using the denoise template (maximum width 4096)")
         self.btn_denoise.setEnabled(sys.platform in ("linux", "win32"))
         if sys.platform not in ("linux", "win32"):
             self.btn_denoise.setToolTip("Background denoise supports Windows and Linux")
@@ -2096,36 +2096,31 @@ class page_nukedash(QMainWindow):
         self.btn_denoise.setEnabled(not busy and sys.platform in ("linux", "win32"))
         self.set_auto_refresh_paused(busy, reason="denoise")
 
-    def _handle_denoise_request(self, shot_card: widgets.ShotCard, nk_path: str):
+    def _handle_denoise_request(self, shot_card: widgets.ShotCard, nk_path=None):
         if getattr(self, "_shutting_down", False):
             return
-        self._ensure_denoise_controller().start(dict(shot_card.data or {}), nk_path)
+        controller = getattr(self, "_denoise_controller", None)
+        if controller and controller.busy:
+            return
+        job = {"timelines": [{"shots": [dict(shot_card.data or {})]}]}
+        tasks, skipped = self._collect_denoise_tasks(job, filesIO.Folders())
+        self._start_template_denoise(tasks, skipped)
 
     def _collect_denoise_tasks(self, active_job, files_io):
-        tasks, seen_shots, seen_scripts = [], set(), set()
-        skipped = 0
-        for timeline in active_job.get("timelines", []) or []:
-            for shot in timeline.get("shots", []) or []:
-                shot_dir = str(shot.get("base_path") or "").strip()
-                key = ("id", shot["id"]) if shot.get("id") is not None else ("path", shot_dir or id(shot))
-                if key in seen_shots:
-                    continue
-                seen_shots.add(key)
-                try:
-                    script = files_io.latest_nk(shot_dir) if shot_dir else None
-                    script = Path(script).resolve() if script else None
-                    if script is None or not script.is_file():
-                        skipped += 1
-                        continue
-                except OSError:
-                    skipped += 1
-                    continue
-                script_key = os.path.normcase(str(script))
-                if script_key in seen_scripts:
-                    continue
-                seen_scripts.add(script_key)
-                tasks.append({"shot": dict(shot), "script": str(script)})
-        return tasks, skipped
+        from denoise_template import collect_tasks
+        return collect_tasks(active_job, files_io)
+
+    def _start_template_denoise(self, tasks, skipped):
+        from denoise_controller import choose_output_mode
+        if not tasks:
+            QMessageBox.information(self, "Denoise", f"No source media found.\n\nSkipped: {skipped}")
+            return
+        mode = choose_output_mode(self, len(tasks), skipped)
+        if mode is None:
+            return
+        for task in tasks:
+            task["media"]["mode"] = mode
+        self._ensure_denoise_controller().start_batch(tasks, skipped=skipped)
 
     def _on_denoise_all_clicked(self):
         if getattr(self, "_shutting_down", False):
@@ -2144,22 +2139,7 @@ class page_nukedash(QMainWindow):
             QMessageBox.information(self, "Denoise", "No job selected.")
             return
         tasks, skipped = self._collect_denoise_tasks(job, filesIO.Folders())
-        if not tasks:
-            QMessageBox.information(self, "Denoise", f"No saved Nuke scripts found.\n\nSkipped: {skipped}")
-            return
-        message = (
-            f"Denoise {len(tasks)} clip(s) in {job.get('title', 'this job')}?\n\n"
-            "Uses each shot's latest saved Nuke script across all timelines.\n"
-            "Saves the noise profile into each script and replaces matching WriteDN1 frames.\n"
-            "Clips run one at a time. Cancel stops the current clip and the remaining queue."
-        )
-        if skipped:
-            message += f"\n\nSkipped (no saved script): {skipped}"
-        if QMessageBox.question(self, "Denoise", message,
-                                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                                QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
-            return
-        self._ensure_denoise_controller().start_batch(tasks, skipped=skipped)
+        self._start_template_denoise(tasks, skipped)
 
     def _populate_filter_dropdowns(self):
         """Populate artist and status filter dropdowns."""

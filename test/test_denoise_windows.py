@@ -399,9 +399,9 @@ class WindowsDenoiseTests(unittest.TestCase):
                           for message, buttons in ((0x200, 0), (0x201, 1), (0x202, 0))])
 
     def test_supervisor_windows_branch_keeps_host_events_environment_and_cleanup(self):
-        script = self.directory / "source.nk"
-        script.write_text("source")
-        request = supervisor.create_request(self.directory, script, "C:/Program Files/Nuke/Nuke.exe")
+        source = self.directory / "source.mov"
+        source.write_text("source")
+        request = supervisor.create_request(self.directory, {"source": str(source), "shot_dir": str(self.directory), "shot_name": "test"}, "C:/Program Files/Nuke/Nuke.exe")
         display = mock.Mock(number="private-desktop")
         display.environment.side_effect = lambda base: {**base, "QT_QPA_PLATFORM": "windows"}
         context = mock.MagicMock()
@@ -410,7 +410,7 @@ class WindowsDenoiseTests(unittest.TestCase):
         process.poll.return_value = 0
         def launch(*args, **kwargs):
             (self.directory / "host-events.jsonl").write_text("".join(json.dumps(event) + "\n" for event in
-                ({"stage": "saved"}, {"stage": "rendering", "completed": 3, "total": 3},
+                ({"stage": "profile_ready"}, {"stage": "rendering", "completed": 3, "total": 3},
                  {"stage": "complete", "completed": 3, "total": 3})))
             return process
         with mock.patch.object(supervisor.sys, "platform", "win32"), \
@@ -419,7 +419,7 @@ class WindowsDenoiseTests(unittest.TestCase):
                 mock.patch.object(display, "launch", side_effect=launch) as popen:
             result = supervisor.run(request, lambda event: None)
         self.assertEqual(result["stage"], "complete")
-        self.assertTrue(result["saved"])
+        self.assertTrue(result["profiled"])
         environment = popen.call_args.args[1]
         self.assertEqual(environment["QT_QPA_PLATFORM"], "windows")
         self.assertEqual(environment["TEMP"], str(self.directory / "tmp"))
@@ -467,15 +467,12 @@ class WindowsDenoiseTests(unittest.TestCase):
                 mock.patch("platform.platform", return_value="Windows test"), \
                 mock.patch("test.denoise_windows_acceptance.resolve_executable", return_value="Nuke.exe"), \
                 mock.patch("test.denoise_windows_acceptance.preflight", return_value={"nuke": "17.1v2", "stage": "complete"}), \
-                mock.patch("test.denoise_acceptance.acceptance", return_value={"frames": 3}) as single, \
-                mock.patch("test.denoise_batch_acceptance.acceptance", return_value={"completed": 2}) as batch, \
+                mock.patch("test.denoise_template_acceptance.acceptance", return_value={"frames": 1, "batch": {"completed": 2}}) as single, \
                 redirect_stdout(io.StringIO()):
             self.assertTrue(verify("Nuke.exe")["success"])
             single.side_effect = RuntimeError("Window capture failed")
             self.assertFalse(verify("Nuke.exe")["success"])
-            batch.assert_called_once()
             single.assert_called_with("Nuke.exe", expected_version="17.1v2")
-            batch.assert_called_with("Nuke.exe", expected_version="17.1v2", include_failure=True)
         reports = [json.loads(path.read_text()) for path in (self.directory / "cache/temp").glob("*/verification.json")]
         self.assertEqual(sorted(report["success"] for report in reports), [False, True])
         failed = next(report for report in reports if not report["success"])
@@ -496,7 +493,7 @@ class WindowsDenoiseTests(unittest.TestCase):
             self.assertEqual(resolve_executable(), str(target.resolve()))
 
     def test_startup_probe_records_version_license_and_plugin_failures(self):
-        from test.denoise_acceptance import startup_probe
+        from test.denoise_test_support import startup_probe
         noise = mock.Mock()
         noise.Class.return_value = "OFXcom.absoft.NeatVideo6_v6"
         nuke = SimpleNamespace(NUKE_VERSION_STRING="17.0v1", env={"nukex": True}, createNode=mock.Mock(return_value=noise))
@@ -532,13 +529,11 @@ class WindowsDenoiseTests(unittest.TestCase):
                 mock.patch("platform.platform", return_value="Windows test"), \
                 mock.patch("test.denoise_windows_acceptance.resolve_executable", return_value="Nuke.exe"), \
                 mock.patch("test.denoise_windows_acceptance.preflight", side_effect=RuntimeError("Plugin not found")), \
-                mock.patch("test.denoise_acceptance.acceptance") as single, \
-                mock.patch("test.denoise_batch_acceptance.acceptance") as batch, redirect_stdout(io.StringIO()):
+                mock.patch("test.denoise_template_acceptance.acceptance") as single, redirect_stdout(io.StringIO()):
             report = verify()
         self.assertFalse(report["success"])
         self.assertEqual(report["stage"], "preflight")
         single.assert_not_called()
-        batch.assert_not_called()
 
     def test_missing_target_executable_still_produces_a_failed_report(self):
         from test.denoise_windows_acceptance import verify
@@ -552,7 +547,7 @@ class WindowsDenoiseTests(unittest.TestCase):
         self.assertTrue(list((self.directory / "cache/temp").glob("*/verification.json")))
 
     def test_native_fixture_launcher_does_not_move_existing_qt_thread(self):
-        from test.denoise_acceptance import host_command
+        from test.denoise_test_support import host_command
         context = mock.MagicMock()
         display = context.__enter__.return_value
         display.environment.side_effect = lambda environment: environment
@@ -566,7 +561,7 @@ class WindowsDenoiseTests(unittest.TestCase):
         run.assert_not_called()
 
     def test_fixture_exit_and_timeout_show_actual_nuke_log_in_verifier_error(self):
-        from test.denoise_acceptance import host_command
+        from test.denoise_test_support import host_command
         for failure in (subprocess.CalledProcessError(1, ["Nuke.exe"]), subprocess.TimeoutExpired(["Nuke.exe"], 90)):
             with self.subTest(failure=type(failure).__name__):
                 def fail(command, **kwargs):

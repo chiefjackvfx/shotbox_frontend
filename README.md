@@ -234,46 +234,55 @@ See [Matte setup](toolbox/shotbox_matte/README.md) and
 
 ## Background denoise (Windows and Linux)
 
-Click **Denoise** beside **mp4s** to denoise the current job. The confirmation
-shows the clip count. Shotbox queues the latest saved Nuke script for each shot
-across all timelines, including hidden shots, skips shots without saved scripts,
-and avoids duplicate scripts. Clips run one at a time using the same workflow
-as the shot-card action. Progress shows the current clip and batch counts;
-**Cancel** stops the current clip and the remaining queue. Failed clips are
-reported and the next clip continues. A final summary lists completed, failed,
-skipped, and remaining clips. The button is disabled while denoise is running.
+Click **Denoise** beside **mp4s**, or right-click a shot card's `.nk` button and
+choose **Denoise**. Both actions process original source media using
+`template_denoise_v01.nk`; an existing compositing script is unnecessary.
+Compositing scripts, original footage, and the supplied template remain unchanged.
 
-Right-click the `.nk` button on a shot card and choose **Denoise**. Shotbox opens
-the saved script on a private display, evaluates its middle frame, runs Neat
-Video **Auto Profile → Apply**, saves the profile into the same `.nk`, and renders
-`WriteDN1` over the full script range. Matching output frames are overwritten.
-Existing filter settings and output paths are preserved. Denoise runs even when
-someone has the script open or the shot is locked, using the last saved script
-on disk. It does not acquire or release shot locks. If the disk script changes
-before the profile is saved, the job stops to preserve that edit. Only one
-denoise job runs at a time.
-The lock monitor identifies supervised denoise workers from their job records
-and excludes them from editing-session detection. Normal Nuke sessions keep
-their existing lock checks.
+Choose **Overwrite** (default) to replace the latest matching denoise
+version, or **Version up** to allocate the next unused version. Outputs
+are scene-linear half-float EXRs under
+`renders/precomp/<shot>_DN_v###`. Multiple original clips use the preview-style
+`<shot>_plate_01_DN_v###` naming. If no version exists, either choice starts at
+`v001`. Successful shorter overwrites remove only matching out-of-range EXRs.
+The generated `.nk`, including its fresh noise profile, is saved only to the
+worker cache at `.cache/temp/denoise-*/profiled.nk`. Output folders contain EXRs
+only. Cancellation or failure can leave partial EXR frames; rerunning Overwrite
+replaces them. Cached scripts are disposable and removed by Clear Cache.
 
-The target combination is **NukeX 17 + Neat Video 6.1.2**, with the English
-Neat Video controls at normal scaling. Nuke 17.0v1 and 17.1v2 are qualified on
-Linux with native tests;
-the Windows backend is implemented and awaiting native verification. Configure
-the Nuke executable in Settings.
-NukeX and Neat Video must already be installed and licensed. Background Nuke
-starts with `--nukex` so existing ModelBuilder and other NukeX nodes load normally,
-including nodes outside the denoise branch. Other plugin versions,
-unrecognized controls, unexpected dialogs, and failed profiles stop the job.
+Each worker loads a fresh template copy and builds
+**Read1 → TimeOffset → Reformat1 → Neat Video → Write1**. It detects the source
+range, dimensions, pixel aspect and movie FPS, falling back to the shot FPS
+when media has none. Output numbering starts at **1001** without changing
+playback speed or duration; a still produces one frame. Widths above **4096**
+resize to 4096 with proportional height, preserving pixel aspect. At or below
+4096, Reformat is bypassed. Portrait footage follows the same width-only rule.
+There is no upscaling, cropping or padding. Height rounds to the nearest pixel.
 
-Denoise uses Nuke's Qt terminal mode with its interactive NukeX license to
-reduce startup time while retaining Neat Video's profiling editor. It uses
-full-frame rendering and up to 16 Nuke rendering threads, limited to half the
-machine's logical CPUs. On the verified 59-frame 4096 × 2850 shot, the complete
-controller workflow took about 21 seconds versus the earlier 43–44 seconds.
-The frame range, resolution, filter settings, and output format were preserved.
+Movies, image sequences and stills are accepted through Nuke's installed
+readers and codecs, with no extension whitelist. Sequence patterns (`####` or
+`%04d`) are supported; Nuke also groups numbered image files. Missing sequence
+frames and unreadable media produce per-clip errors. The shot's input-colourspace
+selection uses the same mapping as previews; defaults are ACEScg for EXR and
+sRGB for other inputs. The template's OCIO configuration and Neat filter settings
+are retained. Every clip evaluates its middle frame and performs fresh
+**Auto Profile → Apply** before rendering. Only `Write1` renders, without a display
+transform. Existing editing locks are neither acquired nor released.
 
-On Linux, install the optional display prerequisites before using this action:
+Job-wide denoise includes unique originals per shot across all timelines,
+including hidden shots. Missing inputs are counted as skipped. Clips run
+sequentially; individual failures do not stop the remaining queue. Both actions
+share a busy guard. **Cancel**, closing the progress window, and application
+shutdown stop the active worker and discard the remaining queue after cleanup.
+Progress includes frame counts, a timestamped activity log and **Open Logs**.
+
+The target is **NukeX 17.1v2 / Neat Video 6.1.2**, installed and licensed, with
+English Neat controls at normal scaling. Configure the Nuke executable in
+Settings. Other Nuke 17 minor versions remain supported by the launcher but do
+not count toward 17.1v2 qualification. Unknown dialogs and controls stop the job
+before rendering with an unverified profile.
+
+Linux uses a private authenticated Xvfb display and Openbox:
 
 ```bash
 # Rocky / RHEL / Fedora
@@ -282,55 +291,26 @@ sudo dnf install xorg-x11-server-Xvfb openbox
 sudo apt install xvfb openbox
 ```
 
-Run normal Shotbox runtime setup to install the Linux-only `python-xlib`
-dependency. Each Linux job starts its own authenticated Xvfb server.
+Normal Shotbox runtime setup installs Python Xlib. Windows uses a private desktop
+and a process job, without switching desktops or moving the user's pointer.
+macOS is not supported. Windows qualification remains pending: the previously
+reported `NeatVideo6 OFX 64` dialog and black capture must be verified natively.
+The new template does not establish that this Windows interaction is fixed.
 
-On Windows 10/11, denoise uses a separate Windows desktop and a process job to
-contain Nuke and its children. It sends control messages only to that desktop's
-Neat Video window. No desktop switching or global mouse/keyboard input is used.
-Xvfb, Openbox, Xlib, and administrator access are not required. Both the toolbar
-button and shot-card action are enabled on Windows; macOS remains disabled.
-
-To verify the real Windows workflow on **NukeX 17.1v2 / Neat Video 6.1.2**,
-open Command Prompt or PowerShell in the updated frontend folder and run:
+Run the Windows acceptance command from the frontend directory:
 
 ```powershell
 .\venv\Scripts\python.exe test\denoise_windows_acceptance.py --nuke "C:\Program Files\Nuke17.1v2\Nuke17.1.exe"
 ```
 
-Adjust the path if installed elsewhere. Without `--nuke`, this verifier checks
-only `%ProgramFiles%\Nuke17.1v2\Nuke17.1.exe`; it never falls back to 17.0 or
-Settings. The running version is checked before creating the test scene.
-It reports startup stages for Nuke import, version, NukeX mode, and Neat plugin
-loading, then generates test clips under `.cache/temp`. It checks profiling,
-rendering, cancellation, application shutdown, crash cleanup, and two successful
-queued clips with an intentionally failing clip between them. The expected batch
-summary is two completed and one failed; the overall verifier must print PASS.
-The command prints PASS/FAIL plus a report path. It does not use
-production shot scripts or contact the database. Windows qualification remains
-pending until this command passes on Windows with the installed Neat Video UI.
-Fixture/reopen failures print the Nuke log path and its last 40 lines so plugin,
-license, or startup errors are visible directly in the verification output.
-Set ShotBox's Nuke executable in Settings to the same 17.1v2 path before checking
-the shot-card action and toolbar button with disposable test shots. The verifier
-does not change Settings. Its report marks these UI checks as pending; native
-automated PASS and both UI checks are required for Windows qualification.
+The verifier requires the supplied `test/noise_test.exr`, template, Python test
+dependencies and `ffmpeg` on PATH for movie fixtures. It explicitly checks
+17.1v2, NukeX licensing and plugin loading, then tests the template workflow.
+It prints PASS/FAIL and report/log paths. Both UI entry points must also pass
+with disposable shots before declaring Windows qualified.
 
-The nonmodal progress window shows the current action, eight workflow steps,
-elapsed time, and a timestamped activity history. Profiling shows the frame and
-image size; rendering shows the frame count, percentage, and latest output path.
-It includes **Cancel** and **Open Logs**. Closing it while running cancels the job. Closing
-Shotbox waits for background cleanup. Cancellation after saving
-keeps the profile and any completed frames; rerunning replaces those frames.
-The popup closes automatically after successful rendering and cleanup.
-The Shotbox console also prints timestamped `[Denoise …]` messages for startup,
-Auto Profile and Apply clicks, saving, each rendered frame, Nuke output,
-failures, cancellation, and cleanup, including the job's log directory.
-
-Disposable job files, the original script recovery copy, screenshots, and logs
-live under `.cache/temp/denoise-*`. Active jobs hold a cache lease so **Clear
-Cache** preserves their files. Completed logs and recovery copies can be removed
-by clearing the cache. The supervisor supports `SHOTBOX_DENOISE_XVFB` and
-`SHOTBOX_DENOISE_OPENBOX` executable overrides for isolated testing.
-See [denoise verification](docs/DENOISE_VERIFICATION.md) for the real Nuke
-acceptance command, checked behavior, and platform limits.
+All test outputs and worker logs, captures and recovery copies live under
+`.cache/temp/denoise-*`. Active jobs hold cache leases so **Clear Cache** preserves
+them. Completed diagnostics can be cleared. `SHOTBOX_DENOISE_XVFB` and
+`SHOTBOX_DENOISE_OPENBOX` override Linux display executables for testing.
+See [denoise verification](docs/DENOISE_VERIFICATION.md) for evidence and commands.

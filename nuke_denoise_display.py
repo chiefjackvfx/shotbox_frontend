@@ -225,8 +225,11 @@ class PrivateDisplay:
         offset = max(0, pixels.shape[0] - 70) if name == "apply" else 0
         pixels = pixels[offset:] if name == "apply" else pixels[:130]
         variants = [self.templates[name]]
-        if name == "apply" and "apply_hover" in self.templates:
-            variants.append(self.templates["apply_hover"])
+        if name == "apply":
+            # Neat's advanced layouts render different Apply label sizes.
+            for key in ("apply_hover", "apply_large", "apply_advanced_small"):
+                if key in self.templates:
+                    variants.append(self.templates[key])
         for template in variants:
             if pixels.shape[0] < template.shape[0] or pixels.shape[1] < template.shape[1]:
                 continue
@@ -248,6 +251,18 @@ class PrivateDisplay:
 
     def poll_profile(self):
         """Return true only after a fresh Auto Profile result has been applied."""
+        try:
+            return self._poll_profile()
+        except Exception as error:
+            if sys.platform == "linux":
+                from Xlib.error import BadWindow
+                if isinstance(error, BadWindow):
+                    # The editor creates/destroys transient windows between
+                    # enumeration and capture. Retry on the next bounded poll.
+                    return self.applied
+            raise
+
+    def _poll_profile(self):
         import cv2
         self._check()
         candidates = []

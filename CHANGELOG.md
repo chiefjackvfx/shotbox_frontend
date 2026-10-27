@@ -6,9 +6,24 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T12:21:36+00:00] Denoise original media using versioned template outputs.
+- [2026-10-27T12:21:36+00:00] Added native template, media, lifecycle, and Windows acceptance checks.
+
 ### Changed
 
+- [2026-10-27T12:59:50+00:00] Recorded real three-shot denoise and versioning verification.
+- [2026-10-27T12:37:23+00:00] Store profiled Nuke scripts exclusively in the worker cache.
+- [2026-10-27T12:35:22+00:00] Removed saved-comp denoising and legacy acceptance/benchmark tools.
+- [2026-10-27T12:35:22+00:00] Migrated denoise regressions to template-only media requests.
+- [2026-10-27T12:29:38+00:00] Label denoise output choices Overwrite and Version up.
+- [2026-10-27T12:21:36+00:00] Limit denoise width to 4096 without upscaling.
+- [2026-10-27T12:21:36+00:00] Documented template workflow and pending Windows qualification.
+
 ### Fixed
+
+- [2026-10-27T12:29:16+00:00] Apply shot IDT before validating denoise media readers.
+- [2026-10-27T12:21:36+00:00] Recognize Neat Apply label sizes after fresh profiling.
+- [2026-10-27T12:21:36+00:00] Retry transient Linux profiling windows without confirming stale profiles.
 
 ## 5.2.2 - 2026-10-27
 

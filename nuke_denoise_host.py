@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import time
 import traceback
 
@@ -19,9 +18,10 @@ def find_nodes(nuke):
     if len(matches) != 1 or matches[0].Class() != NEAT_CLASS:
         raise RuntimeError("Expected one Neat Video v6 node named Reduce Noise v6_1.")
     noise = matches[0]
-    write = nuke.toNode("WriteDN1")
+    write_name = "Write1"
+    write = nuke.toNode(write_name)
     if write is None or write.Class() != "Write":
-        raise RuntimeError("WriteDN1 is missing or is not a Write node.")
+        raise RuntimeError(f"{write_name} is missing or is not a Write node.")
     seen, pending = set(), [write]
     while pending:
         node = pending.pop()
@@ -30,11 +30,11 @@ def find_nodes(nuke):
         seen.add(node)
         pending.extend(node.dependencies(nuke.INPUTS))
     if noise not in seen:
-        raise RuntimeError("WriteDN1 is not connected downstream of Reduce Noise v6_1.")
+        raise RuntimeError(f"{write_name} is not connected downstream of Reduce Noise v6_1.")
     if any(node["disable"].value() for node in (noise, write)):
-        raise RuntimeError("The noise node and WriteDN1 must both be enabled.")
+        raise RuntimeError(f"The noise node and {write_name} must both be enabled.")
     if not write["file"].value():
-        raise RuntimeError("WriteDN1 has no output path.")
+        raise RuntimeError(f"{write_name} has no output path.")
     if not noise.knob("Prepare_Profile..."):
         raise RuntimeError("Neat Video's Prepare Noise Profile control is unavailable.")
     return noise, write
@@ -45,6 +45,8 @@ def start(request_path):
     from PySide6 import QtCore
 
     request = json.loads(Path(request_path).read_text(encoding="utf-8"))
+    if request.get("workflow") != "template":
+        raise RuntimeError("Denoise requires a template-based media request.")
     directory = Path(request_path).parent
     script = Path(request["script"])
     qt_application = None
@@ -58,9 +60,9 @@ def start(request_path):
 
     def unchanged():
         if hashlib.sha256(script.read_bytes()).hexdigest() != request["sha256"]:
-            raise RuntimeError("The .nk changed while denoise was running. The profile was not saved.")
+            raise RuntimeError("The working template changed while denoise was running.")
         if (directory / "cancel").exists():
-            raise RuntimeError("Denoise cancelled before saving.")
+            raise RuntimeError("Denoise cancelled before rendering.")
 
     def run():
         callback = None
@@ -72,11 +74,10 @@ def start(request_path):
             if request.get("qt_terminal") and not isinstance(qt_application, QtWidgets.QApplication):
                 raise RuntimeError("Qt terminal denoise requires a QApplication.")
             if not nuke.env.get("nukex"):
-                raise RuntimeError("Hidden denoise requires NukeX mode to load and preserve the full comp. Check the NukeX license.")
+                raise RuntimeError("Hidden denoise requires NukeX mode. Check the NukeX license.")
             unchanged()
             os.chdir(script.parent)
-            # Redirect before scriptOpen: an artist's newer autosave would
-            # otherwise trigger a recovery dialog on the hidden display.
+            # Keep working-template autosaves inside this worker's cache.
             preferences = nuke.toNode("preferences")
             autosave = preferences.knob("AutoSaveName") if preferences is not None else None
             if autosave is not None:
@@ -87,15 +88,17 @@ def start(request_path):
             nuke.scriptClear(ignoreUnsavedChanges=True)
             event("loading", script=str(script))
             nuke.scriptOpen(str(script))
+            import sys
+            sys.path.insert(0, str(Path(__file__).resolve().parent))
+            from denoise_template import prepare, remove_stale_frames
+            media = prepare(nuke, request)
+            (directory / "media.json").write_text(json.dumps(media, indent=2), encoding="utf-8")
+            event("media", **media)
             noise, write = find_nodes(nuke)
             root = nuke.root()
             first, last = int(root["first_frame"].value()), int(root["last_frame"].value())
             if last < first:
                 raise RuntimeError("The script frame range is invalid.")
-            # nuke.frame() is context-dependent inside callbacks and terminal
-            # scripts. The Root knob holds the frame actually saved in the .nk.
-            saved_frame = int(root["frame"].value())
-            saved_proxy = root["proxy"].value()
             root["proxy"].setValue(False)
             root.setFrame((first + last) // 2)
             event("preparing", first=first, last=last)
@@ -116,16 +119,14 @@ def start(request_path):
             if not receipt.is_file():
                 raise RuntimeError("Neat Video closed without a verified fresh Auto Profile result.")
             unchanged()
-            root.setFrame(saved_frame)
-            root["proxy"].setValue(saved_proxy)
-            event("saving")
-            shutil.copy2(script, directory / "original.nk")
-            # Keep the original script name/directory so relative paths retain meaning.
-            nuke.scriptSaveAs(str(script), overwrite=True)
-            event("saved", saved_frame=saved_frame)
-            root["proxy"].setValue(False)
             if write.knob("use_limit"):
                 write["use_limit"].setValue(False)
+            # Retain the generated script/profile as a disposable worker file;
+            # versioned shot output folders contain rendered EXRs only.
+            root.setFrame(first)
+            cached_script = directory / "profiled.nk"
+            nuke.scriptSaveAs(str(cached_script), overwrite=True)
+            event("profile_ready", script=str(cached_script))
             total = last - first + 1
             completed = 0
 
@@ -148,6 +149,7 @@ def start(request_path):
             nuke.execute(write, first, last, 1)
             if completed != total:
                 raise RuntimeError(f"Expected {total} rendered frames, received {completed}.")
+            remove_stale_frames(request["output_pattern"], first, last)
             event("complete", completed=completed, total=total)
         except Exception as exc:
             event("failed", error=str(exc), traceback=traceback.format_exc())

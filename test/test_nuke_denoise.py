@@ -75,29 +75,37 @@ class DenoiseHostTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(dir=cache_directory("temp"))
         self.addCleanup(self.temp.cleanup)
         self.directory = Path(self.temp.name)
-        self.script = self.directory / "source.nk"
+        self.source = self.directory / "original.mov"
+        self.source.write_bytes(b"original media")
+        self.media = {"source": str(self.source), "shot_dir": str(self.directory / "shot"), "shot_name": "test"}
+        self.request = supervisor.create_request(self.directory, self.media, "/nuke")
+        request = json.loads(self.request.read_text())
+        self.script = Path(request["script"])
         self.script.write_text("original script")
-        self.request = supervisor.create_request(self.directory, self.script, "/nuke")
+        request["sha256"] = hashlib.sha256(self.script.read_bytes()).hexdigest()
+        output = Path(request["output_pattern"]).parent
+        self.output_script = output / (output.name + ".nk")
+        self.output_script.write_text("previous output profile")
+        self.request.write_text(json.dumps(request))
         self.frame = 1001
         self.noise = Node("Reduce_Noise_v6_1", host.NEAT_CLASS, disable=False)
         self.noise["Prepare_Profile..."] = Knob(execute=self.apply_profile)
         self.noise.sample = mock.Mock()
-        self.write = Node("WriteDN1", "Write", inputs=[self.noise], disable=False,
-                          file="renders/out.%04d.exr", use_limit=True)
-        self.root = Node("root", "Root", first_frame=1001, last_frame=1004, frame=1001, proxy=True,
+        self.write = Node("Write1", "Write", inputs=[self.noise], disable=False,
+                          file="renders/out.%04d.exr", use_limit=False)
+        self.root = Node("root", "Root", first_frame=1001, last_frame=1004, frame=1001, proxy=False,
                          project_directory=str(self.directory))
         self.root.setFrame = self.set_frame
         self.callback = None
-        self.saved_state = None
         self.qt_application = QtApplication()
         QtApplication.current = self.qt_application
         self.addCleanup(setattr, QtApplication, "current", None)
         self.nuke = SimpleNamespace(
             INPUTS=1, REPLACE=2, NUKE_VERSION_STRING="17.1v2", GUI=True, env={"nukex": True},
             allNodes=lambda: [self.noise, self.write],
-            toNode=lambda name: self.write if name == "WriteDN1" else None,
+            toNode=lambda name: self.write if name == "Write1" else None,
             root=lambda: self.root, frame=self.set_frame, scriptOpen=mock.Mock(),
-            scriptSaveAs=mock.Mock(side_effect=lambda *_, **__: self.save()), scriptClear=mock.Mock(), scriptExit=mock.Mock(),
+            scriptSaveAs=mock.Mock(side_effect=self.save_cached), scriptClear=mock.Mock(), scriptExit=mock.Mock(),
             addAfterFrameRender=self.add_callback, removeAfterFrameRender=mock.Mock(),
             filename=self.filename, thisNode=lambda: self.write, execute=self.render,
         )
@@ -114,9 +122,9 @@ class DenoiseHostTests(unittest.TestCase):
         self.assertFalse(self.root["proxy"].value())
         (self.directory / "profile-confirmed").touch()
 
-    def save(self):
-        self.saved_state = (self.frame, self.root["proxy"].value(), self.write["use_limit"].value())
-        self.script.write_text(f"Root {{\n frame {self.frame}\n}}\n# saved profile\n")
+    def save_cached(self, path, **kwargs):
+        self.assertEqual(Path(path), self.directory / "profiled.nk")
+        Path(path).write_text("fresh cached profile")
 
     def add_callback(self, callback, **_):
         self.callback = callback
@@ -142,29 +150,32 @@ class DenoiseHostTests(unittest.TestCase):
             QtCore=SimpleNamespace(QTimer=SimpleNamespace(singleShot=lambda _, run: run())),
             QtWidgets=SimpleNamespace(QApplication=QtApplication),
         )
-        with mock.patch.dict(sys.modules, {"nuke": self.nuke, "PySide6": fake_pyside}):
+        with mock.patch.dict(sys.modules, {"nuke": self.nuke, "PySide6": fake_pyside}), \
+                mock.patch("denoise_template.prepare", return_value={"source": str(self.source)}) as prepare:
             host.start(str(self.request))
+        self.prepared = prepare
         return [json.loads(line) for line in (self.directory / "host-events.jsonl").read_text().splitlines()]
 
-    def test_profiles_middle_frame_preserves_saved_state_and_renders_full_range(self):
+    def test_profiles_middle_frame_and_caches_script_before_rendering_full_range(self):
         events = self.run_host()
         self.assertEqual(events[-1], {"stage": "complete", "completed": 4, "total": 4})
-        self.assertEqual(self.saved_state, (1001, True, True))
-        self.assertEqual(self.root["frame"].value(), 1001)
-        self.assertEqual((self.directory / "original.nk").read_text(), "original script")
-        self.assertIn("# saved profile", self.script.read_text())
+        self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
+        self.assertEqual((self.directory / "profiled.nk").read_text(), "fresh cached profile")
+        self.assertFalse((self.directory / "original.nk").exists())
+        self.assertEqual(self.output_script.read_text(), "previous output profile")
+        self.assertEqual(self.script.read_text(), "original script")
+        self.prepared.assert_called_once_with(self.nuke, json.loads(self.request.read_text()))
         self.noise.sample.assert_called_once_with("red", 256, 128, 512, 256)
         self.assertEqual([event["frame"] for event in events
                           if event["stage"] == "rendering" and "frame" in event], [1001, 1002, 1003, 1004])
         self.nuke.removeAfterFrameRender.assert_called_once()
 
-    def test_nuke_17_0_profiles_saves_and_renders_through_the_same_host(self):
+    def test_nuke_17_0_profiles_and_renders_through_the_same_host(self):
         self.nuke.NUKE_VERSION_STRING = "17.0v1"
         self.nuke.GUI = False
         events = self.run_host()
         self.assertEqual(events[-1]["stage"], "complete")
-        self.assertEqual(self.saved_state, (1001, True, True))
-        self.nuke.scriptSaveAs.assert_called_once()
+        self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
 
     def test_other_nuke_major_versions_fail_before_loading_or_saving(self):
         for version in ("16.0v1", "18.0v1"):
@@ -190,7 +201,7 @@ class DenoiseHostTests(unittest.TestCase):
             events = self.run_host()
         sleep.assert_called_once_with(.01)
         self.assertEqual(events[-1]["stage"], "complete")
-        self.nuke.scriptSaveAs.assert_called_once()
+        self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
 
     def test_basic_nuke_mode_is_rejected_before_loading_or_saving_the_comp(self):
         self.nuke.env["nukex"] = False
@@ -229,13 +240,12 @@ class DenoiseHostTests(unittest.TestCase):
             command = supervisor.build_launch_command("/nuke", qt_bootstrap=bootstrap, topdown=True)
         self.assertEqual(command, ["/nuke", "--nukex", "-q", "-m", "16", "--topdown", "-i", "--tg", str(bootstrap)])
 
-    def test_qt_terminal_host_profiles_saves_and_renders_without_desktop_GUI(self):
+    def test_qt_terminal_host_profiles_and_renders_without_desktop_GUI(self):
         self.nuke.GUI = False
         events = self.run_host()
         self.assertEqual(events[-1]["stage"], "complete")
         self.qt_application.quit.assert_called_once_with()
         self.nuke.scriptExit.assert_not_called()
-        self.assertEqual(self.saved_state, (1001, True, True))
 
     def test_qt_terminal_without_QApplication_fails_before_loading_or_saving(self):
         self.nuke.GUI = False
@@ -245,16 +255,6 @@ class DenoiseHostTests(unittest.TestCase):
         self.assertIn("requires a QApplication", events[-1]["error"])
         self.nuke.scriptOpen.assert_not_called()
         self.nuke.scriptSaveAs.assert_not_called()
-
-    def test_legacy_desktop_requests_still_complete_and_exit(self):
-        request = json.loads(self.request.read_text())
-        request.pop("qt_terminal")
-        request.pop("topdown")
-        self.request.write_text(json.dumps(request))
-        events = self.run_host()
-        self.assertEqual(events[-1]["stage"], "complete")
-        self.nuke.scriptExit.assert_called_once_with()
-        self.qt_application.quit.assert_not_called()
 
     def test_apply_requires_continuously_ready_controls_including_enabled_button(self):
         import numpy as np
@@ -299,7 +299,7 @@ class DenoiseHostTests(unittest.TestCase):
         display = PrivateDisplay(self.directory, lambda: False, tools={"Xvfb": "unused", "openbox": "unused"})
         assets = Path(host.__file__).parent / "ui" / "denoise"
         display.templates = {path.stem: cv2.imread(str(path)) for path in assets.glob("*.png")}
-        for name in ("apply", "apply_hover"):
+        for name in ("apply", "apply_hover", "apply_large", "apply_advanced_small"):
             with self.subTest(name=name):
                 button = display.templates[name]
                 height, width = button.shape[:2]
@@ -309,6 +309,20 @@ class DenoiseHostTests(unittest.TestCase):
                 pixels[:] = 0
                 pixels[50:50 + height, 1000:1000 + width] = button
                 self.assertIsNone(display._match(pixels, "apply"))
+
+    @unittest.skipUnless(sys.platform == "linux", "X11 transient-window regression")
+    def test_disappearing_linux_window_retries_without_confirming_profile(self):
+        from Xlib.error import BadWindow
+        class Vanished(BadWindow):
+            def __init__(self):
+                pass
+        display = PrivateDisplay(self.directory, lambda: False, tools={"Xvfb": "unused", "openbox": "unused"})
+        with mock.patch.object(display, "_poll_profile", side_effect=Vanished()):
+            self.assertFalse(display.poll_profile())
+        self.assertFalse((self.directory / "profile-confirmed").exists())
+        with mock.patch.object(display, "_poll_profile", side_effect=RuntimeError("capture failed")):
+            with self.assertRaisesRegex(RuntimeError, "capture failed"):
+                display.poll_profile()
 
     def test_unexpected_plugin_dialog_still_stops_profiling(self):
         display = PrivateDisplay(self.directory, lambda: False, tools={"Xvfb": "unused", "openbox": "unused"})
@@ -332,14 +346,36 @@ class DenoiseHostTests(unittest.TestCase):
         self.nuke.scriptSaveAs.assert_not_called()
         self.assertEqual(self.script.read_text(), "another artist's edit")
 
-    def test_cancel_before_save_preserves_original(self):
+    def test_cancel_before_render_preserves_original(self):
         def cancel():
             self.apply_profile()
             (self.directory / "cancel").touch()
         self.noise["Prepare_Profile..."].execute = cancel
         events = self.run_host()
-        self.assertIn("cancelled before saving", events[-1]["error"])
+        self.assertIn("cancelled before rendering", events[-1]["error"])
         self.nuke.scriptSaveAs.assert_not_called()
+
+    def test_existing_nuke_output_is_not_modified_or_backed_up(self):
+        events = self.run_host()
+        self.assertEqual(events[-1]["stage"], "complete")
+        self.assertEqual(self.output_script.read_text(), "previous output profile")
+        self.assertFalse((self.directory / "original.nk").exists())
+        self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
+
+    def test_saved_comp_requests_are_rejected_before_launch_or_host_loading(self):
+        request = json.loads(self.request.read_text())
+        request.pop("workflow")
+        self.request.write_text(json.dumps(request))
+        with mock.patch.object(supervisor, "discover_tools") as discover:
+            result = supervisor.run(self.request, lambda event: None)
+        self.assertEqual(result["stage"], "failed")
+        self.assertIn("template-based media request", result["error"])
+        discover.assert_not_called()
+        with self.assertRaisesRegex(RuntimeError, "template-based media request"):
+            self.run_host()
+        self.nuke.scriptOpen.assert_not_called()
+        self.nuke.scriptSaveAs.assert_not_called()
+        self.assertEqual(self.output_script.read_text(), "previous output profile")
 
     def test_validation_rejects_missing_ambiguous_disabled_and_disconnected_nodes(self):
         for fault in ("missing", "ambiguous", "disabled", "disconnected", "wrong_class", "empty_path"):
@@ -369,13 +405,14 @@ class DenoiseHostTests(unittest.TestCase):
         self.noise._name = "Reduce Noise v6_1"
         self.assertIs(host.find_nodes(self.nuke)[0], self.noise)
 
-    def test_saved_frame_uses_root_knob_instead_of_callback_context(self):
+    def test_profiling_uses_middle_frame_despite_initial_callback_context(self):
         self.frame = 1  # A new GUI Viewer starts here before loading the script.
         events = self.run_host()
         self.assertEqual(events[-1]["stage"], "complete")
-        self.assertEqual(self.saved_state[0], 1001)
+        self.noise.sample.assert_called_once()
+        self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
 
-    def test_request_captures_script_digest_and_rejects_non_nuke_files(self):
+    def test_request_copies_template_and_rejects_saved_comp_inputs(self):
         request = json.loads(self.request.read_text())
         self.assertEqual(request["sha256"], hashlib.sha256(self.script.read_bytes()).hexdigest())
         self.assertEqual(request["script"], str(self.script.resolve()))

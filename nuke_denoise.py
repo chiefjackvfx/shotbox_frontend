@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -18,8 +17,7 @@ EVENT_PREFIX = "SHOTBOX_DENOISE_EVENT "
 
 
 def build_nuke_command(executable):
-    # Match the desktop launcher: full comps may contain NukeX-only controls
-    # such as ModelBuilder's bake menu, even outside the denoise branch.
+    # Neat's interactive profiling editor requires the NukeX launch mode.
     threads = min(16, max(1, (os.cpu_count() or 8) // 2))
     return [str(executable), "--nukex", "-q", "-m", str(threads)]
 
@@ -33,21 +31,11 @@ def build_launch_command(executable, *, qt_bootstrap=None, topdown=False):
     return command
 
 
-def script_digest(path):
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-
-
-def create_request(directory, script, executable):
-    script = Path(script).resolve()
-    if script.suffix.lower() != ".nk" or not script.is_file():
-        raise RuntimeError("The selected Nuke script does not exist.")
-    if not os.access(script, os.W_OK):
-        raise RuntimeError("The selected Nuke script is not writable.")
-    request = {"script": str(script), "nuke": str(executable), "sha256": script_digest(script),
-               "qt_terminal": True, "topdown": True}
-    path = Path(directory) / "request.json"
-    path.write_text(json.dumps(request), encoding="utf-8")
-    return path
+def create_request(directory, media, executable):
+    from denoise_template import create_template_request
+    if not isinstance(media, dict):
+        raise RuntimeError("Denoise requires original source media and the denoise template.")
+    return create_template_request(directory, media, executable)
 
 
 def emit(event):
@@ -94,9 +82,11 @@ def run(request_path, notify=emit):
 
     old_handlers = {sig: signal.signal(sig, cancel) for sig in (signal.SIGTERM, signal.SIGINT)}
     nuke = None
-    saved = False
+    profiled = False
     terminal = None
     try:
+        if request.get("workflow") != "template":
+            raise RuntimeError("Denoise requires a template-based media request.")
         tools = discover_tools()
         with app_cache.temporary_cache_lease(), private_display(directory, cancelled, tools, notify=notify) as display:
             startup = directory / "startup"
@@ -155,7 +145,7 @@ def run(request_path, notify=emit):
                                 if next_stage != stage:
                                     stage = next_stage
                                     deadline = time.monotonic() + 300
-                                saved = saved or stage == "saved"
+                                profiled = profiled or stage == "profile_ready"
                                 if stage in ("complete", "failed"):
                                     terminal = event
                                 else:
@@ -184,7 +174,7 @@ def run(request_path, notify=emit):
             forward_nuke_output(directory / "nuke.log", log_offset, notify, final=True)
         for sig, handler in old_handlers.items():
             signal.signal(sig, handler)
-    terminal = {**terminal, "saved": saved, "directory": str(directory)}
+    terminal = {**terminal, "profiled": profiled, "directory": str(directory)}
     (directory / "result.json").write_text(json.dumps(terminal, indent=2), encoding="utf-8")
     notify(terminal)
     return terminal

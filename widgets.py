@@ -3874,18 +3874,18 @@ class ShotCard(QWidget):
                     # Extract filename from path
                     filename = Path(nk_path).name if nk_path else "unknown"
                     copy_name.triggered.connect(lambda: self._copy_to_clipboard(filename))
-                    menu.addSeparator()
-                    denoise = menu.addAction("Denoise")
-                    dashboard = self._denoise_dashboard()
-                    controller = getattr(dashboard, "_denoise_controller", None)
-                    denoise.setEnabled(bool(dashboard) and not bool(controller and controller.busy)
-                                       and sys.platform in ("linux", "win32"))
-                    if sys.platform not in ("linux", "win32"):
-                        denoise.setToolTip("Background denoise supports Windows and Linux.")
-                    denoise.triggered.connect(lambda: dashboard._handle_denoise_request(self, str(nk_path)))
                 else:
                     no_file = menu.addAction("No Nuke file found")
                     no_file.setEnabled(False)
+                menu.addSeparator()
+                denoise = menu.addAction("Denoise")
+                dashboard = self._denoise_dashboard()
+                controller = getattr(dashboard, "_denoise_controller", None)
+                denoise.setEnabled(bool(dashboard) and not bool(controller and controller.busy)
+                                   and sys.platform in ("linux", "win32"))
+                if sys.platform not in ("linux", "win32"):
+                    denoise.setToolTip("Background denoise supports Windows and Linux.")
+                denoise.triggered.connect(lambda: dashboard._handle_denoise_request(self, None))
             
             elif widget == self.btn_latest_render:
                 # Get the render file path from button property

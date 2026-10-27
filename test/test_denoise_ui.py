@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PyQt6.QtCore import QPoint, QProcess
-from PyQt6.QtWidgets import QApplication, QMainWindow, QPushButton, QWidget
+from PyQt6.QtWidgets import QApplication, QDialog, QMainWindow, QPushButton, QRadioButton, QWidget
 
 import app_cache
 import denoise_controller as ui
@@ -20,6 +20,18 @@ import widgets
 
 
 class DenoiseUiTests(unittest.TestCase):
+    def test_output_choice_defaults_to_overwrite_and_supports_new_and_cancel(self):
+        for choice, expected in (("overwrite", "overwrite"), ("new", "new"), ("cancel", None)):
+            def execute(dialog):
+                radios = dialog.findChildren(QRadioButton)
+                self.assertEqual([radio.text() for radio in radios], ["Overwrite", "Version up"])
+                self.assertTrue(radios[0].isChecked())
+                if choice == "new":
+                    radios[1].setChecked(True)
+                return QDialog.DialogCode.Rejected if choice == "cancel" else QDialog.DialogCode.Accepted
+            with mock.patch.object(QDialog, "exec", execute):
+                self.assertEqual(ui.choose_output_mode(self.window, 2, 1), expected)
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
@@ -27,9 +39,10 @@ class DenoiseUiTests(unittest.TestCase):
     def setUp(self):
         self.window = QMainWindow()
         self.controller = ui.DenoiseController(self.window)
-        self.script = app_cache.cache_directory("temp") / "denoise-ui-fixture.nk"
+        self.script = app_cache.cache_directory("temp") / "denoise-ui-fixture.mov"
         self.script.write_text("test script")
         self.addCleanup(self.script.unlink, missing_ok=True)
+        self.media = {"source": str(self.script), "shot_dir": str(app_cache.cache_directory("temp") / "denoise-ui-shot"), "shot_name": "SH010"}
         self.addCleanup(self.window.deleteLater)
         self.fake_process = mock.Mock()
         self.fake_process.readAllStandardOutput.return_value = b""
@@ -52,13 +65,13 @@ class DenoiseUiTests(unittest.TestCase):
             self.controller._finished(1, QProcess.ExitStatus.NormalExit)
 
     def start(self, **values):
-        self.controller.start({"id": 4, "title": "SH010", **values}, str(self.script))
+        self.controller.start({"id": 4, "title": "SH010", **values}, dict(self.media))
 
     def test_existing_own_and_foreign_locks_do_not_block_or_change(self):
         for owner in ("artist@desk", "someone@other"):
             with self.subTest(owner=owner):
                 shot = {"title": "SH010", "nuke_in_use": owner}
-                self.controller.start(shot, str(self.script))
+                self.controller.start(shot, dict(self.media))
                 self.assertTrue(self.controller.busy)
                 self.assertEqual(shot["nuke_in_use"], owner)
                 self.finish_if_busy()
@@ -81,7 +94,7 @@ class DenoiseUiTests(unittest.TestCase):
     def test_open_sessions_do_not_require_a_process_scan_or_database_id(self):
         with mock.patch.object(nuke_detector, "scan_open_nuke_scripts",
                                side_effect=AssertionError("Denoise must not scan editing sessions")) as scan:
-            self.controller.start({"title": "Already open"}, str(self.script))
+            self.controller.start({"title": "Already open"}, dict(self.media))
             self.fake_process.start.assert_called_once()
             scan.assert_not_called()
 
@@ -129,7 +142,7 @@ class DenoiseUiTests(unittest.TestCase):
         self.controller._finished(0, QProcess.ExitStatus.NormalExit)
 
     def batch_tasks(self):
-        return [{"shot": {"title": title}, "script": str(self.script)} for title in ("SH010", "SH020")]
+        return [{"shot": {"title": title}, "media": dict(self.media)} for title in ("SH010", "SH020")]
 
     def test_batch_runs_serially_continues_after_failure_and_emits_idle_once(self):
         busy, idle = [], mock.Mock()
@@ -184,14 +197,14 @@ class DenoiseUiTests(unittest.TestCase):
             self.controller.start_batch(self.batch_tasks())
             self.complete_job()
             self.assertFalse(self.controller.start_batch(self.batch_tasks()))
-            self.assertFalse(self.controller.start({"title": "Third"}, str(self.script)))
+            self.assertFalse(self.controller.start({"title": "Third"}, dict(self.media)))
             self.controller.cancel()
             self.app.processEvents()
         self.fake_process.start.assert_called_once()
 
     def test_batch_startup_failure_is_counted_without_blocking_next_clip(self):
         tasks = self.batch_tasks()
-        tasks[0]["script"] = str(self.script.with_name("missing.nk"))
+        tasks[0]["media"]["source"] = str(self.script.with_name("missing.mov"))
         with mock.patch.object(ui.QMessageBox, "warning") as warning, \
                 mock.patch.object(ui.QMessageBox, "information") as summary:
             self.controller.start_batch(tasks)
@@ -249,7 +262,7 @@ class CardMenuTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_denoise_action_captures_clicked_script_and_disables_while_busy(self):
+    def test_denoise_action_works_without_a_script_and_disables_while_busy(self):
         class Owner:
             _denoise_controller = None
             def _handle_nuke_open_request(self, *_):
@@ -258,6 +271,7 @@ class CardMenuTests(unittest.TestCase):
                 self.path = path
         owner = Owner()
         card = CardHarness(owner)
+        card.btn_open_nuke.setProperty("file_path", None)
         self.addCleanup(card.deleteLater)
         menus = []
 
@@ -275,7 +289,7 @@ class CardMenuTests(unittest.TestCase):
         event.globalPos.return_value = QPoint(10, 10)
         with mock.patch.object(widgets.QMenu, "exec", execute), mock.patch.object(widgets.sys, "platform", "linux"):
             card.contextMenuEvent(event)
-            self.assertEqual(owner.path, "/shot/clicked.nk")
+            self.assertIsNone(owner.path)
             owner._denoise_controller = mock.Mock(busy=True)
             card.contextMenuEvent(event)
         self.assertEqual(len(menus), 2)
