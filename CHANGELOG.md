@@ -6,16 +6,25 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-27T15:58:52+00:00] Record DPI, recognition scores, and actual mouse input coordinates.
-- [2026-10-27T15:58:52+00:00] Test UHD mouse input, partial failures, and DPI cleanup.
-
 ### Changed
-
-- [2026-10-27T15:58:52+00:00] Use real mouse clicks for visible Windows denoise controls.
 
 ### Fixed
 
-- [2026-10-27T15:58:52+00:00] Align Windows denoise capture and clicks using physical coordinates.
+## 5.2.12 - 2026-10-27
+
+### Added
+
+- Record DPI, recognition scores, and actual mouse input coordinates.
+- Test UHD mouse input, partial failures, and DPI cleanup.
+
+### Changed
+
+- Use real mouse clicks for visible Windows denoise controls.
+
+### Fixed
+
+- Align Windows denoise capture and clicks using physical coordinates.
+
 ## 5.2.11 - 2026-10-27
 
 ### Added
