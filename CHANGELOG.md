@@ -6,12 +6,20 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-27T14:00:00+00:00] Test language-bar filtering while preserving genuine plugin warnings.
 ### Changed
 
 ### Fixed
 
-- [2026-10-27T14:00:00+00:00] Exclude Windows input helpers from denoise modal detection.
+## 5.2.7 - 2026-10-27
+
+### Added
+
+- Test language-bar filtering while preserving genuine plugin warnings.
+
+### Fixed
+
+- Exclude Windows input helpers from denoise modal detection.
+
 ## 5.2.6 - 2026-10-27
 
 ### Added
