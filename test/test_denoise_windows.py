@@ -53,18 +53,29 @@ class WindowsDenoiseTests(unittest.TestCase):
             self.assertFalse(self.display.poll_profile())
             self.api.click.assert_called_once()
             self.assertFalse((self.directory / "profile-confirmed").exists())
-            self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "apply")
+            self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "profile_check", "apply")
             with mock.patch.object(displays.time, "monotonic", return_value=10) as clock:
                 self.assertFalse(self.display.poll_profile())
                 clock.return_value = 10.4
+                self.assertFalse(self.display.poll_profile())
+                self.assertEqual(self.api.click.call_count, 2)
+                self.assertFalse((self.directory / "profile-confirmed").exists())
+                self.api.screenshot.return_value = self.canvas(
+                    "auto_profile", "adjust_ready", "profile_check_active", "profile_check_preview", "apply")
+                clock.return_value = 10.5
+                self.assertFalse(self.display.poll_profile())
+                clock.return_value = 10.9
+                self.assertFalse(self.display.poll_profile())
+                clock.return_value = 11.5
+                self.assertTrue(self.display.poll_profile())
                 self.assertTrue(self.display.poll_profile())
             self.assertTrue((self.directory / "profile-confirmed").exists())
-            self.assertEqual(self.api.click.call_count, 2)
+            self.assertEqual(self.api.click.call_count, 3)
         self.api.close_job.assert_called_once_with(0x100000003)
         self.api.close_desktop.assert_called_once_with(0x100000002, 0x100000001)
 
     def test_apply_requires_enabled_controls_to_remain_ready(self):
-        with self.display:
+        with self.display, mock.patch.object(self.display, "_before_apply", return_value=True):
             self.display.clicked_auto = True
             with mock.patch.object(displays.time, "monotonic", return_value=10) as clock:
                 self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "apply")
@@ -80,7 +91,7 @@ class WindowsDenoiseTests(unittest.TestCase):
                 self.assertTrue(self.display.poll_profile())
 
     def test_failed_apply_click_does_not_leave_a_profile_receipt(self):
-        with self.display:
+        with self.display, mock.patch.object(self.display, "_before_apply", return_value=True):
             self.display.clicked_auto = True
             self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "apply")
             with mock.patch.object(displays.time, "monotonic", return_value=10) as clock:
@@ -99,6 +110,92 @@ class WindowsDenoiseTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "left the private desktop"):
                 self.display._click(123, (50, 30))
             self.api.click.assert_not_called()
+
+    def test_loading_wait_survives_handle_changes_then_profiles_version_613(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.api.windows.return_value = [(222, "NeatVideo6 OFX 64")]
+            self.api.unexpected_dialog.return_value = True
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 45
+            self.api.windows.return_value = [(223, "NeatVideo6 OFX 64")]
+            self.assertFalse(self.display.poll_profile())
+            self.assertEqual(self.display.loading_since, 10)
+            self.api.click.assert_not_called()
+            self.api.screenshot.assert_not_called()
+            self.api.windows.return_value = [(333, "Neat Video 6.1.3 Studio plug-in for OpenFX hosts")]
+            self.api.screenshot.return_value = self.canvas("auto_profile")
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_called_once()
+            self.assertEqual(json.loads((self.directory / "neat-version.json").read_text())["version"], "6.1.3")
+
+    def test_loading_wait_is_bounded_and_cancellable(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.api.windows.return_value = [(222, "NeatVideo6 OFX 64")]
+            self.api.unexpected_dialog.return_value = True
+            self.api.screenshot.return_value = self.canvas()
+            self.api.window_details.return_value = {"children": [{"text": "Still preparing input frames"}]}
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 129
+            self.assertFalse(self.display.poll_profile())
+            self.display.cancelled = lambda: True
+            with self.assertRaises(displays.DenoiseCancelled):
+                self.display.poll_profile()
+            self.display.cancelled = lambda: False
+            clock.return_value = 130
+            with self.assertRaisesRegex(RuntimeError, "Still preparing input frames"):
+                self.display.poll_profile()
+            self.api.click.assert_not_called()
+
+    def test_profile_check_needs_rendered_preview_and_continuous_ready_controls(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.clicked_auto = self.display.clicked_check = True
+            ready = ("auto_profile", "adjust_ready", "profile_check_active", "apply")
+            self.api.screenshot.return_value = self.canvas(*ready)
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 11
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_not_called()
+            self.api.screenshot.return_value = self.canvas(*ready, "profile_check_preview")
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 11.4
+            self.assertFalse(self.display.poll_profile())
+            # A disappearing editor must restart preview readiness too.
+            self.api.windows.return_value = []
+            self.assertFalse(self.display.poll_profile())
+            self.assertIsNone(self.display.check_preview_since)
+            self.api.windows.return_value = [(333, "Neat Video 6.1.3 Studio")]
+            clock.return_value = 12
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 12.4
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 12.8
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_not_called()
+            clock.return_value = 13
+            self.assertTrue(self.display.poll_profile())
+            self.api.click.assert_called_once()
+
+    def test_missing_profile_check_never_applies(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.clicked_auto = True
+            self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "apply")
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 11
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_not_called()
+            self.assertFalse((self.directory / "profile-confirmed").exists())
+
+    def test_failed_profile_check_click_does_not_advance(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.clicked_auto = True
+            self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "profile_check", "apply")
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 11
+            self.api.click.side_effect = OSError("Profile Check click failed")
+            with self.assertRaisesRegex(OSError, "Profile Check click failed"):
+                self.display.poll_profile()
+            self.assertFalse(self.display.clicked_check)
+            self.assertFalse((self.directory / "profile-confirmed").exists())
 
     def test_input_helper_classes_are_not_modals_when_nuke_owner_is_disabled(self):
         api = windows.WindowsAPI.__new__(windows.WindowsAPI)
@@ -210,6 +307,7 @@ class WindowsDenoiseTests(unittest.TestCase):
 
     def test_black_dialog_capture_reports_native_text_without_clicking(self):
         with self.display:
+            self.display.editor_seen = True
             self.api.windows.return_value = [(222, "NeatVideo6 OFX 64")]
             self.api.unexpected_dialog.return_value = True
             self.api.window_details.return_value = {
@@ -242,6 +340,7 @@ class WindowsDenoiseTests(unittest.TestCase):
 
     def test_qt5_dialog_text_is_read_through_accessibility_despite_black_capture(self):
         with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.editor_seen = True
             self.api.windows.return_value = [(222, "NeatVideo6 OFX 64")]
             self.api.unexpected_dialog.return_value = True
             self.api.window_details.return_value = {"class": "Qt5152QWindow", "text": "NeatVideo6 OFX 64", "children": []}

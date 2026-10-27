@@ -266,7 +266,8 @@ frames and unreadable media produce per-clip errors. The shot's input-colourspac
 selection uses the same mapping as previews; defaults are ACEScg for EXR and
 sRGB for other inputs. The template's OCIO configuration and Neat filter settings
 are retained. Every clip evaluates its first frame and performs fresh
-**Auto Profile → Apply** before rendering. Only `Write1` renders, without a display
+**Auto Profile → Apply** before rendering. Windows additionally selects
+**Profile Check** and waits for its preview before Apply. Only `Write1` renders, without a display
 transform. Existing editing locks are neither acquired nor released.
 
 Job-wide denoise includes unique originals per shot across all timelines,
@@ -276,7 +277,8 @@ share a busy guard. **Cancel**, closing the progress window, and application
 shutdown stop the active worker and discard the remaining queue after cleanup.
 Progress includes frame counts, a timestamped activity log and **Open Logs**.
 
-The target is **NukeX 17.1v2 / Neat Video 6.1.2**, installed and licensed, with
+The target is **NukeX 17.1v2**, installed and licensed, with Neat Video
+**6.1.2** on Linux or **6.1.2 / 6.1.3** on Windows, and
 English Neat controls at normal scaling. Configure the Nuke executable in
 Settings. Other Nuke 17 minor versions remain supported by the launcher but do
 not count toward 17.1v2 qualification. Unknown dialogs and controls stop the job
@@ -295,13 +297,16 @@ Normal Shotbox runtime setup installs Python Xlib. Windows uses a private deskto
 and a process job, without switching desktops or moving the user's pointer.
 Windows workers now start the full NukeX GUI through `menu.py`; Linux retains
 its verified `--tg` Qt-terminal launch. The activity log identifies the mode.
-This Windows-only change tests the launch-mode difference after successful
-manual Windows profiling; it still requires a native denoise retry.
-macOS is not supported. Windows qualification remains pending: the previously
-reported `NeatVideo6 OFX 64` dialog and black capture must be verified natively.
-The new template does not establish that this Windows interaction is fixed.
+macOS is not supported. Windows qualification remains pending. The visible
+diagnostic reached the Neat 6.1.3 editor after Nuke finished preparing frames;
+private-desktop captures and automated clicks still require a native retry.
 
-Windows briefly waits for opening modal windows, then reads Windows
+Before the versioned editor opens, Windows allows up to two minutes for the
+`NeatVideo6 OFX 64` loading window, without clicking or dismissing it.
+Auto Profile waits for its enabled control; Profile Check waits for a completed
+profile; Apply waits for enabled controls and the Profile Check preview.
+Profile Check is a preview mode, not an automated quality verdict. Other modal
+windows retain the two-second settling interval. Diagnostics read Windows
 accessibility labels when native child controls expose no text. This queries
 separate toolkit instances, including Neat's `Qt5152QWindow` and Nuke's Qt 6,
 without depending on a readable screenshot. The read-only helper uses

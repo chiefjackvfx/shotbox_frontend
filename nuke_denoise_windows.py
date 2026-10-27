@@ -388,6 +388,8 @@ class WindowsAPI:
 class WindowsDisplay(PrivateDisplay):
     """Reuse profile verification while replacing X11 transport with Win32."""
 
+    supported_neat_versions = ("6.1.2", "6.1.3")
+
     def __init__(self, directory, cancelled, *, notify=None, api=None, attach=True):
         # The X11 constructor discovers Xvfb; Windows has no external tools.
         self.directory, self.cancelled = Path(directory), cancelled
@@ -403,6 +405,69 @@ class WindowsDisplay(PrivateDisplay):
         self.templates = {}
         self.pending_dialog = None
         self.capture_retry = None
+        self.loading_since = None
+        self.editor_seen = False
+        self.clicked_check = False
+        self.check_preview_since = None
+
+    def _load_templates(self):
+        super()._load_templates()
+        for key in ("profile_check", "profile_check_active", "profile_check_preview"):
+            if self.templates.get(key) is None:
+                raise RuntimeError(f"Windows denoise control image is missing: {key}.")
+
+    def _match(self, pixels, name):
+        if name != "profile_check_preview":
+            return super()._match(pixels, name)
+        import cv2
+        import numpy as np
+        template = self.templates[name]
+        # Assist Image marks the rendered Profile Check preview. Match only
+        # opaque white text and its black outline, not the footage behind it.
+        mask = np.where(np.all(template >= 245, axis=2) | np.all(template <= 10, axis=2), 255, 0).astype(np.uint8)
+        region = pixels[:130]
+        if region.shape[0] < template.shape[0] or region.shape[1] < template.shape[1]:
+            return None
+        scores = cv2.matchTemplate(region, template, cv2.TM_SQDIFF_NORMED, mask=mask)
+        scores[~np.isfinite(scores)] = 1
+        score, _, point, _ = cv2.minMaxLoc(scores)
+        if score <= .003:
+            return point[0] + template.shape[1] // 2, point[1] + template.shape[0] // 2
+        return None
+
+    def _profile_is_ready(self, pixels):
+        if not self.clicked_check:
+            return super()._profile_is_ready(pixels)
+        # Entering Profile Check clears the sample selection and can change
+        # Build Profile back to Auto Profile even though the profile is ready.
+        return (self._match(pixels, "adjust_ready") and self._match(pixels, "profile_check_active")
+                and (self._match(pixels, "auto_profile") or self._match(pixels, "build_profile")))
+
+    def _before_apply(self, window, pixels):
+        import cv2
+        if not self.clicked_check:
+            active = self._match(pixels, "profile_check_active")
+            point = self._match(pixels, "profile_check")
+            if not active and not point:
+                self.ready_since = None
+                return False
+            cv2.imwrite(str(self.directory / "before-profile-check.png"), pixels)
+            if not active:
+                self._click(window, point)
+            self.clicked_check = True
+            self.ready_since = None
+            self.notify({"stage": "checking_profile", "message": "Profile Check enabled; waiting for its preview."})
+            return False
+        if not self._match(pixels, "profile_check_preview"):
+            self.check_preview_since = None
+            return False
+        now = time.monotonic()
+        if self.check_preview_since is None:
+            self.check_preview_since = now
+        if now - self.check_preview_since < .5:
+            return False
+        cv2.imwrite(str(self.directory / "profile-check-ready.png"), pixels)
+        return True
 
     def __enter__(self):
         try:
@@ -444,7 +509,10 @@ class WindowsDisplay(PrivateDisplay):
             raise DenoiseCancelled("Denoise cancelled.")
 
     def windows(self):
-        return self.api.windows(self.desktop)
+        windows = self.api.windows(self.desktop)
+        if any(title.startswith("Neat Video ") for _, title in windows):
+            self.editor_seen = True
+        return windows
 
     def screenshot(self, hwnd):
         return self.api.screenshot(hwnd)
@@ -472,6 +540,8 @@ class WindowsDisplay(PrivateDisplay):
                 raise RuntimeError(f"Neat Video window did not become ready: {error} See window-capture-error.json.") from error
             return False
         finally:
+            if self.ready_since is None:
+                self.check_preview_since = None
             if not self.dialog_seen:
                 self.pending_dialog = None
 
@@ -483,8 +553,16 @@ class WindowsDisplay(PrivateDisplay):
             self.pending_dialog = (key, now)
             self.notify({"stage": "debug", "source": "Display",
                          "message": f"Waiting for modal window to settle: {title}"})
-        # A transient opening window may disappear or become the profile editor.
-        # While it is present, no profiling control may be clicked.
+        # Allow the generic Neat title during input preparation. The visible
+        # Windows diagnostic showed progress before the versioned editor, but
+        # this title alone cannot distinguish loading from a warning. Wait
+        # boundedly; never dismiss it or click through it by title.
+        if not self.editor_seen and not self.clicked_auto and title == "NeatVideo6 OFX 64":
+            if self.loading_since is None:
+                self.loading_since = now
+                self.notify({"stage": "waiting_profile", "message": "Waiting for Nuke to prepare Neat Video input frames…"})
+            return now - self.loading_since >= 120
+        # Other dialogs still get the short settling interval and diagnostics.
         return now - self.pending_dialog[1] >= 2
 
     def _dialog_screenshot(self, hwnd):

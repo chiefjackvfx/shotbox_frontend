@@ -18,7 +18,8 @@ On Windows:
 .\venv\Scripts\python.exe test\denoise_windows_acceptance.py --nuke "C:\Program Files\Nuke17.1v2\Nuke17.1.exe"
 ```
 
-Prerequisites: licensed NukeX **17.1v2**, Neat Video **6.1.2**, supplied template
+Prerequisites: licensed NukeX **17.1v2**, Neat Video **6.1.2** (Windows also accepts
+**6.1.3**), supplied template
 and `test/noise_test.exr`, frontend dependencies including OpenEXR/Pillow/NumPy,
 and ffmpeg on PATH. The Windows command never discovers or substitutes 17.0.
 The Windows wrapper checks import, version, NukeX mode and plugin loading first.
@@ -109,7 +110,33 @@ and `nuke.log` beneath the printed diagnostic directory.
 
 Four mocked regressions passed for setup isolation, latest-job selection,
 visible GUI launch/environment, and first-frame profiling without rendering.
-Native Windows behaviour and the unreadable Neat warning remain unverified.
+The user's Windows screenshots show Nuke preparing input frames, followed by
+the full Neat Video **6.1.3** editor with Auto Profile enabled and Apply disabled.
+That confirms the visible diagnostic opens the editor; it does not verify
+automated input or capture on the private desktop.
+
+## Windows loading and Profile Check sequence
+
+Before the versioned editor appears, the generic `NeatVideo6 OFX 64` modal now
+gets up to 120 seconds to finish loading. The timer survives handle changes;
+cancellation remains active. Other dialogs still receive two seconds before
+diagnostics and failure. No loading or warning dialog is dismissed.
+
+Windows accepts versioned 6.1.2 and 6.1.3 editors and performs Auto Profile,
+waits for enabled profile controls, selects Profile Check, then waits for its
+active button, Assist Image preview label and enabled Apply control. The
+preview must remain ready across polls before Apply. Missing controls, failed
+clicks and interrupted readiness cannot create a profile receipt. Profile Check
+is a preview mode, not an automatic assessment of profile quality. Linux keeps
+its verified Auto Profile → Apply sequence.
+
+The Profile Check button images and masked Assist Image label were captured
+from the local Neat 6.1.2 editor using a disposable Xvfb session. A native
+targeted click activated Profile Check and displayed its preview. Evidence:
+`.cache/temp/denoise-profile-check-kftr4ry9/{before-check,after-check}.png`.
+These are Linux reference images; matching on Windows 6.1.3 remains unverified.
+All 84 focused Windows/host/diagnostic tests passed, including mocked loading,
+version recognition, ordered clicks, preview readiness and failure handling.
 
 ## Recorded Linux results
 
@@ -183,9 +210,9 @@ pointer. Record both entry-point results with the automated report.
 
 ## Qualification boundary
 
-Native Windows qualification remains **pending**. The last Windows run stopped
-at an unidentified `NeatVideo6 OFX 64` dialog with a black capture. The template
-workflow, existing bounded capture retry, and native control-text diagnostics
-need testing on that installation. Automated native PASS plus both UI entry
-points on Windows 17.1v2/Neat 6.1.2 are required; Linux results do not qualify
+Native Windows qualification remains **pending**. The visible diagnostic opens
+Neat 6.1.3 successfully, but the private-desktop loading wait, captures and
+Auto Profile → Profile Check → Apply sequence still need testing there.
+Automated native PASS plus both UI entry points on Windows 17.1v2 with an
+accepted Neat version are required; Linux results do not qualify
 Windows. Codec availability is installation-dependent, not universal.

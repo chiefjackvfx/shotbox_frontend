@@ -105,6 +105,8 @@ def discover_tools():
 
 
 class PrivateDisplay:
+    supported_neat_versions = ("6.1.2",)
+
     def __init__(self, directory, cancelled, tools=None, notify=None):
         self.directory = Path(directory)
         self.cancelled = cancelled
@@ -265,14 +267,18 @@ class PrivateDisplay:
     def _poll_profile(self):
         import cv2
         self._check()
+        if self.applied:
+            return True
         candidates = []
         for window, title in self.windows():
             if title.startswith("Neat Video "):
-                if not title.startswith("Neat Video 6.1.2 "):
-                    raise RuntimeError(f"Unsupported Neat Video version: {title}. Qualified version: 6.1.2.")
+                version = next((value for value in self.supported_neat_versions
+                                if title.startswith(f"Neat Video {value} ")), None)
+                if version is None:
+                    raise RuntimeError(f"Unsupported Neat Video version: {title}. Expected: {', '.join(self.supported_neat_versions)}.")
                 if getattr(self, "neat_title", None) != title:
                     (self.directory / "neat-version.json").write_text(
-                        json.dumps({"version": "6.1.2", "window_title": title, "platform": sys.platform}), encoding="utf-8")
+                        json.dumps({"version": version, "window_title": title, "platform": sys.platform}), encoding="utf-8")
                     self.neat_title = title
                 candidates.append(window)
             elif self._unexpected_dialog(window):
@@ -295,6 +301,7 @@ class PrivateDisplay:
                     capture = f" Screenshot unavailable: {error}"
                 raise RuntimeError(f"Unexpected dialog during denoise: {title}.{details}{capture}")
         if not candidates:
+            self.ready_since = None
             return self.applied
         if len(candidates) != 1:
             raise RuntimeError("More than one Neat Video window appeared.")
@@ -310,13 +317,15 @@ class PrivateDisplay:
                 self.notify({"stage": "auto_profiling", "message": "Clicked Auto Profile."})
             return False
         point = self._match(pixels, "apply")
-        if point and self._match(pixels, "build_profile") and self._match(pixels, "adjust_ready"):
+        if point and self._profile_is_ready(pixels):
             # Require enabled controls to remain ready across multiple polls.
             # A disabled Apply button must reset the readiness interval too.
             now = time.monotonic()
             if self.ready_since is None:
                 self.ready_since = now
             if now - self.ready_since >= .3:
+                if not self._before_apply(window, pixels):
+                    return False
                 cv2.imwrite(str(self.directory / "before-apply.png"), pixels)
                 # The host refuses to save unless this fresh-profile receipt exists.
                 self._click(window, point)
@@ -332,6 +341,12 @@ class PrivateDisplay:
         return (window.get_wm_transient_for() is not None
                 and not any(value.casefold() in {"nuke", "nukex", "nukestudio"}
                             for value in (window.get_wm_class() or ())))
+
+    def _before_apply(self, window, pixels):
+        return True
+
+    def _profile_is_ready(self, pixels):
+        return self._match(pixels, "build_profile") and self._match(pixels, "adjust_ready")
 
     def _dialog_details(self, window):
         return ""

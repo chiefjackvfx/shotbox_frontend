@@ -318,7 +318,9 @@ class DenoiseController(QObject):
                   "loading": (2, "Loading the denoise template and source…"),
                   "preparing": (3, "Preparing the first frame for profiling…"),
                   "profiling": (4, "Opening Prepare Noise Profile…"),
+                  "waiting_profile": (4, "Waiting for Neat Video to finish loading input frames…"),
                   "auto_profiling": (4, "Auto Profile is analysing the noise…"),
+                  "checking_profile": (4, "Profile Check is preparing its preview…"),
                   "applying_profile": (5, "Auto Profile finished. Applying the noise profile…"),
                   "profile_ready": (6, "Noise profile cached. Starting denoised output…")}
         if stage == "rendering":

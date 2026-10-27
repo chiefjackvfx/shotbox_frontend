@@ -67,11 +67,12 @@ def verify(executable=None):
     if sys.platform != "win32":
         raise RuntimeError("Run this verification on the Windows machine with NukeX and Neat Video installed.")
     from test.denoise_template_acceptance import acceptance as single_acceptance
+    from nuke_denoise_windows import WindowsDisplay
     with app_cache.temporary_cache_lease():
         directory = Path(tempfile.mkdtemp(prefix="denoise-windows-verification-", dir=app_cache.cache_directory("temp")))
         print(f"Windows denoise verification: {directory}", flush=True)
         report = {"success": False, "platform": platform.platform(), "python": sys.version,
-                  "target_nuke": TARGET_NUKE, "target_neat": "6.1.2",
+                  "target_nuke": TARGET_NUKE, "target_neat": list(WindowsDisplay.supported_neat_versions),
                   "ui_entry_points": "pending_manual_verification",
                   "stage": "executable_selection", "started_at_utc": datetime.now(timezone.utc).isoformat()}
         with (directory / "console.log").open("w", encoding="utf-8") as log:
