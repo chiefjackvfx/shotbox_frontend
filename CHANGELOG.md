@@ -6,19 +6,28 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-27T13:54:37+00:00] Record window dimensions when denoise capture remains unavailable.
-- [2026-10-27T13:51:12+00:00] Test Windows GUI launch and host shutdown lifecycle.
-
 ### Changed
-
-- [2026-10-27T13:51:41+00:00] Profile each clip's first frame on Windows and Linux.
-- [2026-10-27T13:51:12+00:00] Launch Windows denoise with full NukeX GUI privately.
-- [2026-10-27T13:51:12+00:00] Document Windows launch hypothesis and remaining verification.
 
 ### Fixed
 
-- [2026-10-27T13:54:37+00:00] Retry temporarily empty Windows profiling windows before failing.
-- [2026-10-27T13:54:37+00:00] Preserve plugin warning details when dialog screenshots fail.
+## 5.2.6 - 2026-10-27
+
+### Added
+
+- Record window dimensions when denoise capture remains unavailable.
+- Test Windows GUI launch and host shutdown lifecycle.
+
+### Changed
+
+- Profile each clip's first frame on Windows and Linux.
+- Launch Windows denoise with full NukeX GUI privately.
+- Document Windows launch hypothesis and remaining verification.
+
+### Fixed
+
+- Retry temporarily empty Windows profiling windows before failing.
+- Preserve plugin warning details when dialog screenshots fail.
+
 ## 5.2.5 - 2026-10-27
 
 ### Added
