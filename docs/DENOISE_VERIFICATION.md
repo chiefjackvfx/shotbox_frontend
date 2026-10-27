@@ -138,6 +138,30 @@ These are Linux reference images; matching on Windows 6.1.3 remains unverified.
 All 84 focused Windows/host/diagnostic tests passed, including mocked loading,
 version recognition, ordered clicks, preview readiness and failure handling.
 
+## Visible Windows automation
+
+The next private-desktop run timed out after five minutes without Auto Profile.
+The user confirmed `profile-window.png` was entirely black, so the loaded editor
+could not be matched. At the user's request, normal Windows Denoise now uses
+the current desktop, opening visible NukeX/Neat windows. It retains suspended
+launch into an owned process job, cancellation, crash cleanup and the existing
+Auto Profile → Profile Check → Apply sequence.
+
+Window enumeration is restricted to the live Nuke child's PID before dialog
+inspection, capture or input. Visible capture uses BitBlt on the client DC;
+it does not depend on Qt handling WM_PRINT. Capture and targeted input require
+the owned window to be in front and not minimized, and ownership/focus is checked
+again after capture. Losing focus resets readiness and shows a progress message;
+no desktop switching or global mouse input is used. A continuously black capture
+fails after ten seconds. Keep Neat unobscured during the Windows retry.
+
+Mocked regressions verify current-desktop launch without desktop creation or
+closure, PID filtering, foreground loss, cancellation, black-capture failure,
+ordered profiling clicks and BitBlt resource cleanup. Native Windows capture
+and control-image matching remain unverified. The older private adapter is
+retained for isolated command-line test fixtures; normal Windows jobs select
+the visible adapter. Linux behaviour is unchanged.
+
 ## Recorded Linux results
 
 Earlier Linux template runs on 27 October 2026 verified dimensions, pixel
@@ -211,7 +235,7 @@ pointer. Record both entry-point results with the automated report.
 ## Qualification boundary
 
 Native Windows qualification remains **pending**. The visible diagnostic opens
-Neat 6.1.3 successfully, but the private-desktop loading wait, captures and
+Neat 6.1.3 successfully, but the visible automation's captures and
 Auto Profile → Profile Check → Apply sequence still need testing there.
 Automated native PASS plus both UI entry points on Windows 17.1v2 with an
 accepted Neat version are required; Linux results do not qualify

@@ -232,7 +232,7 @@ See [Matte setup](toolbox/shotbox_matte/README.md) and
 
 [Linux integration verification](toolbox/shotbox_matte/docs/SHOTBOX_INTEGRATION_VERIFICATION.md) records the relocated runtime checks and platform limits.
 
-## Background denoise (Windows and Linux)
+## Denoise (Windows and Linux)
 
 Click **Denoise** beside **mp4s**, or right-click a shot card's `.nk` button and
 choose **Denoise**. Both actions process original source media using
@@ -293,13 +293,20 @@ sudo dnf install xorg-x11-server-Xvfb openbox
 sudo apt install xvfb openbox
 ```
 
-Normal Shotbox runtime setup installs Python Xlib. Windows uses a private desktop
-and a process job, without switching desktops or moving the user's pointer.
-Windows workers now start the full NukeX GUI through `menu.py`; Linux retains
-its verified `--tg` Qt-terminal launch. The activity log identifies the mode.
-macOS is not supported. Windows qualification remains pending. The visible
-diagnostic reached the Neat 6.1.3 editor after Nuke finished preparing frames;
-private-desktop captures and automated clicks still require a native retry.
+Normal Shotbox runtime setup installs Python Xlib. Windows opens **visible NukeX
+and Neat Video windows** on your current desktop. Keep Neat Video in front,
+unobscured and unminimized while it profiles. If you switch away, automated
+capture and clicks pause until you bring it back; the profiling timeout still
+applies. Shotbox does not move your pointer. It only captures/clicks windows
+belonging to its own Nuke process, and closes that process after completion or
+cancellation. Other Nuke sessions are excluded. Capture reads displayed client
+pixels instead of requesting an offscreen repaint. A persistently black capture
+now reports a specific error after ten seconds.
+
+Windows starts the full NukeX GUI through `menu.py`; Linux retains its private
+Xvfb display and verified `--tg` launch. The activity log identifies the mode.
+macOS is not supported. Windows qualification remains pending: the visible
+diagnostic opens Neat 6.1.3, but automated visible capture/clicks need a native retry.
 
 Before the versioned editor opens, Windows allows up to two minutes for the
 `NeatVideo6 OFX 64` loading window, without clicking or dismissing it.
@@ -310,7 +317,7 @@ windows retain the two-second settling interval. Diagnostics read Windows
 accessibility labels when native child controls expose no text. This queries
 separate toolkit instances, including Neat's `Qt5152QWindow` and Nuke's Qt 6,
 without depending on a readable screenshot. The read-only helper uses
-Windows PowerShell/.NET UI Automation on the same private desktop, with a
+Windows PowerShell/.NET UI Automation on the same desktop, with a
 four-second timeout and cancellation support. On another failure, use **Open
 Logs** and share `unexpected-dialog.json`, including its `accessibility` section.
 If accessibility is unavailable, that section records the reason; the helper

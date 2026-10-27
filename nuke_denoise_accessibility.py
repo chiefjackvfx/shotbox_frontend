@@ -12,7 +12,7 @@ from nuke_denoise_display import DenoiseCancelled
 
 
 # Windows PowerShell ships the .NET UI Automation client. Run it on this job's
-# private desktop in an owned process: provider calls can hang, so an in-process
+# desktop in an owned process: provider calls can hang, so an in-process
 # COM call or Python thread would make cancellation/cleanup unbounded.
 QUERY = r"""
 $ErrorActionPreference = 'Stop'
@@ -71,7 +71,7 @@ def read_dialog(display, hwnd):
     try:
         display._check()
         if hwnd not in {window for window, _ in display.windows()}:
-            raise RuntimeError("Dialog left the private desktop before accessibility inspection.")
+            raise RuntimeError("Dialog no longer belongs to this denoise job before accessibility inspection.")
         path.unlink(missing_ok=True)
         command = query_command(hwnd, path)
         with (display.directory / "dialog-accessibility.log").open("wb") as log:

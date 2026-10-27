@@ -67,7 +67,7 @@ class DenoiseProgress(QDialog):
                 f"Completed: {batch['completed']} · Failed: {batch['failed']} · Skipped: {batch['skipped']}"
             )
         layout.addWidget(self.batch_status)
-        self.label = QLabel("Starting hidden NukeX…", self)
+        self.label = QLabel("Starting NukeX…", self)
         self.label.setWordWrap(True)
         layout.addWidget(self.label)
         self.detail = QLabel(self)
@@ -319,6 +319,7 @@ class DenoiseController(QObject):
                   "preparing": (3, "Preparing the first frame for profiling…"),
                   "profiling": (4, "Opening Prepare Noise Profile…"),
                   "waiting_profile": (4, "Waiting for Neat Video to finish loading input frames…"),
+                  "waiting_foreground": (4, "Bring this job's Neat Video window to the front to continue…"),
                   "auto_profiling": (4, "Auto Profile is analysing the noise…"),
                   "checking_profile": (4, "Profile Check is preparing its preview…"),
                   "applying_profile": (5, "Auto Profile finished. Applying the noise profile…"),
@@ -345,11 +346,11 @@ class DenoiseController(QObject):
         if not self.busy or self._cancelled:
             return
         self._cancelled = True
-        self._debug("Cancellation requested; closing background Nuke and its private display.")
+        self._debug("Cancellation requested; closing this job's Nuke process.")
         if self.process is not None:
             (self.directory / "cancel").touch()
         if self.dialog:
-            self.dialog.set_status("Cancelling and closing background Nuke…")
+            self.dialog.set_status("Cancelling and closing this job's Nuke…")
             self.dialog.button.setEnabled(False)
 
     def _error(self, error):
@@ -375,7 +376,7 @@ class DenoiseController(QObject):
         if result.get("stage") == "complete" and (exit_code != 0 or exit_status != QProcess.ExitStatus.NormalExit):
             result = {"stage": "failed", "error": "The denoise supervisor crashed after rendering."}
         self._pending_result = result
-        self.dialog.set_status("Closing background Nuke and finishing cleanup…", step=8)
+        self.dialog.set_status("Closing this job's Nuke and finishing cleanup…", step=8)
         self._cleanup_started = time.monotonic()
         self._cleanup_children()
 

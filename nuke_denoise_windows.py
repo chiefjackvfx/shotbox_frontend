@@ -1,4 +1,4 @@
-"""Windows private desktop, targeted window messages, and owned process jobs.
+"""Windows visible/private displays, targeted messages, and owned process jobs.
 
 No desktop switching, foreground activation, global input, or administrator
 privileges are used. Win32 imports are lazy so Linux can test the adapter.
@@ -23,6 +23,10 @@ class WindowNotReady(RuntimeError):
     def __init__(self, hwnd, width, height):
         self.hwnd, self.width, self.height = int(hwnd), width, height
         super().__init__(f"Window {self.hwnd} has an empty client area ({width} x {height}).")
+
+
+class WindowNotForeground(RuntimeError):
+    pass
 
 
 class Point(C.Structure):
@@ -142,6 +146,10 @@ class WindowsAPI:
         bind(self.user, "EnumChildWindows", BOOL, HANDLE, self.callback_type, C.c_ssize_t)
         bind(self.user, "IsWindowVisible", BOOL, HANDLE)
         bind(self.user, "IsWindowEnabled", BOOL, HANDLE)
+        bind(self.user, "IsIconic", BOOL, HANDLE)
+        bind(self.user, "GetForegroundWindow", HANDLE)
+        bind(self.user, "GetAncestor", HANDLE, HANDLE, C.c_uint)
+        bind(self.user, "GetWindowThreadProcessId", DWORD, HANDLE, C.POINTER(DWORD))
         bind(self.user, "GetWindow", HANDLE, HANDLE, C.c_uint)
         bind(self.user, "GetWindowTextLengthW", C.c_int, HANDLE)
         bind(self.user, "GetWindowTextW", C.c_int, HANDLE, C.c_wchar_p, C.c_int)
@@ -176,6 +184,8 @@ class WindowsAPI:
         bind(self.gdi, "DeleteObject", BOOL, HANDLE)
         bind(self.gdi, "DeleteDC", BOOL, HANDLE)
         bind(self.gdi, "GdiFlush", BOOL)
+        bind(self.gdi, "BitBlt", BOOL, HANDLE, C.c_int, C.c_int, C.c_int, C.c_int,
+             HANDLE, C.c_int, C.c_int, DWORD)
 
     @staticmethod
     def checked(value, operation):
@@ -296,6 +306,15 @@ class WindowsAPI:
         owner = self.user.GetWindow(hwnd, 4)  # GW_OWNER
         return name.value == "#32770" or bool(owner and not self.user.IsWindowEnabled(owner))
 
+    def window_pid(self, hwnd):
+        pid = DWORD()
+        return pid.value if self.user.GetWindowThreadProcessId(hwnd, C.byref(pid)) else None
+
+    def is_foreground(self, hwnd):
+        foreground = self.user.GetForegroundWindow()
+        return bool(foreground and not self.user.IsIconic(hwnd)
+                    and self.user.GetAncestor(foreground, 2) == hwnd)  # GA_ROOT
+
     def window_details(self, hwnd):
         """Read native dialog controls without relying on offscreen painting."""
         def describe(handle):
@@ -323,7 +342,7 @@ class WindowsAPI:
         self.user.EnumChildWindows(hwnd, visit, 0)
         return details
 
-    def screenshot(self, hwnd):
+    def screenshot(self, hwnd, *, visible=False):
         import numpy as np
         rect = Rect()
         self.checked(self.user.GetClientRect(hwnd, C.byref(rect)), "GetClientRect")
@@ -340,6 +359,14 @@ class WindowsAPI:
             pixels = HANDLE()
             bitmap = self.checked(self.gdi.CreateDIBSection(screen, C.byref(info), 0, C.byref(pixels), None, 0), "CreateDIBSection")
             previous = self.checked(self.gdi.SelectObject(dc, bitmap), "SelectObject")
+            if visible:
+                # Read the displayed client pixels. Qt's WM_PRINT handlers can
+                # return success without painting, producing a black capture.
+                self.checked(self.gdi.BitBlt(dc, 0, 0, width, height, screen, 0, 0, 0x00CC0020),
+                             "Capture visible Neat Video window")  # SRCCOPY
+                self.gdi.GdiFlush()
+                raw = C.string_at(pixels, width * height * 4)
+                return np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
             # WM_PRINT draws the client and children, including a hidden desktop.
             # Unlike PrintWindow, this call has a bounded wait if Neat is hung.
             result = SIZE_T()
@@ -618,3 +645,80 @@ class WindowsDisplay(PrivateDisplay):
                     if self.desktop is not None:
                         self.api.close_desktop(self.desktop, self.original)
                         self.desktop = None
+
+
+class VisibleWindowsDisplay(WindowsDisplay):
+    """Run on the current desktop, restricted to the Nuke process we own."""
+
+    visible = True
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.number = None  # NULL lpDesktop inherits the current desktop.
+        self.waiting_foreground = False
+        self.black_since = None
+
+    def __enter__(self):
+        try:
+            self.api = self.api or WindowsAPI()
+            self.job = self.api.create_job(self.job_name)
+            self._load_templates()
+            self.notify({"stage": "debug", "source": "Display",
+                         "message": "Windows visible denoise: keep Neat Video in front while profiling."})
+            return self
+        except BaseException:
+            self.__exit__(None, None, None)
+            raise
+
+    def environment(self, base):
+        result = super().environment(base)
+        result.pop("SHOTBOX_DENOISE_DESKTOP", None)
+        return result
+
+    def windows(self):
+        if self.child is None or self.child.poll() is not None:
+            return []
+        owned = [(hwnd, title) for hwnd, title in self.api.windows(None)
+                 if self.api.window_pid(hwnd) == self.child.pid]
+        if any(title.startswith("Neat Video ") for _, title in owned):
+            self.editor_seen = True
+        return owned
+
+    def _require_owned_foreground(self, hwnd):
+        if hwnd not in {window for window, _ in self.windows()}:
+            raise RuntimeError("Neat Video window no longer belongs to this denoise process.")
+        if not self.api.is_foreground(hwnd):
+            raise WindowNotForeground("Keep this job's Neat Video window visible and in front while profiling.")
+
+    def screenshot(self, hwnd):
+        self._require_owned_foreground(hwnd)
+        pixels = self.api.screenshot(hwnd, visible=True)
+        self._require_owned_foreground(hwnd)
+        if pixels.any():
+            self.black_since = None
+        else:
+            now = time.monotonic()
+            if self.black_since is None:
+                self.black_since = now
+            elif now - self.black_since >= 10:
+                import cv2
+                cv2.imwrite(str(self.directory / "profile-window.png"), pixels)
+                raise RuntimeError("Visible Neat Video capture stayed black for 10 seconds. "
+                                   "Keep the editor on screen; see profile-window.png.")
+        return pixels
+
+    def _click(self, hwnd, point):
+        self._require_owned_foreground(hwnd)
+        self.api.click(hwnd, point)
+
+    def poll_profile(self):
+        try:
+            result = super().poll_profile()
+            self.waiting_foreground = False
+            return result
+        except WindowNotForeground as error:
+            self.ready_since = self.check_preview_since = self.black_since = None
+            if not self.waiting_foreground:
+                self.notify({"stage": "waiting_foreground", "message": str(error)})
+                self.waiting_foreground = True
+            return False

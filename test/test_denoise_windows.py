@@ -402,7 +402,7 @@ class WindowsDenoiseTests(unittest.TestCase):
     def test_accessibility_refuses_other_desktops_and_discards_stale_results(self):
         with self.display, mock.patch.dict("os.environ", {"SystemRoot": "C:/Windows"}):
             result = accessibility.read_dialog(self.display, 999)
-            self.assertIn("left the private desktop", result["error"])
+            self.assertIn("no longer belongs to this denoise job", result["error"])
             self.api.create_process.assert_not_called()
             (self.directory / "dialog-accessibility.json").write_text('{"available": true}')
             helper = mock.Mock(returncode=1)
@@ -510,7 +510,7 @@ class WindowsDenoiseTests(unittest.TestCase):
         with mock.patch.object(displays.sys, "platform", "win32"), \
                 mock.patch.object(displays.shutil, "which", side_effect=AssertionError("No X11 tools on Windows")):
             self.assertEqual(displays.discover_tools(), {})
-            self.assertIsInstance(displays.private_display(self.directory, lambda: False), windows.WindowsDisplay)
+            self.assertIsInstance(displays.private_display(self.directory, lambda: False), windows.VisibleWindowsDisplay)
 
     def test_native_64bit_structures_have_windows_layout(self):
         self.assertEqual(ctypes.sizeof(windows.Rect), 16)
@@ -870,6 +870,156 @@ class WindowsDenoiseTests(unittest.TestCase):
                         host_command("Nuke.exe", "fixture", self.directory, {})
                 self.assertIn(str(self.directory / "fixture.log"), str(caught.exception))
                 self.assertIs(caught.exception.__cause__, failure)
+
+
+class VisibleWindowsDenoiseTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(dir=app_cache.cache_directory("temp"))
+        self.addCleanup(self.temp.cleanup)
+        self.directory = Path(self.temp.name)
+        self.api = mock.Mock()
+        self.api.create_job.return_value = 123
+        self.api.windows.return_value = [(333, "Neat Video 6.1.3 Studio"), (444, "Neat Video 6.1.3 Studio")]
+        self.api.window_pid.side_effect = lambda hwnd: 101 if hwnd == 333 else 202
+        self.api.is_foreground.return_value = True
+        self.process = mock.Mock(pid=101)
+        self.process.poll.return_value = None
+        self.api.create_process.return_value = self.process
+        self.events = []
+        self.display = windows.VisibleWindowsDisplay(self.directory, lambda: False, api=self.api,
+                                                     notify=self.events.append)
+
+    canvas = WindowsDenoiseTests.canvas
+
+    def test_visible_launch_inherits_desktop_retains_owned_job_and_cleans_up(self):
+        with self.display, mock.patch("psutil.Process"), mock.patch.object(child, "record_process"):
+            environment = self.display.environment({"SHOTBOX_DENOISE_DESKTOP": "stale", "DISPLAY": ":0"})
+            self.assertNotIn("SHOTBOX_DENOISE_DESKTOP", environment)
+            self.assertNotIn("DISPLAY", environment)
+            self.assertEqual(environment["SHOTBOX_DENOISE_WINDOWS_JOB"], self.display.job_name)
+            self.assertTrue(all(isinstance(value, str) for value in environment.values()))
+            self.display.launch(["Nuke.exe"], environment, str(self.directory), mock.Mock())
+            self.assertEqual(self.api.create_process.call_args.args[1:3], (None, 123))
+            self.process.resume.assert_called_once()
+        self.api.create_desktop.assert_not_called()
+        self.api.close_desktop.assert_not_called()
+        self.api.close_job.assert_called_once_with(123)
+        self.process.wait.assert_called_once_with(timeout=5)
+        self.process.close.assert_called_once()
+
+    def test_only_live_owned_nuke_windows_can_be_captured_or_clicked(self):
+        with self.display:
+            self.assertEqual(self.display.windows(), [])
+            self.display.child = self.process
+            self.assertEqual(self.display.windows(), [(333, "Neat Video 6.1.3 Studio")])
+            for operation in (lambda: self.display.screenshot(444), lambda: self.display._click(444, (5, 5))):
+                with self.assertRaisesRegex(RuntimeError, "no longer belongs"):
+                    operation()
+            self.process.poll.return_value = 0
+            self.assertEqual(self.display.windows(), [])
+            with self.assertRaisesRegex(RuntimeError, "no longer belongs"):
+                self.display._click(333, (5, 5))
+            self.api.screenshot.assert_not_called()
+            self.api.click.assert_not_called()
+
+    def test_foreground_loss_waits_without_capture_or_input_and_resets_readiness(self):
+        with self.display:
+            self.display.child = self.process
+            self.api.is_foreground.return_value = False
+            self.display.ready_since = self.display.check_preview_since = 1
+            self.assertFalse(self.display.poll_profile())
+            self.assertFalse(self.display.poll_profile())
+            self.assertIsNone(self.display.ready_since)
+            self.assertIsNone(self.display.check_preview_since)
+            self.assertEqual(sum(event["stage"] == "waiting_foreground" for event in self.events), 1)
+            self.api.screenshot.assert_not_called()
+            self.api.click.assert_not_called()
+            self.api.is_foreground.return_value = True
+            self.api.screenshot.return_value = self.canvas("auto_profile")
+            self.assertFalse(self.display.poll_profile())
+            self.api.screenshot.assert_called_once_with(333, visible=True)
+            self.api.click.assert_called_once()
+
+    def test_focus_change_during_capture_prevents_click(self):
+        with self.display:
+            self.display.child = self.process
+            self.api.is_foreground.side_effect = [True, False]
+            self.api.screenshot.return_value = self.canvas("auto_profile")
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_not_called()
+            self.assertFalse(self.display.clicked_auto)
+
+    def test_persistently_black_capture_fails_early_without_input(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.child = self.process
+            self.api.screenshot.return_value = self.canvas()
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 19
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 20
+            with self.assertRaisesRegex(RuntimeError, "capture stayed black"):
+                self.display.poll_profile()
+            self.assertTrue((self.directory / "profile-window.png").exists())
+            self.api.click.assert_not_called()
+
+    def test_cancel_during_foreground_wait_closes_only_owned_job(self):
+        with self.assertRaises(displays.DenoiseCancelled), self.display:
+            self.display.child = self.process
+            self.api.is_foreground.return_value = False
+            self.assertFalse(self.display.poll_profile())
+            self.display.cancelled = lambda: True
+            self.display.poll_profile()
+        self.api.close_job.assert_called_once_with(123)
+        self.api.close_desktop.assert_not_called()
+
+    def test_visible_sequence_profiles_checks_and_applies_once(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.child = self.process
+            self.api.screenshot.return_value = self.canvas("auto_profile")
+            self.assertFalse(self.display.poll_profile())
+            self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "profile_check", "apply")
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 11
+            self.assertFalse(self.display.poll_profile())
+            self.assertTrue(self.display.clicked_check)
+            self.api.screenshot.return_value = self.canvas(
+                "auto_profile", "adjust_ready", "profile_check_active", "profile_check_preview", "apply")
+            clock.return_value = 12
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 13
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 14
+            self.assertTrue(self.display.poll_profile())
+            self.assertTrue(self.display.poll_profile())
+            self.assertEqual(self.api.click.call_count, 3)
+            self.assertTrue(all(call.args[0] == 333 for call in self.api.click.call_args_list))
+            self.assertTrue((self.directory / "profile-confirmed").exists())
+
+    def test_native_visible_capture_uses_bitblt_and_releases_gdi_resources(self):
+        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
+        api.user, api.gdi = mock.Mock(), mock.Mock()
+        pixels = ctypes.create_string_buffer(24)
+        def rect(hwnd, pointer):
+            value = ctypes.cast(pointer, ctypes.POINTER(windows.Rect)).contents
+            value.right, value.bottom = 3, 2
+            return True
+        def bitmap(dc, info, usage, pointer, section, offset):
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p))[0] = ctypes.addressof(pixels)
+            return 5
+        def copy(*args):
+            ctypes.memmove(pixels, bytes(range(24)), 24)
+            return True
+        api.user.GetClientRect.side_effect = rect
+        api.gdi.CreateDIBSection.side_effect = bitmap
+        api.gdi.BitBlt.side_effect = copy
+        image = api.screenshot(333, visible=True)
+        self.assertEqual(image[1, 2].tolist(), [20, 21, 22])
+        api.user.GetDC.assert_called_once_with(333)
+        api.user.SendMessageTimeoutW.assert_not_called()
+        self.assertEqual(api.gdi.BitBlt.call_args.args[-1], 0x00CC0020)
+        api.gdi.DeleteObject.assert_called_once_with(5)
+        api.gdi.DeleteDC.assert_called_once()
+        api.user.ReleaseDC.assert_called_once()
 
 
 if __name__ == "__main__":

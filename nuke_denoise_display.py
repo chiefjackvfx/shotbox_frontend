@@ -369,6 +369,6 @@ class PrivateDisplay:
 
 def private_display(directory, cancelled, tools=None, notify=None):
     if sys.platform == "win32":
-        from nuke_denoise_windows import WindowsDisplay
-        return WindowsDisplay(directory, cancelled, notify=notify)
+        from nuke_denoise_windows import VisibleWindowsDisplay
+        return VisibleWindowsDisplay(directory, cancelled, notify=notify)
     return PrivateDisplay(directory, cancelled, tools, notify=notify)
