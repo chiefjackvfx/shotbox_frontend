@@ -4,6 +4,7 @@ Never connect to the inherited DISPLAY: input is restricted to our Xvfb server.
 """
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import selectors
@@ -254,6 +255,10 @@ class PrivateDisplay:
             if title.startswith("Neat Video "):
                 if not title.startswith("Neat Video 6.1.2 "):
                     raise RuntimeError(f"Unsupported Neat Video version: {title}. Qualified version: 6.1.2.")
+                if getattr(self, "neat_title", None) != title:
+                    (self.directory / "neat-version.json").write_text(
+                        json.dumps({"version": "6.1.2", "window_title": title, "platform": sys.platform}), encoding="utf-8")
+                    self.neat_title = title
                 candidates.append(window)
             elif self._unexpected_dialog(window):
                 cv2.imwrite(str(self.directory / "unexpected-dialog.png"), self._dialog_screenshot(window))
@@ -268,6 +273,7 @@ class PrivateDisplay:
         if not self.clicked_auto:
             point = self._match(pixels, "auto_profile")
             if point:
+                cv2.imwrite(str(self.directory / "before-auto-profile.png"), pixels)
                 self._click(window, point)
                 self.clicked_auto = True
                 self.notify({"stage": "auto_profiling", "message": "Clicked Auto Profile."})
@@ -280,9 +286,10 @@ class PrivateDisplay:
             if self.ready_since is None:
                 self.ready_since = now
             if now - self.ready_since >= .3:
+                cv2.imwrite(str(self.directory / "before-apply.png"), pixels)
                 # The host refuses to save unless this fresh-profile receipt exists.
-                (self.directory / "profile-confirmed").write_text("Auto Profile completed\n", encoding="utf-8")
                 self._click(window, point)
+                (self.directory / "profile-confirmed").write_text("Auto Profile completed\n", encoding="utf-8")
                 self.applied = True
                 self.notify({"stage": "applying_profile", "message": "Fresh profile verified; clicked Apply."})
                 return True

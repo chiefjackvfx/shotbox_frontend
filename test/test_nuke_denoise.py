@@ -158,6 +158,24 @@ class DenoiseHostTests(unittest.TestCase):
                           if event["stage"] == "rendering" and "frame" in event], [1001, 1002, 1003, 1004])
         self.nuke.removeAfterFrameRender.assert_called_once()
 
+    def test_nuke_17_0_profiles_saves_and_renders_through_the_same_host(self):
+        self.nuke.NUKE_VERSION_STRING = "17.0v1"
+        self.nuke.GUI = False
+        events = self.run_host()
+        self.assertEqual(events[-1]["stage"], "complete")
+        self.assertEqual(self.saved_state, (1001, True, True))
+        self.nuke.scriptSaveAs.assert_called_once()
+
+    def test_other_nuke_major_versions_fail_before_loading_or_saving(self):
+        for version in ("16.0v1", "18.0v1"):
+            with self.subTest(version=version):
+                self.nuke.NUKE_VERSION_STRING = version
+                events = self.run_host()
+                self.assertEqual(events[-1]["stage"], "failed")
+                self.assertIn(f"found {version}", events[-1]["error"])
+                self.nuke.scriptOpen.assert_not_called()
+                self.nuke.scriptSaveAs.assert_not_called()
+
     def test_unverified_profile_never_saves_or_renders(self):
         self.noise["Prepare_Profile..."].execute = lambda: None
         events = self.run_host()
@@ -165,6 +183,14 @@ class DenoiseHostTests(unittest.TestCase):
         self.nuke.scriptSaveAs.assert_not_called()
         self.assertEqual(self.script.read_text(), "original script")
         self.assertFalse((self.directory / "renders").exists())
+
+    def test_profile_receipt_can_arrive_just_after_modal_editor_returns(self):
+        self.noise["Prepare_Profile..."].execute = lambda: None
+        with mock.patch.object(host.time, "sleep", side_effect=lambda _: self.apply_profile()) as sleep:
+            events = self.run_host()
+        sleep.assert_called_once_with(.01)
+        self.assertEqual(events[-1]["stage"], "complete")
+        self.nuke.scriptSaveAs.assert_called_once()
 
     def test_basic_nuke_mode_is_rejected_before_loading_or_saving_the_comp(self):
         self.nuke.env["nukex"] = False

@@ -107,7 +107,7 @@ Reference contracts:
 - [CPython startup-field handling](https://github.com/python/cpython/blob/3.13/Modules/_winapi.c)
 - [Foundry Qt terminal mode](https://learn.foundry.com/nuke/content/comp_environment/configuring_nuke/command_line_operations.html)
 
-132 tests passed on the Linux development machine across the denoise,
+141 tests passed on the Linux development machine across the denoise,
 Windows-adapter, detector, benchmark, dashboard, and thumbnail suites. Windows
 coverage includes 64-bit ABI/handle declarations, the actual native startup
 structure and attribute contents, atomic job assignment, restricted standard
@@ -123,23 +123,72 @@ passed after the platform split. Evidence is under the frontend cache; it is
 disposable and not committed.
 
 **Windows native qualification is pending.** Run the following from the updated
-frontend folder on the Windows machine with NukeX 17.1v2 and licensed Neat Video
+frontend folder on the Windows machine with NukeX **17.1v2** and licensed Neat Video
 6.1.2 installed:
 
 ```powershell
-.\venv\Scripts\python.exe test\denoise_windows_acceptance.py
+.\venv\Scripts\python.exe test\denoise_windows_acceptance.py --nuke "C:\Program Files\Nuke17.1v2\Nuke17.1.exe"
 ```
 
-Optionally append `--nuke "C:\path\to\Nuke17.1.exe"`. The verifier uses generated
+Adjust the executable path for a different installation directory. Without an
+explicit path, only the 17.1v2 installation under Program Files is selected;
+Settings and general executable discovery are not used. The actual running
+version must equal 17.1v2. A separate preflight verifies Nuke import, version,
+NukeX mode, and the Neat v6 node's required controls. Each stage is printed to
+the Nuke log and persisted in `preflight/startup-status.json`; failures prevent
+single and batch acceptance from starting. Exact Neat 6.1.2 is checked from the
+editor title during profiling and recorded in each job's `neat-version.json`.
+
+The verifier uses generated
 512×512 footage and scripts under `.cache/temp` only. It runs single-job
 profiling, saving, rendering, fresh reopen, cancellation before/after saving,
-forced supervisor-crash cleanup, and two sequential batch clips. All produced
+application-shutdown cleanup, forced supervisor-crash cleanup, and two successful
+batch clips with a deliberately broken middle clip. The latter must fail without
+changing its script or producing frames, and the final clip must still complete.
+An expected batch summary of two completed and one failed is an overall PASS.
+All produced
 EXRs are checked for full dimensions and finite pixels. It emits a combined
 `verification.json` and console log under `.cache/temp/denoise-windows-verification-*`.
 Even fixture/reopen Nuke processes use owned private desktops and jobs; their
 launch does not rebind a verification thread that already owns Qt windows.
 The final gate is a successful native report and correct behavior of the
 installed Windows Neat Video controls, including capture on an inactive desktop.
+Profile jobs retain `before-auto-profile.png`, `before-apply.png`, and the latest
+`profile-window.png`; unexpected dialogs retain their own capture. Failed Apply
+message delivery must not leave a fresh-profile confirmation receipt.
+The host allows up to one second for the receipt after the modal editor returns,
+so successful Apply delivery cannot race the supervisor's receipt write.
+
+After automated PASS, configure Settings with the same 17.1v2 executable and use
+a disposable test job to check the shot-card Denoise action and toolbar Denoise
+button. Check responsive progress, output renders, cancellation, and shutdown
+without desktop switching or pointer movement. The verifier does not change
+Settings or exercise the dashboard's actual menus; its report explicitly marks
+these manual entry-point checks pending. Both checks are required for native
+Windows qualification. No Windows-native PASS has been obtained here.
+
+The host accepts Nuke 17 minor releases rather than requiring exactly 17.1v2.
+A follow-up native run with NukeX 17.0v1 on Linux passed profiling, saving,
+rendering, fresh-process reopen, cancellation before/after saving, and supervisor
+crash cleanup using generated footage only. Evidence:
+`.cache/temp/denoise-verification-8oavm2a1/verification.json`. These earlier 17.0
+results do not count toward the Windows 17.1v2 target. Tests reject other major versions
+before opening or saving the comp.
+
+The verifier prints the selected executable. Fixture/reopen failures include
+the actual Nuke log path and last 40 lines, including on Windows, rather than
+showing only a child exit status. Timeout failures report the log too; logs are
+read after process and file cleanup. This is needed to distinguish an absent
+plugin, a license error, a startup exception, or a later profiling failure.
+
+The 27 October 2026 follow-up passed native Linux NukeX 17.1v2 single acceptance
+including real controller shutdown during profiling, with an unchanged script
+and completed cleanup. Its report is
+`.cache/temp/denoise-verification-qrjgm7p6/verification.json`.
+The three-clip failure-continuation batch completed in 19.454 seconds
+with six finite full-resolution EXRs and 777 Qt timer ticks. Its report is
+`.cache/temp/denoise-batch-acceptance-6ql69cu5/acceptance.json`. These are Linux
+results; Windows capture and control recognition still require native evidence.
 
 ## User-supplied test comp
 

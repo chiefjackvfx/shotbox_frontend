@@ -6,9 +6,18 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T09:35:56+00:00] Added staged NukeX 17.1v2 Windows qualification checks.
+- [2026-10-27T09:35:56+00:00] Added native shutdown and batch failure-continuation acceptance.
+- [2026-10-26T22:24:32+00:00] Added Nuke 17.0 and verifier failure regression coverage.
+
 ### Changed
 
 ### Fixed
+
+- [2026-10-27T09:35:56+00:00] Prevented Windows qualification selecting other Nuke versions.
+- [2026-10-27T09:35:56+00:00] Prevented failed Apply clicks leaving profile confirmation receipts.
+- [2026-10-26T22:24:32+00:00] Allowed Nuke 17.0 denoise without exact-version restrictions.
+- [2026-10-26T22:24:32+00:00] Show actual Nuke startup errors in verification output.
 
 ## 5.2.0 - 2026-10-26
 

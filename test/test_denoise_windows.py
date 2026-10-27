@@ -76,6 +76,21 @@ class WindowsDenoiseTests(unittest.TestCase):
                 clock.return_value = 10.9
                 self.assertTrue(self.display.poll_profile())
 
+    def test_failed_apply_click_does_not_leave_a_profile_receipt(self):
+        with self.display:
+            self.display.clicked_auto = True
+            self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "apply")
+            with mock.patch.object(displays.time, "monotonic", return_value=10) as clock:
+                self.assertFalse(self.display.poll_profile())
+                clock.return_value = 10.4
+                self.api.click.side_effect = OSError("Apply message failed")
+                with self.assertRaisesRegex(OSError, "Apply message failed"):
+                    self.display.poll_profile()
+            self.assertFalse((self.directory / "profile-confirmed").exists())
+            self.assertTrue((self.directory / "before-apply.png").is_file())
+            neat = json.loads((self.directory / "neat-version.json").read_text())
+            self.assertEqual(neat["version"], "6.1.2")
+
     def test_rejects_handles_outside_private_desktop_without_sending_input(self):
         with self.display:
             with self.assertRaisesRegex(RuntimeError, "left the private desktop"):
@@ -358,6 +373,8 @@ class WindowsDenoiseTests(unittest.TestCase):
         with mock.patch.object(app_cache, "CACHE_ROOT", self.directory / "cache"), \
                 mock.patch.object(sys, "platform", "win32"), \
                 mock.patch("platform.platform", return_value="Windows test"), \
+                mock.patch("test.denoise_windows_acceptance.resolve_executable", return_value="Nuke.exe"), \
+                mock.patch("test.denoise_windows_acceptance.preflight", return_value={"nuke": "17.1v2", "stage": "complete"}), \
                 mock.patch("test.denoise_acceptance.acceptance", return_value={"frames": 3}) as single, \
                 mock.patch("test.denoise_batch_acceptance.acceptance", return_value={"completed": 2}) as batch, \
                 redirect_stdout(io.StringIO()):
@@ -365,10 +382,82 @@ class WindowsDenoiseTests(unittest.TestCase):
             single.side_effect = RuntimeError("Window capture failed")
             self.assertFalse(verify("Nuke.exe")["success"])
             batch.assert_called_once()
+            single.assert_called_with("Nuke.exe", expected_version="17.1v2")
+            batch.assert_called_with("Nuke.exe", expected_version="17.1v2", include_failure=True)
         reports = [json.loads(path.read_text()) for path in (self.directory / "cache/temp").glob("*/verification.json")]
         self.assertEqual(sorted(report["success"] for report in reports), [False, True])
         failed = next(report for report in reports if not report["success"])
         self.assertEqual(failed["error"], "Window capture failed")
+        self.assertEqual(failed["stage"], "single")
+
+    def test_windows_verifier_selects_only_target_installation(self):
+        from test.denoise_windows_acceptance import resolve_executable
+        older = self.directory / "Nuke17.0v1/Nuke17.0.exe"
+        older.parent.mkdir()
+        older.touch()
+        with mock.patch.dict("os.environ", {"ProgramFiles": str(self.directory)}):
+            with self.assertRaisesRegex(RuntimeError, "17.1v2 executable not found"):
+                resolve_executable()
+            target = self.directory / "Nuke17.1v2/Nuke17.1.exe"
+            target.parent.mkdir()
+            target.touch()
+            self.assertEqual(resolve_executable(), str(target.resolve()))
+
+    def test_startup_probe_records_version_license_and_plugin_failures(self):
+        from test.denoise_acceptance import startup_probe
+        noise = mock.Mock()
+        noise.Class.return_value = "OFXcom.absoft.NeatVideo6_v6"
+        nuke = SimpleNamespace(NUKE_VERSION_STRING="17.0v1", env={"nukex": True}, createNode=mock.Mock(return_value=noise))
+        with mock.patch.dict(sys.modules, {"nuke": nuke}), redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, "Expected NukeX 17.1v2"):
+                startup_probe(self.directory, "17.1v2")
+            status = json.loads((self.directory / "startup-status.json").read_text())
+            self.assertEqual(status["stage"], "nuke_version")
+            nuke.createNode.assert_not_called()
+            nuke.NUKE_VERSION_STRING = "17.1v2"
+            nuke.env["nukex"] = False
+            with self.assertRaisesRegex(RuntimeError, "NukeX mode is unavailable"):
+                startup_probe(self.directory, "17.1v2")
+            status = json.loads((self.directory / "startup-status.json").read_text())
+            self.assertEqual(status["stage"], "nukex_license")
+            nuke.env["nukex"] = True
+            nuke.createNode.side_effect = RuntimeError("Plugin not found")
+            with self.assertRaisesRegex(RuntimeError, "Plugin not found"):
+                startup_probe(self.directory, "17.1v2")
+            status = json.loads((self.directory / "startup-status.json").read_text())
+            self.assertEqual(status["stage"], "neat_plugin")
+            self.assertEqual(status["error"], "Plugin not found")
+            nuke.createNode.side_effect = None
+            self.assertIs(startup_probe(self.directory, "17.1v2"), noise)
+            status = json.loads((self.directory / "startup-status.json").read_text())
+            self.assertEqual(status["stage"], "complete")
+            self.assertEqual(status["completed"], ["import_nuke", "nuke_version", "nukex_license", "neat_plugin"])
+
+    def test_preflight_failure_prevents_single_and_batch_jobs(self):
+        from test.denoise_windows_acceptance import verify
+        with mock.patch.object(app_cache, "CACHE_ROOT", self.directory / "cache"), \
+                mock.patch.object(sys, "platform", "win32"), \
+                mock.patch("platform.platform", return_value="Windows test"), \
+                mock.patch("test.denoise_windows_acceptance.resolve_executable", return_value="Nuke.exe"), \
+                mock.patch("test.denoise_windows_acceptance.preflight", side_effect=RuntimeError("Plugin not found")), \
+                mock.patch("test.denoise_acceptance.acceptance") as single, \
+                mock.patch("test.denoise_batch_acceptance.acceptance") as batch, redirect_stdout(io.StringIO()):
+            report = verify()
+        self.assertFalse(report["success"])
+        self.assertEqual(report["stage"], "preflight")
+        single.assert_not_called()
+        batch.assert_not_called()
+
+    def test_missing_target_executable_still_produces_a_failed_report(self):
+        from test.denoise_windows_acceptance import verify
+        with mock.patch.object(app_cache, "CACHE_ROOT", self.directory / "cache"), \
+                mock.patch.object(sys, "platform", "win32"), \
+                mock.patch("platform.platform", return_value="Windows test"), redirect_stdout(io.StringIO()):
+            report = verify(str(self.directory / "missing.exe"))
+        self.assertFalse(report["success"])
+        self.assertEqual(report["stage"], "executable_selection")
+        self.assertIn("17.1v2 executable not found", report["error"])
+        self.assertTrue(list((self.directory / "cache/temp").glob("*/verification.json")))
 
     def test_native_fixture_launcher_does_not_move_existing_qt_thread(self):
         from test.denoise_acceptance import host_command
@@ -383,6 +472,19 @@ class WindowsDenoiseTests(unittest.TestCase):
         self.assertFalse(constructor.call_args.kwargs["attach"])
         display.launch.assert_called_once()
         run.assert_not_called()
+
+    def test_fixture_exit_and_timeout_show_actual_nuke_log_in_verifier_error(self):
+        from test.denoise_acceptance import host_command
+        for failure in (subprocess.CalledProcessError(1, ["Nuke.exe"]), subprocess.TimeoutExpired(["Nuke.exe"], 90)):
+            with self.subTest(failure=type(failure).__name__):
+                def fail(command, **kwargs):
+                    kwargs["stdout"].write(b"Nuke startup\nRuntimeError: fixture plugin could not load\n")
+                    raise failure
+                with mock.patch.object(sys, "platform", "linux"), mock.patch.object(subprocess, "run", side_effect=fail):
+                    with self.assertRaisesRegex(RuntimeError, "fixture plugin could not load") as caught:
+                        host_command("Nuke.exe", "fixture", self.directory, {})
+                self.assertIn(str(self.directory / "fixture.log"), str(caught.exception))
+                self.assertIs(caught.exception.__cause__, failure)
 
 
 if __name__ == "__main__":

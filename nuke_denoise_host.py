@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import time
 import traceback
 
 
@@ -66,8 +67,8 @@ def start(request_path):
         autosave = None
         autosave_value = None
         try:
-            if nuke.NUKE_VERSION_STRING != "17.1v2" or (not nuke.GUI and not request.get("qt_terminal")):
-                raise RuntimeError("Hidden denoise requires Nuke 17.1v2 with Qt.")
+            if not str(nuke.NUKE_VERSION_STRING).startswith("17.") or (not nuke.GUI and not request.get("qt_terminal")):
+                raise RuntimeError(f"Hidden denoise requires Nuke 17 with Qt; found {nuke.NUKE_VERSION_STRING}.")
             if request.get("qt_terminal") and not isinstance(qt_application, QtWidgets.QApplication):
                 raise RuntimeError("Qt terminal denoise requires a QApplication.")
             if not nuke.env.get("nukex"):
@@ -104,7 +105,15 @@ def start(request_path):
             event("profiling", first=first, last=last, frame=(first + last) // 2,
                   width=noise.width(), height=noise.height())
             noise["Prepare_Profile..."].execute()
-            if not (directory / "profile-confirmed").is_file():
+            receipt = directory / "profile-confirmed"
+            # The modal editor can return before the supervisor records its
+            # successful Apply message. Allow that receipt to arrive, bounded.
+            deadline = time.monotonic() + 1
+            while not receipt.is_file() and time.monotonic() < deadline:
+                if (directory / "cancel").exists():
+                    break
+                time.sleep(.01)
+            if not receipt.is_file():
                 raise RuntimeError("Neat Video closed without a verified fresh Auto Profile result.")
             unchanged()
             root.setFrame(saved_frame)

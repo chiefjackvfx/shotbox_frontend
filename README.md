@@ -256,8 +256,9 @@ The lock monitor identifies supervised denoise workers from their job records
 and excludes them from editing-session detection. Normal Nuke sessions keep
 their existing lock checks.
 
-The target combination is **NukeX 17.1v2 + Neat Video 6.1.2**, with the English
-Neat Video controls at normal scaling. Linux is qualified with native tests;
+The target combination is **NukeX 17 + Neat Video 6.1.2**, with the English
+Neat Video controls at normal scaling. Nuke 17.0v1 and 17.1v2 are qualified on
+Linux with native tests;
 the Windows backend is implemented and awaiting native verification. Configure
 the Nuke executable in Settings.
 NukeX and Neat Video must already be installed and licensed. Background Nuke
@@ -290,19 +291,30 @@ Neat Video window. No desktop switching or global mouse/keyboard input is used.
 Xvfb, Openbox, Xlib, and administrator access are not required. Both the toolbar
 button and shot-card action are enabled on Windows; macOS remains disabled.
 
-To verify the real Windows workflow, open PowerShell in the updated frontend
-folder and run:
+To verify the real Windows workflow on **NukeX 17.1v2 / Neat Video 6.1.2**,
+open Command Prompt or PowerShell in the updated frontend folder and run:
 
 ```powershell
-.\venv\Scripts\python.exe test\denoise_windows_acceptance.py
+.\venv\Scripts\python.exe test\denoise_windows_acceptance.py --nuke "C:\Program Files\Nuke17.1v2\Nuke17.1.exe"
 ```
 
-The command uses the Nuke path from Settings or automatic discovery; pass
-`--nuke "C:\path\to\Nuke17.1.exe"` to select it explicitly. It generates test clips
-under `.cache/temp`, checks profiling, rendering, cancellation, crash cleanup,
-and two queued clips, and prints PASS/FAIL plus a report path. It does not use
+Adjust the path if installed elsewhere. Without `--nuke`, this verifier checks
+only `%ProgramFiles%\Nuke17.1v2\Nuke17.1.exe`; it never falls back to 17.0 or
+Settings. The running version is checked before creating the test scene.
+It reports startup stages for Nuke import, version, NukeX mode, and Neat plugin
+loading, then generates test clips under `.cache/temp`. It checks profiling,
+rendering, cancellation, application shutdown, crash cleanup, and two successful
+queued clips with an intentionally failing clip between them. The expected batch
+summary is two completed and one failed; the overall verifier must print PASS.
+The command prints PASS/FAIL plus a report path. It does not use
 production shot scripts or contact the database. Windows qualification remains
 pending until this command passes on Windows with the installed Neat Video UI.
+Fixture/reopen failures print the Nuke log path and its last 40 lines so plugin,
+license, or startup errors are visible directly in the verification output.
+Set ShotBox's Nuke executable in Settings to the same 17.1v2 path before checking
+the shot-card action and toolbar button with disposable test shots. The verifier
+does not change Settings. Its report marks these UI checks as pending; native
+automated PASS and both UI checks are required for Windows qualification.
 
 The nonmodal progress window shows the current action, eight workflow steps,
 elapsed time, and a timestamped activity history. Profiling shows the frame and
