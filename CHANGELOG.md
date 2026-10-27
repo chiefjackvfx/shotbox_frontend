@@ -6,16 +6,25 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-27T14:18:35+00:00] Add Windows Profile Check step before applying denoise profiles.
-- [2026-10-27T14:18:35+00:00] Test loading waits, ordered profiling clicks, and preview readiness.
-
 ### Changed
-
-- [2026-10-27T14:18:35+00:00] Accept Windows Neat 6.1.3; document remaining native verification.
 
 ### Fixed
 
-- [2026-10-27T14:18:35+00:00] Allow Windows input preparation to finish before reporting dialog failures.
+## 5.2.9 - 2026-10-27
+
+### Added
+
+- Add Windows Profile Check step before applying denoise profiles.
+- Test loading waits, ordered profiling clicks, and preview readiness.
+
+### Changed
+
+- Accept Windows Neat 6.1.3; document remaining native verification.
+
+### Fixed
+
+- Allow Windows input preparation to finish before reporting dialog failures.
+
 ## 5.2.8 - 2026-10-27
 
 ### Added
