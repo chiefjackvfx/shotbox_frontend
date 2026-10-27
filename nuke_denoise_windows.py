@@ -28,6 +28,10 @@ class WindowObscured(RuntimeError):
     pass
 
 
+class HiddenProfilingUnavailable(RuntimeError):
+    pass
+
+
 class Point(C.Structure):
     _fields_ = [("x", LONG), ("y", LONG)]
 
@@ -185,6 +189,7 @@ class WindowsAPI:
         bind(self.user, "SendMessageTimeoutW", C.c_ssize_t, HANDLE, C.c_uint, SIZE_T, C.c_ssize_t,
              C.c_uint, C.c_uint, C.POINTER(SIZE_T))
         bind(self.user, "PostMessageW", BOOL, HANDLE, C.c_uint, SIZE_T, C.c_ssize_t)
+        bind(self.user, "MapVirtualKeyW", C.c_uint, C.c_uint, C.c_uint)
         bind(self.user, "ChildWindowFromPointEx", HANDLE, HANDLE, Point, C.c_uint)
         bind(self.user, "MapWindowPoints", C.c_int, HANDLE, HANDLE, C.POINTER(Point), C.c_uint)
         bind(self.kernel, "GetCurrentThreadId", DWORD)
@@ -371,6 +376,21 @@ class WindowsAPI:
                 self.user.SendInput(1, C.byref(release), C.sizeof(Input))
             raise RuntimeError(f"Windows accepted {sent}/2 Neat Video keyboard events.")
         return {"key": int(key), "events_sent": int(sent)}
+
+    def post_key(self, hwnd, key):
+        """Address only a window on the owned private desktop; no global input."""
+        if not self.ready_for_key(hwnd):
+            raise WindowObscured("Waiting for the hidden Neat editor to become responsive.")
+        scan = self.user.MapVirtualKeyW(key, 0)
+        if not scan:
+            raise RuntimeError(f"Could not map hidden Neat hotkey {key}.")
+        down = 1 | ((scan & 0xFF) << 16)
+        # Inform the private Qt window of activation/focus so its window-scoped
+        # shortcuts can dispatch. This never switches the interactive desktop.
+        for message, value, data in ((0x0006, 1, 0), (0x0007, 0, 0),
+                                      (0x0100, key, down), (0x0101, key, down | 0xC0000000)):
+            self.checked(self.user.PostMessageW(hwnd, message, value, data), "Post hidden Neat hotkey")
+        return {"key": int(key), "events_posted": 4, "scan_code": int(scan)}
 
     def point_is_visible(self, hwnd, point):
         """Hit-test the intended client coordinate without activating any window."""
@@ -759,6 +779,7 @@ class VisibleWindowsDisplay(WindowsDisplay):
         self.number = None  # NULL lpDesktop inherits the current desktop.
         self.waiting_visible = False
         self.black_since = None
+        self.capture_reported = False
         self.original_dpi_context = None
         self.keyboard_window = None
         self.editor_ready_since = None
@@ -852,6 +873,7 @@ class VisibleWindowsDisplay(WindowsDisplay):
         if not self.api.ready_for_key(window):
             self.editor_ready_since = None
             return False
+
         if self.editor_ready_since is None:
             self.editor_ready_since = now
         if now - self.editor_ready_since < 1:
@@ -901,3 +923,53 @@ class VisibleWindowsDisplay(WindowsDisplay):
                 self.notify({"stage": "waiting_visible", "message": str(error)})
                 self.waiting_visible = True
             return False
+
+
+class HiddenWindowsDisplay(VisibleWindowsDisplay):
+    """Experimental keyboard profiling on an isolated, non-input desktop."""
+
+    visible = False
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.number = "ShotBoxDenoise_" + uuid.uuid4().hex
+        self.hidden_started = None
+
+    def __enter__(self):
+        try:
+            return WindowsDisplay.__enter__(self)
+        except DenoiseCancelled:
+            raise
+        except Exception as error:
+            raise HiddenProfilingUnavailable(f"Hidden denoise unavailable: {error}") from error
+
+    def environment(self, base):
+        return WindowsDisplay.environment(self, base)
+
+    def windows(self):
+        if self.child is None or self.child.poll() is not None:
+            return []
+        owned = [(hwnd, title) for hwnd, title in self.api.windows(self.desktop)
+                 if self.api.window_pid(hwnd) == self.child.pid]
+        if any(title.startswith("Neat Video ") for _, title in owned):
+            self.editor_seen = True
+        return owned
+
+    def _send_key(self, hwnd, key):
+        self._require_owned_visible(hwnd)
+        self._check()
+        try:
+            details = self.api.post_key(hwnd, key)
+        except OSError as error:
+            raise HiddenProfilingUnavailable(f"Hidden denoise unavailable: {error}") from error
+        with (self.directory / "keyboard-input.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({**details, "window": int(hwnd), "method": "PostMessage"}) + "\n")
+
+    def _poll_profile(self):
+        self._check()
+        now = time.monotonic()
+        if self.hidden_started is None:
+            self.hidden_started = now
+        if not self.applied and now - self.hidden_started >= 90:
+            raise HiddenProfilingUnavailable("Hidden denoise unavailable: profiling did not finish within 90 seconds.")
+        return super()._poll_profile()

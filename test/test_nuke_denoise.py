@@ -415,6 +415,19 @@ class DenoiseHostTests(unittest.TestCase):
         self.assertFalse((self.directory / "original.nk").exists())
         self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
 
+    def test_parent_attempt_cancellation_is_checked_before_rendering(self):
+        cancel_path = self.directory / "parent-cancel"
+        request = json.loads(self.request.read_text())
+        request["cancel_path"] = str(cancel_path)
+        self.request.write_text(json.dumps(request))
+        def cancel():
+            self.apply_profile()
+            cancel_path.touch()
+        self.noise["Prepare_Profile..."].execute = cancel
+        events = self.run_host()
+        self.assertIn("cancelled before rendering", events[-1]["error"])
+        self.nuke.scriptSaveAs.assert_not_called()
+
     def test_saved_comp_requests_are_rejected_before_launch_or_host_loading(self):
         request = json.loads(self.request.read_text())
         request.pop("workflow")

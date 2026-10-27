@@ -86,6 +86,13 @@ class TemplateTests(unittest.TestCase):
                 request = json.loads(template.create_template_request(directory, self.media, "/nuke").read_text())
                 self.assertEqual(request["qt_terminal"], qt_terminal)
                 self.assertTrue(request["topdown"])
+                self.assertEqual(request.get("windows_display"), "hidden" if platform == "win32" else None)
+
+    def test_windows_display_can_be_forced_visible(self):
+        with mock.patch.object(template.sys, "platform", "win32"), \
+                mock.patch.dict(template.os.environ, {"SHOTBOX_DENOISE_WINDOWS_DISPLAY": "visible"}):
+            request = json.loads(template.create_template_request(self.root, self.media, "/nuke").read_text())
+        self.assertEqual(request["windows_display"], "visible")
 
     def test_overwrite_defaults_to_latest_and_new_versions_are_distinct(self):
         first = template.output_directory(self.media)

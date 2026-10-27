@@ -6,10 +6,16 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T16:34:26+00:00] Add hidden Windows profiling with direct F2/Enter messages.
+- [2026-10-27T16:34:26+00:00] Test hidden key dispatch and visible fallback lifecycle.
+
 ### Changed
+
+- [2026-10-27T16:34:26+00:00] Try hidden Windows denoise before the working visible method.
 
 ### Fixed
 
+- [2026-10-27T16:34:26+00:00] Preserve cancellation and profile metadata across Windows denoise attempts.
 ## 5.2.13 - 2026-10-27
 
 ### Added

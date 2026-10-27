@@ -293,31 +293,35 @@ sudo dnf install xorg-x11-server-Xvfb openbox
 sudo apt install xvfb openbox
 ```
 
-Normal Shotbox runtime setup installs Python Xlib. Windows opens **visible NukeX
-and Neat Video windows** on your current desktop. Once the owned Neat editor is
-visible and responsive, Shotbox activates it and sends **F2** for Auto Profile.
-It waits at least five seconds, then sends **Enter** to apply. If Neat is still
-working, Enter is retried at five-second intervals while the editor is
-responsive. Unexpected dialogs stop the sequence. The overall profiling timeout
-still applies.
+Normal Shotbox runtime setup installs Python Xlib. Windows now **tries a hidden
+private desktop first**. Nuke and Neat still create GUI windows, but they are
+isolated from your displayed desktop. F2 and Enter are posted directly to the
+owned Neat window, without screen matching, global keyboard injection or a
+desktop switch. This is an experimental hidden GUI workflow, not a Neat CLI API.
 
-Keep this job's Neat editor available and leave the keyboard alone during
-profiling. Hotkeys are sent only when that editor owns foreground focus and no
-modifier keys are held. The worker does not find or click button images and
-skips Profile Check. Your normal Windows display scaling, including 150%, can
-remain in place. The activity log identifies F2 and Enter; `keyboard-input.jsonl`
-records sent keys.
+The host must confirm committed profile/settings data before rendering. If the
+hidden editor does not finish profiling within 90 seconds, posted input fails,
+a hidden warning appears, or the editor closes without a committed profile,
+Shotbox closes that attempt and retries once using the **working visible
+F2/Enter method**. Source errors and failures after profile confirmation are not
+retried. Cancel prevents fallback. A successful hidden attempt keeps rendering
+on its private desktop.
 
-After Enter closes the editor, the host checks that Neat committed changed
-profile/settings data before saving the cached profile and rendering. Cancelling
-or closing without changed settings fails the job. Shotbox closes its owned
-Nuke process after completion or cancellation; other Nuke sessions are excluded.
-Windows starts the full NukeX GUI through `menu.py`; Linux retains its private
+The activity log identifies hidden mode and any visible fallback. Attempt logs
+live under `hidden-attempt` and `visible-attempt` in the job's cache folder;
+`attempts.json` records outcomes and `keyboard-input.jsonl` records the transport
+inside each attempt. The final `profiled.nk`, media metadata and profile receipt
+are also retained at the normal job root. All files stay under `.cache/temp`.
+
+To force the known visible method, set `SHOTBOX_DENOISE_WINDOWS_DISPLAY=visible`
+in the environment used to launch Shotbox. Default is `hidden`. In visible mode,
+keep Neat active and leave the keyboard alone for F2/Enter. Your Windows display
+scaling, including 150%, can remain unchanged. Profile Check is skipped.
+
+Visible Windows F2/Enter profiling and rendering were confirmed working by the
+user. The hidden transport and automatic fallback pass mocked regressions;
+live hidden Windows operation remains unverified. Linux retains its private
 Xvfb display and verified `--tg` launch. macOS is not supported.
-
-The F2/Enter sequence and host confirmation passed a native Linux test using
-Neat 6.1.2, including one rendered EXR. F2 followed by Escape left stored settings
-unchanged. Native Windows hotkey delivery and rendering remain unverified.
 
 Before the versioned editor opens, Windows allows up to two minutes for the
 `NeatVideo6 OFX 64` loading window, without clicking or dismissing it.

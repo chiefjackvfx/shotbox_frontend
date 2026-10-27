@@ -315,6 +315,8 @@ class DenoiseController(QObject):
         if self._cancelled:
             return
         labels = {"starting": (1, "Starting NukeX and loading plugins…"),
+                  "display_mode": (1, event.get("message", "Starting Windows denoise…")),
+                  "display_fallback": (1, "Hidden profiling did not complete. Retrying visibly…"),
                   "loading": (2, "Loading the denoise template and source…"),
                   "preparing": (3, "Preparing the first frame for profiling…"),
                   "profiling": (4, "Opening Prepare Noise Profile…"),

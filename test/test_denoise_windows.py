@@ -693,6 +693,9 @@ class WindowsDenoiseTests(unittest.TestCase):
         source.write_text("source")
         with mock.patch.object(sys, "platform", "win32"):
             request = supervisor.create_request(self.directory, {"source": str(source), "shot_dir": str(self.directory), "shot_name": "test"}, "C:/Program Files/Nuke/Nuke.exe")
+        values = json.loads(request.read_text())
+        values["windows_display"] = "visible"
+        request.write_text(json.dumps(values))
         display = mock.Mock(number="private-desktop")
         display.environment.side_effect = lambda base: {**base, "QT_QPA_PLATFORM": "windows"}
         context = mock.MagicMock()

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import signal
 import shlex
+import shutil
 import sys
 import time
 
@@ -67,7 +68,7 @@ def forward_nuke_output(path, offset, notify, *, final=False):
 
 
 @app_cache.temporary_cache_task
-def run(request_path, notify=emit):
+def _run_once(request_path, notify=emit):
     path = Path(request_path).resolve()
     directory = path.parent
     request = json.loads(path.read_text(encoding="utf-8"))
@@ -78,7 +79,8 @@ def run(request_path, notify=emit):
         cancelled_by_signal = True
 
     def cancelled():
-        return cancelled_by_signal or (directory / "cancel").exists()
+        return (cancelled_by_signal or (directory / "cancel").exists()
+                or bool(request.get("cancel_path") and Path(request["cancel_path"]).exists()))
 
     old_handlers = {sig: signal.signal(sig, cancel) for sig in (signal.SIGTERM, signal.SIGINT)}
     nuke = None
@@ -88,7 +90,10 @@ def run(request_path, notify=emit):
         if request.get("workflow") != "template":
             raise RuntimeError("Denoise requires a template-based media request.")
         tools = discover_tools()
-        with app_cache.temporary_cache_lease(), private_display(directory, cancelled, tools, notify=notify) as display:
+        display_options = {"notify": notify}
+        if sys.platform == "win32":
+            display_options["mode"] = request.get("windows_display", "visible")
+        with app_cache.temporary_cache_lease(), private_display(directory, cancelled, tools, **display_options) as display:
             startup = directory / "startup"
             startup.mkdir()
             host = str(Path(__file__).with_name("nuke_denoise_host.py"))
@@ -181,6 +186,59 @@ def run(request_path, notify=emit):
     (directory / "result.json").write_text(json.dumps(terminal, indent=2), encoding="utf-8")
     notify(terminal)
     return terminal
+
+
+@app_cache.temporary_cache_task
+def run(request_path, notify=emit):
+    path = Path(request_path).resolve()
+    request = json.loads(path.read_text(encoding="utf-8"))
+    if sys.platform != "win32" or request.get("windows_display") != "hidden":
+        return _run_once(path, notify=notify)
+    directory = path.parent
+    attempts = []
+    with app_cache.temporary_cache_lease():
+        for mode in ("hidden", "visible"):
+            if (directory / "cancel").exists():
+                result = {"stage": "cancelled", "error": "Denoise cancelled.", "profiled": False}
+                break
+            attempt_dir = directory / (mode + "-attempt")
+            attempt_dir.mkdir()
+            script = attempt_dir / "template.nk"
+            shutil.copy2(request["script"], script)
+            attempt = {**request, "script": str(script), "windows_display": mode,
+                       "cancel_path": str(directory / "cancel")}
+            attempt_path = attempt_dir / "request.json"
+            attempt_path.write_text(json.dumps(attempt, indent=2), encoding="utf-8")
+            notify({"stage": "display_mode", "message": f"Trying {mode} Windows denoise.", "mode": mode})
+
+            def relay(event):
+                # The first attempt's failure is not the overall job result.
+                if event["stage"] not in {"complete", "failed", "cancelled"}:
+                    notify(event)
+
+            result = _run_once(attempt_path, notify=relay)
+            attempts.append({"mode": mode, **result})
+            (directory / "attempts.json").write_text(json.dumps(attempts, indent=2), encoding="utf-8")
+            reason = result.get("error", "")
+            retryable = (reason.startswith("Hidden denoise unavailable:")
+                         or reason.startswith("Unexpected dialog during denoise:")
+                         or "closed without a verified fresh Auto Profile" in reason
+                         or "timed out while profiling" in reason)
+            if (mode != "hidden" or result["stage"] != "failed" or not retryable
+                    or result.get("profiled") or (attempt_dir / "profile-confirmed").exists()):
+                break
+            notify({"stage": "display_fallback", "message": "Hidden profiling did not complete; retrying visibly.",
+                    "reason": reason})
+        completed_dir = result.get("directory")
+        if completed_dir:
+            for name in ("profiled.nk", "media.json", "neat-version.json", "profile-confirmed", "host-events.jsonl"):
+                source = Path(completed_dir) / name
+                if source.is_file():
+                    shutil.copy2(source, directory / name)
+        result = {**result, "attempt_directory": completed_dir, "directory": str(directory)}
+        (directory / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+        notify(result)
+        return result
 
 
 if __name__ == "__main__":

@@ -127,6 +127,11 @@ def create_template_request(directory, media, executable):
                "qt_terminal": sys.platform != "win32", "topdown": True,
                "profile_method": "keyboard" if sys.platform == "win32" else "visual"}
     path = directory / "request.json"
+    if sys.platform == "win32":
+        mode = os.environ.get("SHOTBOX_DENOISE_WINDOWS_DISPLAY", "hidden").strip().lower()
+        if mode not in {"hidden", "visible"}:
+            raise RuntimeError("SHOTBOX_DENOISE_WINDOWS_DISPLAY must be hidden or visible.")
+        request["windows_display"] = mode
     path.write_text(json.dumps(request, indent=2), encoding="utf-8")
     return path
 

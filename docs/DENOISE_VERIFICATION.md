@@ -262,6 +262,40 @@ host confirmation, unchanged/cancelled settings, lifecycle and screenshot
 reference tests. The references are retained for prior visual-workflow tests;
 normal Windows profiling now uses hotkeys.
 
+## Hidden Windows trial
+
+The user confirmed the visible Windows F2/Enter workflow successfully profiles
+and renders. Normal Windows requests now try a private desktop first, with an
+explicit `windows_display=hidden` field. Set
+`SHOTBOX_DENOISE_WINDOWS_DISPLAY=visible` to retain the known visible method.
+
+Hidden mode creates an owned desktop/process job, uses the same F2/Enter state
+machine, and posts WM_ACTIVATE, WM_SETFOCUS, WM_KEYDOWN and WM_KEYUP only to
+Neat windows belonging to that job's Nuke process. Key messages include scan
+codes and key-release flags. It does not use SendInput, SetForegroundWindow,
+screen matching or SwitchDesktop. Whether Neat's Qt 5 shortcuts accept these
+messages on an inactive Windows desktop remains a native test requirement.
+
+Before rendering, the host still requires changed committed ClipParams after
+Enter. Hidden profiling has a 90-second bound. A hidden input/setup failure,
+profiling timeout, unexpected modal or uncommitted editor exit can retry once
+visibly. Source failures are not retried. A profile receipt or `profiled=true`
+prevents fallback, including failures later in rendering. Cancel is shared by
+both the supervisor and host and prevents a visible retry.
+
+Each attempt gets a separate cache subdirectory and owned-process cleanup;
+`attempts.json` records results. The final profile and metadata are copied to
+the normal job root for existing reopen/acceptance tools. A hidden failure is
+not emitted as the final job failure before a permitted visible retry.
+
+Mocked tests cover hidden key ordering without foreground calls or captures,
+scan/key-release fields, PID restrictions, timeout, cancellation, independent
+fallback files, committed-profile guards, warning fallback and single final
+result emission. The prior 136-test focused suite passed, followed by focused
+configuration and warning-fallback checks. No native hidden Windows PASS is
+claimed. The next user run must establish hidden success or record the visible
+fallback via the activity log and attempt reports.
+
 ## Recorded Linux results
 
 Earlier Linux template runs on 27 October 2026 verified dimensions, pixel

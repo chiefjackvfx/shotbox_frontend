@@ -61,7 +61,8 @@ def start(request_path):
     def unchanged():
         if hashlib.sha256(script.read_bytes()).hexdigest() != request["sha256"]:
             raise RuntimeError("The working template changed while denoise was running.")
-        if (directory / "cancel").exists():
+        if ((directory / "cancel").exists()
+                or bool(request.get("cancel_path") and Path(request["cancel_path"]).exists())):
             raise RuntimeError("Denoise cancelled before rendering.")
 
     def run():
@@ -115,7 +116,8 @@ def start(request_path):
             # successful Apply message. Allow that receipt to arrive, bounded.
             deadline = time.monotonic() + 1
             while not receipt.is_file() and time.monotonic() < deadline:
-                if (directory / "cancel").exists():
+                if ((directory / "cancel").exists()
+                        or bool(request.get("cancel_path") and Path(request["cancel_path"]).exists())):
                     break
                 if keyboard_profile and (directory / "keyboard-apply-pending").is_file():
                     after_profile = noise["ClipParams"].toScript()

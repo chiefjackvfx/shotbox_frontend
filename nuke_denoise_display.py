@@ -373,8 +373,12 @@ class PrivateDisplay:
             log.close()
 
 
-def private_display(directory, cancelled, tools=None, notify=None):
+def private_display(directory, cancelled, tools=None, notify=None, *, mode="visible"):
     if sys.platform == "win32":
-        from nuke_denoise_windows import VisibleWindowsDisplay
+        from nuke_denoise_windows import HiddenWindowsDisplay, VisibleWindowsDisplay
+        if mode == "hidden":
+            return HiddenWindowsDisplay(directory, cancelled, notify=notify)
+        if mode != "visible":
+            raise RuntimeError(f"Unknown Windows denoise display mode: {mode}")
         return VisibleWindowsDisplay(directory, cancelled, notify=notify)
     return PrivateDisplay(directory, cancelled, tools, notify=notify)
