@@ -154,7 +154,7 @@ to be visible and not minimized; ownership and visibility are checked again
 after capture. Before input, ClientToScreen and WindowFromPoint verify that the
 matched button's screen point belongs to the same editor's window hierarchy.
 Other Nuke dialogs are rejected too. Covered controls reset readiness and show
-a progress message. No desktop switching or global mouse input is used. A continuously black capture
+a progress message. No desktop switching is used. A continuously black capture
 fails after ten seconds. Keep Neat unobscured during the Windows retry.
 
 Mocked regressions verify current-desktop launch without desktop creation or
@@ -172,6 +172,35 @@ including negative monitor coordinates, other-window rejection and invalid
 points. All 107 focused Windows, host and UI tests passed after this change.
 Live Windows delivery remains pending; the screenshot alone does not prove
 whether the recognised control would have accepted the earlier input method.
+
+The user subsequently reported a UHD Windows monitor at **150% scaling**.
+Visible workers now enter per-monitor-v2 DPI awareness before capture or launch
+and restore the previous thread context during cleanup, including failed
+startup. This makes coordinate APIs use physical pixels across DPI settings.
+Windows screenshot resampling tests alone did not exercise live DPI
+virtualization. The relevant API contract is documented by
+[Microsoft](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setthreaddpiawarenesscontext).
+
+Visible clicks now use SendInput rather than posted window messages. Each
+recognised point is ownership/visibility checked, converted with ClientToScreen,
+and normalized over the physical virtual desktop before a move/down/up input
+batch. The pointer moves to the button. An activation request is best effort;
+it does not replace the visibility check. Negative monitor origins are
+supported. Failed or partial batches raise an error; a partial mouse-down batch
+also attempts release. The isolated private test adapter keeps its posted input.
+
+The activity log distinguishes locating Auto Profile, finding it and sending
+the click. Accepted input events are not treated as proof that Neat responded:
+the existing profile/preview readiness checks still gate subsequent steps.
+`window-dpi.json`, `control-recognition.json`, and `mouse-input.jsonl` record
+capture/DPI, recognition scores and accepted input coordinates, respectively.
+The target window DPI can differ from monitor DPI for DPI-unaware applications.
+
+Mocked checks cover 64-bit INPUT layout, UHD coordinate normalization without
+double scaling, negative monitor origins, occlusion, offscreen points, partial
+input release and DPI restoration. Native Windows response at 150% remains
+pending. These changes do not establish that DPI virtualization was the sole
+cause of the reported lack of clicks.
 
 ## Windows screenshot recognition
 
@@ -265,8 +294,9 @@ shot. Set Nuke's executable to 17.1v2. Run the shot-card action without an
 existing comp, choose Overwrite, then Version up. Run job-wide Denoise
 and confirm all unique clips including the hidden shot. Check each output version
 contains EXRs with no generated `.nk`. Verify cancel and application shutdown
-leave no worker processes, do not switch desktops or move the foreground
-pointer. Record both entry-point results with the automated report.
+leave no worker processes and do not switch desktops. For Windows, verify that
+the pointer moves only to recognised, uncovered controls of the owned Neat
+window. Record both entry-point results with the automated report.
 
 ## Qualification boundary
 

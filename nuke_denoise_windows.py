@@ -1,7 +1,6 @@
-"""Windows visible/private displays, targeted messages, and owned process jobs.
+"""Windows displays and owned jobs; visible workers use real mouse input.
 
-No desktop switching, foreground activation, global input, or administrator
-privileges are used. Win32 imports are lazy so Linux can test the adapter.
+Win32 imports are lazy so Linux can test the adapter.
 """
 from __future__ import annotations
 
@@ -35,6 +34,19 @@ class Point(C.Structure):
 
 class Rect(C.Structure):
     _fields_ = [(name, LONG) for name in ("left", "top", "right", "bottom")]
+
+
+class MouseInput(C.Structure):
+    _fields_ = [("dx", LONG), ("dy", LONG), ("data", DWORD), ("flags", DWORD),
+                ("time", DWORD), ("extra", SIZE_T)]
+
+
+class InputData(C.Union):
+    _fields_ = [("mouse", MouseInput)]
+
+
+class Input(C.Structure):
+    _fields_ = [("type", DWORD), ("data", InputData)]
 
 
 class BitmapInfo(C.Structure):
@@ -149,6 +161,11 @@ class WindowsAPI:
         bind(self.user, "IsIconic", BOOL, HANDLE)
         bind(self.user, "ClientToScreen", BOOL, HANDLE, C.POINTER(Point))
         bind(self.user, "WindowFromPoint", HANDLE, Point)
+        bind(self.user, "SetThreadDpiAwarenessContext", HANDLE, HANDLE)
+        bind(self.user, "GetDpiForWindow", C.c_uint, HANDLE)
+        bind(self.user, "GetSystemMetrics", C.c_int, C.c_int)
+        bind(self.user, "SetForegroundWindow", BOOL, HANDLE)
+        bind(self.user, "SendInput", C.c_uint, C.c_uint, C.POINTER(Input), C.c_int)
         bind(self.user, "GetAncestor", HANDLE, HANDLE, C.c_uint)
         bind(self.user, "GetWindowThreadProcessId", DWORD, HANDLE, C.POINTER(DWORD))
         bind(self.user, "GetWindow", HANDLE, HANDLE, C.c_uint)
@@ -314,6 +331,12 @@ class WindowsAPI:
     def is_viewable(self, hwnd):
         return bool(self.user.IsWindowVisible(hwnd) and not self.user.IsIconic(hwnd))
 
+    def set_dpi_context(self, context):
+        return self.checked(self.user.SetThreadDpiAwarenessContext(context), "Set denoise DPI awareness")
+
+    def window_dpi(self, hwnd):
+        return int(self.user.GetDpiForWindow(hwnd))
+
     def point_is_visible(self, hwnd, point):
         """Hit-test the intended client coordinate without activating any window."""
         rect = Rect()
@@ -424,6 +447,36 @@ class WindowsAPI:
         coordinates = (int(location.x) & 0xFFFF) | ((int(location.y) & 0xFFFF) << 16)
         for message, buttons in ((0x0200, 0), (0x0201, 1), (0x0202, 0)):
             self.checked(self.user.PostMessageW(target, message, buttons, coordinates), "Click Neat Video control")
+
+    def mouse_click(self, hwnd, point):
+        """Deliver an actual mouse click using physical pixels on the virtual desktop."""
+        if not self.is_viewable(hwnd) or not self.point_is_visible(hwnd, point):
+            raise WindowObscured("Uncover this job's Neat Video controls to continue profiling.")
+        self.user.SetForegroundWindow(hwnd)  # Best effort; the real click can activate it too.
+        if not self.point_is_visible(hwnd, point):
+            raise WindowObscured("Neat Video's control became covered before clicking.")
+        location = Point(*point)
+        self.checked(self.user.ClientToScreen(hwnd, C.byref(location)), "Locate Neat Video control")
+        left, top, width, height = [self.user.GetSystemMetrics(index) for index in (76, 77, 78, 79)]
+        if width <= 1 or height <= 1 or not (left <= location.x < left + width and top <= location.y < top + height):
+            raise WindowObscured("Move Neat Video's controls onto a visible monitor to continue.")
+        x = round((location.x - left) * 65535 / (width - 1))
+        y = round((location.y - top) * 65535 / (height - 1))
+        events = (Input * 3)()
+        events[0].data.mouse = MouseInput(x, y, 0, 0xC001, 0, 0)  # MOVE | ABSOLUTE | VIRTUALDESK
+        events[1].data.mouse.flags = 0x0002  # LEFTDOWN
+        events[2].data.mouse.flags = 0x0004  # LEFTUP
+        sent = self.user.SendInput(3, events, C.sizeof(Input))
+        if sent != 3:
+            if sent == 2:
+                # A partial insert must not leave the physical mouse held down.
+                release = Input()
+                release.data.mouse.flags = 0x0004
+                self.user.SendInput(1, C.byref(release), C.sizeof(Input))
+            raise RuntimeError(f"Windows accepted {sent}/3 Neat Video mouse events. "
+                               "Run Shotbox and Nuke at the same Windows privilege level.")
+        return {"client_point": list(point), "screen_point": [location.x, location.y],
+                "virtual_desktop": [left, top, width, height], "events_sent": int(sent)}
 
 
 class WindowsDisplay(PrivateDisplay):
@@ -671,6 +724,11 @@ class VisibleWindowsDisplay(WindowsDisplay):
         self.number = None  # NULL lpDesktop inherits the current desktop.
         self.waiting_visible = False
         self.black_since = None
+        self.original_dpi_context = None
+        self.input_sequence = 0
+        self.reported_controls = set()
+        self.recognition_logged_at = None
+        self.capture_reported = False
 
     def _load_templates(self):
         from nuke_denoise_controls import WindowsControlMatcher
@@ -680,21 +738,37 @@ class VisibleWindowsDisplay(WindowsDisplay):
     def _match(self, pixels, name):
         previous_scale = self.control_matcher.scale
         point = self.control_matcher.match(pixels, name)
+        now = time.monotonic()
+        if self.recognition_logged_at is None or now - self.recognition_logged_at >= 5:
+            report = {"capture_size": [pixels.shape[1], pixels.shape[0]],
+                      "coordinate_mode": "per-monitor-v2 physical pixels",
+                      "scale": self.control_matcher.scale, "controls": self.control_matcher.diagnostics}
+            (self.directory / "control-recognition.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+            self.recognition_logged_at = now
+        if name == "auto_profile" and name not in self.reported_controls:
+            self.notify({"stage": "locating_auto_profile", "message": "Editor captured; locating Auto Profile."})
+            self.reported_controls.add(name)
         if previous_scale is None and self.control_matcher.scale is not None:
             details = {"reference": "Windows Neat Video 6.1.3", "scale": self.control_matcher.scale,
                        "capture_size": [pixels.shape[1], pixels.shape[0]]}
             (self.directory / "control-scale.json").write_text(json.dumps(details, indent=2), encoding="utf-8")
             self.notify({"stage": "debug", "source": "Display",
                          "message": "Windows control recognition calibrated: " + json.dumps(details)})
+        if name == "auto_profile" and point and "auto_found" not in self.reported_controls:
+            self.notify({"stage": "auto_profile_found", "message": "Auto Profile located; sending mouse click."})
+            self.reported_controls.add("auto_found")
         return point
 
     def __enter__(self):
         try:
             self.api = self.api or WindowsAPI()
+            # All capture, hit testing and input coordinates use physical pixels,
+            # including on a UHD monitor scaled to 150% or across mixed-DPI monitors.
+            self.original_dpi_context = self.api.set_dpi_context(-4)  # PER_MONITOR_AWARE_V2
             self.job = self.api.create_job(self.job_name)
             self._load_templates()
             self.notify({"stage": "debug", "source": "Display",
-                         "message": "Windows visible denoise: keep Neat Video controls uncovered while profiling."})
+                         "message": "Windows visible denoise: per-monitor DPI awareness; real mouse clicks."})
             return self
         except BaseException:
             self.__exit__(None, None, None)
@@ -724,6 +798,13 @@ class VisibleWindowsDisplay(WindowsDisplay):
         self._require_owned_visible(hwnd)
         pixels = self.api.screenshot(hwnd, visible=True)
         self._require_owned_visible(hwnd)
+        if not self.capture_reported:
+            report = {"window": int(hwnd), "window_dpi": self.api.window_dpi(hwnd),
+                      "capture_size": [pixels.shape[1], pixels.shape[0]],
+                      "coordinate_mode": "per-monitor-v2 physical pixels", "input_method": "SendInput"}
+            (self.directory / "window-dpi.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+            self.notify({"stage": "debug", "source": "Display", "message": "Visible capture: " + json.dumps(report)})
+            self.capture_reported = True
         if pixels.any():
             self.black_since = None
         else:
@@ -741,7 +822,22 @@ class VisibleWindowsDisplay(WindowsDisplay):
         self._require_owned_visible(hwnd)
         if not self.api.point_is_visible(hwnd, point):
             raise WindowObscured("Uncover this job's Neat Video controls to continue profiling.")
-        self.api.click(hwnd, point)
+        self._check()
+        details = self.api.mouse_click(hwnd, point)
+        self.input_sequence += 1
+        details = {**details, "window": int(hwnd), "window_dpi": self.api.window_dpi(hwnd),
+                   "method": "SendInput", "sequence": self.input_sequence}
+        with (self.directory / "mouse-input.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(details) + "\n")
+        self.notify({"stage": "debug", "source": "Display", "message": "Mouse input: " + json.dumps(details)})
+
+    def __exit__(self, *args):
+        try:
+            super().__exit__(*args)
+        finally:
+            original, self.original_dpi_context = self.original_dpi_context, None
+            if original is not None:
+                self.api.set_dpi_context(original)
 
     def poll_profile(self):
         try:

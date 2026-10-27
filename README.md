@@ -298,8 +298,9 @@ and Neat Video windows** on your current desktop. Keep Neat Video's controls
 uncovered and the window unminimized while it profiles. Keyboard focus may be
 in another window. Before each click, Shotbox checks that the screen point
 belongs to its Neat editor; covered controls pause the sequence until uncovered.
-The profiling timeout still applies. Shotbox does not move your pointer.
-It only captures/clicks windows
+The profiling timeout still applies. During profiling, Shotbox briefly moves the
+Windows pointer to each recognised button and sends a real mouse click. Leave
+the pointer alone while Auto Profile, Profile Check and Apply run. It only captures/clicks windows
 belonging to its own Nuke process, and closes that process after completion or
 cancellation. Other Nuke sessions are excluded. Capture reads displayed client
 pixels instead of requesting an offscreen repaint. A persistently black capture
@@ -316,6 +317,13 @@ Preview are compared against captured disabled states; Profile Check must be
 selected before its preview can permit Apply. Calibration is recorded in
 `control-scale.json`. The three supplied Windows states pass screenshot replay
 at multiple scales; live Windows automation still needs verification.
+
+The visible worker uses per-monitor DPI awareness so capture, hit testing and
+clicks share physical-pixel coordinates, including at 150% Windows scaling on
+UHD displays. Keep your normal display scaling. The activity log distinguishes
+locating Auto Profile from sending its click. `window-dpi.json` records the
+capture size and target window DPI; `control-recognition.json` records match
+scores; `mouse-input.jsonl` records accepted mouse events and screen coordinates.
 
 Before the versioned editor opens, Windows allows up to two minutes for the
 `NeatVideo6 OFX 64` loading window, without clicking or dismissing it.

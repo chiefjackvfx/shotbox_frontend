@@ -320,7 +320,9 @@ class DenoiseController(QObject):
                   "profiling": (4, "Opening Prepare Noise Profile…"),
                   "waiting_profile": (4, "Waiting for Neat Video to finish loading input frames…"),
                   "waiting_visible": (4, "Restore or uncover this job's Neat Video controls to continue…"),
-                  "auto_profiling": (4, "Auto Profile is analysing the noise…"),
+                  "locating_auto_profile": (4, "Neat Video is visible. Locating Auto Profile…"),
+                  "auto_profile_found": (4, "Auto Profile found. Sending the mouse click…"),
+                  "auto_profiling": (4, "Auto Profile click sent. Waiting for profiling to finish…"),
                   "checking_profile": (4, "Profile Check is preparing its preview…"),
                   "applying_profile": (5, "Auto Profile finished. Applying the noise profile…"),
                   "profile_ready": (6, "Noise profile cached. Starting denoised output…")}

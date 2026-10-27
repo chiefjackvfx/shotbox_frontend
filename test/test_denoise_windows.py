@@ -517,6 +517,8 @@ class WindowsDenoiseTests(unittest.TestCase):
         self.assertEqual(ctypes.sizeof(windows.Point), 8)
         self.assertEqual(ctypes.sizeof(windows.BitmapInfo), 44)
         if ctypes.sizeof(ctypes.c_void_p) == 8:
+            self.assertEqual(ctypes.sizeof(windows.MouseInput), 32)
+            self.assertEqual(ctypes.sizeof(windows.Input), 40)
             self.assertEqual(ctypes.sizeof(windows.BasicLimits), 64)
             self.assertEqual(ctypes.sizeof(windows.ExtendedLimits), 144)
             self.assertEqual(ctypes.sizeof(windows.StartupInfo), 104)
@@ -883,6 +885,9 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
         self.api.window_pid.side_effect = lambda hwnd: 101 if hwnd == 333 else 202
         self.api.is_viewable.return_value = True
         self.api.point_is_visible.return_value = True
+        self.api.mouse_click.return_value = {"events_sent": 3}
+        self.api.window_dpi.return_value = 144
+        self.api.set_dpi_context.return_value = 0x100000005
         self.process = mock.Mock(pid=101)
         self.process.poll.return_value = None
         self.api.create_process.return_value = self.process
@@ -908,6 +913,9 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
         self.process.wait.assert_called_once_with(timeout=5)
         self.process.close.assert_called_once()
 
+        self.assertEqual(self.api.set_dpi_context.call_args_list,
+                         [mock.call(-4), mock.call(0x100000005)])
+
     def test_only_live_owned_nuke_windows_can_be_captured_or_clicked(self):
         with self.display:
             self.assertEqual(self.display.windows(), [])
@@ -921,7 +929,15 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "no longer belongs"):
                 self.display._click(333, (5, 5))
             self.api.screenshot.assert_not_called()
-            self.api.click.assert_not_called()
+            self.api.mouse_click.assert_not_called()
+
+    def test_failed_visible_startup_restores_previous_thread_dpi(self):
+        self.api.create_job.side_effect = RuntimeError("Cannot create job")
+        with self.assertRaisesRegex(RuntimeError, "Cannot create job"):
+            self.display.__enter__()
+        self.assertEqual(self.api.set_dpi_context.call_args_list,
+                         [mock.call(-4), mock.call(0x100000005)])
+        self.api.close_job.assert_not_called()
 
     def test_minimized_window_waits_without_capture_or_input_and_resets_readiness(self):
         with self.display:
@@ -934,12 +950,12 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             self.assertIsNone(self.display.check_preview_since)
             self.assertEqual(sum(event["stage"] == "waiting_visible" for event in self.events), 1)
             self.api.screenshot.assert_not_called()
-            self.api.click.assert_not_called()
+            self.api.mouse_click.assert_not_called()
             self.api.is_viewable.return_value = True
             self.api.screenshot.return_value = self.canvas("auto_profile")
             self.assertFalse(self.display.poll_profile())
             self.api.screenshot.assert_called_once_with(333, visible=True)
-            self.api.click.assert_called_once()
+            self.api.mouse_click.assert_called_once()
 
     def test_minimizing_during_capture_prevents_click(self):
         with self.display:
@@ -947,7 +963,7 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             self.api.is_viewable.side_effect = [True, False]
             self.api.screenshot.return_value = self.canvas("auto_profile")
             self.assertFalse(self.display.poll_profile())
-            self.api.click.assert_not_called()
+            self.api.mouse_click.assert_not_called()
             self.assertFalse(self.display.clicked_auto)
 
     def test_persistently_black_capture_fails_early_without_input(self):
@@ -961,7 +977,7 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "capture stayed black"):
                 self.display.poll_profile()
             self.assertTrue((self.directory / "profile-window.png").exists())
-            self.api.click.assert_not_called()
+            self.api.mouse_click.assert_not_called()
 
     def test_cancel_during_visibility_wait_closes_only_owned_job(self):
         with self.assertRaises(displays.DenoiseCancelled), self.display:
@@ -979,8 +995,8 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             self.api.is_foreground.side_effect = AssertionError("Foreground ownership must not gate visible controls")
             self.api.screenshot.return_value = self.canvas("auto_profile")
             self.assertFalse(self.display.poll_profile())
-            self.api.click.assert_called_once()
-            self.api.point_is_visible.assert_called_once_with(333, self.api.click.call_args.args[1])
+            self.api.mouse_click.assert_called_once()
+            self.api.point_is_visible.assert_called_once_with(333, self.api.mouse_click.call_args.args[1])
             self.assertTrue(self.display.clicked_auto)
 
     def test_covered_control_waits_and_retries_without_advancing(self):
@@ -991,11 +1007,11 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             self.assertFalse(self.display.poll_profile())
             self.assertFalse(self.display.poll_profile())
             self.assertFalse(self.display.clicked_auto)
-            self.api.click.assert_not_called()
+            self.api.mouse_click.assert_not_called()
             self.assertEqual(sum(event["stage"] == "waiting_visible" for event in self.events), 1)
             self.api.point_is_visible.return_value = True
             self.assertFalse(self.display.poll_profile())
-            self.api.click.assert_called_once()
+            self.api.mouse_click.assert_called_once()
             self.assertTrue(self.display.clicked_auto)
 
     def test_hit_test_converts_client_coordinates_and_rejects_other_windows(self):
@@ -1051,9 +1067,14 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             clock.return_value = 14
             self.assertTrue(self.display.poll_profile())
             self.assertTrue(self.display.poll_profile())
-            self.assertEqual(self.api.click.call_count, 3)
-            self.assertTrue(all(call.args[0] == 333 for call in self.api.click.call_args_list))
+            self.assertEqual(self.api.mouse_click.call_count, 3)
+            self.assertTrue(all(call.args[0] == 333 for call in self.api.mouse_click.call_args_list))
             self.assertTrue((self.directory / "profile-confirmed").exists())
+            receipt = [json.loads(line) for line in (self.directory / "mouse-input.jsonl").read_text().splitlines()]
+            self.assertEqual([entry["sequence"] for entry in receipt], [1, 2, 3])
+            self.assertTrue(all(entry["method"] == "SendInput" and entry["window_dpi"] == 144 for entry in receipt))
+            self.assertTrue((self.directory / "control-recognition.json").exists())
+            self.assertEqual(json.loads((self.directory / "window-dpi.json").read_text())["window_dpi"], 144)
 
     def test_native_visible_capture_uses_bitblt_and_releases_gdi_resources(self):
         api = windows.WindowsAPI.__new__(windows.WindowsAPI)
@@ -1080,6 +1101,73 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
         api.gdi.DeleteObject.assert_called_once_with(5)
         api.gdi.DeleteDC.assert_called_once()
         api.user.ReleaseDC.assert_called_once()
+
+
+class WindowsMouseInputTests(unittest.TestCase):
+    def setUp(self):
+        self.api = windows.WindowsAPI.__new__(windows.WindowsAPI)
+        self.api.user = mock.Mock()
+        self.api.is_viewable = mock.Mock(return_value=True)
+        self.api.point_is_visible = mock.Mock(return_value=True)
+        self.api.user.GetSystemMetrics.side_effect = {76: 0, 77: 0, 78: 3840, 79: 2160}.get
+        self.api.user.SendInput.return_value = 3
+        def convert(hwnd, pointer):
+            point = ctypes.cast(pointer, ctypes.POINTER(windows.Point)).contents
+            point.x += 960
+            point.y += 240
+            return True
+        self.api.user.ClientToScreen.side_effect = convert
+
+    def test_real_click_maps_physical_pixels_on_uhd_display_without_extra_scaling(self):
+        details = self.api.mouse_click(333, (300, 150))
+        self.assertEqual(details["screen_point"], [1260, 390])
+        count, events, size = self.api.user.SendInput.call_args.args
+        self.assertEqual(count, 3)
+        self.assertEqual(size, ctypes.sizeof(windows.Input))
+        self.assertEqual(events[0].type, 0)
+        self.assertEqual(events[0].data.mouse.dx, round(1260 * 65535 / 3839))
+        self.assertEqual(events[0].data.mouse.dy, round(390 * 65535 / 2159))
+        self.assertEqual([item.data.mouse.flags for item in events], [0xC001, 2, 4])
+        self.api.user.PostMessageW.assert_not_called()
+
+    def test_virtual_desktop_supports_monitor_left_of_primary(self):
+        self.api.user.GetSystemMetrics.side_effect = {76: -3840, 77: 0, 78: 7680, 79: 2160}.get
+        def convert(hwnd, pointer):
+            point = ctypes.cast(pointer, ctypes.POINTER(windows.Point)).contents
+            point.x, point.y = -2000, 500
+            return True
+        self.api.user.ClientToScreen.side_effect = convert
+        details = self.api.mouse_click(333, (300, 150))
+        self.assertEqual(details["screen_point"], [-2000, 500])
+        events = self.api.user.SendInput.call_args.args[1]
+        self.assertEqual(events[0].data.mouse.dx, round(1840 * 65535 / 7679))
+
+    def test_partial_send_releases_mouse_before_reporting_failure(self):
+        self.api.user.SendInput.side_effect = [2, 1]
+        with self.assertRaisesRegex(RuntimeError, "accepted 2/3"):
+            self.api.mouse_click(333, (300, 150))
+        count, pointer, size = self.api.user.SendInput.call_args.args
+        self.assertEqual(count, 1)
+        event = ctypes.cast(pointer, ctypes.POINTER(windows.Input)).contents
+        self.assertEqual(event.data.mouse.flags, 4)
+
+    def test_zero_events_is_failure_without_claiming_a_click(self):
+        self.api.user.SendInput.return_value = 0
+        with self.assertRaisesRegex(RuntimeError, "accepted 0/3"):
+            self.api.mouse_click(333, (300, 150))
+        self.api.user.SendInput.assert_called_once()
+
+    def test_occlusion_after_activation_prevents_real_input(self):
+        self.api.point_is_visible.side_effect = [True, False]
+        with self.assertRaises(windows.WindowObscured):
+            self.api.mouse_click(333, (300, 150))
+        self.api.user.SendInput.assert_not_called()
+
+    def test_offscreen_coordinates_prevent_real_input(self):
+        self.api.user.GetSystemMetrics.side_effect = {76: 0, 77: 0, 78: 800, 79: 600}.get
+        with self.assertRaises(windows.WindowObscured):
+            self.api.mouse_click(333, (300, 150))
+        self.api.user.SendInput.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ class WindowsControlMatcher:
         self.scale = None
         self.frame = None
         self.results = {}
+        self.diagnostics = {}
         self.resized = {}
 
     def _template(self, name, scale):
@@ -57,6 +58,7 @@ class WindowsControlMatcher:
     def match(self, pixels, name):
         if self.frame is not pixels:
             self.frame, self.results = pixels, {}
+            self.diagnostics = {}
         if name in self.results:
             return self.results[name]
         offset = round(pixels.shape[0] * .88) if name == "apply" else 0
@@ -71,6 +73,7 @@ class WindowsControlMatcher:
             if refined and refined[0] < best[0]:
                 best = refined
         result = None
+        other = None
         threshold = .025 if name == "profile_check_preview" else self.threshold
         if best and best[0] <= threshold:
             score, (x, y), scale, w, h = best
@@ -86,4 +89,8 @@ class WindowsControlMatcher:
                 if name == "auto_profile" and self.scale is None:
                     self.scale = scale
         self.results[name] = result
+        self.diagnostics[name] = {"matched": result is not None, "point": result,
+                                  "score": best[0] if best else None, "threshold": threshold,
+                                  "candidate_scale": best[2] if best else None,
+                                  "alternative_score": other}
         return result
