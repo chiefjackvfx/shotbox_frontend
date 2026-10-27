@@ -107,6 +107,8 @@ def start(request_path):
             noise.sample("red", noise.width() / 2, noise.height() / 2, noise.width(), noise.height())
             event("profiling", first=first, last=last, frame=first,
                   width=noise.width(), height=noise.height())
+            keyboard_profile = request.get("profile_method") == "keyboard"
+            before_profile = noise["ClipParams"].toScript() if keyboard_profile else None
             noise["Prepare_Profile..."].execute()
             receipt = directory / "profile-confirmed"
             # The modal editor can return before the supervisor records its
@@ -115,6 +117,12 @@ def start(request_path):
             while not receipt.is_file() and time.monotonic() < deadline:
                 if (directory / "cancel").exists():
                     break
+                if keyboard_profile and (directory / "keyboard-apply-pending").is_file():
+                    after_profile = noise["ClipParams"].toScript()
+                    if after_profile and after_profile != before_profile:
+                        receipt.write_text("F2 profiling committed after Enter\n", encoding="utf-8")
+                        event("keyboard_profile_applied", message="Neat committed changed settings after F2 and Enter.")
+                        break
                 time.sleep(.01)
             if not receipt.is_file():
                 raise RuntimeError("Neat Video closed without a verified fresh Auto Profile result.")

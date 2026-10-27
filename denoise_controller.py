@@ -323,6 +323,8 @@ class DenoiseController(QObject):
                   "locating_auto_profile": (4, "Neat Video is visible. Locating Auto Profile…"),
                   "auto_profile_found": (4, "Auto Profile found. Sending the mouse click…"),
                   "auto_profiling": (4, "Auto Profile click sent. Waiting for profiling to finish…"),
+                  "keyboard_auto_profiling": (4, "F2 sent. Waiting for Auto Profile to finish…"),
+                  "keyboard_applying_profile": (5, "Enter sent. Waiting for Neat Video to close…"),
                   "checking_profile": (4, "Profile Check is preparing its preview…"),
                   "applying_profile": (5, "Auto Profile finished. Applying the noise profile…"),
                   "profile_ready": (6, "Noise profile cached. Starting denoised output…")}

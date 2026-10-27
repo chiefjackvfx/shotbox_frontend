@@ -266,8 +266,8 @@ frames and unreadable media produce per-clip errors. The shot's input-colourspac
 selection uses the same mapping as previews; defaults are ACEScg for EXR and
 sRGB for other inputs. The template's OCIO configuration and Neat filter settings
 are retained. Every clip evaluates its first frame and performs fresh
-**Auto Profile → Apply** before rendering. Windows additionally selects
-**Profile Check** and waits for its preview before Apply. Only `Write1` renders, without a display
+**Auto Profile → Apply** before rendering. Windows uses **F2 → Enter**
+in the visible Neat editor. Only `Write1` renders, without a display
 transform. Existing editing locks are neither acquired nor released.
 
 Job-wide denoise includes unique originals per shot across all timelines,
@@ -294,43 +294,34 @@ sudo apt install xvfb openbox
 ```
 
 Normal Shotbox runtime setup installs Python Xlib. Windows opens **visible NukeX
-and Neat Video windows** on your current desktop. Keep Neat Video's controls
-uncovered and the window unminimized while it profiles. Keyboard focus may be
-in another window. Before each click, Shotbox checks that the screen point
-belongs to its Neat editor; covered controls pause the sequence until uncovered.
-The profiling timeout still applies. During profiling, Shotbox briefly moves the
-Windows pointer to each recognised button and sends a real mouse click. Leave
-the pointer alone while Auto Profile, Profile Check and Apply run. It only captures/clicks windows
-belonging to its own Nuke process, and closes that process after completion or
-cancellation. Other Nuke sessions are excluded. Capture reads displayed client
-pixels instead of requesting an offscreen repaint. A persistently black capture
-now reports a specific error after ten seconds.
+and Neat Video windows** on your current desktop. Once the owned Neat editor is
+visible and responsive, Shotbox activates it and sends **F2** for Auto Profile.
+It waits at least five seconds, then sends **Enter** to apply. If Neat is still
+working, Enter is retried at five-second intervals while the editor is
+responsive. Unexpected dialogs stop the sequence. The overall profiling timeout
+still applies.
 
+Keep this job's Neat editor available and leave the keyboard alone during
+profiling. Hotkeys are sent only when that editor owns foreground focus and no
+modifier keys are held. The worker does not find or click button images and
+skips Profile Check. Your normal Windows display scaling, including 150%, can
+remain in place. The activity log identifies F2 and Enter; `keyboard-input.jsonl`
+records sent keys.
+
+After Enter closes the editor, the host checks that Neat committed changed
+profile/settings data before saving the cached profile and rendering. Cancelling
+or closing without changed settings fails the job. Shotbox closes its owned
+Nuke process after completion or cancellation; other Nuke sessions are excluded.
 Windows starts the full NukeX GUI through `menu.py`; Linux retains its private
-Xvfb display and verified `--tg` launch. The activity log identifies the mode.
-macOS is not supported. Windows qualification remains pending: the visible
-diagnostic opens Neat 6.1.3, but automated visible capture/clicks need a native retry.
+Xvfb display and verified `--tg` launch. macOS is not supported.
 
-Visible Windows jobs now use control references captured from Windows Neat
-6.1.3, with scale calibration from Auto Profile. Enabled Apply and Adjust and
-Preview are compared against captured disabled states; Profile Check must be
-selected before its preview can permit Apply. Calibration is recorded in
-`control-scale.json`. The three supplied Windows states pass screenshot replay
-at multiple scales; live Windows automation still needs verification.
-
-The visible worker uses per-monitor DPI awareness so capture, hit testing and
-clicks share physical-pixel coordinates, including at 150% Windows scaling on
-UHD displays. Keep your normal display scaling. The activity log distinguishes
-locating Auto Profile from sending its click. `window-dpi.json` records the
-capture size and target window DPI; `control-recognition.json` records match
-scores; `mouse-input.jsonl` records accepted mouse events and screen coordinates.
+The F2/Enter sequence and host confirmation passed a native Linux test using
+Neat 6.1.2, including one rendered EXR. F2 followed by Escape left stored settings
+unchanged. Native Windows hotkey delivery and rendering remain unverified.
 
 Before the versioned editor opens, Windows allows up to two minutes for the
 `NeatVideo6 OFX 64` loading window, without clicking or dismissing it.
-Auto Profile waits for its enabled control; Profile Check waits for a completed
-profile; Apply waits for enabled controls and the Profile Check preview.
-Profile Check is a preview mode, not an automated quality verdict. Other modal
-windows retain the two-second settling interval. Diagnostics read Windows
+Other modal windows retain the two-second settling interval. Diagnostics read Windows
 accessibility labels when native child controls expose no text. This queries
 separate toolkit instances, including Neat's `Qt5152QWindow` and Nuke's Qt 6,
 without depending on a readable screenshot. The read-only helper uses

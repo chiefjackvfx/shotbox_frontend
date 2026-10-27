@@ -6,10 +6,15 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T16:15:46+00:00] Verify hotkey ordering, cancellation, and committed profile rendering.
+
 ### Changed
+
+- [2026-10-27T16:15:46+00:00] Automate Windows Neat profiling with F2, then Enter.
 
 ### Fixed
 
+- [2026-10-27T16:15:46+00:00] Confirm committed keyboard profiles before saving and rendering EXRs.
 ## 5.2.12 - 2026-10-27
 
 ### Added

@@ -1,4 +1,4 @@
-"""Windows displays and owned jobs; visible workers use real mouse input.
+"""Windows displays and owned jobs; visible workers use F2/Enter hotkeys.
 
 Win32 imports are lazy so Linux can test the adapter.
 """
@@ -41,8 +41,13 @@ class MouseInput(C.Structure):
                 ("time", DWORD), ("extra", SIZE_T)]
 
 
+class KeyboardInput(C.Structure):
+    _fields_ = [("key", C.c_uint16), ("scan", C.c_uint16), ("flags", DWORD),
+                ("time", DWORD), ("extra", SIZE_T)]
+
+
 class InputData(C.Union):
-    _fields_ = [("mouse", MouseInput)]
+    _fields_ = [("mouse", MouseInput), ("keyboard", KeyboardInput)]
 
 
 class Input(C.Structure):
@@ -165,6 +170,8 @@ class WindowsAPI:
         bind(self.user, "GetDpiForWindow", C.c_uint, HANDLE)
         bind(self.user, "GetSystemMetrics", C.c_int, C.c_int)
         bind(self.user, "SetForegroundWindow", BOOL, HANDLE)
+        bind(self.user, "GetForegroundWindow", HANDLE)
+        bind(self.user, "GetAsyncKeyState", C.c_int16, C.c_int)
         bind(self.user, "SendInput", C.c_uint, C.c_uint, C.POINTER(Input), C.c_int)
         bind(self.user, "GetAncestor", HANDLE, HANDLE, C.c_uint)
         bind(self.user, "GetWindowThreadProcessId", DWORD, HANDLE, C.POINTER(DWORD))
@@ -336,6 +343,34 @@ class WindowsAPI:
 
     def window_dpi(self, hwnd):
         return int(self.user.GetDpiForWindow(hwnd))
+
+    def ready_for_key(self, hwnd):
+        if not self.is_viewable(hwnd) or not self.user.IsWindowEnabled(hwnd):
+            return False
+        result = SIZE_T()
+        return bool(self.user.SendMessageTimeoutW(hwnd, 0, 0, 0, 0x23, 100, C.byref(result)))  # WM_NULL
+
+    def key_press(self, hwnd, key):
+        if not self.ready_for_key(hwnd):
+            raise WindowObscured("Wait for this job's Neat Video editor to become ready.")
+        self.user.SetForegroundWindow(hwnd)
+        foreground = self.user.GetForegroundWindow()
+        if not foreground or self.user.GetAncestor(foreground, 2) != hwnd:
+            raise WindowObscured("Activate this job's Neat Video editor to send its hotkeys.")
+        if any(self.user.GetAsyncKeyState(modifier) & 0x8000 for modifier in (0x10, 0x11, 0x12, 0x5B, 0x5C)):
+            raise WindowObscured("Release modifier keys while Neat Video hotkeys run.")
+        events = (Input * 2)()
+        for event in events:
+            event.type = 1  # INPUT_KEYBOARD
+            event.data.keyboard.key = key
+        events[1].data.keyboard.flags = 2  # KEYEVENTF_KEYUP
+        sent = self.user.SendInput(2, events, C.sizeof(Input))
+        if sent != 2:
+            if sent == 1:
+                release = events[1]
+                self.user.SendInput(1, C.byref(release), C.sizeof(Input))
+            raise RuntimeError(f"Windows accepted {sent}/2 Neat Video keyboard events.")
+        return {"key": int(key), "events_sent": int(sent)}
 
     def point_is_visible(self, hwnd, point):
         """Hit-test the intended client coordinate without activating any window."""
@@ -725,39 +760,14 @@ class VisibleWindowsDisplay(WindowsDisplay):
         self.waiting_visible = False
         self.black_since = None
         self.original_dpi_context = None
-        self.input_sequence = 0
-        self.reported_controls = set()
-        self.recognition_logged_at = None
-        self.capture_reported = False
+        self.keyboard_window = None
+        self.editor_ready_since = None
+        self.auto_sent_at = None
+        self.enter_sent_at = None
 
     def _load_templates(self):
-        from nuke_denoise_controls import WindowsControlMatcher
-        self.control_matcher = WindowsControlMatcher()
-        self.templates = self.control_matcher.templates
-
-    def _match(self, pixels, name):
-        previous_scale = self.control_matcher.scale
-        point = self.control_matcher.match(pixels, name)
-        now = time.monotonic()
-        if self.recognition_logged_at is None or now - self.recognition_logged_at >= 5:
-            report = {"capture_size": [pixels.shape[1], pixels.shape[0]],
-                      "coordinate_mode": "per-monitor-v2 physical pixels",
-                      "scale": self.control_matcher.scale, "controls": self.control_matcher.diagnostics}
-            (self.directory / "control-recognition.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-            self.recognition_logged_at = now
-        if name == "auto_profile" and name not in self.reported_controls:
-            self.notify({"stage": "locating_auto_profile", "message": "Editor captured; locating Auto Profile."})
-            self.reported_controls.add(name)
-        if previous_scale is None and self.control_matcher.scale is not None:
-            details = {"reference": "Windows Neat Video 6.1.3", "scale": self.control_matcher.scale,
-                       "capture_size": [pixels.shape[1], pixels.shape[0]]}
-            (self.directory / "control-scale.json").write_text(json.dumps(details, indent=2), encoding="utf-8")
-            self.notify({"stage": "debug", "source": "Display",
-                         "message": "Windows control recognition calibrated: " + json.dumps(details)})
-        if name == "auto_profile" and point and "auto_found" not in self.reported_controls:
-            self.notify({"stage": "auto_profile_found", "message": "Auto Profile located; sending mouse click."})
-            self.reported_controls.add("auto_found")
-        return point
+        # Keyboard profiling does not require captures or button references.
+        self.templates = {}
 
     def __enter__(self):
         try:
@@ -768,7 +778,7 @@ class VisibleWindowsDisplay(WindowsDisplay):
             self.job = self.api.create_job(self.job_name)
             self._load_templates()
             self.notify({"stage": "debug", "source": "Display",
-                         "message": "Windows visible denoise: per-monitor DPI awareness; real mouse clicks."})
+                         "message": "Windows visible denoise: F2 Auto Profile, then Enter to apply."})
             return self
         except BaseException:
             self.__exit__(None, None, None)
@@ -818,18 +828,59 @@ class VisibleWindowsDisplay(WindowsDisplay):
                                    "Keep the editor on screen; see profile-window.png.")
         return pixels
 
-    def _click(self, hwnd, point):
+    def _send_key(self, hwnd, key):
         self._require_owned_visible(hwnd)
-        if not self.api.point_is_visible(hwnd, point):
-            raise WindowObscured("Uncover this job's Neat Video controls to continue profiling.")
         self._check()
-        details = self.api.mouse_click(hwnd, point)
-        self.input_sequence += 1
-        details = {**details, "window": int(hwnd), "window_dpi": self.api.window_dpi(hwnd),
-                   "method": "SendInput", "sequence": self.input_sequence}
-        with (self.directory / "mouse-input.jsonl").open("a", encoding="utf-8") as stream:
-            stream.write(json.dumps(details) + "\n")
-        self.notify({"stage": "debug", "source": "Display", "message": "Mouse input: " + json.dumps(details)})
+        details = self.api.key_press(hwnd, key)
+        with (self.directory / "keyboard-input.jsonl").open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({**details, "window": int(hwnd), "method": "SendInput"}) + "\n")
+
+    def _poll_profile(self):
+        self._check()
+        if self.applied:
+            return True
+        window = self._profile_window()
+        if window is None:
+            if self.enter_sent_at is not None and (self.directory / "profile-confirmed").is_file():
+                self.applied = True
+            return self.applied
+        self._require_owned_visible(window)
+        now = time.monotonic()
+        if self.keyboard_window != window:
+            self.keyboard_window = window
+            self.editor_ready_since = None
+        if not self.api.ready_for_key(window):
+            self.editor_ready_since = None
+            return False
+        if self.editor_ready_since is None:
+            self.editor_ready_since = now
+        if now - self.editor_ready_since < 1:
+            return False
+        if not self.clicked_auto:
+            self._send_key(window, 0x71)  # F2: Auto Profile
+            self.clicked_auto = True
+            self.auto_sent_at = now
+            self.editor_ready_since = None
+            self.notify({"stage": "keyboard_auto_profiling", "message": "Sent F2. Waiting for Auto Profile."})
+            return False
+        if now - self.auto_sent_at < 5:
+            return False
+        # Apply is disabled until a profile is ready. If Neat ignores Enter
+        # while working, retry it at most once per five seconds, only in the
+        # same owned, responsive editor with no unexpected modal present.
+        if self.enter_sent_at is None or now - self.enter_sent_at >= 5:
+            pending = self.directory / "keyboard-apply-pending"
+            created = not pending.exists()
+            pending.write_text("F2 sent; Enter requested\n", encoding="utf-8")
+            try:
+                self._send_key(window, 0x0D)  # Enter: Apply
+            except BaseException:
+                if created:
+                    pending.unlink(missing_ok=True)
+                raise
+            self.enter_sent_at = now
+            self.notify({"stage": "keyboard_applying_profile", "message": "Sent Enter. Waiting for Neat Video to close."})
+        return False
 
     def __exit__(self, *args):
         try:
@@ -845,7 +896,7 @@ class VisibleWindowsDisplay(WindowsDisplay):
             self.waiting_visible = False
             return result
         except WindowObscured as error:
-            self.ready_since = self.check_preview_since = self.black_since = None
+            self.ready_since = self.check_preview_since = self.black_since = self.editor_ready_since = None
             if not self.waiting_visible:
                 self.notify({"stage": "waiting_visible", "message": str(error)})
                 self.waiting_visible = True

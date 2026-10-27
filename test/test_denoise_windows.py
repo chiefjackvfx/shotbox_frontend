@@ -881,293 +881,148 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
         self.directory = Path(self.temp.name)
         self.api = mock.Mock()
         self.api.create_job.return_value = 123
+        self.api.set_dpi_context.return_value = 456
         self.api.windows.return_value = [(333, "Neat Video 6.1.3 Studio"), (444, "Neat Video 6.1.3 Studio")]
         self.api.window_pid.side_effect = lambda hwnd: 101 if hwnd == 333 else 202
+        self.api.unexpected_dialog.return_value = False
         self.api.is_viewable.return_value = True
-        self.api.point_is_visible.return_value = True
-        self.api.mouse_click.return_value = {"events_sent": 3}
-        self.api.window_dpi.return_value = 144
-        self.api.set_dpi_context.return_value = 0x100000005
+        self.api.ready_for_key.return_value = True
+        self.api.key_press.side_effect = lambda hwnd, key: {"key": key, "events_sent": 2}
         self.process = mock.Mock(pid=101)
         self.process.poll.return_value = None
         self.api.create_process.return_value = self.process
-        self.events = []
-        self.display = windows.VisibleWindowsDisplay(self.directory, lambda: False, api=self.api,
-                                                     notify=self.events.append)
+        self.display = windows.VisibleWindowsDisplay(self.directory, lambda: False, api=self.api)
 
-    canvas = WindowsDenoiseTests.canvas
+    def test_f2_then_enter_without_images_waits_for_host_confirmation(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.child = self.process
+            self.assertEqual(self.display.templates, {})
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 11.1
+            self.assertFalse(self.display.poll_profile())
+            self.api.key_press.assert_called_once_with(333, 0x71)
+            clock.return_value = 12.2
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 15.9
+            self.assertFalse(self.display.poll_profile())
+            self.assertEqual(self.api.key_press.call_count, 1)
+            clock.return_value = 16.2
+            self.assertFalse(self.display.poll_profile())
+            self.assertTrue((self.directory / "keyboard-apply-pending").exists())
+            self.assertFalse((self.directory / "profile-confirmed").exists())
+            clock.return_value = 21.3
+            self.assertFalse(self.display.poll_profile())
+            self.assertEqual(self.api.key_press.call_args_list,
+                             [mock.call(333, 0x71), mock.call(333, 0x0D), mock.call(333, 0x0D)])
+            self.api.windows.return_value = []
+            self.assertFalse(self.display.poll_profile())
+            (self.directory / "profile-confirmed").touch()
+            self.assertTrue(self.display.poll_profile())
+            self.assertTrue(self.display.poll_profile())
+            self.api.screenshot.assert_not_called()
+            self.api.mouse_click.assert_not_called()
+            self.api.click.assert_not_called()
+            entries = [json.loads(line) for line in (self.directory / "keyboard-input.jsonl").read_text().splitlines()]
+            self.assertEqual([entry["key"] for entry in entries], [0x71, 0x0D, 0x0D])
 
-    def test_visible_launch_inherits_desktop_retains_owned_job_and_cleans_up(self):
-        with self.display, mock.patch("psutil.Process"), mock.patch.object(child, "record_process"):
-            environment = self.display.environment({"SHOTBOX_DENOISE_DESKTOP": "stale", "DISPLAY": ":0"})
-            self.assertNotIn("SHOTBOX_DENOISE_DESKTOP", environment)
-            self.assertNotIn("DISPLAY", environment)
-            self.assertEqual(environment["SHOTBOX_DENOISE_WINDOWS_JOB"], self.display.job_name)
-            self.assertTrue(all(isinstance(value, str) for value in environment.values()))
-            self.display.launch(["Nuke.exe"], environment, str(self.directory), mock.Mock())
+    def test_busy_editor_and_other_process_do_not_receive_keys(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.child = self.process
+            self.api.ready_for_key.return_value = False
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 100
+            self.assertFalse(self.display.poll_profile())
+            self.api.key_press.assert_not_called()
+            with self.assertRaisesRegex(RuntimeError, "no longer belongs"):
+                self.display._send_key(444, 0x71)
+            self.api.key_press.assert_not_called()
+
+    def test_failed_f2_does_not_advance_or_write_receipt(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.child = self.process
+            self.display.poll_profile()
+            self.api.key_press.side_effect = windows.WindowObscured("Activate editor")
+            clock.return_value = 12
+            self.assertFalse(self.display.poll_profile())
+            self.assertFalse(self.display.clicked_auto)
+            self.assertIsNone(self.display.auto_sent_at)
+            self.assertFalse((self.directory / "profile-confirmed").exists())
+
+    def test_failed_enter_removes_pending_marker(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.display.child = self.process
+            self.display.poll_profile()
+            clock.return_value = 12
+            self.display.poll_profile()
+            clock.return_value = 14
+            self.display.poll_profile()
+            self.api.key_press.side_effect = windows.WindowObscured("Activate editor")
+            clock.return_value = 18
+            self.assertFalse(self.display.poll_profile())
+            self.assertFalse((self.directory / "keyboard-apply-pending").exists())
+            self.assertIsNone(self.display.enter_sent_at)
+
+    def test_visible_launch_and_cancel_restore_dpi_and_close_owned_job(self):
+        with self.assertRaises(displays.DenoiseCancelled), self.display, \
+                mock.patch("psutil.Process"), mock.patch.object(child, "record_process"):
+            env = self.display.environment({"DISPLAY": ":0"})
+            self.assertNotIn("SHOTBOX_DENOISE_DESKTOP", env)
+            self.assertNotIn("DISPLAY", env)
+            self.display.launch(["Nuke.exe"], env, str(self.directory), mock.Mock())
             self.assertEqual(self.api.create_process.call_args.args[1:3], (None, 123))
-            self.process.resume.assert_called_once()
+            self.display.cancelled = lambda: True
+            self.display.poll_profile()
         self.api.create_desktop.assert_not_called()
         self.api.close_desktop.assert_not_called()
         self.api.close_job.assert_called_once_with(123)
-        self.process.wait.assert_called_once_with(timeout=5)
-        self.process.close.assert_called_once()
+        self.assertEqual(self.api.set_dpi_context.call_args_list, [mock.call(-4), mock.call(456)])
 
-        self.assertEqual(self.api.set_dpi_context.call_args_list,
-                         [mock.call(-4), mock.call(0x100000005)])
-
-    def test_only_live_owned_nuke_windows_can_be_captured_or_clicked(self):
-        with self.display:
-            self.assertEqual(self.display.windows(), [])
-            self.display.child = self.process
-            self.assertEqual(self.display.windows(), [(333, "Neat Video 6.1.3 Studio")])
-            for operation in (lambda: self.display.screenshot(444), lambda: self.display._click(444, (5, 5))):
-                with self.assertRaisesRegex(RuntimeError, "no longer belongs"):
-                    operation()
-            self.process.poll.return_value = 0
-            self.assertEqual(self.display.windows(), [])
-            with self.assertRaisesRegex(RuntimeError, "no longer belongs"):
-                self.display._click(333, (5, 5))
-            self.api.screenshot.assert_not_called()
-            self.api.mouse_click.assert_not_called()
-
-    def test_failed_visible_startup_restores_previous_thread_dpi(self):
-        self.api.create_job.side_effect = RuntimeError("Cannot create job")
-        with self.assertRaisesRegex(RuntimeError, "Cannot create job"):
+    def test_failed_startup_restores_dpi(self):
+        self.api.create_job.side_effect = RuntimeError("No job")
+        with self.assertRaisesRegex(RuntimeError, "No job"):
             self.display.__enter__()
-        self.assertEqual(self.api.set_dpi_context.call_args_list,
-                         [mock.call(-4), mock.call(0x100000005)])
-        self.api.close_job.assert_not_called()
-
-    def test_minimized_window_waits_without_capture_or_input_and_resets_readiness(self):
-        with self.display:
-            self.display.child = self.process
-            self.api.is_viewable.return_value = False
-            self.display.ready_since = self.display.check_preview_since = 1
-            self.assertFalse(self.display.poll_profile())
-            self.assertFalse(self.display.poll_profile())
-            self.assertIsNone(self.display.ready_since)
-            self.assertIsNone(self.display.check_preview_since)
-            self.assertEqual(sum(event["stage"] == "waiting_visible" for event in self.events), 1)
-            self.api.screenshot.assert_not_called()
-            self.api.mouse_click.assert_not_called()
-            self.api.is_viewable.return_value = True
-            self.api.screenshot.return_value = self.canvas("auto_profile")
-            self.assertFalse(self.display.poll_profile())
-            self.api.screenshot.assert_called_once_with(333, visible=True)
-            self.api.mouse_click.assert_called_once()
-
-    def test_minimizing_during_capture_prevents_click(self):
-        with self.display:
-            self.display.child = self.process
-            self.api.is_viewable.side_effect = [True, False]
-            self.api.screenshot.return_value = self.canvas("auto_profile")
-            self.assertFalse(self.display.poll_profile())
-            self.api.mouse_click.assert_not_called()
-            self.assertFalse(self.display.clicked_auto)
-
-    def test_persistently_black_capture_fails_early_without_input(self):
-        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
-            self.display.child = self.process
-            self.api.screenshot.return_value = self.canvas()
-            self.assertFalse(self.display.poll_profile())
-            clock.return_value = 19
-            self.assertFalse(self.display.poll_profile())
-            clock.return_value = 20
-            with self.assertRaisesRegex(RuntimeError, "capture stayed black"):
-                self.display.poll_profile()
-            self.assertTrue((self.directory / "profile-window.png").exists())
-            self.api.mouse_click.assert_not_called()
-
-    def test_cancel_during_visibility_wait_closes_only_owned_job(self):
-        with self.assertRaises(displays.DenoiseCancelled), self.display:
-            self.display.child = self.process
-            self.api.is_viewable.return_value = False
-            self.assertFalse(self.display.poll_profile())
-            self.display.cancelled = lambda: True
-            self.display.poll_profile()
-        self.api.close_job.assert_called_once_with(123)
-        self.api.close_desktop.assert_not_called()
-
-    def test_visible_editor_clicks_even_when_foreground_belongs_elsewhere(self):
-        with self.display:
-            self.display.child = self.process
-            self.api.is_foreground.side_effect = AssertionError("Foreground ownership must not gate visible controls")
-            self.api.screenshot.return_value = self.canvas("auto_profile")
-            self.assertFalse(self.display.poll_profile())
-            self.api.mouse_click.assert_called_once()
-            self.api.point_is_visible.assert_called_once_with(333, self.api.mouse_click.call_args.args[1])
-            self.assertTrue(self.display.clicked_auto)
-
-    def test_covered_control_waits_and_retries_without_advancing(self):
-        with self.display:
-            self.display.child = self.process
-            self.api.screenshot.return_value = self.canvas("auto_profile")
-            self.api.point_is_visible.return_value = False
-            self.assertFalse(self.display.poll_profile())
-            self.assertFalse(self.display.poll_profile())
-            self.assertFalse(self.display.clicked_auto)
-            self.api.mouse_click.assert_not_called()
-            self.assertEqual(sum(event["stage"] == "waiting_visible" for event in self.events), 1)
-            self.api.point_is_visible.return_value = True
-            self.assertFalse(self.display.poll_profile())
-            self.api.mouse_click.assert_called_once()
-            self.assertTrue(self.display.clicked_auto)
-
-    def test_hit_test_converts_client_coordinates_and_rejects_other_windows(self):
-        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
-        api.user = mock.Mock()
-        def rect(hwnd, pointer):
-            value = ctypes.cast(pointer, ctypes.POINTER(windows.Rect)).contents
-            value.right, value.bottom = 800, 600
-            return True
-        def convert(hwnd, pointer):
-            value = ctypes.cast(pointer, ctypes.POINTER(windows.Point)).contents
-            # Negative screen coordinates exercise monitors left of primary.
-            value.x -= 1000
-            value.y += 100
-            return True
-        api.user.GetClientRect.side_effect = rect
-        api.user.ClientToScreen.side_effect = convert
-        api.user.WindowFromPoint.return_value = 334
-        api.user.GetAncestor.return_value = 333
-        self.assertTrue(api.point_is_visible(333, (70, 90)))
-        point = api.user.WindowFromPoint.call_args.args[0]
-        self.assertEqual((point.x, point.y), (-930, 190))
-        api.user.GetAncestor.assert_called_with(334, 2)
-        api.user.GetAncestor.return_value = 444
-        self.assertFalse(api.point_is_visible(333, (70, 90)))
-        api.user.WindowFromPoint.return_value = None
-        self.assertFalse(api.point_is_visible(333, (70, 90)))
-        api.user.WindowFromPoint.reset_mock()
-        self.assertFalse(api.point_is_visible(333, (-1, 90)))
-        self.assertFalse(api.point_is_visible(333, (800, 90)))
-        api.user.WindowFromPoint.assert_not_called()
-        api.user.ClientToScreen.side_effect = None
-        api.user.ClientToScreen.return_value = False
-        self.assertFalse(api.point_is_visible(333, (70, 90)))
-        api.user.WindowFromPoint.assert_not_called()
-
-    def test_visible_sequence_profiles_checks_and_applies_once(self):
-        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
-            self.display.child = self.process
-            self.api.screenshot.return_value = self.canvas("auto_profile")
-            self.assertFalse(self.display.poll_profile())
-            self.api.screenshot.return_value = self.canvas("build_profile", "adjust_ready", "profile_check", "apply")
-            self.assertFalse(self.display.poll_profile())
-            clock.return_value = 11
-            self.assertFalse(self.display.poll_profile())
-            self.assertTrue(self.display.clicked_check)
-            self.api.screenshot.return_value = self.canvas(
-                "build_profile", "adjust_ready", "profile_check_active", "profile_check_preview", "apply")
-            clock.return_value = 12
-            self.assertFalse(self.display.poll_profile())
-            clock.return_value = 13
-            self.assertFalse(self.display.poll_profile())
-            clock.return_value = 14
-            self.assertTrue(self.display.poll_profile())
-            self.assertTrue(self.display.poll_profile())
-            self.assertEqual(self.api.mouse_click.call_count, 3)
-            self.assertTrue(all(call.args[0] == 333 for call in self.api.mouse_click.call_args_list))
-            self.assertTrue((self.directory / "profile-confirmed").exists())
-            receipt = [json.loads(line) for line in (self.directory / "mouse-input.jsonl").read_text().splitlines()]
-            self.assertEqual([entry["sequence"] for entry in receipt], [1, 2, 3])
-            self.assertTrue(all(entry["method"] == "SendInput" and entry["window_dpi"] == 144 for entry in receipt))
-            self.assertTrue((self.directory / "control-recognition.json").exists())
-            self.assertEqual(json.loads((self.directory / "window-dpi.json").read_text())["window_dpi"], 144)
-
-    def test_native_visible_capture_uses_bitblt_and_releases_gdi_resources(self):
-        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
-        api.user, api.gdi = mock.Mock(), mock.Mock()
-        pixels = ctypes.create_string_buffer(24)
-        def rect(hwnd, pointer):
-            value = ctypes.cast(pointer, ctypes.POINTER(windows.Rect)).contents
-            value.right, value.bottom = 3, 2
-            return True
-        def bitmap(dc, info, usage, pointer, section, offset):
-            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p))[0] = ctypes.addressof(pixels)
-            return 5
-        def copy(*args):
-            ctypes.memmove(pixels, bytes(range(24)), 24)
-            return True
-        api.user.GetClientRect.side_effect = rect
-        api.gdi.CreateDIBSection.side_effect = bitmap
-        api.gdi.BitBlt.side_effect = copy
-        image = api.screenshot(333, visible=True)
-        self.assertEqual(image[1, 2].tolist(), [20, 21, 22])
-        api.user.GetDC.assert_called_once_with(333)
-        api.user.SendMessageTimeoutW.assert_not_called()
-        self.assertEqual(api.gdi.BitBlt.call_args.args[-1], 0x00CC0020)
-        api.gdi.DeleteObject.assert_called_once_with(5)
-        api.gdi.DeleteDC.assert_called_once()
-        api.user.ReleaseDC.assert_called_once()
+        self.assertEqual(self.api.set_dpi_context.call_args_list, [mock.call(-4), mock.call(456)])
 
 
-class WindowsMouseInputTests(unittest.TestCase):
+class WindowsKeyboardInputTests(unittest.TestCase):
     def setUp(self):
         self.api = windows.WindowsAPI.__new__(windows.WindowsAPI)
         self.api.user = mock.Mock()
-        self.api.is_viewable = mock.Mock(return_value=True)
-        self.api.point_is_visible = mock.Mock(return_value=True)
-        self.api.user.GetSystemMetrics.side_effect = {76: 0, 77: 0, 78: 3840, 79: 2160}.get
-        self.api.user.SendInput.return_value = 3
-        def convert(hwnd, pointer):
-            point = ctypes.cast(pointer, ctypes.POINTER(windows.Point)).contents
-            point.x += 960
-            point.y += 240
-            return True
-        self.api.user.ClientToScreen.side_effect = convert
+        self.api.ready_for_key = mock.Mock(return_value=True)
+        self.api.user.GetForegroundWindow.return_value = 334
+        self.api.user.GetAncestor.return_value = 333
+        self.api.user.GetAsyncKeyState.return_value = 0
+        self.api.user.SendInput.return_value = 2
 
-    def test_real_click_maps_physical_pixels_on_uhd_display_without_extra_scaling(self):
-        details = self.api.mouse_click(333, (300, 150))
-        self.assertEqual(details["screen_point"], [1260, 390])
+    def test_real_f2_keydown_and_keyup_are_sent_only_to_owned_foreground(self):
+        self.assertEqual(self.api.key_press(333, 0x71), {"key": 0x71, "events_sent": 2})
         count, events, size = self.api.user.SendInput.call_args.args
-        self.assertEqual(count, 3)
+        self.assertEqual(count, 2)
         self.assertEqual(size, ctypes.sizeof(windows.Input))
-        self.assertEqual(events[0].type, 0)
-        self.assertEqual(events[0].data.mouse.dx, round(1260 * 65535 / 3839))
-        self.assertEqual(events[0].data.mouse.dy, round(390 * 65535 / 2159))
-        self.assertEqual([item.data.mouse.flags for item in events], [0xC001, 2, 4])
+        self.assertEqual([event.type for event in events], [1, 1])
+        self.assertEqual([event.data.keyboard.key for event in events], [0x71, 0x71])
+        self.assertEqual([event.data.keyboard.flags for event in events], [0, 2])
         self.api.user.PostMessageW.assert_not_called()
 
-    def test_virtual_desktop_supports_monitor_left_of_primary(self):
-        self.api.user.GetSystemMetrics.side_effect = {76: -3840, 77: 0, 78: 7680, 79: 2160}.get
-        def convert(hwnd, pointer):
-            point = ctypes.cast(pointer, ctypes.POINTER(windows.Point)).contents
-            point.x, point.y = -2000, 500
-            return True
-        self.api.user.ClientToScreen.side_effect = convert
-        details = self.api.mouse_click(333, (300, 150))
-        self.assertEqual(details["screen_point"], [-2000, 500])
-        events = self.api.user.SendInput.call_args.args[1]
-        self.assertEqual(events[0].data.mouse.dx, round(1840 * 65535 / 7679))
+    def test_foreign_foreground_or_modifier_blocks_hotkeys(self):
+        self.api.user.GetAncestor.return_value = 444
+        with self.assertRaises(windows.WindowObscured):
+            self.api.key_press(333, 0x0D)
+        self.api.user.GetAncestor.return_value = 333
+        self.api.user.GetAsyncKeyState.return_value = -32768
+        with self.assertRaises(windows.WindowObscured):
+            self.api.key_press(333, 0x0D)
+        self.api.user.SendInput.assert_not_called()
 
-    def test_partial_send_releases_mouse_before_reporting_failure(self):
-        self.api.user.SendInput.side_effect = [2, 1]
-        with self.assertRaisesRegex(RuntimeError, "accepted 2/3"):
-            self.api.mouse_click(333, (300, 150))
+    def test_partial_key_input_is_released_and_reported(self):
+        self.api.user.SendInput.side_effect = [1, 1]
+        with self.assertRaisesRegex(RuntimeError, "accepted 1/2"):
+            self.api.key_press(333, 0x71)
         count, pointer, size = self.api.user.SendInput.call_args.args
         self.assertEqual(count, 1)
         event = ctypes.cast(pointer, ctypes.POINTER(windows.Input)).contents
-        self.assertEqual(event.data.mouse.flags, 4)
-
-    def test_zero_events_is_failure_without_claiming_a_click(self):
-        self.api.user.SendInput.return_value = 0
-        with self.assertRaisesRegex(RuntimeError, "accepted 0/3"):
-            self.api.mouse_click(333, (300, 150))
-        self.api.user.SendInput.assert_called_once()
-
-    def test_occlusion_after_activation_prevents_real_input(self):
-        self.api.point_is_visible.side_effect = [True, False]
-        with self.assertRaises(windows.WindowObscured):
-            self.api.mouse_click(333, (300, 150))
-        self.api.user.SendInput.assert_not_called()
-
-    def test_offscreen_coordinates_prevent_real_input(self):
-        self.api.user.GetSystemMetrics.side_effect = {76: 0, 77: 0, 78: 800, 79: 600}.get
-        with self.assertRaises(windows.WindowObscured):
-            self.api.mouse_click(333, (300, 150))
-        self.api.user.SendInput.assert_not_called()
+        self.assertEqual(event.data.keyboard.key, 0x71)
+        self.assertEqual(event.data.keyboard.flags, 2)
 
 
 if __name__ == "__main__":

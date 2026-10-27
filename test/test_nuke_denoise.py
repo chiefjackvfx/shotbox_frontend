@@ -207,6 +207,44 @@ class DenoiseHostTests(unittest.TestCase):
         self.assertEqual(events[-1]["stage"], "complete")
         self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
 
+    def test_keyboard_profile_renders_only_after_enter_commits_changed_settings(self):
+        request = json.loads(self.request.read_text())
+        request["profile_method"] = "keyboard"
+        self.request.write_text(json.dumps(request))
+        clip = self.noise["ClipParams"] = Knob("template state")
+        clip.toScript = lambda: clip.value()
+        def apply():
+            (self.directory / "keyboard-apply-pending").write_text("F2 then Enter")
+            clip.setValue("applied profile")
+        self.noise["Prepare_Profile..."].execute = apply
+        events = self.run_host()
+        self.assertEqual(events[-1]["stage"], "complete")
+        self.assertTrue((self.directory / "profile-confirmed").is_file())
+        self.assertTrue(any(event["stage"] == "keyboard_profile_applied" for event in events))
+
+    def test_keyboard_cancelled_or_unchanged_settings_never_render(self):
+        request = json.loads(self.request.read_text())
+        request["profile_method"] = "keyboard"
+        self.request.write_text(json.dumps(request))
+        clip = self.noise["ClipParams"] = Knob("template state")
+        clip.toScript = lambda: clip.value()
+        self.noise["Prepare_Profile..."].execute = lambda: (self.directory / "keyboard-apply-pending").write_text("Enter")
+        events = self.run_host()
+        self.assertEqual(events[-1]["stage"], "failed")
+        self.nuke.scriptSaveAs.assert_not_called()
+        self.assertFalse((self.directory / "renders").exists())
+
+    def test_changed_keyboard_settings_without_enter_marker_never_render(self):
+        request = json.loads(self.request.read_text())
+        request["profile_method"] = "keyboard"
+        self.request.write_text(json.dumps(request))
+        clip = self.noise["ClipParams"] = Knob("template state")
+        clip.toScript = lambda: clip.value()
+        self.noise["Prepare_Profile..."].execute = lambda: clip.setValue("unconfirmed state")
+        events = self.run_host()
+        self.assertEqual(events[-1]["stage"], "failed")
+        self.nuke.scriptSaveAs.assert_not_called()
+
     def test_basic_nuke_mode_is_rejected_before_loading_or_saving_the_comp(self):
         self.nuke.env["nukex"] = False
         events = self.run_host()

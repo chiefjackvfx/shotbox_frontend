@@ -264,11 +264,8 @@ class PrivateDisplay:
                     return self.applied
             raise
 
-    def _poll_profile(self):
+    def _profile_window(self):
         import cv2
-        self._check()
-        if self.applied:
-            return True
         candidates = []
         for window, title in self.windows():
             if title.startswith("Neat Video "):
@@ -284,7 +281,7 @@ class PrivateDisplay:
             elif self._unexpected_dialog(window):
                 if not self._prepare_dialog(window, title):
                     self.ready_since = None
-                    return False
+                    return None
                 details = self._dialog_details(window)
                 try:
                     image = self._dialog_screenshot(window)
@@ -302,10 +299,19 @@ class PrivateDisplay:
                 raise RuntimeError(f"Unexpected dialog during denoise: {title}.{details}{capture}")
         if not candidates:
             self.ready_since = None
-            return self.applied
+            return None
         if len(candidates) != 1:
             raise RuntimeError("More than one Neat Video window appeared.")
-        window = candidates[0]
+        return candidates[0]
+
+    def _poll_profile(self):
+        import cv2
+        self._check()
+        if self.applied:
+            return True
+        window = self._profile_window()
+        if window is None:
+            return False
         pixels = self.screenshot(window)
         cv2.imwrite(str(self.directory / "profile-window.png"), pixels)
         if not self.clicked_auto:

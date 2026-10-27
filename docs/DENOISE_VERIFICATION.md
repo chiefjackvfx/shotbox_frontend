@@ -227,6 +227,41 @@ and reject blank captures or Apply outside the footer. `control-scale.json`
 records the chosen scale and capture size. These checks validate recognition
 from the supplied screenshots, not live Windows capture or delivered clicks.
 
+## Current Windows F2/Enter workflow
+
+At the user's request, normal Windows jobs now select `profile_method=keyboard`.
+The visible adapter does not load button references or capture/match images to
+operate the editor. It identifies the owned versioned Neat window, waits for
+visibility, enabled state and responsiveness, and sends F2 using SendInput.
+It waits at least five seconds before Enter. Enter retries at five-second
+intervals if the editor remains open and responsive. Every hotkey requires
+the exact owned editor to be foreground, with no Shift/Ctrl/Alt/Windows modifier
+held. Warnings, cancellation, version checks and process-job cleanup still apply.
+Profile Check is skipped. `keyboard-input.jsonl` records sent keys.
+
+Before opening the editor, the host snapshots Neat's serialized ClipParams.
+An Enter attempt creates `keyboard-apply-pending`; after the editor returns,
+the host confirms that ClipParams changed before writing `profile-confirmed`,
+caching the script and rendering. An unchanged or cancelled editor cannot
+render merely because Enter was sent. This verifies committed settings after
+the requested hotkeys; it does not infer success from keyboard-event delivery.
+
+Native local tests on NukeX 17.1v2 / Neat 6.1.2 verified that F2 then Enter
+closes the editor with changed serialized settings, while F2 then Escape leaves
+the settings unchanged. Evidence:
+`.cache/temp/denoise-hotkeys-native-tu356kip/{Return,Escape}/result.json`.
+The same keyboard state machine and actual host confirmation then completed
+one generated 512 × 512 noise image through profile caching and EXR rendering.
+Evidence: `.cache/temp/denoise-keyboard-pipeline-wdh0y4zh/verification.json`.
+That end-to-end run used X11 hotkey transport on Linux; it does not qualify
+Win32 SendInput delivery on the user's Windows machine.
+
+All 125 focused regressions passed, including key ordering without image reads,
+busy editors, failed keys, foreground/modifier guards, partial key release,
+host confirmation, unchanged/cancelled settings, lifecycle and screenshot
+reference tests. The references are retained for prior visual-workflow tests;
+normal Windows profiling now uses hotkeys.
+
 ## Recorded Linux results
 
 Earlier Linux template runs on 27 October 2026 verified dimensions, pixel
@@ -295,14 +330,14 @@ existing comp, choose Overwrite, then Version up. Run job-wide Denoise
 and confirm all unique clips including the hidden shot. Check each output version
 contains EXRs with no generated `.nk`. Verify cancel and application shutdown
 leave no worker processes and do not switch desktops. For Windows, verify that
-the pointer moves only to recognised, uncovered controls of the owned Neat
-window. Record both entry-point results with the automated report.
+F2 and Enter are sent only to the owned Neat editor and that its committed
+profile proceeds to rendering. Record both entry-point results with the automated report.
 
 ## Qualification boundary
 
 Native Windows qualification remains **pending**. The visible diagnostic opens
-Neat 6.1.3 successfully, but the visible automation's captures and
-Auto Profile → Profile Check → Apply sequence still need testing there.
+Neat 6.1.3 successfully, but the F2 → Enter sequence and committed-profile
+rendering still need testing there.
 Automated native PASS plus both UI entry points on Windows 17.1v2 with an
 accepted Neat version are required; Linux results do not qualify
 Windows. Codec availability is installation-dependent, not universal.

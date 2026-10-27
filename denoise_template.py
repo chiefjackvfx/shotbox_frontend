@@ -121,10 +121,11 @@ def create_template_request(directory, media, executable):
                "fps": media.get("fps") or 25,
                "output_pattern": (output / (output.name + "_####.exr")).as_posix(),
                # Windows manual profiling succeeds in the full NukeX GUI;
-               # use its normal startup on the private desktop. Keep Linux's
+               # use its normal visible startup. Keep Linux's
                # qualified Qt-terminal workflow unchanged.
                "nuke": str(executable), "write_node": "Write1",
-               "qt_terminal": sys.platform != "win32", "topdown": True}
+               "qt_terminal": sys.platform != "win32", "topdown": True,
+               "profile_method": "keyboard" if sys.platform == "win32" else "visual"}
     path = directory / "request.json"
     path.write_text(json.dumps(request, indent=2), encoding="utf-8")
     return path
