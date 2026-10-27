@@ -881,7 +881,8 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
         self.api.create_job.return_value = 123
         self.api.windows.return_value = [(333, "Neat Video 6.1.3 Studio"), (444, "Neat Video 6.1.3 Studio")]
         self.api.window_pid.side_effect = lambda hwnd: 101 if hwnd == 333 else 202
-        self.api.is_foreground.return_value = True
+        self.api.is_viewable.return_value = True
+        self.api.point_is_visible.return_value = True
         self.process = mock.Mock(pid=101)
         self.process.poll.return_value = None
         self.api.create_process.return_value = self.process
@@ -922,28 +923,28 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             self.api.screenshot.assert_not_called()
             self.api.click.assert_not_called()
 
-    def test_foreground_loss_waits_without_capture_or_input_and_resets_readiness(self):
+    def test_minimized_window_waits_without_capture_or_input_and_resets_readiness(self):
         with self.display:
             self.display.child = self.process
-            self.api.is_foreground.return_value = False
+            self.api.is_viewable.return_value = False
             self.display.ready_since = self.display.check_preview_since = 1
             self.assertFalse(self.display.poll_profile())
             self.assertFalse(self.display.poll_profile())
             self.assertIsNone(self.display.ready_since)
             self.assertIsNone(self.display.check_preview_since)
-            self.assertEqual(sum(event["stage"] == "waiting_foreground" for event in self.events), 1)
+            self.assertEqual(sum(event["stage"] == "waiting_visible" for event in self.events), 1)
             self.api.screenshot.assert_not_called()
             self.api.click.assert_not_called()
-            self.api.is_foreground.return_value = True
+            self.api.is_viewable.return_value = True
             self.api.screenshot.return_value = self.canvas("auto_profile")
             self.assertFalse(self.display.poll_profile())
             self.api.screenshot.assert_called_once_with(333, visible=True)
             self.api.click.assert_called_once()
 
-    def test_focus_change_during_capture_prevents_click(self):
+    def test_minimizing_during_capture_prevents_click(self):
         with self.display:
             self.display.child = self.process
-            self.api.is_foreground.side_effect = [True, False]
+            self.api.is_viewable.side_effect = [True, False]
             self.api.screenshot.return_value = self.canvas("auto_profile")
             self.assertFalse(self.display.poll_profile())
             self.api.click.assert_not_called()
@@ -962,15 +963,74 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             self.assertTrue((self.directory / "profile-window.png").exists())
             self.api.click.assert_not_called()
 
-    def test_cancel_during_foreground_wait_closes_only_owned_job(self):
+    def test_cancel_during_visibility_wait_closes_only_owned_job(self):
         with self.assertRaises(displays.DenoiseCancelled), self.display:
             self.display.child = self.process
-            self.api.is_foreground.return_value = False
+            self.api.is_viewable.return_value = False
             self.assertFalse(self.display.poll_profile())
             self.display.cancelled = lambda: True
             self.display.poll_profile()
         self.api.close_job.assert_called_once_with(123)
         self.api.close_desktop.assert_not_called()
+
+    def test_visible_editor_clicks_even_when_foreground_belongs_elsewhere(self):
+        with self.display:
+            self.display.child = self.process
+            self.api.is_foreground.side_effect = AssertionError("Foreground ownership must not gate visible controls")
+            self.api.screenshot.return_value = self.canvas("auto_profile")
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_called_once()
+            self.api.point_is_visible.assert_called_once_with(333, self.api.click.call_args.args[1])
+            self.assertTrue(self.display.clicked_auto)
+
+    def test_covered_control_waits_and_retries_without_advancing(self):
+        with self.display:
+            self.display.child = self.process
+            self.api.screenshot.return_value = self.canvas("auto_profile")
+            self.api.point_is_visible.return_value = False
+            self.assertFalse(self.display.poll_profile())
+            self.assertFalse(self.display.poll_profile())
+            self.assertFalse(self.display.clicked_auto)
+            self.api.click.assert_not_called()
+            self.assertEqual(sum(event["stage"] == "waiting_visible" for event in self.events), 1)
+            self.api.point_is_visible.return_value = True
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_called_once()
+            self.assertTrue(self.display.clicked_auto)
+
+    def test_hit_test_converts_client_coordinates_and_rejects_other_windows(self):
+        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
+        api.user = mock.Mock()
+        def rect(hwnd, pointer):
+            value = ctypes.cast(pointer, ctypes.POINTER(windows.Rect)).contents
+            value.right, value.bottom = 800, 600
+            return True
+        def convert(hwnd, pointer):
+            value = ctypes.cast(pointer, ctypes.POINTER(windows.Point)).contents
+            # Negative screen coordinates exercise monitors left of primary.
+            value.x -= 1000
+            value.y += 100
+            return True
+        api.user.GetClientRect.side_effect = rect
+        api.user.ClientToScreen.side_effect = convert
+        api.user.WindowFromPoint.return_value = 334
+        api.user.GetAncestor.return_value = 333
+        self.assertTrue(api.point_is_visible(333, (70, 90)))
+        point = api.user.WindowFromPoint.call_args.args[0]
+        self.assertEqual((point.x, point.y), (-930, 190))
+        api.user.GetAncestor.assert_called_with(334, 2)
+        api.user.GetAncestor.return_value = 444
+        self.assertFalse(api.point_is_visible(333, (70, 90)))
+        api.user.WindowFromPoint.return_value = None
+        self.assertFalse(api.point_is_visible(333, (70, 90)))
+        api.user.WindowFromPoint.reset_mock()
+        self.assertFalse(api.point_is_visible(333, (-1, 90)))
+        self.assertFalse(api.point_is_visible(333, (800, 90)))
+        api.user.WindowFromPoint.assert_not_called()
+        api.user.ClientToScreen.side_effect = None
+        api.user.ClientToScreen.return_value = False
+        self.assertFalse(api.point_is_visible(333, (70, 90)))
+        api.user.WindowFromPoint.assert_not_called()
 
     def test_visible_sequence_profiles_checks_and_applies_once(self):
         with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:

@@ -25,7 +25,7 @@ class WindowNotReady(RuntimeError):
         super().__init__(f"Window {self.hwnd} has an empty client area ({width} x {height}).")
 
 
-class WindowNotForeground(RuntimeError):
+class WindowObscured(RuntimeError):
     pass
 
 
@@ -147,7 +147,8 @@ class WindowsAPI:
         bind(self.user, "IsWindowVisible", BOOL, HANDLE)
         bind(self.user, "IsWindowEnabled", BOOL, HANDLE)
         bind(self.user, "IsIconic", BOOL, HANDLE)
-        bind(self.user, "GetForegroundWindow", HANDLE)
+        bind(self.user, "ClientToScreen", BOOL, HANDLE, C.POINTER(Point))
+        bind(self.user, "WindowFromPoint", HANDLE, Point)
         bind(self.user, "GetAncestor", HANDLE, HANDLE, C.c_uint)
         bind(self.user, "GetWindowThreadProcessId", DWORD, HANDLE, C.POINTER(DWORD))
         bind(self.user, "GetWindow", HANDLE, HANDLE, C.c_uint)
@@ -310,10 +311,23 @@ class WindowsAPI:
         pid = DWORD()
         return pid.value if self.user.GetWindowThreadProcessId(hwnd, C.byref(pid)) else None
 
-    def is_foreground(self, hwnd):
-        foreground = self.user.GetForegroundWindow()
-        return bool(foreground and not self.user.IsIconic(hwnd)
-                    and self.user.GetAncestor(foreground, 2) == hwnd)  # GA_ROOT
+    def is_viewable(self, hwnd):
+        return bool(self.user.IsWindowVisible(hwnd) and not self.user.IsIconic(hwnd))
+
+    def point_is_visible(self, hwnd, point):
+        """Hit-test the intended client coordinate without activating any window."""
+        rect = Rect()
+        if not self.user.GetClientRect(hwnd, C.byref(rect)):
+            return False
+        x, y = point
+        if not (0 <= x < rect.right - rect.left and 0 <= y < rect.bottom - rect.top):
+            return False
+        screen = Point(x, y)
+        if not self.user.ClientToScreen(hwnd, C.byref(screen)):
+            return False
+        hit = self.user.WindowFromPoint(screen)
+        # Another window from the same Nuke process can still obscure Neat.
+        return bool(hit and self.user.GetAncestor(hit, 2) == hwnd)  # GA_ROOT
 
     def window_details(self, hwnd):
         """Read native dialog controls without relying on offscreen painting."""
@@ -655,7 +669,7 @@ class VisibleWindowsDisplay(WindowsDisplay):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.number = None  # NULL lpDesktop inherits the current desktop.
-        self.waiting_foreground = False
+        self.waiting_visible = False
         self.black_since = None
 
     def _load_templates(self):
@@ -680,7 +694,7 @@ class VisibleWindowsDisplay(WindowsDisplay):
             self.job = self.api.create_job(self.job_name)
             self._load_templates()
             self.notify({"stage": "debug", "source": "Display",
-                         "message": "Windows visible denoise: keep Neat Video in front while profiling."})
+                         "message": "Windows visible denoise: keep Neat Video controls uncovered while profiling."})
             return self
         except BaseException:
             self.__exit__(None, None, None)
@@ -700,16 +714,16 @@ class VisibleWindowsDisplay(WindowsDisplay):
             self.editor_seen = True
         return owned
 
-    def _require_owned_foreground(self, hwnd):
+    def _require_owned_visible(self, hwnd):
         if hwnd not in {window for window, _ in self.windows()}:
             raise RuntimeError("Neat Video window no longer belongs to this denoise process.")
-        if not self.api.is_foreground(hwnd):
-            raise WindowNotForeground("Keep this job's Neat Video window visible and in front while profiling.")
+        if not self.api.is_viewable(hwnd):
+            raise WindowObscured("Restore this job's Neat Video window to continue profiling.")
 
     def screenshot(self, hwnd):
-        self._require_owned_foreground(hwnd)
+        self._require_owned_visible(hwnd)
         pixels = self.api.screenshot(hwnd, visible=True)
-        self._require_owned_foreground(hwnd)
+        self._require_owned_visible(hwnd)
         if pixels.any():
             self.black_since = None
         else:
@@ -724,17 +738,19 @@ class VisibleWindowsDisplay(WindowsDisplay):
         return pixels
 
     def _click(self, hwnd, point):
-        self._require_owned_foreground(hwnd)
+        self._require_owned_visible(hwnd)
+        if not self.api.point_is_visible(hwnd, point):
+            raise WindowObscured("Uncover this job's Neat Video controls to continue profiling.")
         self.api.click(hwnd, point)
 
     def poll_profile(self):
         try:
             result = super().poll_profile()
-            self.waiting_foreground = False
+            self.waiting_visible = False
             return result
-        except WindowNotForeground as error:
+        except WindowObscured as error:
             self.ready_since = self.check_preview_since = self.black_since = None
-            if not self.waiting_foreground:
-                self.notify({"stage": "waiting_foreground", "message": str(error)})
-                self.waiting_foreground = True
+            if not self.waiting_visible:
+                self.notify({"stage": "waiting_visible", "message": str(error)})
+                self.waiting_visible = True
             return False

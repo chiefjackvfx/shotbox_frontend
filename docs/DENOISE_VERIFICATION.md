@@ -149,18 +149,29 @@ Auto Profile → Profile Check → Apply sequence.
 
 Window enumeration is restricted to the live Nuke child's PID before dialog
 inspection, capture or input. Visible capture uses BitBlt on the client DC;
-it does not depend on Qt handling WM_PRINT. Capture and targeted input require
-the owned window to be in front and not minimized, and ownership/focus is checked
-again after capture. Losing focus resets readiness and shows a progress message;
-no desktop switching or global mouse input is used. A continuously black capture
+it does not depend on Qt handling WM_PRINT. Capture requires the owned window
+to be visible and not minimized; ownership and visibility are checked again
+after capture. Before input, ClientToScreen and WindowFromPoint verify that the
+matched button's screen point belongs to the same editor's window hierarchy.
+Other Nuke dialogs are rejected too. Covered controls reset readiness and show
+a progress message. No desktop switching or global mouse input is used. A continuously black capture
 fails after ten seconds. Keep Neat unobscured during the Windows retry.
 
 Mocked regressions verify current-desktop launch without desktop creation or
-closure, PID filtering, foreground loss, cancellation, black-capture failure,
+closure, PID filtering, minimization, cancellation, black-capture failure,
 ordered profiling clicks and BitBlt resource cleanup. Native Windows capture
 and control-image matching remain unverified. The older private adapter is
 retained for isolated command-line test fixtures; normal Windows jobs select
 the visible adapter. Linux behaviour is unchanged.
+
+The next user screenshot showed repeated foreground-wait messages with Neat
+visible. The strict foreground requirement has therefore been removed. An
+unobscured control can receive targeted input while keyboard focus is elsewhere.
+New mocked tests cover that case, covered-control retries, coordinate conversion
+including negative monitor coordinates, other-window rejection and invalid
+points. All 107 focused Windows, host and UI tests passed after this change.
+Live Windows delivery remains pending; the screenshot alone does not prove
+whether the recognised control would have accepted the earlier input method.
 
 ## Windows screenshot recognition
 

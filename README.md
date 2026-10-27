@@ -294,10 +294,12 @@ sudo apt install xvfb openbox
 ```
 
 Normal Shotbox runtime setup installs Python Xlib. Windows opens **visible NukeX
-and Neat Video windows** on your current desktop. Keep Neat Video in front,
-unobscured and unminimized while it profiles. If you switch away, automated
-capture and clicks pause until you bring it back; the profiling timeout still
-applies. Shotbox does not move your pointer. It only captures/clicks windows
+and Neat Video windows** on your current desktop. Keep Neat Video's controls
+uncovered and the window unminimized while it profiles. Keyboard focus may be
+in another window. Before each click, Shotbox checks that the screen point
+belongs to its Neat editor; covered controls pause the sequence until uncovered.
+The profiling timeout still applies. Shotbox does not move your pointer.
+It only captures/clicks windows
 belonging to its own Nuke process, and closes that process after completion or
 cancellation. Other Nuke sessions are excluded. Capture reads displayed client
 pixels instead of requesting an offscreen repaint. A persistently black capture
