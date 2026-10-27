@@ -6,16 +6,25 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-27T14:54:44+00:00] Test visible denoise ownership, capture, focus, sequencing, and cleanup.
-
 ### Changed
-
-- [2026-10-27T14:54:44+00:00] Run Windows denoise visibly; document foreground profiling requirements.
 
 ### Fixed
 
-- [2026-10-27T14:54:44+00:00] Capture visible Neat pixels instead of requesting offscreen painting.
-- [2026-10-27T14:54:44+00:00] Report persistently black captures before the full profiling timeout.
+## 5.2.10 - 2026-10-27
+
+### Added
+
+- Test visible denoise ownership, capture, focus, sequencing, and cleanup.
+
+### Changed
+
+- Run Windows denoise visibly; document foreground profiling requirements.
+
+### Fixed
+
+- Capture visible Neat pixels instead of requesting offscreen painting.
+- Report persistently black captures before the full profiling timeout.
+
 ## 5.2.9 - 2026-10-27
 
 ### Added
