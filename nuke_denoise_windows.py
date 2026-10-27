@@ -6,6 +6,7 @@ privileges are used. Win32 imports are lazy so Linux can test the adapter.
 from __future__ import annotations
 
 import ctypes as C
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -131,6 +132,7 @@ class WindowsAPI:
         bind(self.user, "SetThreadDesktop", BOOL, HANDLE)
         bind(self.user, "CloseDesktop", BOOL, HANDLE)
         bind(self.user, "EnumDesktopWindows", BOOL, HANDLE, self.callback_type, C.c_ssize_t)
+        bind(self.user, "EnumChildWindows", BOOL, HANDLE, self.callback_type, C.c_ssize_t)
         bind(self.user, "IsWindowVisible", BOOL, HANDLE)
         bind(self.user, "IsWindowEnabled", BOOL, HANDLE)
         bind(self.user, "GetWindow", HANDLE, HANDLE, C.c_uint)
@@ -281,6 +283,30 @@ class WindowsAPI:
         owner = self.user.GetWindow(hwnd, 4)  # GW_OWNER
         return name.value == "#32770" or bool(owner and not self.user.IsWindowEnabled(owner))
 
+    def window_details(self, hwnd):
+        """Read native dialog controls without relying on offscreen painting."""
+        def describe(handle):
+            name, text = C.create_unicode_buffer(256), C.create_unicode_buffer(2048)
+            self.user.GetClassNameW(handle, name, len(name))
+            result = SIZE_T()
+            # WM_GETTEXT works with controls in another process. Bound each
+            # call and the total number of controls; never invoke a button.
+            received = self.user.SendMessageTimeoutW(handle, 0x000D, len(text), C.addressof(text),
+                                                     0x23, 100, C.byref(result))
+            return {"handle": int(handle), "class": name.value,
+                    "text": text.value if received else "", "text_timeout": not bool(received)}
+
+        details = describe(hwnd)
+        details["children"] = []
+
+        @self.callback_type
+        def visit(child, _):
+            details["children"].append(describe(child))
+            return len(details["children"]) < 32
+
+        self.user.EnumChildWindows(hwnd, visit, 0)
+        return details
+
     def screenshot(self, hwnd):
         import numpy as np
         rect = Rect()
@@ -305,7 +331,18 @@ class WindowsAPI:
             self.checked(self.user.SendMessageTimeoutW(hwnd, 0x0317, dc, 0x1C, 0x23, 1500, C.byref(result)), "Capture Neat Video window")
             self.gdi.GdiFlush()
             raw = C.string_at(pixels, width * height * 4)
-            return np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
+            image = np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
+            if not image.any():
+                # Some custom window procedures only implement WM_PRINTCLIENT.
+                # Keep this retry bounded too; a successful message alone does
+                # not establish that the target actually painted anything.
+                C.set_last_error(0)
+                self.checked(self.user.SendMessageTimeoutW(hwnd, 0x0318, dc, 0x1C, 0x23, 1500, C.byref(result)),
+                             "Capture Neat Video client area")
+                self.gdi.GdiFlush()
+                raw = C.string_at(pixels, width * height * 4)
+                image = np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 4)[:, :, :3].copy()
+            return image
         finally:
             if previous:
                 self.gdi.SelectObject(dc, previous)
@@ -398,6 +435,13 @@ class WindowsDisplay(PrivateDisplay):
     def _dialog_screenshot(self, hwnd):
         return self.screenshot(hwnd)
 
+    def _dialog_details(self, hwnd):
+        details = self.api.window_details(hwnd)
+        (self.directory / "unexpected-dialog.json").write_text(json.dumps(details, indent=2), encoding="utf-8")
+        self.notify({"stage": "debug", "source": "Display", "message": "Native dialog: " + json.dumps(details)})
+        texts = [item["text"] for item in details.get("children", []) if item.get("text")]
+        return " Native controls: " + " | ".join(texts) if texts else " No native control text; see unexpected-dialog.json."
+
     def _click(self, hwnd, point):
         # Only handles enumerated on this job's unique desktop are accepted.
         if hwnd not in {window for window, _ in self.windows()}:
@@ -405,13 +449,21 @@ class WindowsDisplay(PrivateDisplay):
         self.api.click(hwnd, point)
 
     def __exit__(self, *_):
+        # Closing the owned job already requests termination of every member.
+        # Wait for that asynchronous termination before closing process handles;
+        # a second TerminateProcess call can return ERROR_ACCESS_DENIED while
+        # the original termination is still finishing.
+        job, self.job = self.job, None
         try:
-            if self.job is not None:
-                self.api.close_job(self.job)
-                self.job = None
+            if job is not None:
+                self.api.close_job(job)
         finally:
             try:
-                stop_process(self.child)
+                if self.child is not None:
+                    if job is not None:
+                        self.child.wait(timeout=5)
+                    else:
+                        stop_process(self.child)
             finally:
                 try:
                     if self.child is not None:

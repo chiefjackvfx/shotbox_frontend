@@ -107,7 +107,7 @@ Reference contracts:
 - [CPython startup-field handling](https://github.com/python/cpython/blob/3.13/Modules/_winapi.c)
 - [Foundry Qt terminal mode](https://learn.foundry.com/nuke/content/comp_environment/configuring_nuke/command_line_operations.html)
 
-141 tests passed on the Linux development machine across the denoise,
+147 tests passed on the Linux development machine across the denoise,
 Windows-adapter, detector, benchmark, dashboard, and thumbnail suites. Windows
 coverage includes 64-bit ABI/handle declarations, the actual native startup
 structure and attribute contents, atomic job assignment, restricted standard
@@ -189,6 +189,35 @@ The three-clip failure-continuation batch completed in 19.454 seconds
 with six finite full-resolution EXRs and 777 Qt timer ticks. Its report is
 `.cache/temp/denoise-batch-acceptance-6ql69cu5/acceptance.json`. These are Linux
 results; Windows capture and control recognition still require native evidence.
+
+### Windows profiling failure follow-up
+
+The supplied Windows 17.1v2 report passed executable selection and preflight,
+loaded the generated script, evaluated its middle frame, and reached profiling.
+It then stopped on a window titled `NeatVideo6 OFX 64`, with `saved: false`.
+The supplied screenshot was black, so neither its title nor the PNG identifies
+the contents. This run does not qualify Windows denoising.
+
+Black `WM_PRINT` results now trigger one bounded `WM_PRINTCLIENT` retry. This
+can help custom window procedures that implement only client painting; it is
+not proof that the installed Windows plugin will paint on an inactive desktop.
+See Microsoft's [WM_PRINTCLIENT contract](https://learn.microsoft.com/en-us/windows/win32/gdi/wm-printclient).
+Unexpected dialogs also produce `unexpected-dialog.json` with window classes
+and native control text, read using bounded `WM_GETTEXT` messages. Up to 32
+child controls are inspected with a 100 ms timeout per read. Available text is
+included in debug output and the failure message even when the PNG is black.
+The backend still refuses to click an unidentified dialog or save its script.
+Rerun the updated Windows verifier and inspect its native text/details before
+changing window recognition; no new Windows-native result has been obtained.
+
+A separate supplied failure showed `TerminateProcess: Access is denied` during
+cleanup. The backend terminated the owned job and immediately attempted to
+terminate Nuke again. Job teardown now waits for Nuke to finish before closing
+its handles, avoiding that second termination request. Microsoft documents
+[asynchronous termination and error 5 for an already terminated process](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminateprocess).
+Regression coverage checks that cleanup waits after closing the job, preserves
+the original profiling error, and still releases the desktop on a wait timeout.
+These adapter tests run on Linux; native Windows confirmation remains pending.
 
 ## User-supplied test comp
 

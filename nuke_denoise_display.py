@@ -261,8 +261,12 @@ class PrivateDisplay:
                     self.neat_title = title
                 candidates.append(window)
             elif self._unexpected_dialog(window):
-                cv2.imwrite(str(self.directory / "unexpected-dialog.png"), self._dialog_screenshot(window))
-                raise RuntimeError(f"Unexpected dialog during denoise: {title}. See unexpected-dialog.png.")
+                details = self._dialog_details(window)
+                image = self._dialog_screenshot(window)
+                cv2.imwrite(str(self.directory / "unexpected-dialog.png"), image)
+                if not image.any():
+                    details += " Capture is black; the dialog contents were not visually verified."
+                raise RuntimeError(f"Unexpected dialog during denoise: {title}. See unexpected-dialog.png.{details}")
         if not candidates:
             return self.applied
         if len(candidates) != 1:
@@ -301,6 +305,9 @@ class PrivateDisplay:
         return (window.get_wm_transient_for() is not None
                 and not any(value.casefold() in {"nuke", "nukex", "nukestudio"}
                             for value in (window.get_wm_class() or ())))
+
+    def _dialog_details(self, window):
+        return ""
 
     def _dialog_screenshot(self, window):
         return self.screenshot(self.connection.screen().root)

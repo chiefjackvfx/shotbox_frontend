@@ -31,6 +31,7 @@ class WindowsDenoiseTests(unittest.TestCase):
         self.api.create_job.return_value = 0x100000003
         self.api.windows.return_value = [(0x100000004, "Neat Video 6.1.2 Studio")]
         self.api.unexpected_dialog.return_value = False
+        self.api.window_details.return_value = {"class": "#32770", "text": "NeatVideo6 OFX 64", "children": []}
         self.display = windows.WindowsDisplay(self.directory, lambda: False, api=self.api)
 
     def canvas(self, *names):
@@ -118,6 +119,97 @@ class WindowsDenoiseTests(unittest.TestCase):
         with self.assertRaisesRegex(OSError, "No job handle"):
             other.__enter__()
         self.assertEqual(self.api.close_desktop.call_count, 2)
+
+    def test_black_dialog_capture_reports_native_text_without_clicking(self):
+        with self.display:
+            self.api.windows.return_value = [(222, "NeatVideo6 OFX 64")]
+            self.api.unexpected_dialog.return_value = True
+            self.api.window_details.return_value = {
+                "class": "#32770", "text": "NeatVideo6 OFX 64",
+                "children": [{"class": "Static", "text": "Example plugin startup error"}]}
+            self.api.screenshot.return_value = self.canvas()
+            with self.assertRaisesRegex(RuntimeError, "Example plugin startup error") as caught:
+                self.display.poll_profile()
+            self.assertIn("Capture is black", str(caught.exception))
+            details = json.loads((self.directory / "unexpected-dialog.json").read_text())
+            self.assertEqual(details["children"][0]["text"], "Example plugin startup error")
+            self.api.click.assert_not_called()
+            self.assertFalse((self.directory / "profile-confirmed").exists())
+
+    def test_native_dialog_control_text_uses_bounded_cross_process_messages(self):
+        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
+        api.user = mock.Mock()
+        api.callback_type = ctypes.CFUNCTYPE(windows.BOOL, windows.HANDLE, ctypes.c_ssize_t)
+        def class_name(hwnd, buffer, length):
+            buffer.value = "#32770" if hwnd == 222 else "Static"
+        def text(hwnd, message, length, address, flags, timeout, result):
+            self.assertEqual((message, flags, timeout), (0xD, 0x23, 100))
+            buffer = ctypes.create_unicode_buffer("Plugin title" if hwnd == 222 else "Plugin startup message")
+            ctypes.memmove(address, buffer, ctypes.sizeof(buffer))
+            return True
+        api.user.GetClassNameW.side_effect = class_name
+        api.user.SendMessageTimeoutW.side_effect = text
+        api.user.EnumChildWindows.side_effect = lambda hwnd, callback, data: callback(333, data)
+        details = api.window_details(222)
+        self.assertEqual(details["text"], "Plugin title")
+        self.assertEqual(details["children"][0]["text"], "Plugin startup message")
+        self.assertFalse(details["children"][0]["text_timeout"])
+
+    def test_black_wm_print_capture_retries_bounded_client_paint(self):
+        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
+        api.user, api.gdi = mock.Mock(), mock.Mock()
+        pixels = ctypes.create_string_buffer(24)
+        def rect(hwnd, pointer):
+            value = ctypes.cast(pointer, ctypes.POINTER(windows.Rect)).contents
+            value.right, value.bottom = 3, 2
+            return True
+        def bitmap(dc, info, usage, pointer, section, offset):
+            ctypes.cast(pointer, ctypes.POINTER(ctypes.c_void_p))[0] = ctypes.addressof(pixels)
+            return 5
+        def paint(hwnd, message, dc, flags, mode, timeout, result):
+            self.assertEqual(timeout, 1500)
+            if message == 0x318:
+                ctypes.memmove(pixels, bytes(range(24)), 24)
+            return True
+        api.user.GetClientRect.side_effect = rect
+        api.user.SendMessageTimeoutW.side_effect = paint
+        api.gdi.CreateDIBSection.side_effect = bitmap
+        with mock.patch.object(ctypes, "set_last_error", create=True):
+            image = api.screenshot(222)
+        self.assertEqual([call.args[1] for call in api.user.SendMessageTimeoutW.call_args_list], [0x317, 0x318])
+        self.assertEqual(image[1, 2].tolist(), [20, 21, 22])
+        api.gdi.DeleteObject.assert_called_once_with(5)
+        api.user.ReleaseDC.assert_called_once()
+
+    def test_job_cleanup_waits_without_terminating_a_dying_process_again(self):
+        process = mock.Mock()
+        process.terminate.side_effect = PermissionError("TerminateProcess: Access is denied")
+        with self.display:
+            self.display.child = process
+            process.wait.side_effect = lambda **_: self.api.close_job.assert_called_once()
+        process.wait.assert_called_once_with(timeout=5)
+        process.terminate.assert_not_called()
+        process.close.assert_called_once()
+        self.api.close_desktop.assert_called_once()
+
+    def test_job_cleanup_preserves_the_original_profiling_error(self):
+        process = mock.Mock()
+        process.terminate.side_effect = PermissionError("TerminateProcess: Access is denied")
+        with self.assertRaisesRegex(RuntimeError, "Unexpected dialog: NeatVideo6 OFX 64"):
+            with self.display:
+                self.display.child = process
+                raise RuntimeError("Unexpected dialog: NeatVideo6 OFX 64")
+        process.terminate.assert_not_called()
+        process.close.assert_called_once()
+
+    def test_job_cleanup_timeout_still_releases_desktop(self):
+        process = mock.Mock()
+        process.wait.side_effect = subprocess.TimeoutExpired(["Nuke.exe"], 5)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            with self.display:
+                self.display.child = process
+        process.close.assert_called_once()
+        self.api.close_desktop.assert_called_once()
 
     def test_windows_launch_uses_private_desktop_and_no_inherited_x11(self):
         environment = self.display.environment({"DISPLAY": ":0", "XAUTHORITY": "user", "QT_QPA_PLATFORM": "offscreen"})

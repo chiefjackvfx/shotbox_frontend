@@ -6,10 +6,14 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T09:45:41+00:00] Covered Windows termination races and original-error preservation.
+- [2026-10-27T09:49:01+00:00] Capture native dialog text when Windows screenshots fail.
 ### Changed
 
 ### Fixed
 
+- [2026-10-27T09:45:41+00:00] Wait for job termination before closing Windows workers.
+- [2026-10-27T09:49:01+00:00] Retry black Windows captures using bounded client painting.
 ## 5.2.1 - 2026-10-27
 
 ### Added
