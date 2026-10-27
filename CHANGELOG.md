@@ -10,6 +10,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
+- [2026-10-27T13:33:36+00:00] Ignore local EXR fixture and remove oversized unpushed history.
+
 ## 5.2.3 - 2026-10-27
 
 ### Added
