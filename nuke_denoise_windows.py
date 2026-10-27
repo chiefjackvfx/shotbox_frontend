@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import time
 import uuid
 
 from nuke_denoise_display import DenoiseCancelled, PrivateDisplay, child_environment, stop_process
@@ -383,6 +384,7 @@ class WindowsDisplay(PrivateDisplay):
         self.clicked_auto = self.applied = False
         self.ready_since = None
         self.templates = {}
+        self.pending_dialog = None
 
     def __enter__(self):
         try:
@@ -432,15 +434,48 @@ class WindowsDisplay(PrivateDisplay):
     def _unexpected_dialog(self, hwnd):
         return self.api.unexpected_dialog(hwnd)
 
+    def poll_profile(self):
+        self.dialog_seen = False
+        try:
+            return super().poll_profile()
+        finally:
+            if not self.dialog_seen:
+                self.pending_dialog = None
+
+    def _prepare_dialog(self, hwnd, title):
+        self.dialog_seen = True
+        key = (hwnd, title)
+        now = time.monotonic()
+        if self.pending_dialog is None or self.pending_dialog[0] != key:
+            self.pending_dialog = (key, now)
+            self.notify({"stage": "debug", "source": "Display",
+                         "message": f"Waiting for modal window to settle: {title}"})
+        # A transient opening window may disappear or become the profile editor.
+        # While it is present, no profiling control may be clicked.
+        return now - self.pending_dialog[1] >= 2
+
     def _dialog_screenshot(self, hwnd):
         return self.screenshot(hwnd)
 
     def _dialog_details(self, hwnd):
+        from nuke_denoise_accessibility import read_dialog
         details = self.api.window_details(hwnd)
-        (self.directory / "unexpected-dialog.json").write_text(json.dumps(details, indent=2), encoding="utf-8")
-        self.notify({"stage": "debug", "source": "Display", "message": "Native dialog: " + json.dumps(details)})
         texts = [item["text"] for item in details.get("children", []) if item.get("text")]
-        return " Native controls: " + " | ".join(texts) if texts else " No native control text; see unexpected-dialog.json."
+        if not texts:
+            accessibility = read_dialog(self, hwnd)
+            details["accessibility"] = accessibility
+            for item in accessibility.get("elements", []):
+                for field in ("name", "help"):
+                    text = item.get(field)
+                    if text and text != details.get("text") and text not in texts:
+                        texts.append(text)
+        (self.directory / "unexpected-dialog.json").write_text(json.dumps(details, indent=2), encoding="utf-8")
+        self.notify({"stage": "debug", "source": "Display", "message": "Dialog details: " + json.dumps(details)})
+        if texts:
+            return " Dialog controls: " + " | ".join(texts)
+        error = details.get("accessibility", {}).get("error")
+        suffix = f" Accessibility: {error}" if error else ""
+        return " No dialog control text; see unexpected-dialog.json." + suffix
 
     def _click(self, hwnd, point):
         # Only handles enumerated on this job's unique desktop are accepted.

@@ -6,9 +6,16 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T13:40:47+00:00] Read separate Qt denoise dialogs through Windows accessibility.
+- [2026-10-27T13:40:47+00:00] Test accessibility cleanup, timeouts, cancellation, and transient denoise windows.
+
 ### Changed
 
+- [2026-10-27T13:40:47+00:00] Document Windows diagnostic retry and pending native qualification.
+
 ### Fixed
+
+- [2026-10-27T13:40:47+00:00] Allow opening Windows denoise dialogs time to settle.
 
 ## 5.2.4 - 2026-10-27
 

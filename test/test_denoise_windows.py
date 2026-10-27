@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import ctypes
 import json
 from pathlib import Path
@@ -16,6 +17,7 @@ import numpy as np
 
 import app_cache
 import nuke_denoise as supervisor
+import nuke_denoise_accessibility as accessibility
 import nuke_denoise_child as child
 import nuke_denoise_display as displays
 import nuke_denoise_windows as windows
@@ -103,8 +105,11 @@ class WindowsDenoiseTests(unittest.TestCase):
             self.api.windows.return_value = [(222, "License warning")]
             self.api.unexpected_dialog.return_value = True
             self.api.screenshot.return_value = self.canvas()
-            with self.assertRaisesRegex(RuntimeError, "Unexpected dialog"):
-                self.display.poll_profile()
+            with mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+                self.assertFalse(self.display.poll_profile())
+                clock.return_value = 12.1
+                with self.assertRaisesRegex(RuntimeError, "Unexpected dialog"):
+                    self.display.poll_profile()
             self.assertTrue((self.directory / "unexpected-dialog.png").is_file())
             self.assertFalse((self.directory / "profile-confirmed").exists())
 
@@ -128,13 +133,114 @@ class WindowsDenoiseTests(unittest.TestCase):
                 "class": "#32770", "text": "NeatVideo6 OFX 64",
                 "children": [{"class": "Static", "text": "Example plugin startup error"}]}
             self.api.screenshot.return_value = self.canvas()
-            with self.assertRaisesRegex(RuntimeError, "Example plugin startup error") as caught:
-                self.display.poll_profile()
+            with mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+                self.assertFalse(self.display.poll_profile())
+                clock.return_value = 12.1
+                with self.assertRaisesRegex(RuntimeError, "Example plugin startup error") as caught:
+                    self.display.poll_profile()
             self.assertIn("Capture is black", str(caught.exception))
             details = json.loads((self.directory / "unexpected-dialog.json").read_text())
             self.assertEqual(details["children"][0]["text"], "Example plugin startup error")
             self.api.click.assert_not_called()
             self.assertFalse((self.directory / "profile-confirmed").exists())
+
+    def test_transient_modal_blocks_clicks_then_allows_profile_editor(self):
+        with self.display:
+            self.api.windows.return_value = [(222, "NeatVideo6 OFX 64"), (333, "Neat Video 6.1.2 Studio")]
+            self.api.unexpected_dialog.return_value = True
+            self.api.screenshot.return_value = self.canvas("auto_profile")
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_not_called()
+            self.api.windows.return_value = [(333, "Neat Video 6.1.2 Studio")]
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_called_once()
+            self.assertIsNone(self.display.pending_dialog)
+            self.assertFalse((self.directory / "unexpected-dialog.json").exists())
+
+    def test_qt5_dialog_text_is_read_through_accessibility_despite_black_capture(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.api.windows.return_value = [(222, "NeatVideo6 OFX 64")]
+            self.api.unexpected_dialog.return_value = True
+            self.api.window_details.return_value = {"class": "Qt5152QWindow", "text": "NeatVideo6 OFX 64", "children": []}
+            self.api.screenshot.return_value = self.canvas()
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 12.1
+            result = {"available": True, "elements": [
+                {"name": "NeatVideo6 OFX 64"}, {"name": "Actual plugin warning", "help": "More detail"}]}
+            with mock.patch.object(accessibility, "read_dialog", return_value=result) as read:
+                with self.assertRaisesRegex(RuntimeError, "Actual plugin warning.*More detail") as caught:
+                    self.display.poll_profile()
+            read.assert_called_once_with(self.display, 222)
+            self.assertIn("Capture is black", str(caught.exception))
+            self.api.click.assert_not_called()
+            details = json.loads((self.directory / "unexpected-dialog.json").read_text())
+            self.assertEqual(details["accessibility"], result)
+            self.assertFalse((self.directory / "profile-confirmed").exists())
+
+    def test_accessibility_helper_stays_on_owned_desktop_without_replacing_nuke(self):
+        with self.display, mock.patch.dict("os.environ", {"SystemRoot": "C:/Windows"}):
+            nuke = self.display.child = mock.Mock()
+            helper = mock.Mock(returncode=0)
+            helper.poll.return_value = 0
+            self.api.create_process.return_value = helper
+            result = {"handle": 0x100000004, "available": True, "elements": [{"name": "Warning"}]}
+            helper.resume.side_effect = lambda: (self.directory / "dialog-accessibility.json").write_text(
+                json.dumps(result), encoding="utf-8-sig")
+            self.assertEqual(accessibility.read_dialog(self.display, 0x100000004), result)
+            arguments = self.api.create_process.call_args.args
+            self.assertEqual(arguments[1:3], (self.display.number, self.display.job))
+            self.assertIn("-MTA", arguments[0])
+            helper.close.assert_called_once()
+            helper.terminate.assert_not_called()
+            self.assertIs(self.display.child, nuke)
+
+    def test_accessibility_timeout_terminates_helper_and_preserves_nuke(self):
+        with self.display, mock.patch.dict("os.environ", {"SystemRoot": "C:/Windows"}), \
+                mock.patch.object(accessibility.time, "monotonic", side_effect=[0, 5]):
+            helper = mock.Mock()
+            helper.poll.return_value = None
+            self.api.create_process.return_value = helper
+            result = accessibility.read_dialog(self.display, 0x100000004)
+            self.assertFalse(result["available"])
+            self.assertIn("timed out", result["error"])
+            helper.terminate.assert_called_once()
+            helper.close.assert_called_once()
+
+    def test_accessibility_cancellation_stops_helper_and_propagates(self):
+        with self.display, mock.patch.dict("os.environ", {"SystemRoot": "C:/Windows"}):
+            helper = mock.Mock()
+            helper.poll.return_value = None
+            helper.resume.side_effect = lambda: setattr(self.display, "cancelled", lambda: True)
+            self.api.create_process.return_value = helper
+            with self.assertRaises(displays.DenoiseCancelled):
+                accessibility.read_dialog(self.display, 0x100000004)
+            helper.terminate.assert_called_once()
+            helper.close.assert_called_once()
+
+    def test_accessibility_refuses_other_desktops_and_discards_stale_results(self):
+        with self.display, mock.patch.dict("os.environ", {"SystemRoot": "C:/Windows"}):
+            result = accessibility.read_dialog(self.display, 999)
+            self.assertIn("left the private desktop", result["error"])
+            self.api.create_process.assert_not_called()
+            (self.directory / "dialog-accessibility.json").write_text('{"available": true}')
+            helper = mock.Mock(returncode=1)
+            helper.poll.return_value = 1
+            self.api.create_process.return_value = helper
+            result = accessibility.read_dialog(self.display, 0x100000004)
+            self.assertFalse(result["available"])
+            self.assertIn("exited with code 1", result["error"])
+            self.assertFalse((self.directory / "dialog-accessibility.json").exists())
+            helper.close.assert_called_once()
+
+    def test_accessibility_command_preserves_literal_unicode_and_shell_characters(self):
+        destination = "C:/artist's clips/雪/$name`test/dialog.json"
+        with mock.patch.dict("os.environ", {"SystemRoot": "C:/Windows"}):
+            command = accessibility.query_command(0x100000004, destination)
+        script = base64.b64decode(command[-1]).decode("utf-16-le")
+        self.assertIn("$targetHandle = [long]4294967300", script)
+        self.assertIn("$destination = 'C:/artist''s clips/雪/$name`test/dialog.json'", script)
+        self.assertIn("::FromHandle([IntPtr]$targetHandle)", script)
+        self.assertNotIn("RootElement", script)
 
     def test_native_dialog_control_text_uses_bounded_cross_process_messages(self):
         api = windows.WindowsAPI.__new__(windows.WindowsAPI)

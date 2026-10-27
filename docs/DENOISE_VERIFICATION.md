@@ -43,6 +43,28 @@ Neat editor version. On Windows, inspect `unexpected-dialog.json` alongside
 `unexpected-dialog.png`; a black image is not evidence of a recognized dialog.
 Do not automatically dismiss unknown dialogs.
 
+Windows modal diagnostics allow two seconds for an opening window to settle.
+When native control text is empty, an owned helper queries .NET UI Automation
+from the same private desktop. It reads only the target window's subtree,
+limited to 64 elements and six levels, without focusing or invoking controls.
+The supervisor bounds the query to four seconds and terminates the helper on
+timeout or cancellation. The helper uses Windows PowerShell in MTA mode with
+no user profile; no additional Python dependencies are required.
+
+The reported window class is `Qt5152QWindow`, so Neat owns a Qt 5.15.2 UI separate
+from Nuke's Qt 6 instance. The earlier in-process Qt 6 capture helper cannot
+inspect that window and has been replaced. The existing native paint fallback
+can still return a black PNG; text is read through accessibility independently.
+`unexpected-dialog.json` now includes an `accessibility` section with control
+names/help text or the query error. `dialog-accessibility.log` records helper
+startup failures. Unknown dialogs remain unacknowledged.
+
+Mocked regressions cover the supplied Qt 5 window shape, black captures,
+transient windows, private-desktop/job ownership, timeout/cancellation cleanup,
+stale-result removal and literal Unicode paths. The PowerShell/.NET query and
+the underlying Neat warning still require a native Windows retry; Linux checks
+do not qualify this integration or establish the cause of the warning.
+
 ## Recorded Linux results
 
 Earlier Linux template runs on 27 October 2026 verified dimensions, pixel

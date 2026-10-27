@@ -297,6 +297,17 @@ macOS is not supported. Windows qualification remains pending: the previously
 reported `NeatVideo6 OFX 64` dialog and black capture must be verified natively.
 The new template does not establish that this Windows interaction is fixed.
 
+Windows briefly waits for opening modal windows, then reads Windows
+accessibility labels when native child controls expose no text. This queries
+separate toolkit instances, including Neat's `Qt5152QWindow` and Nuke's Qt 6,
+without depending on a readable screenshot. The read-only helper uses
+Windows PowerShell/.NET UI Automation on the same private desktop, with a
+four-second timeout and cancellation support. On another failure, use **Open
+Logs** and share `unexpected-dialog.json`, including its `accessibility` section.
+If accessibility is unavailable, that section records the reason; the helper
+log is `dialog-accessibility.log`. The PNG may still be black. Unknown dialogs
+still stop the job without being dismissed.
+
 Run the Windows acceptance command from the frontend directory:
 
 ```powershell

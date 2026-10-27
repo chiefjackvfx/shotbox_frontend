@@ -276,6 +276,9 @@ class PrivateDisplay:
                     self.neat_title = title
                 candidates.append(window)
             elif self._unexpected_dialog(window):
+                if not self._prepare_dialog(window, title):
+                    self.ready_since = None
+                    return False
                 details = self._dialog_details(window)
                 image = self._dialog_screenshot(window)
                 cv2.imwrite(str(self.directory / "unexpected-dialog.png"), image)
@@ -323,6 +326,9 @@ class PrivateDisplay:
 
     def _dialog_details(self, window):
         return ""
+
+    def _prepare_dialog(self, window, title):
+        return True
 
     def _dialog_screenshot(self, window):
         return self.screenshot(self.connection.screen().root)
