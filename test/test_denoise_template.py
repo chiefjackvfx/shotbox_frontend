@@ -78,6 +78,15 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(result["read_colorspace"], colourspace)
         nuke.delete.assert_called_once_with(probe)
 
+    def test_windows_requests_full_gui_while_linux_keeps_qt_terminal(self):
+        for platform, qt_terminal in (("win32", False), ("linux", True)):
+            with self.subTest(platform=platform), mock.patch.object(template.sys, "platform", platform):
+                directory = self.root / platform
+                directory.mkdir()
+                request = json.loads(template.create_template_request(directory, self.media, "/nuke").read_text())
+                self.assertEqual(request["qt_terminal"], qt_terminal)
+                self.assertTrue(request["topdown"])
+
     def test_overwrite_defaults_to_latest_and_new_versions_are_distinct(self):
         first = template.output_directory(self.media)
         (first / "keep.txt").write_text("unrelated output")

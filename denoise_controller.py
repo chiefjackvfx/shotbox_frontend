@@ -316,7 +316,7 @@ class DenoiseController(QObject):
             return
         labels = {"starting": (1, "Starting NukeX and loading plugins…"),
                   "loading": (2, "Loading the denoise template and source…"),
-                  "preparing": (3, "Preparing the middle frame for profiling…"),
+                  "preparing": (3, "Preparing the first frame for profiling…"),
                   "profiling": (4, "Opening Prepare Noise Profile…"),
                   "auto_profiling": (4, "Auto Profile is analysing the noise…"),
                   "applying_profile": (5, "Auto Profile finished. Applying the noise profile…"),

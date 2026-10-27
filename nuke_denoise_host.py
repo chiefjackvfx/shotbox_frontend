@@ -100,12 +100,12 @@ def start(request_path):
             if last < first:
                 raise RuntimeError("The script frame range is invalid.")
             root["proxy"].setValue(False)
-            root.setFrame((first + last) // 2)
+            root.setFrame(first)
             event("preparing", first=first, last=last)
             # Neat Video requires an evaluated full-resolution input frame.
             # A full-image sample evaluates it without writing any render output.
             noise.sample("red", noise.width() / 2, noise.height() / 2, noise.width(), noise.height())
-            event("profiling", first=first, last=last, frame=(first + last) // 2,
+            event("profiling", first=first, last=last, frame=first,
                   width=noise.width(), height=noise.height())
             noise["Prepare_Profile..."].execute()
             receipt = directory / "profile-confirmed"

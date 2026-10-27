@@ -6,7 +6,13 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T13:51:12+00:00] Test Windows GUI launch and host shutdown lifecycle.
+
 ### Changed
+
+- [2026-10-27T13:51:41+00:00] Profile each clip's first frame on Windows and Linux.
+- [2026-10-27T13:51:12+00:00] Launch Windows denoise with full NukeX GUI privately.
+- [2026-10-27T13:51:12+00:00] Document Windows launch hypothesis and remaining verification.
 
 ### Fixed
 

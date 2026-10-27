@@ -78,7 +78,10 @@ class DenoiseHostTests(unittest.TestCase):
         self.source = self.directory / "original.mov"
         self.source.write_bytes(b"original media")
         self.media = {"source": str(self.source), "shot_dir": str(self.directory / "shot"), "shot_name": "test"}
-        self.request = supervisor.create_request(self.directory, self.media, "/nuke")
+        # Most host checks exercise the established Linux terminal workflow.
+        # The Windows GUI lifecycle has its own explicit check below.
+        with mock.patch.object(sys, "platform", "linux"):
+            self.request = supervisor.create_request(self.directory, self.media, "/nuke")
         request = json.loads(self.request.read_text())
         self.script = Path(request["script"])
         self.script.write_text("original script")
@@ -118,7 +121,7 @@ class DenoiseHostTests(unittest.TestCase):
         return self.frame
 
     def apply_profile(self):
-        self.assertEqual(self.frame, 1002)
+        self.assertEqual(self.frame, 1001)
         self.assertFalse(self.root["proxy"].value())
         (self.directory / "profile-confirmed").touch()
 
@@ -156,8 +159,9 @@ class DenoiseHostTests(unittest.TestCase):
         self.prepared = prepare
         return [json.loads(line) for line in (self.directory / "host-events.jsonl").read_text().splitlines()]
 
-    def test_profiles_middle_frame_and_caches_script_before_rendering_full_range(self):
+    def test_profiles_first_frame_and_caches_script_before_rendering_full_range(self):
         events = self.run_host()
+        self.assertEqual([event["frame"] for event in events if event["stage"] == "profiling"], [1001])
         self.assertEqual(events[-1], {"stage": "complete", "completed": 4, "total": 4})
         self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
         self.assertEqual((self.directory / "profiled.nk").read_text(), "fresh cached profile")
@@ -246,6 +250,17 @@ class DenoiseHostTests(unittest.TestCase):
         self.assertEqual(events[-1]["stage"], "complete")
         self.qt_application.quit.assert_called_once_with()
         self.nuke.scriptExit.assert_not_called()
+
+    def test_full_gui_host_profiles_renders_and_exits_nuke(self):
+        request = json.loads(self.request.read_text())
+        request["qt_terminal"] = False
+        self.request.write_text(json.dumps(request))
+        events = self.run_host()
+        self.assertEqual(events[-1]["stage"], "complete")
+        self.nuke.scriptExit.assert_called_once_with()
+        self.qt_application.quit.assert_not_called()
+        self.noise.sample.assert_called_once()
+        self.nuke.scriptSaveAs.assert_called_once_with(str(self.directory / "profiled.nk"), overwrite=True)
 
     def test_qt_terminal_without_QApplication_fails_before_loading_or_saving(self):
         self.nuke.GUI = False
@@ -405,7 +420,7 @@ class DenoiseHostTests(unittest.TestCase):
         self.noise._name = "Reduce Noise v6_1"
         self.assertIs(host.find_nodes(self.nuke)[0], self.noise)
 
-    def test_profiling_uses_middle_frame_despite_initial_callback_context(self):
+    def test_profiling_uses_first_frame_despite_initial_callback_context(self):
         self.frame = 1  # A new GUI Viewer starts here before loading the script.
         events = self.run_host()
         self.assertEqual(events[-1]["stage"], "complete")

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import sys
 from fractions import Fraction
 
 from nuke_headless_tasks import preview_input_exists, resolve_preview_sequence_input, resolve_preview_input_colourspace, map_input_colorspace
@@ -119,7 +120,11 @@ def create_template_request(directory, media, executable):
                "template": str(template), "source": source, "colourspace": media.get("colourspace"),
                "fps": media.get("fps") or 25,
                "output_pattern": (output / (output.name + "_####.exr")).as_posix(),
-               "nuke": str(executable), "write_node": "Write1", "qt_terminal": True, "topdown": True}
+               # Windows manual profiling succeeds in the full NukeX GUI;
+               # use its normal startup on the private desktop. Keep Linux's
+               # qualified Qt-terminal workflow unchanged.
+               "nuke": str(executable), "write_node": "Write1",
+               "qt_terminal": sys.platform != "win32", "topdown": True}
     path = directory / "request.json"
     path.write_text(json.dumps(request, indent=2), encoding="utf-8")
     return path

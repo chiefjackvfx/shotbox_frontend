@@ -120,6 +120,8 @@ def run(request_path, notify=emit):
                 environment.pop(key, None)
             notify({"stage": "starting"})
             notify({"stage": "debug", "source": "Supervisor",
+                    "message": "Nuke launch mode: " + ("Qt terminal" if bootstrap else "full GUI on private desktop")})
+            notify({"stage": "debug", "source": "Supervisor",
                     "message": f"Launching {shlex.join(command)} on {display.number}"})
             log_offset = 0
             with (directory / "nuke.log").open("wb") as log:

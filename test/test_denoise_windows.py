@@ -507,7 +507,8 @@ class WindowsDenoiseTests(unittest.TestCase):
     def test_supervisor_windows_branch_keeps_host_events_environment_and_cleanup(self):
         source = self.directory / "source.mov"
         source.write_text("source")
-        request = supervisor.create_request(self.directory, {"source": str(source), "shot_dir": str(self.directory), "shot_name": "test"}, "C:/Program Files/Nuke/Nuke.exe")
+        with mock.patch.object(sys, "platform", "win32"):
+            request = supervisor.create_request(self.directory, {"source": str(source), "shot_dir": str(self.directory), "shot_name": "test"}, "C:/Program Files/Nuke/Nuke.exe")
         display = mock.Mock(number="private-desktop")
         display.environment.side_effect = lambda base: {**base, "QT_QPA_PLATFORM": "windows"}
         context = mock.MagicMock()
@@ -526,6 +527,15 @@ class WindowsDenoiseTests(unittest.TestCase):
             result = supervisor.run(request, lambda event: None)
         self.assertEqual(result["stage"], "complete")
         self.assertTrue(result["profiled"])
+        command = popen.call_args.args[0]
+        self.assertIn("--nukex", command)
+        self.assertNotIn("--tg", command)
+        self.assertNotIn("-t", command)
+        self.assertFalse(json.loads(request.read_text())["qt_terminal"])
+        self.assertFalse((self.directory / "qt-bootstrap.py").exists())
+        startup = (self.directory / "startup/menu.py").read_text()
+        self.assertIn("nuke_denoise_host.py", startup)
+        self.assertIn(repr(str(request)), startup)
         environment = popen.call_args.args[1]
         self.assertEqual(environment["QT_QPA_PLATFORM"], "windows")
         self.assertEqual(environment["TEMP"], str(self.directory / "tmp"))

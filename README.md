@@ -265,7 +265,7 @@ readers and codecs, with no extension whitelist. Sequence patterns (`####` or
 frames and unreadable media produce per-clip errors. The shot's input-colourspace
 selection uses the same mapping as previews; defaults are ACEScg for EXR and
 sRGB for other inputs. The template's OCIO configuration and Neat filter settings
-are retained. Every clip evaluates its middle frame and performs fresh
+are retained. Every clip evaluates its first frame and performs fresh
 **Auto Profile → Apply** before rendering. Only `Write1` renders, without a display
 transform. Existing editing locks are neither acquired nor released.
 
@@ -293,6 +293,10 @@ sudo apt install xvfb openbox
 
 Normal Shotbox runtime setup installs Python Xlib. Windows uses a private desktop
 and a process job, without switching desktops or moving the user's pointer.
+Windows workers now start the full NukeX GUI through `menu.py`; Linux retains
+its verified `--tg` Qt-terminal launch. The activity log identifies the mode.
+This Windows-only change tests the launch-mode difference after successful
+manual Windows profiling; it still requires a native denoise retry.
 macOS is not supported. Windows qualification remains pending: the previously
 reported `NeatVideo6 OFX 64` dialog and black capture must be verified natively.
 The new template does not establish that this Windows interaction is fixed.
@@ -305,7 +309,9 @@ Windows PowerShell/.NET UI Automation on the same private desktop, with a
 four-second timeout and cancellation support. On another failure, use **Open
 Logs** and share `unexpected-dialog.json`, including its `accessibility` section.
 If accessibility is unavailable, that section records the reason; the helper
-log is `dialog-accessibility.log`. The PNG may still be black. Unknown dialogs
+log is `dialog-accessibility.log`. A successful accessibility query can still
+return only the window title, as observed for the `Information` dialog.
+The PNG may still be black. Unknown dialogs
 still stop the job without being dismissed.
 
 Run the Windows acceptance command from the frontend directory:

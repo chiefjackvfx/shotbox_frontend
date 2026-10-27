@@ -61,9 +61,22 @@ startup failures. Unknown dialogs remain unacknowledged.
 
 Mocked regressions cover the supplied Qt 5 window shape, black captures,
 transient windows, private-desktop/job ownership, timeout/cancellation cleanup,
-stale-result removal and literal Unicode paths. The PowerShell/.NET query and
-the underlying Neat warning still require a native Windows retry; Linux checks
-do not qualify this integration or establish the cause of the warning.
+stale-result removal and literal Unicode paths. A native Windows retry reached
+the `Information` window (`Qt5152QWindowIcon`) through UI Automation but exposed
+only its root title, with no message body. The PNG remained black. This does
+not establish the cause of the warning.
+
+Manual denoising was subsequently confirmed working on Windows, while the
+Shotbox Linux workflow also works. Windows requests now select full NukeX GUI
+startup via `menu.py`, leaving Linux's `--tg` launch and top-down setting intact.
+The GUI still runs on the private desktop. The supervisor logs the launch mode.
+This tests terminal-mode compatibility as a hypothesis; an inactive desktop
+or another Windows-specific difference could still be responsible.
+
+All 78 focused template/host/Windows tests passed locally after the change.
+Checks include platform-specific request selection, GUI startup without a
+terminal bootstrap, profile/render events, normal GUI exit, and cleanup.
+Native Windows denoising with this launch change remains unverified.
 
 ## Recorded Linux results
 
