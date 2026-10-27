@@ -6,6 +6,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T14:05:11+00:00] Add visible Windows profiling diagnosis without automatic rendering.
+- [2026-10-27T14:05:11+00:00] Test diagnostic setup isolation, launch, and profiling lifecycle.
 ### Changed
 
 ### Fixed

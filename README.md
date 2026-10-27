@@ -320,6 +320,21 @@ Run the Windows acceptance command from the frontend directory:
 .\venv\Scripts\python.exe test\denoise_windows_acceptance.py --nuke "C:\Program Files\Nuke17.1v2\Nuke17.1.exe"
 ```
 
+If an unreadable Neat warning still blocks profiling, reproduce the most recent
+Shotbox job visibly from the frontend directory:
+
+```powershell
+.\venv\Scripts\python.exe test\denoise_windows_diagnostic.py
+```
+
+This intentionally opens a visible NukeX window using the cached template,
+source, colourspace, sizing and first-frame profiling setup. It does not start
+a render or dismiss any Neat dialogs. Screenshot the warning before dismissing
+it; if the profile editor opens normally, report that instead. Close this Nuke
+window when finished. Working scripts, logs and redirected output paths stay
+under `.cache/temp/denoise-visible-*`. The command prints the selected job and
+clip; pass `--request "C:\path\to\failed-job\request.json"` to select another.
+
 The verifier requires the supplied `test/noise_test.exr`, template, Python test
 dependencies and `ffmpeg` on PATH for movie fixtures. It explicitly checks
 17.1v2, NukeX licensing and plugin loading, then tests the template workflow.

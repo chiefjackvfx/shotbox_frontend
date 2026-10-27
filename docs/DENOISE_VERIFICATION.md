@@ -96,6 +96,21 @@ preserves its original title and recorded text instead of replacing them with
 the capture error. All 73 focused host/Windows tests passed after these changes;
 the new native Windows behaviour still needs verification.
 
+## Visible Windows diagnostic
+
+The visible Windows diagnostic (`test/denoise_windows_diagnostic.py`) reproduces
+the latest cached job on the user's desktop instead of the private desktop.
+It copies the worker template, preserves media/colourspace/frame preparation,
+redirects outputs to its own leased cache directory, and opens Prepare Profile
+without rendering or closing Nuke. `--request` selects a particular cached job.
+The original job, source media and production output paths are not modified.
+It writes `prepared.nk`, `media.json`, `diagnostic-status.json`, `launch.json`
+and `nuke.log` beneath the printed diagnostic directory.
+
+Four mocked regressions passed for setup isolation, latest-job selection,
+visible GUI launch/environment, and first-frame profiling without rendering.
+Native Windows behaviour and the unreadable Neat warning remain unverified.
+
 ## Recorded Linux results
 
 Earlier Linux template runs on 27 October 2026 verified dimensions, pixel
