@@ -6,6 +6,7 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T13:54:37+00:00] Record window dimensions when denoise capture remains unavailable.
 - [2026-10-27T13:51:12+00:00] Test Windows GUI launch and host shutdown lifecycle.
 
 ### Changed
@@ -16,6 +17,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
+- [2026-10-27T13:54:37+00:00] Retry temporarily empty Windows profiling windows before failing.
+- [2026-10-27T13:54:37+00:00] Preserve plugin warning details when dialog screenshots fail.
 ## 5.2.5 - 2026-10-27
 
 ### Added

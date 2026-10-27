@@ -78,6 +78,14 @@ Checks include platform-specific request selection, GUI startup without a
 terminal bootstrap, profile/render events, normal GUI exit, and cleanup.
 Native Windows denoising with this launch change remains unverified.
 
+Empty Windows profile windows now retry for up to two seconds without clicking.
+If the client area stays empty, `window-capture-error.json` records its handle,
+dimensions and enumerated window titles. Invalid oversized geometry still fails
+before allocating a bitmap. An unexpected dialog's screenshot failure now
+preserves its original title and recorded text instead of replacing them with
+the capture error. All 73 focused host/Windows tests passed after these changes;
+the new native Windows behaviour still needs verification.
+
 ## Recorded Linux results
 
 Earlier Linux template runs on 27 October 2026 verified dimensions, pixel

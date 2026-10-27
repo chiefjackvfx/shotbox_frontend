@@ -100,6 +100,59 @@ class WindowsDenoiseTests(unittest.TestCase):
                 self.display._click(123, (50, 30))
             self.api.click.assert_not_called()
 
+    def test_empty_profile_window_retries_until_ready_without_clicking(self):
+        with self.display:
+            self.api.screenshot.side_effect = [windows.WindowNotReady(0x100000004, 0, 0), self.canvas("auto_profile")]
+            self.display.ready_since = 1
+            self.assertFalse(self.display.poll_profile())
+            self.assertIsNone(self.display.ready_since)
+            self.api.click.assert_not_called()
+            self.assertFalse((self.directory / "profile-confirmed").exists())
+            self.assertFalse(self.display.poll_profile())
+            self.api.click.assert_called_once()
+            self.assertIsNone(self.display.capture_retry)
+
+    def test_persistently_empty_profile_window_fails_with_geometry_diagnostics(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.api.screenshot.side_effect = windows.WindowNotReady(0x100000004, 0, 30)
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 12.1
+            with self.assertRaisesRegex(RuntimeError, "did not become ready.*0 x 30"):
+                self.display.poll_profile()
+            details = json.loads((self.directory / "window-capture-error.json").read_text())
+            self.assertEqual(details["client_size"], [0, 30])
+            self.assertEqual(details["windows"][0][1], "Neat Video 6.1.2 Studio")
+            self.api.click.assert_not_called()
+            self.assertFalse((self.directory / "profile-confirmed").exists())
+
+    def test_failed_dialog_capture_preserves_original_warning_and_text(self):
+        with self.display, mock.patch.object(windows.time, "monotonic", return_value=10) as clock:
+            self.api.windows.return_value = [(222, "Information")]
+            self.api.unexpected_dialog.return_value = True
+            self.api.window_details.return_value = {"text": "Information", "children": [{"text": "Plugin explanation"}]}
+            self.api.screenshot.side_effect = windows.WindowNotReady(222, 0, 0)
+            self.assertFalse(self.display.poll_profile())
+            clock.return_value = 12.1
+            with self.assertRaisesRegex(RuntimeError, "Unexpected dialog.*Information.*Plugin explanation.*Screenshot unavailable"):
+                self.display.poll_profile()
+            self.assertTrue((self.directory / "unexpected-dialog.json").exists())
+            self.api.click.assert_not_called()
+
+    def test_empty_or_oversized_capture_never_allocates_a_bitmap(self):
+        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
+        api.user, api.gdi = mock.Mock(), mock.Mock()
+        for width, height, error in ((0, 40, windows.WindowNotReady), (50, 0, windows.WindowNotReady),
+                                     (17000, 40, RuntimeError), (-1, 40, RuntimeError)):
+            def get_rect(hwnd, pointer):
+                rect = ctypes.cast(pointer, ctypes.POINTER(windows.Rect)).contents
+                rect.right, rect.bottom = width, height
+                return True
+            api.user.GetClientRect.side_effect = get_rect
+            with self.subTest(size=(width, height)), self.assertRaises(error):
+                api.screenshot(222)
+        api.user.GetDC.assert_not_called()
+        api.gdi.CreateDIBSection.assert_not_called()
+
     def test_unexpected_modal_is_captured_and_prevents_profile_receipt(self):
         with self.display:
             self.api.windows.return_value = [(222, "License warning")]

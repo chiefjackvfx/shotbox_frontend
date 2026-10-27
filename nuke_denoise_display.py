@@ -280,11 +280,20 @@ class PrivateDisplay:
                     self.ready_since = None
                     return False
                 details = self._dialog_details(window)
-                image = self._dialog_screenshot(window)
-                cv2.imwrite(str(self.directory / "unexpected-dialog.png"), image)
-                if not image.any():
-                    details += " Capture is black; the dialog contents were not visually verified."
-                raise RuntimeError(f"Unexpected dialog during denoise: {title}. See unexpected-dialog.png.{details}")
+                try:
+                    image = self._dialog_screenshot(window)
+                    if not cv2.imwrite(str(self.directory / "unexpected-dialog.png"), image):
+                        raise RuntimeError("Could not save unexpected-dialog.png.")
+                    capture = " See unexpected-dialog.png."
+                    if not image.any():
+                        capture += " Capture is black; the dialog contents were not visually verified."
+                except DenoiseCancelled:
+                    raise
+                except Exception as error:
+                    # Capturing a closing/empty dialog must not replace the
+                    # actual plugin warning and its already recorded text.
+                    capture = f" Screenshot unavailable: {error}"
+                raise RuntimeError(f"Unexpected dialog during denoise: {title}.{details}{capture}")
         if not candidates:
             return self.applied
         if len(candidates) != 1:

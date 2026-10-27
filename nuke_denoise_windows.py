@@ -19,6 +19,12 @@ DWORD, LONG, BOOL = C.c_uint32, C.c_int32, C.c_int32
 HANDLE, SIZE_T = C.c_void_p, C.c_size_t
 
 
+class WindowNotReady(RuntimeError):
+    def __init__(self, hwnd, width, height):
+        self.hwnd, self.width, self.height = int(hwnd), width, height
+        super().__init__(f"Window {self.hwnd} has an empty client area ({width} x {height}).")
+
+
 class Point(C.Structure):
     _fields_ = [("x", LONG), ("y", LONG)]
 
@@ -298,6 +304,9 @@ class WindowsAPI:
                     "text": text.value if received else "", "text_timeout": not bool(received)}
 
         details = describe(hwnd)
+        rect = Rect()
+        details["client_size"] = ([rect.right - rect.left, rect.bottom - rect.top]
+                                  if self.user.GetClientRect(hwnd, C.byref(rect)) else None)
         details["children"] = []
 
         @self.callback_type
@@ -313,8 +322,10 @@ class WindowsAPI:
         rect = Rect()
         self.checked(self.user.GetClientRect(hwnd, C.byref(rect)), "GetClientRect")
         width, height = rect.right - rect.left, rect.bottom - rect.top
+        if width == 0 or height == 0:
+            raise WindowNotReady(hwnd, width, height)
         if not (1 <= width <= 16384 and 1 <= height <= 16384):
-            raise RuntimeError("Neat Video returned an invalid window size.")
+            raise RuntimeError(f"Window {int(hwnd)} returned an invalid client size: {width} x {height}.")
         screen = self.checked(self.user.GetDC(hwnd), "GetDC")
         dc = bitmap = previous = None
         try:
@@ -385,6 +396,7 @@ class WindowsDisplay(PrivateDisplay):
         self.ready_since = None
         self.templates = {}
         self.pending_dialog = None
+        self.capture_retry = None
 
     def __enter__(self):
         try:
@@ -437,7 +449,22 @@ class WindowsDisplay(PrivateDisplay):
     def poll_profile(self):
         self.dialog_seen = False
         try:
-            return super().poll_profile()
+            result = super().poll_profile()
+            self.capture_retry = None
+            return result
+        except WindowNotReady as error:
+            # Visible top-level windows can still have no client area while
+            # opening. Retry without clicking or confirming a profile.
+            self.ready_since = None
+            now = time.monotonic()
+            if self.capture_retry is None or self.capture_retry[0] != error.hwnd:
+                self.capture_retry = (error.hwnd, now)
+            if now - self.capture_retry[1] >= 2:
+                details = {"handle": error.hwnd, "client_size": [error.width, error.height],
+                           "windows": [(int(hwnd), title) for hwnd, title in self.windows()]}
+                (self.directory / "window-capture-error.json").write_text(json.dumps(details, indent=2), encoding="utf-8")
+                raise RuntimeError(f"Neat Video window did not become ready: {error} See window-capture-error.json.") from error
+            return False
         finally:
             if not self.dialog_seen:
                 self.pending_dialog = None
