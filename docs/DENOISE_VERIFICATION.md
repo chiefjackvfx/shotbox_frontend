@@ -162,6 +162,31 @@ and control-image matching remain unverified. The older private adapter is
 retained for isolated command-line test fixtures; normal Windows jobs select
 the visible adapter. Linux behaviour is unchanged.
 
+## Windows screenshot recognition
+
+The user supplied three Windows Neat 6.1.3 screenshots showing the loaded
+editor, a completed Auto Profile, and the active Profile Check preview.
+These were copied from Pictures into `.cache/temp/denoise-windows-reference`.
+Control crops, including disabled Apply and Adjust and Preview, now live in
+`ui/denoise/windows` with source/crop provenance. Redacted control-only fixtures
+are retained in `test/fixtures/denoise_windows`; source footage and the remote
+desktop are excluded from those fixtures.
+
+Normal visible Windows jobs use these references instead of Linux-derived
+controls. Matching calibrates scale from Auto Profile, searches small scale
+variations for subsequent controls, and compares enabled/disabled alternatives
+at the same candidate location. Assist Image matching masks the footage behind
+the lettering. The captured third state retains Build Profile, which the
+sequence now explicitly exercises. Linux and private test-fixture matching
+retain their existing references.
+
+Screenshot replay tests distinguish all expected positive and negative states
+at 100%, 80%, 93%, 125% and 150%. Additional checks reject disabled Apply even
+with the Check preview visible, tolerate changed footage behind Assist Image,
+and reject blank captures or Apply outside the footer. `control-scale.json`
+records the chosen scale and capture size. These checks validate recognition
+from the supplied screenshots, not live Windows capture or delivered clicks.
+
 ## Recorded Linux results
 
 Earlier Linux template runs on 27 October 2026 verified dimensions, pixel

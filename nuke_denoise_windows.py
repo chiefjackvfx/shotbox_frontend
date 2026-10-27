@@ -658,6 +658,22 @@ class VisibleWindowsDisplay(WindowsDisplay):
         self.waiting_foreground = False
         self.black_since = None
 
+    def _load_templates(self):
+        from nuke_denoise_controls import WindowsControlMatcher
+        self.control_matcher = WindowsControlMatcher()
+        self.templates = self.control_matcher.templates
+
+    def _match(self, pixels, name):
+        previous_scale = self.control_matcher.scale
+        point = self.control_matcher.match(pixels, name)
+        if previous_scale is None and self.control_matcher.scale is not None:
+            details = {"reference": "Windows Neat Video 6.1.3", "scale": self.control_matcher.scale,
+                       "capture_size": [pixels.shape[1], pixels.shape[0]]}
+            (self.directory / "control-scale.json").write_text(json.dumps(details, indent=2), encoding="utf-8")
+            self.notify({"stage": "debug", "source": "Display",
+                         "message": "Windows control recognition calibrated: " + json.dumps(details)})
+        return point
+
     def __enter__(self):
         try:
             self.api = self.api or WindowsAPI()

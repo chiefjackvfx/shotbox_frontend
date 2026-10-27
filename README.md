@@ -308,6 +308,13 @@ Xvfb display and verified `--tg` launch. The activity log identifies the mode.
 macOS is not supported. Windows qualification remains pending: the visible
 diagnostic opens Neat 6.1.3, but automated visible capture/clicks need a native retry.
 
+Visible Windows jobs now use control references captured from Windows Neat
+6.1.3, with scale calibration from Auto Profile. Enabled Apply and Adjust and
+Preview are compared against captured disabled states; Profile Check must be
+selected before its preview can permit Apply. Calibration is recorded in
+`control-scale.json`. The three supplied Windows states pass screenshot replay
+at multiple scales; live Windows automation still needs verification.
+
 Before the versioned editor opens, Windows allows up to two minutes for the
 `NeatVideo6 OFX 64` loading window, without clicking or dismissing it.
 Auto Profile waits for its enabled control; Profile Check waits for a completed

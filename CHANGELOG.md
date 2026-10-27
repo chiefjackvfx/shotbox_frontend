@@ -6,10 +6,16 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T15:20:02+00:00] Add Windows screenshot fixtures and control recognition regression tests.
+
 ### Changed
+
+- [2026-10-27T15:20:02+00:00] Record Windows control scale calibration in denoise job logs.
 
 ### Fixed
 
+- [2026-10-27T15:20:02+00:00] Recognize Windows Neat controls using captured, scale-adjusted Windows references.
+- [2026-10-27T15:20:02+00:00] Distinguish disabled Apply and preview controls before advancing denoise.
 ## 5.2.10 - 2026-10-27
 
 ### Added

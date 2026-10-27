@@ -983,7 +983,7 @@ class VisibleWindowsDenoiseTests(unittest.TestCase):
             self.assertFalse(self.display.poll_profile())
             self.assertTrue(self.display.clicked_check)
             self.api.screenshot.return_value = self.canvas(
-                "auto_profile", "adjust_ready", "profile_check_active", "profile_check_preview", "apply")
+                "build_profile", "adjust_ready", "profile_check_active", "profile_check_preview", "apply")
             clock.return_value = 12
             self.assertFalse(self.display.poll_profile())
             clock.return_value = 13
