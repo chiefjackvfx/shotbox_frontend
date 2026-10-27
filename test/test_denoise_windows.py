@@ -100,6 +100,36 @@ class WindowsDenoiseTests(unittest.TestCase):
                 self.display._click(123, (50, 30))
             self.api.click.assert_not_called()
 
+    def test_input_helper_classes_are_not_modals_when_nuke_owner_is_disabled(self):
+        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
+        api.user = mock.Mock()
+        api.user.GetWindow.return_value = 999
+        api.user.IsWindowEnabled.return_value = False
+        for name, unexpected in (("CiceroUIWndFrame", False), ("MSCTFIME UI", False), ("IME", False),
+                                 ("Qt5152QWindowIcon", True), ("Qt5152QWindow", True),
+                                 ("#32770", True), ("UnknownPluginWindow", True)):
+            with self.subTest(window_class=name):
+                api.user.GetClassNameW.side_effect = lambda hwnd, buffer, size: setattr(buffer, "value", name)
+                self.assertEqual(api.unexpected_dialog(222), unexpected)
+        api.user.GetWindowTextW.assert_not_called()
+        api.user.GetClientRect.assert_not_called()
+
+    def test_language_bar_does_not_block_neat_editor_or_receive_clicks(self):
+        api = windows.WindowsAPI.__new__(windows.WindowsAPI)
+        api.user = mock.Mock()
+        api.user.GetWindow.return_value = 999
+        api.user.IsWindowEnabled.return_value = False
+        api.user.GetClassNameW.side_effect = lambda hwnd, buffer, size: setattr(buffer, "value", "CiceroUIWndFrame")
+        with self.display:
+            self.api.windows.return_value = [(222, "TF_FloatingLangBar_WndTitle"), (333, "Neat Video 6.1.2 Studio")]
+            self.api.unexpected_dialog.side_effect = api.unexpected_dialog
+            self.api.screenshot.return_value = self.canvas("auto_profile")
+            self.assertFalse(self.display.poll_profile())
+            self.api.screenshot.assert_called_once_with(333)
+            self.assertEqual(self.api.click.call_args.args[0], 333)
+            self.api.window_details.assert_not_called()
+            self.assertFalse((self.directory / "unexpected-dialog.json").exists())
+
     def test_empty_profile_window_retries_until_ready_without_clicking(self):
         with self.display:
             self.api.screenshot.side_effect = [windows.WindowNotReady(0x100000004, 0, 0), self.canvas("auto_profile")]

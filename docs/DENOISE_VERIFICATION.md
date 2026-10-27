@@ -43,6 +43,16 @@ Neat editor version. On Windows, inspect `unexpected-dialog.json` alongside
 `unexpected-dialog.png`; a black image is not evidence of a recognized dialog.
 Do not automatically dismiss unknown dialogs.
 
+The full-GUI Windows retry exposed `TF_FloatingLangBar_WndTitle`, a Windows
+language-bar helper, as a false modal. Windows input-helper classes
+`CiceroUIWndFrame`, `MSCTFIME UI`, and `IME` are now excluded from modal
+classification. These helpers can share Nuke's disabled owner while Neat is
+open. The filter uses exact native classes, not window titles or empty sizes;
+Qt, native message boxes, and unknown plugin classes retain their modal checks.
+All 75 focused host/Windows tests passed, including continuing to Auto Profile
+with a language bar present and never clicking that helper. A native Windows
+retry is still required to verify the full profiling workflow.
+
 Windows modal diagnostics allow two seconds for an opening window to settle.
 When native control text is empty, an owned helper queries .NET UI Automation
 from the same private desktop. It reads only the target window's subtree,

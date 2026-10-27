@@ -287,6 +287,12 @@ class WindowsAPI:
     def unexpected_dialog(self, hwnd):
         name = C.create_unicode_buffer(256)
         self.user.GetClassNameW(hwnd, name, len(name))
+        # Windows text-input helpers can be owned by Nuke too. When Neat's
+        # modal editor disables that owner, these helpers satisfy the generic
+        # modal test despite not being plugin dialogs (the language bar may
+        # even be 0 x 20). Match native classes, never titles or dimensions.
+        if name.value in {"CiceroUIWndFrame", "MSCTFIME UI", "IME"}:
+            return False
         owner = self.user.GetWindow(hwnd, 4)  # GW_OWNER
         return name.value == "#32770" or bool(owner and not self.user.IsWindowEnabled(owner))
 
