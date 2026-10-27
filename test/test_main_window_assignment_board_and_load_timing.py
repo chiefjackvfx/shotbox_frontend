@@ -182,6 +182,7 @@ def import_main_module():
         "review_page": ("ReviewPage", FakeSimplePage),
         "importer_page": ("ImporterPage", FakeSimplePage),
         "import_xml_v2": ("XMLImportPage", FakeSimplePage),
+        "import_timeline_page": ("ImportTimelinePage", FakeSimplePage),
         "duration_updater": ("DurationUpdaterPage", FakeSimplePage),
         "shotbox_notifications": ("NotificationSystem", FakeNotificationSystem),
     }
@@ -692,6 +693,24 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_import_timeline_is_independent_and_has_stable_startup_id(self):
+        window = build_main_window(startup_tab=5, extra_settings={'enable_timeline_import_page': True})
+        try:
+            self.assertTrue(hasattr(window, 'page_timelineImport'))
+            self.assertFalse(hasattr(window, 'page_xmlImport'))
+            self.assertIs(window.tabs.currentWidget(), window.page_timelineImport)
+            self.assertIn('Import Timeline', [window.tabs.tabText(i) for i in range(window.tabs.count())])
+        finally:
+            window.close()
+
+    def test_disabled_import_timeline_startup_falls_back_to_tasks(self):
+        window = build_main_window(startup_tab=5)
+        try:
+            self.assertFalse(hasattr(window, 'page_timelineImport'))
+            self.assertIs(window.tabs.currentWidget(), window.page_nukedash)
+        finally:
+            window.close()
+
     def test_assignment_board_tab_is_not_created_when_feature_flag_is_off(self):
         window = build_main_window(startup_tab=0)
         try:
@@ -704,7 +723,7 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
             self.assertNotIn("Assignment Board", tab_titles)
             self.assertNotIn("Review", tab_titles)
             self.assertNotIn("Import", tab_titles)
-            self.assertNotIn("XML Import", tab_titles)
+            self.assertNotIn("XML Import V2", tab_titles)
             self.assertNotIn("📋 Activity", tab_titles)
         finally:
             window.close()
@@ -766,7 +785,7 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
             self.assertIn("Assignment Board", tab_titles)
             self.assertIn("Review", tab_titles)
             self.assertIn("Import", tab_titles)
-            self.assertIn("XML Import", tab_titles)
+            self.assertIn("XML Import V2", tab_titles)
             self.assertIn("📋 Activity", tab_titles)
             self.assertIs(window.tabs.currentWidget(), window.page_review)
         finally:

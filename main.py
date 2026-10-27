@@ -35,6 +35,7 @@ import app_update
 from app_version import APP_VERSION
 import http_help
 import filesIO
+from input_behaviour import install_input_wheel_guard
 from duration_updater import DurationUpdaterPage
 from settings import SettingsPage, get_settings_manager
 from toolbox_page import ToolboxPage
@@ -48,6 +49,7 @@ ENABLE_REVIEW_PAGE = False  # Default for restoring the Review tab on next launc
 ENABLE_ACTIVITY_PAGE = False  # Default for restoring the Activity tab on next launch.
 ENABLE_IMPORT_PAGE = False  # Default for restoring the Import tab on next launch.
 ENABLE_XML_IMPORT_PAGE = False  # Default for restoring the XML Import tab on next launch.
+ENABLE_TIMELINE_IMPORT_PAGE = False
 
 
 def _load_optional_class(enabled: bool, module_name: str, class_name: str):
@@ -137,6 +139,7 @@ if platform.system() == "Linux":
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        install_input_wheel_guard(QtWidgets.QApplication.instance())
         
         # Initialize settings manager first
         self._settings_manager = get_settings_manager()
@@ -155,6 +158,9 @@ class MainWindow(QMainWindow):
         )
         self._enable_xml_import_page = bool(
             self._settings_manager.get("enable_xml_import_page", ENABLE_XML_IMPORT_PAGE)
+        )
+        self._enable_timeline_import_page = bool(
+            self._settings_manager.get("enable_timeline_import_page", ENABLE_TIMELINE_IMPORT_PAGE)
         )
         
         # Apply settings to modules before creating pages
@@ -180,6 +186,10 @@ class MainWindow(QMainWindow):
             self.page_importer = importer_page_class()
 
         self.tabs = QTabWidget()
+        if self._enable_timeline_import_page:
+            from presentation_widgets import NewFeatureTabBar
+
+            self.tabs.setTabBar(NewFeatureTabBar('Import Timeline', self.tabs))
         self.tabs.addTab(self.page_nukedash, 'Tasks / Nuke dash')
         assignment_board_class = _load_optional_class(
             self._enable_assignment_board, "page_assignment_board", "AssignmentBoardPage"
@@ -204,7 +214,15 @@ class MainWindow(QMainWindow):
         )
         if xml_import_page_class is not None:
             self.page_xmlImport = xml_import_page_class()
-            self.tabs.addTab(self.page_xmlImport, 'XML Import')
+            self.tabs.addTab(self.page_xmlImport, 'XML Import V2')
+
+        timeline_import_class = _load_optional_class(
+            self._enable_timeline_import_page, 'import_timeline_page', 'ImportTimelinePage'
+        )
+        if timeline_import_class is not None:
+            self.page_timelineImport = timeline_import_class()
+            timeline_tab = self.tabs.addTab(self.page_timelineImport, 'Import Timeline')
+            self.tabs.setTabToolTip(timeline_tab, 'New feature: import timelines using local media-managed clips')
 
         self.page_DurationUpdaterPage = DurationUpdaterPage()
         #self.tabs.addTab(self.page_DurationUpdaterPage, "Duration Updater")
@@ -400,6 +418,7 @@ class MainWindow(QMainWindow):
             2: getattr(self, "page_xmlImport", None),
             3: getattr(self, "page_activity", None),
             4: getattr(self, "page_settings", None),
+            5: getattr(self, "page_timelineImport", None),
         }
         return logical_tabs.get(startup_tab)
 

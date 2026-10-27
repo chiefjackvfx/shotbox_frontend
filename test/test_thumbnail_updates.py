@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -48,6 +49,41 @@ class ThumbnailUpdateTests(unittest.TestCase):
         self.assertGreater(color.blue(), 240)
         self.assertLess(color.red(), 10)
 
+    def test_exact_source_frame_preserves_occurrence_cut_selection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'preview.mp4'
+            self.make_preview(path)
+            image = thumbnail_updates.extract_preview_thumbnail(str(path), frame_index=2)
+        self.assertGreater(image.pixelColor(0, 0).red(), 240)
+        self.assertLess(image.pixelColor(0, 0).blue(), 10)
+
+    def test_reserved_colour_tags_on_twelve_bit_yuv_do_not_produce_black_thumbnail(self):
+        source = np.full((32, 64, 3), 100, dtype=np.uint8)
+        frame = av.VideoFrame.from_ndarray(source, format='rgb24').reformat(format='yuv444p12le')
+        frame.colorspace = frame.color_primaries = frame.color_trc = 0
+        container = mock.Mock()
+        container.duration = None
+        container.streams.video = [SimpleNamespace(start_time=0, duration=None, time_base=None, frames=1)]
+        container.decode.return_value = iter([frame])
+        with mock.patch.object(av, 'open') as open_video:
+            open_video.return_value.__enter__.return_value = container
+            image = thumbnail_updates.extract_preview_thumbnail('camera.mxf', frame_index=0)
+        self.assertFalse(image.isNull())
+        self.assertGreater(image.pixelColor(0, 0).red(), 70)
+        self.assertEqual((frame.colorspace, frame.color_primaries, frame.color_trc), (1, 1, 1))
+
+    def test_valid_colour_metadata_is_preserved(self):
+        frame = av.VideoFrame.from_ndarray(np.full((32, 64, 3), 100, dtype=np.uint8), format='rgb24').reformat(format='yuv420p')
+        frame.colorspace, frame.color_primaries, frame.color_trc = 9, 9, 16
+        container = mock.Mock()
+        container.duration = None
+        container.streams.video = [SimpleNamespace(start_time=0, duration=None, time_base=None, frames=1)]
+        container.decode.return_value = iter([frame])
+        with mock.patch.object(av, 'open') as open_video:
+            open_video.return_value.__enter__.return_value = container
+            thumbnail_updates.extract_preview_thumbnail('valid.mxf', frame_index=0)
+        self.assertEqual((frame.colorspace, frame.color_primaries, frame.color_trc), (9, 9, 16))
+
     def test_cancellation_interrupts_decoding(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "preview.mp4"
@@ -93,6 +129,74 @@ class ThumbnailUpdateTests(unittest.TestCase):
             stored.unlink()
             self.assertIsNone(thumbnail_updates.latest_thumbnail_preview(shot, filesIO.Folders()))
         self.assertIsNone(thumbnail_updates.latest_thumbnail_preview({}, filesIO.Folders()))
+
+    def test_uses_primary_mxf_when_no_preview_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plates = Path(directory, 'plates')
+            plates.mkdir()
+            primary = plates / 'camera.MXF'
+            secondary = plates / 'layer.mxf'
+            primary.touch()
+            secondary.touch()
+            shot = {'base_path': directory, 'original_clip': str(primary), 'original_clips': [str(primary), str(secondary)]}
+            self.assertEqual(thumbnail_updates.latest_thumbnail_preview(shot, filesIO.Folders()), str(primary))
+            primary.unlink()
+            self.assertIsNone(thumbnail_updates.latest_thumbnail_preview(shot, filesIO.Folders()))
+
+    def test_primary_mxf_does_not_override_rendered_preview(self):
+        with tempfile.TemporaryDirectory() as directory:
+            previews = Path(directory, 'renders', 'precomp', 'previews')
+            previews.mkdir(parents=True)
+            preview = previews / 'sho010_v001.mp4'
+            preview.touch()
+            primary = Path(directory, 'camera.mxf')
+            primary.touch()
+            shot = {'base_path': directory, 'original_clip': str(primary)}
+            self.assertEqual(thumbnail_updates.latest_thumbnail_preview(shot, filesIO.Folders()), str(preview))
+
+    def test_stored_mxf_and_unambiguous_legacy_plate_are_supported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plates = Path(directory, 'plates')
+            plates.mkdir()
+            video = plates / 'primary.mxf'
+            video.touch()
+            self.assertEqual(thumbnail_updates.latest_thumbnail_preview({'base_path': directory, 'preview_video': 'plates/primary.mxf'}, filesIO.Folders()), str(video))
+            self.assertEqual(thumbnail_updates.latest_thumbnail_preview({'base_path': directory}, filesIO.Folders()), str(video))
+            (plates / 'another.mxf').touch()
+            self.assertIsNone(thumbnail_updates.latest_thumbnail_preview({'base_path': directory}, filesIO.Folders()))
+
+    def test_sidecar_identifies_primary_and_the_middle_of_its_cut(self):
+        with tempfile.TemporaryDirectory() as directory:
+            plates = Path(directory, 'plates')
+            plates.mkdir()
+            primary = plates / 'shared.mxf'
+            primary.touch()
+            (plates / 'secondary.mxf').touch()
+            assets = Path(directory, 'Shot_Assets')
+            assets.mkdir()
+            metadata = {'cut_duration': 11, 'plates': [{'track': 1, 'copied_path': '/old/shot/plates/shared.mxf', 'cut_start': 42.221967, 'speed': 0.6361556}]}
+            (assets / 'timeline_import.json').write_text(json.dumps(metadata))
+            shot = {'base_path': directory}
+            self.assertEqual(thumbnail_updates.latest_thumbnail_preview(shot, filesIO.Folders()), str(primary))
+            self.assertEqual(thumbnail_updates._source_thumbnail_frame(shot, filesIO.Folders(), str(primary)), 45)
+            self.assertIsNone(thumbnail_updates._source_thumbnail_frame(shot, filesIO.Folders(), str(plates / 'render.mp4')))
+
+    def test_import_thumbnail_uses_pyav_for_mxf_and_without_opencv(self):
+        from import_xml_v2 import ThumbnailGenerator
+        import import_xml_v2
+
+        with tempfile.TemporaryDirectory() as directory:
+            for extension, installed in (('.mxf', True), ('.mp4', False)):
+                with self.subTest(extension=extension):
+                    video = Path(directory, 'camera' + extension)
+                    video.touch()
+                    output = Path(directory, 'thumbnail' + extension + '.jpeg')
+                    with mock.patch.object(import_xml_v2, 'HAS_CV2', installed), \
+                            mock.patch.object(thumbnail_updates, 'extract_preview_thumbnail', return_value=self.image()) as extract:
+                        result = ThumbnailGenerator.generate(str(video), str(output), frame=10)
+                    self.assertEqual(result, str(output))
+                    self.assertEqual((QImage(str(output)).width(), QImage(str(output)).height()), (32, 16))
+                    extract.assert_called_once_with(str(video), frame_index=10)
 
     def test_batch_continues_after_failed_upload_and_skips_missing_previews(self):
         api = mock.Mock()

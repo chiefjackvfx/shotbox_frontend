@@ -212,11 +212,12 @@ def test_probe_uses_frontend_imports_and_pinned_cuda_stack(root, monkeypatch):
         recorded.append(command) or subprocess.CompletedProcess(command, 0, "optional notice\n[]\n", "")))
     setup.verify_environment(setup.environment_python(root), root, {}, inference=True)
     modules, versions = json.loads(recorded[0][-1])
-    assert {"OpenImageIO", "OpenEXR", "PyOpenColorIO", "torch", "ltx_pipelines.ic_lora"}.issubset(modules)
+    assert {"OpenImageIO", "OpenEXR", "PyOpenColorIO", "opentimelineio", "torch", "ltx_pipelines.ic_lora"}.issubset(modules)
     assert versions["torch"] == "2.11.0"
     setup.verify_environment(setup.environment_python(root), root, {}, inference=False)
     modules, versions = json.loads(recorded[1][-1])
     assert "torch" not in modules and versions == {}
+    assert 'opentimelineio' in modules
 
 
 @pytest.mark.parametrize("qualification", [False, True])

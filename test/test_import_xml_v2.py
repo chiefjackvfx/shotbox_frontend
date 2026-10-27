@@ -80,12 +80,13 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
                 )
 
             generator = module.NukeScriptGenerator(nuke_path="/configured/Nuke")
+            generator.user = "Jack"  # The request assertion must not depend on the test runner's login.
             shot_folder = Path(generator.create_shot_folder(shot, str(root), "timeline_A"))
 
             self.assertEqual(shot_folder, root / "VFX" / "timeline_A" / "seq010")
-            self.assertTrue((root / "VFX" / "Job_Assets").is_dir())
-            self.assertTrue((root / "VFX" / "timeline_A" / "Timeline_Assets").is_dir())
-            self.assertTrue((shot_folder / "Shot_Assets").is_dir())
+            self.assertTrue((root / "VFX" / "job_assets").is_dir())
+            self.assertTrue((root / "VFX" / "timeline_A" / "timeline_assets").is_dir())
+            self.assertTrue((shot_folder / "shot_assets").is_dir())
             self.assertFalse((shot_folder / "assets").exists())
             self.assertTrue((shot_folder / "plates").is_dir())
             self.assertFalse((shot_folder / "seq010.txt").exists())
@@ -147,9 +148,9 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
             )
 
             self.assertEqual(shot_folder, timeline_dir / "sho010")
-            self.assertTrue((root / "VFX" / "Job_Assets").is_dir())
-            self.assertTrue((timeline_dir / "Timeline_Assets").is_dir())
-            self.assertTrue((shot_folder / "Shot_Assets").is_dir())
+            self.assertTrue((root / "VFX" / "job_assets").is_dir())
+            self.assertTrue((timeline_dir / "timeline_assets").is_dir())
+            self.assertTrue((shot_folder / "shot_assets").is_dir())
             self.assertFalse((shot_folder / "assets").exists())
 
     def test_create_nuke_script_surfaces_create_nk_errors(self):

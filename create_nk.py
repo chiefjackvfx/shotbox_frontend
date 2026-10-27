@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -22,6 +23,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Iterable, Optional
+from html import escape
 
 from nuke_headless_tasks import find_nuke_executable, map_input_colorspace
 from app_cache import cache_directory, temporary_cache_task
@@ -52,10 +54,24 @@ class GenerateNkRequest:
     format_height: int = 1080
     primary_plate_path: str = ""
     extra_plate_paths: list[str] = field(default_factory=list)
+    # Optional timeline-only mapping. Legacy requests leave this empty.
+    plate_timings: list[dict] = field(default_factory=list)
+    cut_duration: Optional[int] = None
+    head_handles: Optional[int] = None
+    tail_handles: Optional[int] = None
     dn_exr_file: str = ""
     comp_mov_file: str = ""
     comp_exr_file: str = ""
     preview_mp4_file: str = ""
+    shot_metadata_lines: list[str] = field(default_factory=list)
+
+    @property
+    def cut_first(self):
+        return self.frame_first + (self.head_handles or 0)
+
+    @property
+    def cut_last(self):
+        return self.cut_first + max(self.cut_duration or self.duration, 1) - 1
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -80,10 +96,15 @@ class GenerateNkRequest:
             format_height=int(data.get("format_height", 1080)),
             primary_plate_path=str(data.get("primary_plate_path", "")),
             extra_plate_paths=[str(path) for path in data.get("extra_plate_paths", [])],
+            plate_timings=list(data.get("plate_timings", [])),
+            cut_duration=data.get("cut_duration"),
+            head_handles=data.get("head_handles"),
+            tail_handles=data.get("tail_handles"),
             dn_exr_file=str(data.get("dn_exr_file", "")),
             comp_mov_file=str(data.get("comp_mov_file", "")),
             comp_exr_file=str(data.get("comp_exr_file", "")),
             preview_mp4_file=str(data.get("preview_mp4_file", "")),
+            shot_metadata_lines=[str(line) for line in data.get("shot_metadata_lines", [])],
         )
 
 
@@ -344,6 +365,8 @@ class _TemplateEditor:
         self._update_info_backdrop()
         self._update_primary_plate()
         self._update_extra_plates()
+        self._update_timeline_plate_timing()
+        self._update_edit_cut_range()
         self._update_reformats()
         self._update_outputs()
         self._update_slate_overlay()
@@ -415,7 +438,15 @@ class _TemplateEditor:
         self._set_optional_knob(reformat3, "box_fixed", True)
 
     def _update_info_backdrop(self):
-        self._set_knob(self._required_node("BackdropINFO")["label"], self._build_info_text())
+        node = self._required_node('BackdropINFO')
+        text = self._build_info_text()
+        self._set_knob(node['label'], text)
+        if self.request.shot_metadata_lines:
+            font = float(node['note_font_size'].value() or 20) if 'note_font_size' in node.knobs() else 20
+            for key, required in (('bdheight', len(text.splitlines()) * font * 1.5 + 40),
+                                  ('bdwidth', max(map(len, text.splitlines())) * font * 0.6 + 40)):
+                if key in node.knobs():
+                    self._set_knob(node[key], max(float(node[key].value() or 0), required))
 
     def _update_primary_plate(self):
         read1 = self._required_node("Read1")
@@ -468,6 +499,69 @@ class _TemplateEditor:
             self._set_optional_knob(retime_node, "output.first_lock", True)
             self._set_optional_knob(retime_node, "output.last", self.request.frame_last)
             self._set_optional_knob(retime_node, "time", "")
+
+    def _update_timeline_plate_timing(self):
+        """Keep media at 1001 and place the cut after the head handles."""
+        if not self.request.plate_timings:
+            return
+        expected = 1 + len(self.request.extra_plate_paths)
+        if len(self.request.plate_timings) != expected:
+            raise ValueError('Every timeline plate must have its own source timing')
+        for index, timing in enumerate(self.request.plate_timings, 1):
+            read = self._required_node(f'Read{index}')
+            retime = self._required_node(f'Retime{index}')
+            frames = int(timing['frames'])
+            speed = float(timing['speed'])
+            source_first = float(timing['cut_start']) + 1  # Movie Read nodes are one-based.
+            working_source_first = source_first - (self.request.head_handles or 0) * speed
+            working_source_last = source_first + (self.request.frame_last - self.request.cut_first) * speed
+            if speed <= 0 or working_source_first < 1 - 0.000001 or working_source_last > frames + 0.000001:
+                raise ValueError('Timeline plate mapping exceeds available media')
+            for knob, value in (('first', 1), ('origfirst', 1), ('last', frames), ('origlast', frames), ('origset', True)):
+                self._set_knob(read[knob], value)
+            if timing.get('input_colourspace'):
+                self._set_knob(read['colorspace'], map_input_colorspace(timing['input_colourspace']))
+            if abs(speed - 1.0) < 1e-9:
+                # Preserve the template's existing Retime node for a simple
+                # frame-number offset. Do not replace it or add a speed node.
+                anchor = math.floor(working_source_first + 0.000001)
+                fraction = working_source_first - anchor
+                if abs(fraction) > 0.000001:
+                    self._set_knob(read['frame_mode'], 'expression')
+                    self._set_knob(read['frame'], f'frame + {fraction:.15g}')
+                for knob, value in (
+                    ('input.first', anchor), ('input.first_lock', True),
+                    ('input.last', frames), ('input.last_lock', False),
+                    ('output.first', self.request.frame_first), ('output.first_lock', True),
+                    ('output.last_lock', False), ('speed', 1.0), ('reverse', False),
+                    ('before', 'continue'), ('after', 'continue'), ('filter', 'none'), ('shutter', 0.0),
+                ):
+                    self._set_knob(retime[knob], value)
+                continue
+            # Retime's input anchor rounds fractional frames. A linear TimeWarp
+            # preserves the chosen XML/OTIO cut anchor and never fits endpoints.
+            dependents = [(node, port) for node in retime.dependent(self.nuke.INPUTS)
+                          for port in range(node.inputs()) if node.input(port) is retime]
+            xpos = self._node_position(retime, 'xpos', 0)
+            ypos = self._node_position(retime, 'ypos', 0)
+            self.nuke.delete(retime)
+            warp = self._create_node('TimeWarp', f'Retime{index}', xpos=xpos, ypos=ypos, inputs=[read])
+            warp['lookup'].setExpression(f'{source_first:.15g} + (frame - {self.request.cut_first}) * {speed:.15g}')
+            self._set_knob(warp['filter'], 'none')
+            self._set_knob(warp['label'], f'Cut {self.request.cut_first}-{self.request.cut_last}; speed {speed:.9g}')
+            for node, port in dependents:
+                node.setInput(port, warp)
+
+    def _update_edit_cut_range(self):
+        if not self.request.plate_timings:
+            return
+        viewers = self.nuke.allNodes('Viewer')
+        if not viewers:
+            viewers = [self._create_node('Viewer', 'Viewer1', xpos=500, ypos=500,
+                                        inputs=[self._required_node('Retime1')])]
+        for viewer in viewers:
+            self._set_knob(viewer['frame_range'], f'{self.request.cut_first}-{self.request.cut_last}')
+            self._set_knob(viewer['frame_range_lock'], True)
 
     def _update_outputs(self):
         self._configure_write_node(
@@ -561,13 +655,16 @@ class _TemplateEditor:
         for index, path in enumerate(self.request.extra_plate_paths, start=2):
             lines.append(f"track V{index}: {self._relative_to_script(path)}")
         timestamp = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        # Labels support HTML and Tcl substitutions. Metadata must remain literal.
+        metadata_text = ''.join(escape(line).replace('[', '&#91;').replace(']', '&#93;') + '\n'
+                                for line in self.request.shot_metadata_lines)
         return (
             f"script was auto generated by: {self.request.artist_name}\n"
             f"generated on: {timestamp}\n"
             f"shot: {self.request.shot_name}\n"
             f"edit: {self.request.edit_inpoint}-{self.request.edit_outpoint}\n"
             f"duration: {self.request.duration}\n"
-            f"plates:\n" + "\n".join(lines)
+            f"{metadata_text}plates:\n" + "\n".join(lines)
         )
 
     def _duration_timecode(self) -> str:

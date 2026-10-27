@@ -289,9 +289,9 @@ class TimelineMatchmoveTests(unittest.TestCase):
 
             self.assertEqual(
                 harness.filesIO.opened_paths[-1],
-                shot_root.parent / "Timeline_Assets",
+                shot_root.parent / "timeline_assets",
             )
-            self.assertTrue((shot_root.parent / "Timeline_Assets").is_dir())
+            self.assertTrue((shot_root.parent / "timeline_assets").is_dir())
 
     def test_timeline_assets_control_is_an_instant_popup_tool_button(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -321,7 +321,7 @@ class TimelineMatchmoveTests(unittest.TestCase):
             menu.actions[0].triggered.fire()
             self.assertEqual(
                 harness.filesIO.opened_paths[-1],
-                shot_root.parent / "Timeline_Assets",
+                shot_root.parent / "timeline_assets",
             )
 
     def test_timeline_matchmove_indicator_tracks_configured_project_files(self):
@@ -436,7 +436,7 @@ class TimelineMatchmoveTests(unittest.TestCase):
             shot_root = Path(tmpdir) / "PROJECT" / "VFX" / "Edit_A" / "sho001"
             write_minimal_exr(shot_root / "renders" / "precomp" / "plateA" / "plateA.1001.exr")
             harness = TimelineMatchmoveHarness(self._make_job_data([shot_root]))
-            harness._worker.api.response = {"id": 10, "matchmove_path": str(shot_root.parent / "Timeline_Assets" / "matchmove")}
+            harness._worker.api.response = {"id": 10, "matchmove_path": str(shot_root.parent / "timeline_assets" / "matchmove")}
             candidate = timeline_matchmove_dialog.TimelineMatchmoveCandidate(
                 shot_id=1,
                 shot_title="sho001",
@@ -456,7 +456,7 @@ class TimelineMatchmoveTests(unittest.TestCase):
                 mock.patch.object(page_nukedash.QMessageBox, "information") as information:
                 harness._create_timeline_matchmove_project([candidate])
 
-            matchmove_dir = shot_root.parent / "Timeline_Assets" / "matchmove"
+            matchmove_dir = shot_root.parent / "timeline_assets" / "matchmove"
             self.assertTrue((matchmove_dir / "work").is_dir())
             self.assertTrue((matchmove_dir / "export").is_dir())
             self.assertEqual(harness._worker.api.update_calls[0][0], 10)

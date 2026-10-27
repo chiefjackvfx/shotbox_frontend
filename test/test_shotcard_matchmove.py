@@ -191,8 +191,8 @@ class ShotCardMatchmoveTests(unittest.TestCase):
 
             card._open_shot_assets()
 
-            self.assertEqual(fake_folders.opened_locations[-1], shot_root / "Shot_Assets")
-            self.assertTrue((shot_root / "Shot_Assets").is_dir())
+            self.assertEqual(fake_folders.opened_locations[-1], shot_root / "shot_assets")
+            self.assertTrue((shot_root / "shot_assets").is_dir())
 
     def test_assets_control_opens_folder_with_delayed_popup(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -206,7 +206,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 QToolButton.ToolButtonPopupMode.DelayedPopup,
             )
             card.btn_open_assets.click()
-            self.assertEqual(fake_folders.opened_locations, [shot_root / "Shot_Assets"])
+            self.assertEqual(fake_folders.opened_locations, [shot_root / "shot_assets"])
 
     def test_assets_menu_first_action_opens_assets_in_file_browser(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -222,7 +222,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             self.assertEqual(menu.actions[0].text, "Open Assets in File Browser")
             self.assertEqual(menu.separator_count, 1)
             menu.actions[0].triggered.fire()
-            self.assertEqual(fake_folders.opened_locations[-1], shot_root / "Shot_Assets")
+            self.assertEqual(fake_folders.opened_locations[-1], shot_root / "shot_assets")
 
     def test_push_to_dvr_uses_shot_title_for_resolve_bin(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -507,7 +507,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 status_path="/tmp/status.json",
             )
             updated_data = dict(card.data)
-            updated_data["matchmove_path"] = str(shot_root / "Shot_Assets" / "matchmove")
+            updated_data["matchmove_path"] = str(shot_root / "shot_assets" / "matchmove")
 
             def create_project_file(request, _log_callback):
                 Path(request.project_path).touch()
@@ -521,7 +521,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 mock.patch.object(card._api, "update_shot", return_value=updated_data) as update_shot:
                 card._create_matchmove_project(sequence_info)
 
-            matchmove_dir = shot_root / "Shot_Assets" / "matchmove"
+            matchmove_dir = shot_root / "shot_assets" / "matchmove"
             self.assertTrue((matchmove_dir / "work").is_dir())
             self.assertTrue((matchmove_dir / "export").is_dir())
             update_shot.assert_called_once_with(card._shot_id, matchmove_path=str(matchmove_dir))

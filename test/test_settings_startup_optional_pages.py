@@ -295,6 +295,7 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
                 "enable_activity_page": True,
                 "enable_import_page": False,
                 "enable_xml_import_page": True,
+                "enable_timeline_import_page": True,
             }
         )
 
@@ -309,12 +310,14 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             self.assertTrue(page.enable_activity_page_check.isChecked())
             self.assertFalse(page.enable_import_page_check.isChecked())
             self.assertTrue(page.enable_xml_import_page_check.isChecked())
+            self.assertTrue(page.enable_timeline_import_page_check.isChecked())
 
             page.enable_assignment_board_check.setChecked(False)
             page.enable_review_page_check.setChecked(True)
             page.enable_activity_page_check.setChecked(False)
             page.enable_import_page_check.setChecked(True)
             page.enable_xml_import_page_check.setChecked(False)
+            page.enable_timeline_import_page_check.setChecked(False)
 
             with mock.patch.object(settings.QMessageBox, "information", lambda *args, **kwargs: None):
                 page._save_all_settings()
@@ -324,6 +327,7 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             self.assertFalse(manager.get("enable_activity_page"))
             self.assertTrue(manager.get("enable_import_page"))
             self.assertFalse(manager.get("enable_xml_import_page"))
+            self.assertFalse(manager.get("enable_timeline_import_page"))
         finally:
             page.close()
             page.deleteLater()

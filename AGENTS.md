@@ -4,6 +4,14 @@ After each development task, use `$update-app-changelog` to record meaningful co
 
 Development tasks only update pending notes. Do not bump versions, commit, tag, launch `release_manager.py`, or publish automatically. The user runs the release manager, reviews notes, chooses a version, and uses Commit Release and Push Release explicitly.
 
+# Scrolling and input values
+
+Mouse wheel and trackpad scrolling must never change input values or switch tabs, even when the control has focus. This applies throughout the frontend, including new pages, dialogs, combo boxes, numeric and date/time fields, sliders, dials, and custom inputs.
+
+Scrolling over an input must scroll its surrounding page when possible. Preserve normal scrolling in lists, open dropdown lists, text areas, and scroll bars without committing a new input value. Controls must remain editable through deliberate clicks, typing, and keyboard navigation.
+
+Reuse the application-wide guard in `input_behaviour.py`, installed through `install_input_wheel_guard`. Ensure new custom controls follow the same rule; do not introduce focus-based exceptions that allow scrolling to edit values.
+
 # Runtime cache and temporary files
 
 This development rule applies to Codex, other coding agents, and all human developers working on the frontend.

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
 from app_cache import cache_directory, temporary_cache_task
+from asset_paths import asset_path
 
 
 CAMERA_PRESETS = {
@@ -50,7 +51,7 @@ POSIX_THREEDE_CANDIDATES = (
     "3DE4",
 )
 
-SHOT_ASSETS_DIRNAME = "Shot_Assets"
+SHOT_ASSETS_DIRNAME = "shot_assets"
 MATCHMOVE_DIRNAME = "matchmove"
 MATCHMOVE_WORK_DIRNAME = "work"
 MATCHMOVE_EXPORT_DIRNAME = "export"
@@ -287,11 +288,11 @@ def build_unique_camera_name(
 
 
 def build_shot_assets_directory(shot_root: str) -> str:
-    return os.path.join(normalize_user_path(shot_root), SHOT_ASSETS_DIRNAME)
+    return str(asset_path(normalize_user_path(shot_root), SHOT_ASSETS_DIRNAME))
 
 
 def build_shot_matchmove_directory(shot_root: str) -> str:
-    return os.path.join(build_shot_assets_directory(shot_root), MATCHMOVE_DIRNAME)
+    return str(asset_path(normalize_user_path(shot_root), SHOT_ASSETS_DIRNAME, MATCHMOVE_DIRNAME))
 
 
 def build_work_directory(matchmove_dir: str) -> str:

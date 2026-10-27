@@ -42,6 +42,7 @@ DEFAULT_PYTHON = default_python()
 FRONTEND_MODULES = (
     "PyQt6.QtWidgets", "yaml", "requests", "psutil", "av", "numpy", "PIL.Image",
     "OpenImageIO", "OpenEXR", "PyOpenColorIO", "cv2", "pyperclip", "openpyxl",
+    "opentimelineio",
 )
 INFERENCE_MODULES = (
     "torch", "torchvision", "torchaudio", "transformers", "ltx_pipelines.ic_lora",

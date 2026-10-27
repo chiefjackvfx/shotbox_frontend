@@ -17,6 +17,7 @@ import datetime
 import shutil
 import subprocess
 import getpass
+import json
 import urllib.parse
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -36,6 +37,7 @@ from PyQt6.QtGui import QFont, QColor, QPixmap
 
 import create_nk
 import path_mapping
+from asset_paths import asset_path
 from colourspace_defaults import COLOURSPACE_LIST, DEFAULT_COLOURSPACE
 
 # Optional imports
@@ -44,7 +46,7 @@ try:
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
-    print("[XMLImport] opencv-python not installed. Thumbnail generation disabled.")
+    print("[XMLImport] opencv-python not installed. Using PyAV for thumbnails.")
 
 try:
     import http_help
@@ -106,6 +108,7 @@ class ParsedClip:
     end_frame: int
     track: int  # V1=1, V2=2, etc.
     copied_filepath: Optional[str] = None
+    media_timing: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -121,6 +124,24 @@ class ParsedShot:
     folder_path: Optional[str] = None
     nuke_script_path: Optional[str] = None
     db_shot_id: Optional[int] = None
+    cut_duration: Optional[int] = None
+    head_handles: Optional[int] = None
+    tail_handles: Optional[int] = None
+    fps: float = 25.0
+    requested_handles: Optional[int] = None
+    timeline_inpoint: Optional[int] = None
+    timeline_outpoint: Optional[int] = None
+    detected_head_handles: Optional[int] = None
+    detected_tail_handles: Optional[int] = None
+
+    @property
+    def cut_first(self) -> int:
+        """Nuke cut start, independent of the editorial timeline positions."""
+        return 1001 + (self.head_handles or 0)
+
+    @property
+    def cut_last(self) -> int:
+        return self.cut_first + max(self.cut_duration or self.duration, 1) - 1
     
     @property
     def primary_clip(self) -> Optional[ParsedClip]:
@@ -468,14 +489,32 @@ class NukeScriptGenerator:
         work_folder = os.path.join(nuke_root, edit_name) if edit_name else nuke_root
         shot_folder = os.path.join(work_folder, shot.name)
 
-        os.makedirs(os.path.join(nuke_root, "Job_Assets"), exist_ok=True)
+        os.makedirs(asset_path(nuke_root, 'job_assets'), exist_ok=True)
         os.makedirs(work_folder, exist_ok=True)
         if edit_name:
-            os.makedirs(os.path.join(work_folder, "Timeline_Assets"), exist_ok=True)
+            os.makedirs(asset_path(work_folder, 'timeline_assets'), exist_ok=True)
 
         shot_preexists = os.path.isdir(shot_folder)
         self._ensure_shot_subfolders(shot_folder)
         self._copy_clips_to_plates(shot, shot_folder)
+        if shot.cut_duration is not None:
+            metadata = {
+                'schema_version': 3, 'cut_duration': shot.cut_duration,
+                'head_handles': shot.head_handles, 'tail_handles': shot.tail_handles,
+                'detected_head_handles': shot.detected_head_handles,
+                'detected_tail_handles': shot.detected_tail_handles,
+                'requested_handles': shot.requested_handles,
+                'working_duration': shot.duration, 'fps': shot.fps,
+                'handle_mode': 'detected' if shot.requested_handles is None else 'requested',
+                'cut_first': shot.cut_first, 'cut_last': shot.cut_last,
+                'working_first': 1001, 'working_last': 1001 + shot.duration - 1,
+                'edit_inpoint': shot.edit_inpoint, 'edit_outpoint': shot.edit_outpoint,
+                'timeline_inpoint': shot.timeline_inpoint, 'timeline_outpoint': shot.timeline_outpoint,
+                'plates': [dict(clip.media_timing or {}, local_path=clip.filepath,
+                                copied_path=clip.copied_filepath, track=clip.track) for clip in shot.clips],
+            }
+            with open(asset_path(shot_folder, 'shot_assets', 'timeline_import.json'), 'w', encoding='utf-8') as stream:
+                json.dump(metadata, stream, indent=2)
 
         if shot_preexists:
             print(f"[NukeGen] Shot folder already exists: {shot_folder}")
@@ -487,7 +526,7 @@ class NukeScriptGenerator:
         os.makedirs(os.path.join(shot_folder, "renders", "comp"), exist_ok=True)
         os.makedirs(os.path.join(shot_folder, "renders", "precomp"), exist_ok=True)
         os.makedirs(os.path.join(shot_folder, "scripts"), exist_ok=True)
-        os.makedirs(os.path.join(shot_folder, "Shot_Assets"), exist_ok=True)
+        os.makedirs(asset_path(shot_folder, 'shot_assets'), exist_ok=True)
 
     def _copy_clips_to_plates(self, shot: ParsedShot, shot_folder: str):
         """Copy each online clip into the local plates folder."""
@@ -503,10 +542,22 @@ class NukeScriptGenerator:
                 continue
             if not os.path.isfile(clip.filepath):
                 raise FileNotFoundError(f"Clip not found for copy: {clip.filepath}")
+            if clip.media_timing and clip.media_timing.get('signature'):
+                stat = os.stat(clip.filepath)
+                if (stat.st_size, stat.st_mtime_ns) != tuple(clip.media_timing['signature']):
+                    raise ValueError(f"Media changed since timeline review: {clip.filepath}")
 
             dest_path = self._resolve_plate_destination(plates_folder, clip.filepath, used_names)
             if os.path.abspath(clip.filepath) != os.path.abspath(dest_path):
                 shutil.copy2(clip.filepath, dest_path)
+                if clip.media_timing and clip.media_timing.get('signature'):
+                    # Destination filesystems may round timestamps. Recheck the
+                    # source fingerprint and copied size instead of timestamp
+                    # equality across local/network filesystem boundaries.
+                    stat = os.stat(clip.filepath)
+                    expected = tuple(clip.media_timing['signature'])
+                    if (stat.st_size, stat.st_mtime_ns) != expected or os.path.getsize(dest_path) != expected[0]:
+                        raise ValueError(f"Media changed while copying: {clip.filepath}")
             clip.copied_filepath = dest_path
 
     def _resolve_plate_destination(self, plates_folder: str, source_path: str, used_names: set[str]) -> str:
@@ -596,6 +647,7 @@ class NukeScriptGenerator:
             raise RuntimeError(f"Shot {shot.name} has no online plates to build a Nuke script from.")
 
         output_files = self._build_nuke_output_files(shot_folder, script_path, shot.name)
+        from media_colourspace import camera_note_lines
 
         return create_nk.GenerateNkRequest(
             template_path=str(create_nk.get_runtime_template_path()),
@@ -604,8 +656,8 @@ class NukeScriptGenerator:
             shot_name=shot.name,
             project_name=project_name,
             artist_name=self.user,
-            fps=25.0,
-            colourspace=self.colourspace,
+            fps=shot.fps,
+            colourspace=(primary_clip.media_timing or {}).get('input_colourspace', self.colourspace),
             duration=max(shot.duration, 1),
             edit_inpoint=shot.edit_inpoint,
             edit_outpoint=shot.edit_outpoint,
@@ -615,10 +667,18 @@ class NukeScriptGenerator:
             format_height=height,
             primary_plate_path=primary_clip_path,
             extra_plate_paths=extra_plate_paths,
+            plate_timings=[clip.media_timing for clip in [primary_clip] + [
+                c for c in sorted(shot.clips, key=lambda current: (current.track, current.name, current.filepath))
+                if c is not primary_clip and c.filepath != "offline"
+            ]] if primary_clip.media_timing else [],
+            cut_duration=shot.cut_duration,
+            head_handles=shot.head_handles,
+            tail_handles=shot.tail_handles,
             dn_exr_file=output_files["dn_exr_file"],
             comp_mov_file=output_files["comp_mov_file"],
             comp_exr_file=output_files["comp_exr_file"],
             preview_mp4_file=output_files["preview_mp4_file"],
+            shot_metadata_lines=camera_note_lines([(clip.track, clip.media_timing or {}) for clip in shot.clips]),
         )
 
     def _build_nuke_output_files(self, shot_folder: str, script_path: str, shot_name: str) -> Dict[str, str]:
@@ -670,9 +730,30 @@ class NukeScriptGenerator:
 
 class ThumbnailGenerator:
     """Generates thumbnails from video clips."""
+
+    @staticmethod
+    def _generate_with_pyav(video_path: str, output_path: str, frame: int,
+                           input_colourspace: Optional[str] = None) -> Optional[str]:
+        try:
+            from thumbnail_updates import extract_preview_thumbnail
+
+            options = {'input_colourspace': input_colourspace} if input_colourspace else {}
+            image = extract_preview_thumbnail(video_path, frame_index=max(0, int(frame)), **options)
+            if image.isNull():
+                raise ValueError('No video frame decoded')
+            image = image.scaled(max(1, image.width() // 2), max(1, image.height() // 2),
+                                 Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            if not image.save(output_path, 'JPEG', 90):
+                raise OSError(f'Could not save thumbnail: {output_path}')
+            return output_path
+        except Exception as exc:
+            print(f'[Thumbnail] Could not decode {video_path}: {exc}')
+            return None
     
     @staticmethod
-    def generate(video_path: str, output_path: str, frame: int = 1) -> Optional[str]:
+    def generate(video_path: str, output_path: str, frame: int = 1,
+                 *, input_colourspace: Optional[str] = None) -> Optional[str]:
         """
         Generate a thumbnail from a video file.
         
@@ -680,27 +761,33 @@ class ThumbnailGenerator:
             video_path: Path to the video file
             output_path: Where to save the thumbnail
             frame: Which frame to grab (default 1)
+            input_colourspace: Reviewed per-clip IDT; otherwise detect from media.
         
         Returns:
             Path to the thumbnail or None if failed
         """
-        if not HAS_CV2:
-            print("[Thumbnail] OpenCV not available")
-            return None
-        
         # Normalize path
         video_path = video_path.replace("\\", "/")
         
         if not os.path.isfile(video_path):
             print(f"[Thumbnail] Video not found: {video_path}")
             return None
+
+        if not input_colourspace:
+            from media_colourspace import detect_input_colourspace
+            from timeline_import import probe_media
+
+            input_colourspace = detect_input_colourspace(probe_media(video_path).metadata).colourspace
+        if input_colourspace or Path(video_path).suffix.lower() == '.mxf' or not HAS_CV2:
+            return ThumbnailGenerator._generate_with_pyav(video_path, output_path, frame, input_colourspace)
         
         try:
             # Open video
             cap = cv2.VideoCapture(video_path)
             if not cap.isOpened():
                 print(f"[Thumbnail] Could not open video: {video_path}")
-                return None
+                cap.release()
+                return ThumbnailGenerator._generate_with_pyav(video_path, output_path, frame)
             
             # Get total frame count
             total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -714,7 +801,7 @@ class ThumbnailGenerator:
             
             if not success or thumb is None:
                 print(f"[Thumbnail] Failed to read frame {target_frame} from: {video_path}")
-                return None
+                return ThumbnailGenerator._generate_with_pyav(video_path, output_path, frame)
             
             # Resize to half (like original)
             original_height, original_width = thumb.shape[:2]
@@ -743,7 +830,7 @@ class ThumbnailGenerator:
             print(f"[Thumbnail] Error processing {video_path}: {e}")
             import traceback
             traceback.print_exc()
-            return None
+            return ThumbnailGenerator._generate_with_pyav(video_path, output_path, frame)
     
     @staticmethod
     def get_video_duration(video_path: str) -> int:
@@ -819,15 +906,29 @@ class DjangoImporter:
             "duration": str(shot.duration),
             "edit_inpoint": str(shot.edit_inpoint),
             "edit_outpoint": str(shot.edit_outpoint),
-            "colourspace": colourspace,
-            "handles": str(handles),
+            "colourspace": (shot.primary_clip.media_timing or {}).get('input_colourspace', colourspace) if shot.primary_clip else colourspace,
+            "handles": str(min(shot.head_handles or 0, shot.tail_handles or 0)
+                           if shot.cut_duration is not None and shot.requested_handles is None else handles),
             "original_clip": shot.original_clip_name,
             "original_clips": shot.original_clip_paths,
         }
+        from media_colourspace import camera_note_lines
+
+        camera_lines = camera_note_lines([(clip.track, clip.media_timing or {}) for clip in shot.clips])
+        if camera_lines:
+            current = shot_data if created else self.api.get_shot(shot_id)
+            if not isinstance(current, dict):
+                raise RuntimeError(f'Shot {shot.name}: could not read existing notes safely')
+            existing = current.get('notes') or ''
+            missing = [line for line in camera_lines if line not in existing.splitlines()]
+            if missing:
+                update_fields['notes'] = (existing.rstrip() + '\n\n' if existing.strip() else '') + '\n'.join(missing)
         
         try:
             self.api.update_shot(shot_id, **update_fields)
         except Exception as e:
+            if shot.head_handles is not None:
+                raise RuntimeError(f"Shot {shot.name}: timeline metadata update failed: {e}") from e
             self._log(f"Shot {shot.name} | update_shot metadata | {e}")
         
         return shot_id, created
@@ -893,7 +994,8 @@ class ImportWorker(QObject):
                  colourspace: str, handles: int, local_work: bool,
                  add_to_db: bool, create_tasks: bool,
                  skip_activity_logging: bool = False,
-                 nuke_path: Optional[str] = None):
+                 nuke_path: Optional[str] = None,
+                 preflight=None):
         super().__init__()
         self.shots = shots
         self.project_root = project_root
@@ -905,6 +1007,7 @@ class ImportWorker(QObject):
         self.create_tasks = create_tasks
         self.skip_activity_logging = skip_activity_logging
         self.nuke_path = nuke_path
+        self.preflight = preflight
         
         self.nuke_gen = NukeScriptGenerator(colourspace, local_work, nuke_path=nuke_path)
         self.thumb_gen = ThumbnailGenerator()
@@ -928,6 +1031,11 @@ class ImportWorker(QObject):
         job_title = os.path.basename(self.project_root)
         
         try:
+            if self.preflight is not None:
+                self.preflight()
+                if self.add_to_db:
+                    if not self.django_importer:
+                        raise RuntimeError("Database importer is unavailable; disable Add to ShotBox or fix the connection")
             for idx, shot in enumerate(self.shots):
                 self.progress.emit(idx + 1, total, f"Processing: {shot.name}")
                 
@@ -952,9 +1060,14 @@ class ImportWorker(QObject):
                     if primary_clip and primary_clip.filepath != "offline":
                         thumb_path = os.path.join(shot_folder, f"{shot.name}_thumb_{INITIAL_IMPORT_VERSION_TAG}.jpeg")
                         if not os.path.isfile(thumb_path):
-                            result = self.thumb_gen.generate(primary_clip.filepath, thumb_path)
+                            frame = round(primary_clip.media_timing['cut_start']) if primary_clip.media_timing else 1
+                            colourspace = (primary_clip.media_timing or {}).get('input_colourspace', self.colourspace)
+                            result = self.thumb_gen.generate(primary_clip.filepath, thumb_path, frame=frame,
+                                                             input_colourspace=colourspace)
                             if result:
                                 shot.thumbnail_path = result
+                            else:
+                                stats.errors.append(f'{shot.name}: thumbnail could not be generated; check decoding and input transform.')
                         else:
                             shot.thumbnail_path = thumb_path
                     
@@ -1041,7 +1154,9 @@ class ThumbnailWorker(QThread):
                 thumb_path = os.path.join(thumb_dir, f"{shot.name}_thumb_{INITIAL_IMPORT_VERSION_TAG}.jpeg")
                 
                 if not os.path.isfile(thumb_path):
-                    result = ThumbnailGenerator.generate(primary_clip.filepath, thumb_path)
+                    colourspace = (primary_clip.media_timing or {}).get('input_colourspace', getattr(self.parent(), 'colourspace', None))
+                    result = ThumbnailGenerator.generate(primary_clip.filepath, thumb_path,
+                                                         input_colourspace=colourspace)
                     if result:
                         shot.thumbnail_path = result
                     else:
@@ -1087,7 +1202,7 @@ class LoadingDialog(QDialog):
 # =============================================================================
 
 class XMLImportPage(QWidget):
-    """Main XML Import page widget."""
+    """Main XML Import V2 page widget."""
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1156,8 +1271,6 @@ class XMLImportPage(QWidget):
         row3.addWidget(self.btnSelecRoot)
         self.lableRoot = QLabel("None")
         row3.addWidget(self.lableRoot)
-        self.checkBoxlocalwork = QCheckBox("Portable scripts")
-        row3.addWidget(self.checkBoxlocalwork)
         row3.addWidget(QLabel("Handles:"))
         self.spinboxHandles = QSpinBox()
         self.spinboxHandles.setValue(25)
@@ -1237,7 +1350,6 @@ class XMLImportPage(QWidget):
         self.shot_padding = self.shotNumberPadSpinbox.value()
         self.colourspace = self.colourspaceComboBox.currentText()
         self.handles = self.spinboxHandles.value()
-        self.local_work = self.checkBoxlocalwork.isChecked()
         self.add_to_db = self.checkBoxAddToDB.isChecked()
         self.create_tasks = self.checkBoxCreateTasks.isChecked()
         self.skip_activity_logging = self.checkBoxSkipActivityLogging.isChecked()
@@ -1481,8 +1593,9 @@ class XMLImportPage(QWidget):
             if primary and primary.filepath != "offline":
                 thumb_path = os.path.join(shot_folder, f"{shot.name}_thumb_{INITIAL_IMPORT_VERSION_TAG}.jpeg")
                 if not os.path.isfile(thumb_path):
-                    ThumbnailGenerator.generate(primary.filepath, thumb_path)
-                    shot.thumbnail_path = thumb_path
+                    shot.thumbnail_path = ThumbnailGenerator.generate(
+                        primary.filepath, thumb_path,
+                        input_colourspace=(primary.media_timing or {}).get('input_colourspace', self.colourspace))
             
             # Create Nuke script
             nuke_gen.create_nuke_script(shot, shot_folder, self.parser.project_root)
@@ -1616,14 +1729,14 @@ class XMLImportPage(QWidget):
             timeline_assets_directory = None
         else:
             vfx_root_directory = output_directory.parent
-            timeline_assets_directory = output_directory / "Timeline_Assets"
+            timeline_assets_directory = asset_path(output_directory, 'timeline_assets')
 
-        job_assets_directory = vfx_root_directory / "Job_Assets"
+        job_assets_directory = asset_path(vfx_root_directory, 'job_assets')
         plates_directory = os.path.join(shot_folder_path, "plates")
         renders_comp_directory = os.path.join(shot_folder_path, "renders", "comp")
         renders_precomp_directory = os.path.join(shot_folder_path, "renders", "precomp")
         scripts_directory = os.path.join(shot_folder_path, "scripts")
-        assets_directory = os.path.join(shot_folder_path, "Shot_Assets")
+        assets_directory = asset_path(shot_folder_path, 'shot_assets')
 
         os.makedirs(job_assets_directory, exist_ok=True)
         if timeline_assets_directory is not None:
@@ -1744,6 +1857,7 @@ class XMLImportPage(QWidget):
                 ThumbnailGenerator.generate(
                     video_path=selected_clip_file_paths[0],
                     output_path=thumbnail_file_path,
+                    input_colourspace=selected_colourspace,
                 )
 
             if os.path.isfile(thumbnail_file_path):
@@ -2392,7 +2506,7 @@ if __name__ == "__main__":
             app.setStyleSheet(f.read())
     
     window = XMLImportPage()
-    window.setWindowTitle("ShotBox - XML Import")
+    window.setWindowTitle("ShotBox - XML Import V2")
     window.resize(1200, 800)
     window.show()
     

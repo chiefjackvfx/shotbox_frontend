@@ -154,7 +154,7 @@ DEFAULT_SETTINGS = {
     },
 
     # Startup behavior
-    "startup_tab": 0,  # 0=Tasks, 1=Review, 2=XML Import, 3=Activity, 4=Settings
+    "startup_tab": 0,  # 0=Tasks, 1=Review, 2=XML Import, 3=Activity, 4=Settings, 5=Import Timeline
     "show_startup_loading_dialog": True,
     "enable_assignment_board": False,
     "enable_review_page": False,
@@ -170,6 +170,7 @@ DEFAULT_SETTINGS = {
     "enable_activity_page": False,
     "enable_import_page": False,
     "enable_xml_import_page": False,
+    "enable_timeline_import_page": False,
     
     # Notifications (future feature)
     "notifications": "off",  # "off", "silent", "on"
@@ -733,9 +734,10 @@ class SettingsPage(QWidget):
         self.startup_tab_combo = NoScrollComboBox()
         self.startup_tab_combo.addItem("Tasks", 0)
         self.startup_tab_combo.addItem("Review", 1)
-        self.startup_tab_combo.addItem("XML Import", 2)
+        self.startup_tab_combo.addItem("XML Import V2", 2)
         self.startup_tab_combo.addItem("Activity", 3)
         self.startup_tab_combo.addItem("Settings", 4)
+        self.startup_tab_combo.addItem("Import Timeline", 5)
         startup_layout.addRow("Default Tab:", self.startup_tab_combo)
 
         self.show_startup_loading_check = QCheckBox("Show Loading Dialog on Startup")
@@ -753,8 +755,10 @@ class SettingsPage(QWidget):
         self.enable_import_page_check = QCheckBox("Enable Import Tab")
         startup_layout.addRow("", self.enable_import_page_check)
 
-        self.enable_xml_import_page_check = QCheckBox("Enable XML Import Tab")
+        self.enable_xml_import_page_check = QCheckBox("Enable XML Import V2 Tab")
         startup_layout.addRow("", self.enable_xml_import_page_check)
+        self.enable_timeline_import_page_check = QCheckBox("Enable Import Timeline Tab")
+        startup_layout.addRow("", self.enable_timeline_import_page_check)
 
         startup_pages_note = QLabel(
             "Optional page toggles apply on the next app launch."
@@ -1187,6 +1191,9 @@ class SettingsPage(QWidget):
         self.enable_xml_import_page_check.setChecked(
             self._settings.get("enable_xml_import_page", False)
         )
+        self.enable_timeline_import_page_check.setChecked(
+            self._settings.get("enable_timeline_import_page", False)
+        )
         
         # Notifications
         notif_value = self._settings.get("notifications", "off")
@@ -1485,6 +1492,7 @@ class SettingsPage(QWidget):
         self._set_pending_setting("enable_activity_page", self.enable_activity_page_check.isChecked(), save=False)
         self._set_pending_setting("enable_import_page", self.enable_import_page_check.isChecked(), save=False)
         self._set_pending_setting("enable_xml_import_page", self.enable_xml_import_page_check.isChecked(), save=False)
+        self._set_pending_setting("enable_timeline_import_page", self.enable_timeline_import_page_check.isChecked(), save=False)
         
         # Notifications
         if self.notif_off_radio.isChecked():

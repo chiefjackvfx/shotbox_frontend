@@ -47,6 +47,7 @@ except ImportError:
 import http_help
 import filesIO
 import project_load_profiler
+from asset_paths import asset_path
 from nuke_lock_utils import parse_lock_info
 from task_create_dialog import TaskCreateDialog
 from image_loader import ImageLoader
@@ -71,7 +72,7 @@ from task_card import setup_task_widget_ui
 BASE_URL = "http://192.168.10.207:8000"
 THUMBNAILS_ENABLED = True
 THUMBNAIL_TARGET_WIDTH = 240
-SHOT_ASSETS_DIRNAME = "Shot_Assets"
+SHOT_ASSETS_DIRNAME = "shot_assets"
 MATCHMOVE_DIRNAME = "matchmove"
 CAMERA_PRESETS = {
     "Alexa 35": {
@@ -123,11 +124,12 @@ def _load_matchmove_helpers():
 
 def build_shot_assets_directory(shot_root: str) -> str:
     base_path = os.path.abspath(os.path.expanduser(str(shot_root)))
-    return os.path.join(base_path, SHOT_ASSETS_DIRNAME)
+    return str(asset_path(base_path, SHOT_ASSETS_DIRNAME))
 
 
 def build_shot_matchmove_directory(shot_root: str) -> str:
-    return str(Path(build_shot_assets_directory(shot_root)) / MATCHMOVE_DIRNAME)
+    base_path = os.path.abspath(os.path.expanduser(str(shot_root)))
+    return str(asset_path(base_path, SHOT_ASSETS_DIRNAME, MATCHMOVE_DIRNAME))
 
 
 def find_latest_matchmove_project(matchmove_dir: str, shot_name: str):

@@ -13,6 +13,7 @@ python-xlib==0.33; sys_platform == "linux"
 # Review / media
 opencolorio>=2.5,<3
 opencv-python
+opentimelineio>=0.17,<0.19
 pyperclip
 OpenEXR
 openpyxl

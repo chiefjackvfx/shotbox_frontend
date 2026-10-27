@@ -89,6 +89,9 @@ class _FakeKnob:
         self.script_value = value
         self._value = value
 
+    def setExpression(self, value):
+        self.expression = value
+
 
 class _FakeNode:
     DEFAULT_KNOBS = (
@@ -96,6 +99,9 @@ class _FakeNode:
         "file",
         "colorspace",
         "label",
+        "bdheight",
+        "bdwidth",
+        "note_font_size",
         "message",
         "projecttext",
         "artisttext",
@@ -112,6 +118,20 @@ class _FakeNode:
         "origset",
         "first",
         "origfirst",
+        "lookup",
+        "filter",
+        "frame_mode",
+        "frame_range",
+        "frame_range_lock",
+        "input.first",
+        "input.first_lock",
+        "input.last_lock",
+        "output.last_lock",
+        "speed",
+        "reverse",
+        "before",
+        "after",
+        "shutter",
         "input.last",
         "output.first",
         "output.first_lock",
@@ -135,7 +155,9 @@ class _FakeNode:
     def __init__(self, name, xpos=0, ypos=0):
         self._name = name
         self._knobs = {}
-        self.inputs = {}
+        self._inputs = {}
+        self._nuke = None
+        self.node_class = ''
         for knob_name in self.DEFAULT_KNOBS:
             self._knobs[knob_name] = _FakeKnob(knob_name, None, self)
         self._knobs["name"].setValue(name)
@@ -152,10 +174,16 @@ class _FakeNode:
         return self._knobs
 
     def setInput(self, index, node):
-        self.inputs[index] = node
+        self._inputs[index] = node
 
     def input(self, index):
-        return self.inputs.get(index)
+        return self._inputs.get(index)
+
+    def inputs(self):
+        return max(self._inputs, default=-1) + 1
+
+    def dependent(self, flags):
+        return [node for node in self._nuke.allNodes() if self in node._inputs.values()]
 
     def name(self):
         return self._name
@@ -181,6 +209,8 @@ class _FakeNodeFactory:
     def __getattr__(self, class_name):
         def creator():
             node = _FakeNode(f"{class_name}Generated")
+            node._nuke = self._nuke
+            node.node_class = class_name
             self._nuke.top_nodes.append(node)
             return node
 
@@ -196,6 +226,7 @@ PREVIEW_MP4_EXPR = "../renders/precomp/previews/[string range [basename [value r
 
 
 class _FakeNuke:
+    INPUTS = 1
     def __init__(self, include_text10=False, include_text12=False, use_dynamic_output_paths=True):
         self.top_nodes = []
         self.current_group = None
@@ -230,6 +261,8 @@ class _FakeNuke:
         readtime = _FakeNode("readtime")
         slate = _FakeGroupNode("MS_slate_overlay", self, inner_nodes=[readtime], xpos=620, ypos=3274)
         self.top_nodes.append(slate)
+        for node in self.top_nodes:
+            node._nuke = self
 
         if use_dynamic_output_paths:
             self.toNode("WriteCompMov")["file"].setValue(COMP_MOV_EXPR)
@@ -257,18 +290,93 @@ class _FakeNuke:
                 return node
         return None
 
-    def allNodes(self):
+    def allNodes(self, filter=None):
         nodes = list(self.top_nodes)
         for node in self.top_nodes:
             if isinstance(node, _FakeGroupNode):
                 nodes.extend(node.inner_nodes)
-        return nodes
+        return [n for n in nodes if n.node_class == filter] if filter else nodes
 
     def createNode(self, class_name, inpanel=False):
         return getattr(self.nodes, class_name)()
 
+    def delete(self, node):
+        self.top_nodes.remove(node)
+
 
 class CreateNkTests(unittest.TestCase):
+    def test_lens_metadata_roundtrips_and_appears_literally_in_info_backdrop(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            request = self._request(Path(tmpdir))
+            request.shot_metadata_lines = ['Camera: ARRI ALEXA Mini LF',
+                                           'Lens: TRIBE7 TRIBE 7 BLACKWINGS 37 T 1', 'Focal length: 37 mm',
+                                           'V2 Lens: Custom [value frame] <lens>', 'V2 Retime: 50%']
+            restored = module.GenerateNkRequest.from_dict(request.to_dict())
+            self.assertEqual(restored.shot_metadata_lines, request.shot_metadata_lines)
+            fake = _FakeNuke()
+            module._TemplateEditor(fake).edit(restored)
+            node = fake.toNode('BackdropINFO')
+            text = node['label'].value()
+            self.assertIn('Lens: TRIBE7 TRIBE 7 BLACKWINGS 37 T 1', text)
+            self.assertIn('Focal length: 37 mm', text)
+            self.assertIn('V2 Lens: Custom &#91;value frame&#93; &lt;lens&gt;', text)
+            self.assertIn('V2 Retime: 50%', text)
+            self.assertGreater(node['bdheight'].value(), 296)
+
+    def test_timeline_mapping_preserves_fractional_anchor_and_downstream_connections(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            request = self._request(Path(tmpdir))
+            request.duration = 45
+            request.cut_duration = 20
+            request.head_handles = 10
+            request.tail_handles = 15
+            request.frame_first = 1001
+            request.frame_last = 1045
+            request.plate_timings = [{'frames': 87, 'cut_start': 42.2219679633, 'speed': 0.6361556064}]
+            restored = module.GenerateNkRequest.from_dict(request.to_dict())
+            self.assertEqual(restored.plate_timings, request.plate_timings)
+            fake = _FakeNuke()
+            fake.toNode('Reformat3').setInput(0, fake.toNode('Retime1'))
+            module._TemplateEditor(fake).edit(restored)
+            warp = fake.toNode('Retime1')
+            self.assertIn('43.2219679633', warp['lookup'].expression)
+            self.assertIn('0.6361556064', warp['lookup'].expression)
+            self.assertIn('frame - 1011', warp['lookup'].expression)
+            self.assertIs(fake.toNode('Reformat3').input(0), warp)
+            self.assertIs(warp.input(0), fake.toNode('Read1'))
+            self.assertEqual(fake.toNode('Read1')['first'].value(), 1)
+            self.assertEqual(fake.toNode('Read1')['last'].value(), 87)
+            self.assertEqual(fake.root()['first_frame'].value(), 1001)
+            self.assertEqual(fake.toNode('Viewer1')['frame_range'].value(), '1011-1030')
+            self.assertTrue(fake.toNode('Viewer1')['frame_range_lock'].value())
+
+    def test_timeline_mapping_rejects_unavailable_handle_frames(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            request = self._request(Path(tmpdir))
+            request.head_handles = 25
+            request.frame_first = 1001
+            request.plate_timings = [{'frames': 40, 'cut_start': 10, 'speed': 1}]
+            with self.assertRaisesRegex(ValueError, 'exceeds available'):
+                module._TemplateEditor(_FakeNuke()).edit(request)
+
+    def test_normal_speed_keeps_template_node_and_cut_inside_handles(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            request = self._request(Path(tmpdir))
+            request.duration, request.cut_duration = 40, 20
+            request.head_handles = request.tail_handles = 10
+            request.frame_last = 1040
+            request.plate_timings = [{'frames': 40, 'cut_start': 10, 'speed': 1, 'input_colourspace': 'ARRI LogC3 (EI800)'}]
+            fake = _FakeNuke()
+            original_retime = fake.toNode('Retime1')
+            module._TemplateEditor(fake).edit(request)
+            self.assertIs(fake.toNode('Retime1'), original_retime)
+            self.assertFalse(any(n.node_class == 'TimeWarp' for n in fake.allNodes()))
+            self.assertEqual(original_retime['input.first'].value(), 1)
+            self.assertEqual(original_retime['output.first'].value(), 1001)
+            self.assertEqual(original_retime['speed'].value(), 1)
+            self.assertEqual(fake.toNode('Viewer1')['frame_range'].value(), '1011-1030')
+            self.assertEqual(fake.toNode('Read1')['colorspace'].value(), 'ARRI LogC3 (EI800)')
+
     def _request(self, root: Path, template_path: Path | None = None) -> module.GenerateNkRequest:
         template = template_path or root / "template_current.nk"
         primary_plate = root / "shot" / "plates" / "V1.mov"

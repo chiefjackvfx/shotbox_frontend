@@ -34,6 +34,7 @@ from PyQt6.QtWidgets import (
 import widgets
 import http_help
 import filesIO
+from asset_paths import asset_path
 from nuke_lock_worker import NukeLockWorker
 import project_load_profiler
 import nukedash_excel_export
@@ -1516,7 +1517,7 @@ class page_nukedash(QMainWindow):
         vfx_root = self._infer_vfx_root_from_shot_dir(shot_dir)
         if vfx_root is None:
             return None
-        return vfx_root / "Job_Assets"
+        return asset_path(vfx_root, 'job_assets')
 
     def _resolve_timeline_assets_dir(self) -> Path | None:
         timeline_data = self._active_timeline_data()
@@ -1524,7 +1525,7 @@ class page_nukedash(QMainWindow):
         if shot_dir is not None:
             timeline_root = shot_dir.parent
             if timeline_root and timeline_root.name.lower() not in ASSET_ROOT_DIRECTORY_NAMES:
-                return timeline_root / "Timeline_Assets"
+                return asset_path(timeline_root, 'timeline_assets')
 
         job_data = self._active_job_data()
         reference_shot_dir = self._first_shot_dir_for_job(job_data)
@@ -1535,7 +1536,7 @@ class page_nukedash(QMainWindow):
         timeline_title = str((timeline_data or {}).get("title") or "").strip()
         if vfx_root is None or not timeline_title:
             return None
-        return vfx_root / timeline_title / "Timeline_Assets"
+        return asset_path(vfx_root / timeline_title, 'timeline_assets')
 
     def _resolved_timeline_matchmove_dir(self) -> Path | None:
         timeline_data = self._active_timeline_data()
@@ -1555,7 +1556,7 @@ class page_nukedash(QMainWindow):
         timeline_assets_dir = self._resolve_timeline_assets_dir()
         if timeline_assets_dir is None:
             return None
-        return timeline_assets_dir / "matchmove"
+        return asset_path(timeline_assets_dir.parent, 'timeline_assets', 'matchmove')
 
     def _discover_timeline_matchmove_candidates(
         self,
@@ -3046,7 +3047,7 @@ class page_nukedash(QMainWindow):
         try:
             import av
         except ImportError:
-            QMessageBox.warning(self, "Update Thumbnails", "PyAV is required to capture preview frames.")
+            QMessageBox.warning(self, "Update Thumbnails", "PyAV is required to capture preview or plate frames.")
             return
         shots = []
         seen = set()
@@ -3111,7 +3112,7 @@ class page_nukedash(QMainWindow):
         title = "Cancelled." if summary["cancelled"] else "Done."
         message = (
             f"{title}\n\nUpdated: {summary['updated']}\nFailed: {summary['failed']}\n"
-            f"Skipped (no preview): {summary['skipped']}"
+            f"Skipped (no preview or primary clip): {summary['skipped']}"
         )
         if summary["remaining"]:
             message += f"\nRemaining: {summary['remaining']}"

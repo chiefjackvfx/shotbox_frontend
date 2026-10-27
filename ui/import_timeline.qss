@@ -1,0 +1,227 @@
+/* Scoped to the folder importer; the existing XML page keeps its styling. */
+QWidget#import_timeline_page {
+    background: #15181e;
+}
+QWidget#import_timeline_page QWidget {
+    font-family: "Inter", "Segoe UI", "Noto Sans", sans-serif;
+    font-size: 12px;
+}
+QWidget#import_timeline_page QScrollArea#timeline_setup_scroll,
+QWidget#import_timeline_page QWidget#timeline_setup_content,
+QWidget#import_timeline_page QScrollArea#timeline_setup_scroll > QWidget {
+    background: transparent;
+    border: none;
+}
+QWidget#import_timeline_page QFrame[role="card"] {
+    background: #1e222a;
+    border: 1px solid #333945;
+    border-radius: 10px;
+}
+QWidget#import_timeline_page QFrame#timeline_source_card {
+    border-color: #603d2f;
+}
+QWidget#import_timeline_page QLabel,
+QWidget#import_timeline_page QCheckBox,
+QWidget#import_timeline_page QStackedWidget,
+QWidget#import_timeline_page QStackedWidget > QWidget {
+    background: transparent;
+    border: none;
+}
+QWidget#import_timeline_page QLabel[role="pageTitle"] {
+    color: #f3f4f6;
+    font-size: 25px;
+    font-weight: 600;
+}
+QWidget#import_timeline_page QLabel[role="sectionTitle"],
+QWidget#import_timeline_page QLabel[role="emptyTitle"] {
+    color: #edf0f5;
+    font-size: 14px;
+    font-weight: 600;
+}
+QWidget#import_timeline_page QLabel[role="muted"] {
+    color: #9aa5b6;
+    font-size: 11px;
+}
+QWidget#import_timeline_page QLabel[role="fieldLabel"] {
+    color: #c7cfdb;
+    font-size: 11px;
+}
+QWidget#import_timeline_page QLabel[role="step"],
+QWidget#import_timeline_page QLabel[role="loading"] {
+    color: #ff6b35;
+    font-weight: 600;
+}
+QWidget#import_timeline_page QLabel[role="formatBadge"] {
+    background: #30231e;
+    color: #ff6b35;
+    border: 1px solid #603d2f;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 10px;
+    font-weight: 600;
+}
+QWidget#import_timeline_page QPushButton {
+    background: #2a303b;
+    color: #dce3ed;
+    border: 1px solid #434c5c;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-weight: 500;
+    text-transform: none;
+}
+QWidget#import_timeline_page QPushButton:hover {
+    background: #373f4d;
+    border-color: #7e899b;
+}
+QWidget#import_timeline_page QPushButton:pressed {
+    background: #202631;
+}
+QWidget#import_timeline_page QPushButton:disabled {
+    background: #242932;
+    color: #657084;
+    border-color: #343c49;
+}
+QWidget#import_timeline_page QPushButton[role="primary"] {
+    background: #ff6b35;
+    color: #1a1d23;
+    border-color: #ff6b35;
+    padding: 10px 20px;
+    font-weight: 600;
+}
+QWidget#import_timeline_page QPushButton[role="primary"]:hover {
+    background: #ff8357;
+}
+QWidget#import_timeline_page QPushButton[role="primary"]:pressed {
+    background: #d85a28;
+    border-color: #d85a28;
+}
+QWidget#import_timeline_page QPushButton[role="primary"]:disabled {
+    background: #3d2922;
+    color: #af7c65;
+    border-color: #603d2f;
+}
+QWidget#import_timeline_page QLineEdit,
+QWidget#import_timeline_page QComboBox,
+QWidget#import_timeline_page QSpinBox,
+QWidget#import_timeline_page QDoubleSpinBox {
+    background: #171b22;
+    color: #e2e7ef;
+    border: 1px solid #3b4453;
+    border-radius: 5px;
+    padding: 6px 8px;
+    min-height: 18px;
+    selection-background-color: #613d2b;
+}
+QWidget#import_timeline_page QComboBox,
+QWidget#import_timeline_page QSpinBox,
+QWidget#import_timeline_page QDoubleSpinBox {
+    padding-right: 24px;
+}
+QWidget#import_timeline_page QLineEdit:focus,
+QWidget#import_timeline_page QComboBox:focus,
+QWidget#import_timeline_page QSpinBox:focus,
+QWidget#import_timeline_page QDoubleSpinBox:focus {
+    border-color: #ff6b35;
+}
+QWidget#import_timeline_page QLineEdit:disabled,
+QWidget#import_timeline_page QComboBox:disabled,
+QWidget#import_timeline_page QSpinBox:disabled {
+    color: #778396;
+    border-color: #303846;
+}
+QWidget#import_timeline_page QComboBox QLineEdit {
+    border: none;
+    padding: 0;
+    min-height: 0;
+}
+QWidget#import_timeline_page QComboBox::drop-down {
+    background: transparent;
+    border: none;
+    width: 24px;
+}
+QWidget#import_timeline_page QComboBox::down-arrow {
+    image: url("@TIMELINE_UI@/timeline_chevron.svg");
+    width: 12px;
+    height: 12px;
+}
+QWidget#import_timeline_page QCheckBox::indicator {
+    background: #171b22;
+    border: 1px solid #536074;
+    border-radius: 4px;
+    width: 16px;
+    height: 16px;
+}
+QWidget#import_timeline_page QCheckBox::indicator:checked {
+    background: #ff6b35;
+    border-color: #ff6b35;
+    image: url("@TIMELINE_UI@/timeline_check.svg");
+}
+QWidget#import_timeline_page QCheckBox::indicator:hover {
+    border-color: #ff8357;
+}
+QWidget#import_timeline_page QCheckBox::indicator:disabled {
+    border-color: #3b4453;
+}
+QWidget#import_timeline_page QTableWidget {
+    background: #191e26;
+    alternate-background-color: #202630;
+    border: 1px solid #343e4e;
+    border-radius: 6px;
+    selection-background-color: #354557;
+    selection-color: #ffffff;
+}
+QWidget#import_timeline_page QTableWidget QWidget {
+    background: transparent;
+}
+QWidget#import_timeline_page QTableWidget QComboBox,
+QWidget#import_timeline_page QTableWidget QSpinBox,
+QWidget#import_timeline_page QTableWidget QDoubleSpinBox {
+    background: #1a202a;
+}
+QWidget#import_timeline_page QTableWidget::item {
+    padding: 6px;
+    border-bottom: 1px solid #29313e;
+}
+QWidget#import_timeline_page QHeaderView::section {
+    background: #252c37;
+    color: #b9c6d8;
+    border: none;
+    border-bottom: 1px solid #404b5d;
+    padding: 10px 8px;
+    font-size: 11px;
+    font-weight: 600;
+}
+QWidget#import_timeline_page QTextEdit#timeline_validation {
+    background: #191e26;
+    color: #aebbd0;
+    border: 1px solid #333d4b;
+    border-radius: 6px;
+    padding: 7px;
+    font-size: 11px;
+}
+QWidget#import_timeline_page QProgressBar {
+    background: #30343c;
+    border: none;
+    border-radius: 2px;
+}
+QWidget#import_timeline_page QProgressBar::chunk {
+    background: #ff6b35;
+    border-radius: 2px;
+}
+QWidget#import_timeline_page QSplitter::handle {
+    background: transparent;
+    height: 8px;
+}
+QWidget#import_timeline_page QLabel[role="importStatus"] {
+    color: #9aa5b6;
+    font-weight: 600;
+}
+QWidget#import_timeline_page QLabel[tone="success"] {
+    color: #8bd5b0;
+}
+QWidget#import_timeline_page QLabel[tone="warning"] {
+    color: #ff6b35;
+}
+QWidget#import_timeline_page QLabel[tone="error"] {
+    color: #f19c9c;
+}

@@ -139,9 +139,9 @@ class NukeDashAssetActionsTests(unittest.TestCase):
 
             self.assertEqual(
                 harness._resolve_timeline_assets_dir(),
-                base_root / "Edit_A" / "Timeline_Assets",
+                base_root / "Edit_A" / "timeline_assets",
             )
-            self.assertEqual(harness._resolve_job_assets_dir(), base_root / "Job_Assets")
+            self.assertEqual(harness._resolve_job_assets_dir(), base_root / "job_assets")
 
     def test_resolves_timeline_assets_for_empty_timeline_from_job_structure(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -167,7 +167,7 @@ class NukeDashAssetActionsTests(unittest.TestCase):
 
             self.assertEqual(
                 harness._resolve_timeline_assets_dir(),
-                base_root / "Edit_B" / "Timeline_Assets",
+                base_root / "Edit_B" / "timeline_assets",
             )
 
     def test_disables_timeline_button_when_job_has_no_timeline_directories(self):
@@ -192,7 +192,7 @@ class NukeDashAssetActionsTests(unittest.TestCase):
             self.assertTrue(harness.btn_open_job_assets.isEnabled())
             self.assertEqual(
                 harness.btn_open_job_assets.property("folder_path"),
-                str(base_root / "Job_Assets"),
+                str(base_root / "job_assets"),
             )
 
     def test_timeline_matchmove_state_updates_when_switching_timelines(self):
@@ -259,8 +259,8 @@ class NukeDashAssetActionsTests(unittest.TestCase):
 
             harness = AssetsHarness(job_data, current_timeline_index=0)
 
-            timeline_assets_dir = base_root / "Edit_A" / "Timeline_Assets"
-            job_assets_dir = base_root / "Job_Assets"
+            timeline_assets_dir = base_root / "Edit_A" / "timeline_assets"
+            job_assets_dir = base_root / "job_assets"
 
             harness._on_open_timeline_assets_clicked()
             harness._on_open_job_assets_clicked()

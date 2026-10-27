@@ -6,9 +6,84 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T20:02:57+00:00] Show import readiness, shot counts, and responsive review panels.
+
+- [2026-10-27T19:50:25+00:00] Test focused inputs, page scrolling, dropdown lists, and keyboard editing.
+
+- [2026-10-27T19:47:11+00:00] Show animated loading feedback while scanning folders and parsing timelines.
+
+- [2026-10-27T19:32:07+00:00] Apply detected clip IDTs and ACES display to thumbnails.
+- [2026-10-27T19:32:07+00:00] Verify thumbnail colour transforms, overrides, and mixed-camera plate selection.
+
+- [2026-10-27T19:22:04+00:00] Accept folder drops across the entire Import Timeline panel.
+- [2026-10-27T19:22:04+00:00] Test folder drops, XML defaults, and protected dialog behavior.
+
+- [2026-10-27T19:17:31+00:00] Test lowercase asset creation and legacy folder compatibility.
+
+- [2026-10-27T19:08:38+00:00] Show retime percentages in shot notes and Nuke backdrops.
+
+- [2026-10-27T19:00:11+00:00] Read preserved ARRI lens metadata from managed MXF headers.
+- [2026-10-27T19:00:11+00:00] Include lens names and focal lengths in shot notes.
+- [2026-10-27T19:00:11+00:00] Show camera and lens metadata in Nuke info backdrops.
+- [2026-10-27T19:00:11+00:00] Test embedded metadata parsing, preserved notes, and Nuke backdrops.
+
+- [2026-10-27T18:12:19+00:00] Detect per-clip input transforms from media and camera metadata.
+- [2026-10-27T18:12:19+00:00] Append detected camera make and model to shot notes.
+- [2026-10-27T18:12:19+00:00] Test colour detection, mixed-camera imports, and preserved shot notes.
+
+- [2026-10-27T17:35:18+00:00] Added folder timeline imports with reviewed local media matching.
+- [2026-10-27T17:35:18+00:00] Added XML/OTIO timing choices, fractional retimes, and uneven handles.
+- [2026-10-27T17:35:18+00:00] Added frontend import sidecars and native Nuke acceptance checks.
+
 ### Changed
 
+- [2026-10-27T20:04:20+00:00] Use Shotbox orange for timeline controls and glowing tab.
+
+- [2026-10-27T20:02:57+00:00] Refresh Import Timeline with modern cards and clearer controls.
+- [2026-10-27T20:02:57+00:00] Import either XML or OTIO using only selected-file timing.
+- [2026-10-27T20:02:57+00:00] Verify independent timeline selection and retain legacy import regressions.
+
+- [2026-10-27T19:51:44+00:00] Document mandatory scrolling protection for all frontend input controls.
+
+- [2026-10-27T19:22:04+00:00] Automatically select a single XML timeline ahead of OTIO.
+
+- [2026-10-27T19:17:31+00:00] Create lowercase asset folders while reusing legacy title-case folders.
+
+- [2026-10-27T19:08:06+00:00] Remove source and timing diagnostics from Nuke info backdrops.
+
+- [2026-10-27T19:06:21+00:00] Combine camera make/model into one notes and backdrop line.
+
+- [2026-10-27T18:12:19+00:00] Label inferred colour-space assumptions and allow manual transform overrides.
+
+- [2026-10-27T17:58:37+00:00] Renamed XML Import page labels to XML Import V2.
+
+- [2026-10-27T17:58:12+00:00] Removed unused Portable scripts checkbox from import pages.
+
+- [2026-10-27T17:40:49+00:00] Highlighted new Import Timeline tab with a golden glow.
+
+- [2026-10-27T17:35:18+00:00] Documented timeline imports and expanded XML regression coverage.
+
 ### Fixed
+
+- [2026-10-27T19:50:25+00:00] Prevent wheel scrolling from changing inputs throughout the application.
+
+- [2026-10-27T19:47:39+00:00] Preserve scan cancellation status after background parsing finishes.
+
+- [2026-10-27T19:32:07+00:00] Preserve thumbnail precision and avoid transforming rendered previews twice.
+
+- [2026-10-27T19:17:31+00:00] Find legacy metadata and matchmove within mixed-case asset layouts.
+
+- [2026-10-27T19:11:44+00:00] Keep shot in/out on editorial timelines, separate from Nuke.
+
+- [2026-10-27T19:05:30+00:00] Install missing OTIO dependency in the actual frontend runtime.
+- [2026-10-27T19:05:30+00:00] Verify OTIO during setup and explain module loading failures.
+
+- [2026-10-27T17:57:32+00:00] Detect timeline handles automatically from available local media ranges.
+- [2026-10-27T17:57:32+00:00] Start imported clips at 1001 with correct edit cuts.
+- [2026-10-27T17:57:32+00:00] Preserve template timing nodes for clips at normal speed.
+
+- [2026-10-27T17:48:51+00:00] Fixed black MXF thumbnails from invalid camera colour metadata.
+- [2026-10-27T17:48:51+00:00] Generate thumbnails from primary plates when previews are unavailable.
 
 ## 5.2.14 - 2026-10-27
 

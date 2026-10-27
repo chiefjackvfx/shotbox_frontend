@@ -191,6 +191,9 @@
              </item>
              <item>
               <widget class="QPushButton" name="btn_update_thumbnails">
+               <property name="toolTip">
+                <string>Update thumbnails from previews or primary media clips, including MXF.</string>
+               </property>
                <property name="text">
                 <string>thumbs</string>
                </property>

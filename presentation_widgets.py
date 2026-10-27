@@ -3,8 +3,60 @@
 from math import ceil
 
 from PyQt6.QtCore import QPointF, QSize, Qt
-from PyQt6.QtGui import QTextLayout, QTextOption
-from PyQt6.QtWidgets import QLabel, QPushButton, QStyle, QStyleOptionButton, QStylePainter
+from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, QTextLayout, QTextOption
+from PyQt6.QtWidgets import QLabel, QPushButton, QStyle, QStyleOptionButton, QStyleOptionTab, QStylePainter, QTabBar
+
+
+class NewFeatureTabBar(QTabBar):
+    """Keep native tabs, with an orange shine on one new feature label."""
+
+    def __init__(self, featured_text, parent=None):
+        super().__init__(parent)
+        self.featured_text = featured_text
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        # Paint the selected tab last, as Qt does for overlapping tab borders.
+        indices = [i for i in range(self.count()) if i != self.currentIndex()]
+        if self.currentIndex() >= 0:
+            indices.append(self.currentIndex())
+        for index in indices:
+            if not self.isTabVisible(index):
+                continue
+            option = QStyleOptionTab()
+            self.initStyleOption(option, index)
+            if option.text != self.featured_text or not self.isTabEnabled(index):
+                painter.drawControl(QStyle.ControlElement.CE_TabBarTab, option)
+                continue
+            rect = self.style().subElementRect(QStyle.SubElement.SE_TabBarTabText, option, self)
+            selected = bool(option.state & QStyle.StateFlag.State_Selected)
+            text = option.fontMetrics.elidedText(option.text, self.elideMode(), rect.width())
+            option.text = ''
+            painter.drawControl(QStyle.ControlElement.CE_TabBarTab, option)
+            font = self.font()
+            font.setBold(True)
+            path = QPainterPath()
+            path.addText(QPointF(0, 0), font, text)
+            bounds = path.boundingRect()
+            path.translate(rect.center().x() - bounds.center().x(), rect.center().y() - bounds.center().y())
+            painter.save()
+            painter.setClipRect(self.tabRect(index))
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            for width, alpha in ((8, 18), (5, 28), (3, 48)):
+                painter.setPen(QPen(QColor(255, 107, 53, alpha), width,
+                                    Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
+                painter.drawPath(path)
+            shine = QLinearGradient(path.boundingRect().topLeft(), path.boundingRect().bottomLeft())
+            stops = (((0, '#ffffff'), (0.4, '#fff8f3'), (0.55, '#ffe2d5'), (1, '#ffffff'))
+                     if selected else
+                     ((0, '#ffb18e'), (0.4, '#fff0e9'), (0.55, '#ff6b35'), (1, '#ff9971')))
+            for stop, colour in stops:
+                shine.setColorAt(stop, QColor(colour))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(shine)
+            painter.drawPath(path)
+            painter.restore()
 
 
 class FlexibleLabel(QLabel):
