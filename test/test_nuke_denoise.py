@@ -174,6 +174,22 @@ class DenoiseHostTests(unittest.TestCase):
                           if event["stage"] == "rendering" and "frame" in event], [1001, 1002, 1003, 1004])
         self.nuke.removeAfterFrameRender.assert_called_once()
 
+
+    def test_profile_only_saves_verified_profile_without_rendering(self):
+        request = json.loads(self.request.read_text())
+        request.update(profile_only=True, deadline_repository={
+            "executables": {"RenderExecutable17_1": "/opt/Nuke17.1v2/Nuke17.1"}})
+        self.request.write_text(json.dumps(request))
+        self.write["beforeRender"] = Knob("")
+        self.nuke.execute = mock.Mock(side_effect=AssertionError("must not render"))
+        events = self.run_host()
+        self.assertEqual(events[-1]["stage"], "prepared")
+        self.assertEqual((events[-1]["first"], events[-1]["last"]), (1001, 1004))
+        self.assertEqual(events[-1]["nuke_version"], "17.1v2")
+        self.nuke.execute.assert_not_called()
+        self.assertNotIn("rendering", [e["stage"] for e in events])
+        self.assertIn("17.1v2", self.write["beforeRender"].value())
+
     def test_nuke_17_0_profiles_and_renders_through_the_same_host(self):
         self.nuke.NUKE_VERSION_STRING = "17.0v1"
         self.nuke.GUI = False

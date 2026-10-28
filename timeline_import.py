@@ -19,6 +19,8 @@ from typing import Callable
 from urllib.parse import unquote
 import xml.etree.ElementTree as ET
 
+from timeline_limits import validate_video_track
+
 from arri_metadata import read_embedded_arri_metadata
 from media_colourspace import ColourspaceDetection, camera_identity, detect_input_colourspace, lens_identity
 
@@ -101,7 +103,7 @@ def discover(folder: str, cancel=lambda: False) -> Discovery:
             elif ext == '.otio':
                 result.timelines.append(str(path))
             elif ext == '.drt':
-                result.references.append(str(path))
+                result.timelines.append(str(path))
             elif ext == '.xml':
                 try:
                     if ET.parse(path).getroot().tag == 'xmeml':
@@ -232,6 +234,7 @@ def read_xml(path: str) -> TimelineDocument:
         if track.findall('transitionitem'):
             raise ValueError(f'V{number}: transitions are not supported')
         for index, element in enumerate(track.findall('clipitem')):
+            validate_video_track(number)
             if element.findtext('enabled', 'TRUE').upper() == 'FALSE':
                 result.warnings.append(f'V{number}: disabled clip omitted')
                 continue
@@ -277,8 +280,6 @@ def read_xml(path: str) -> TimelineDocument:
                 source_start = timecode_frames(file.findtext('timecode/string', ''), clip_fps) + source_in
             except (ValueError, AttributeError):
                 pass  # Review can supply the local cut start explicitly.
-            if number > 5:
-                errors.append('Only V1–V5 are supported by shot creation')
             result.clips.append(TimelineClip(
                 f'{number}:{index}', name, file.findtext('pathurl', '') if file is not None else '',
                 file.findtext('name', '') if file is not None else '',
@@ -318,6 +319,7 @@ def read_otio(path: str) -> TimelineDocument:
                 continue
             if not isinstance(clip, otio.schema.Clip):
                 raise ValueError(f'V{number}: unsupported transition or nested timeline')
+            validate_video_track(number)
             if not clip.enabled:
                 result.warnings.append(f'V{number} {clip.name}: disabled clip omitted')
                 continue
@@ -342,8 +344,6 @@ def read_otio(path: str) -> TimelineDocument:
                     speed = effect.time_scalar
                 else:
                     errors.append('Only forward constant-speed retimes are supported')
-            if number > 5:
-                errors.append('Only V1–V5 are supported by shot creation')
             result.clips.append(TimelineClip(
                 f'{number}:{index}', clip.name, getattr(reference, 'target_url', ''), reference.name,
                 clip.metadata.get('Resolve_OTIO', {}).get('Reel Number', ''), number,
@@ -355,6 +355,9 @@ def read_otio(path: str) -> TimelineDocument:
 
 
 def read_timeline(path: str) -> TimelineDocument:
+    if Path(path).suffix.lower() == '.drt':
+        from drt_import import read_drt
+        return read_drt(path)
     return read_otio(path) if Path(path).suffix.lower() == '.otio' else read_xml(path)
 
 
@@ -364,6 +367,7 @@ def _validate_structure(document):
         raise ValueError('Timeline has no V1 clips to create shots')
     occupied = set()
     for clip in document.clips:
+        validate_video_track(clip.track)
         key = clip.track, clip.timeline_start
         if key in occupied:
             clip.error = 'Multiple clips occupy the same track/start'
@@ -538,7 +542,7 @@ def prepare_import(document: TimelineDocument, media: dict[str, MediaInfo], *, c
         row.available_tail = max(0, math.floor((info.frames - 1 - last + EPSILON) / speed))
         resolved[clip.uid] = (effective, info, start)
     parser = XMLTimelineParser()
-    parser.clips_by_track = {i: [] for i in range(1, 6)}
+    parser.clips_by_track = {clip.track: [] for clip in document.clips}
     for row in rows:
         if row.clip.uid not in resolved or row.clip.track not in parser.clips_by_track:
             continue

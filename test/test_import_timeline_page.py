@@ -40,7 +40,7 @@ def load(page, tmp_path):
     page.discovery = Discovery(str(tmp_path), [path])
     page.media = {path: info}
     page.document = document(tmp_path)
-    page.parser.edit_name = page.document.name
+    page.timeline_name_edit.setText(page.document.name)
     page.parser.project_root = str(tmp_path / 'destination')
     page._refresh_preview()
 
@@ -308,3 +308,61 @@ def test_preflight_failure_happens_before_any_shot_writes(tmp_path):
     worker.run()
     assert errors == ['Input changed']
     worker.nuke_gen.create_shot_folder.assert_not_called()
+
+
+def test_matching_drt_is_preferred(page, tmp_path, app):
+    from test_drt_import import write_drt
+    write_drt(tmp_path / 'edit.drt')
+    (tmp_path / 'edit.xml').write_text(xml_text())
+    page._load_folder(str(tmp_path))
+    wait_read(page, app)
+    wait_read(page, app)
+    assert page.document.path == str(tmp_path / 'edit.drt')
+    assert len(page.document.clips) == 27
+
+
+def test_drt_with_different_edit_requires_selection(page, tmp_path, app):
+    from test_drt_import import write_drt
+    write_drt(tmp_path / 'edit.drt')
+    (tmp_path / 'another.xml').write_text(xml_text())
+    page._load_folder(str(tmp_path))
+    wait_read(page, app)
+    assert page.timeline_combo.currentData() is None
+    assert page.document is None
+
+
+def test_timeline_name_controls_import_destination_and_survives_refresh(page, tmp_path):
+    load(page, tmp_path)
+    original_name = page.document.name
+    page.timeline_name_edit.setText('Client edit v2')
+    page._on_update_settings()
+    page._refresh_preview()
+    assert page.parser.edit_name == 'Client edit v2'
+    assert page.document.name == original_name
+    scripts = Path(page.parser.project_root, 'VFX', 'Client edit v2', page.shots[0].name, 'scripts')
+    scripts.mkdir(parents=True)
+    (scripts / 'existing.nk').write_text('existing')
+    with mock.patch.object(page.prepared, 'revalidate'):
+        with pytest.raises(ValueError, match='scripts already exist'):
+            page._preflight()
+
+
+@pytest.mark.parametrize('name', ['', '   ', '../escape', 'bad/name', 'bad\\name'])
+def test_invalid_timeline_name_blocks_import(page, tmp_path, name):
+    load(page, tmp_path)
+    page.timeline_name_edit.setText(name)
+    assert page.prepared.errors
+    assert not page.btnNukeAll.isEnabled()
+    with mock.patch.object(import_xml_v2, 'ImportWorker') as worker:
+        page._on_import_all()
+    worker.assert_not_called()
+
+
+def test_loading_timeline_initializes_editable_name(page, tmp_path):
+    load(page, tmp_path)
+    page.timeline_name_edit.setText('Custom name')
+    replacement = document(tmp_path)
+    replacement.name = 'Next edit'
+    page._documents_loaded(replacement)
+    assert page.timeline_name_edit.text() == 'Next edit'
+    assert page.parser.edit_name == 'Next edit'

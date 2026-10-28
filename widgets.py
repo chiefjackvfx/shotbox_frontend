@@ -2531,6 +2531,8 @@ class ShotCard(QWidget):
             primary_clip = self._primary_original_clip_entry()
             if primary_clip:
                 clip_label = primary_clip["clip_name"]
+                if len(self._original_clip_entries) > 1:
+                    clip_label += f" (+{len(self._original_clip_entries) - 1})"
             else:
                 clip_label = "Clips"
             self.label_original_clip.setText(clip_label)
@@ -2665,6 +2667,17 @@ class ShotCard(QWidget):
                 clip_path=path,
                 plate_name=plate,
             )
+        )
+
+        denoise = menu.addAction("Denoise")
+        dashboard = self._denoise_dashboard()
+        controller = getattr(dashboard, "_denoise_controller", None)
+        denoise.setEnabled(bool(dashboard) and not bool(controller and controller.busy)
+                           and sys.platform in ("linux", "win32"))
+        if sys.platform not in ("linux", "win32"):
+            denoise.setToolTip("Background denoise supports Windows and Linux.")
+        denoise.triggered.connect(
+            lambda checked=False, path=clip_path: dashboard._handle_denoise_request(self, path)
         )
 
         make_precomp_exr = menu.addAction("Make Precomp EXR (ACEScg)")
@@ -3879,15 +3892,6 @@ class ShotCard(QWidget):
                 else:
                     no_file = menu.addAction("No Nuke file found")
                     no_file.setEnabled(False)
-                menu.addSeparator()
-                denoise = menu.addAction("Denoise")
-                dashboard = self._denoise_dashboard()
-                controller = getattr(dashboard, "_denoise_controller", None)
-                denoise.setEnabled(bool(dashboard) and not bool(controller and controller.busy)
-                                   and sys.platform in ("linux", "win32"))
-                if sys.platform not in ("linux", "win32"):
-                    denoise.setToolTip("Background denoise supports Windows and Linux.")
-                denoise.triggered.connect(lambda: dashboard._handle_denoise_request(self, None))
             
             elif widget == self.btn_latest_render:
                 # Get the render file path from button property

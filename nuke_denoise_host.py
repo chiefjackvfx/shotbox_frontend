@@ -92,6 +92,9 @@ def start(request_path):
             import sys
             sys.path.insert(0, str(Path(__file__).resolve().parent))
             from denoise_template import prepare, remove_stale_frames
+            if request.get("profile_only"):
+                from deadline_client import validate_version
+                validate_version(str(nuke.NUKE_VERSION_STRING), request["deadline_repository"])
             media = prepare(nuke, request)
             (directory / "media.json").write_text(json.dumps(media, indent=2), encoding="utf-8")
             event("media", **media)
@@ -135,8 +138,18 @@ def start(request_path):
             # versioned shot output folders contain rendered EXRs only.
             root.setFrame(first)
             cached_script = directory / "profiled.nk"
+            if request.get("profile_only"):
+                # Guard against Deadline's automatic minor-version fallback.
+                guard = ("import nuke, sys\nif sys.platform != 'linux':\n    raise RuntimeError('Shotbox Deadline denoise currently targets Linux workers')\nif nuke.NUKE_VERSION_STRING != " + repr(str(nuke.NUKE_VERSION_STRING))
+                         + ":\n    raise RuntimeError('Shotbox denoise requires the exact profiling Nuke version')\n")
+                before = write["beforeRender"].value()
+                write["beforeRender"].setValue(guard + (before or ""))
             nuke.scriptSaveAs(str(cached_script), overwrite=True)
             event("profile_ready", script=str(cached_script))
+            if request.get("profile_only"):
+                event("prepared", first=first, last=last, nuke_version=str(nuke.NUKE_VERSION_STRING),
+                      script=str(cached_script))
+                return
             total = last - first + 1
             completed = 0
 

@@ -494,7 +494,7 @@ class page_nukedash(QMainWindow):
         #self.btn_make_previews = QPushButton("Make All Previews")
         self.btn_make_previews.setToolTip("Generate previews for all shots with original clips or latest renders")
         self.btn_make_previews.clicked.connect(self._on_make_all_previews_clicked)
-        self.btn_denoise.setToolTip("Denoise original source clips using the denoise template (maximum width 4096)")
+        self.btn_denoise.setToolTip("Denoise all original clips in the selected timeline, including hidden shots (maximum width 4096)")
         self.btn_denoise.setEnabled(sys.platform in ("linux", "win32"))
         if sys.platform not in ("linux", "win32"):
             self.btn_denoise.setToolTip("Background denoise supports Windows and Linux")
@@ -2097,30 +2097,41 @@ class page_nukedash(QMainWindow):
         self.btn_denoise.setEnabled(not busy and sys.platform in ("linux", "win32"))
         self.set_auto_refresh_paused(busy, reason="denoise")
 
-    def _handle_denoise_request(self, shot_card: widgets.ShotCard, nk_path=None):
+    def _handle_denoise_request(self, shot_card: widgets.ShotCard, clip_path):
         if getattr(self, "_shutting_down", False):
             return
         controller = getattr(self, "_denoise_controller", None)
         if controller and controller.busy:
             return
+        if sys.platform not in ("linux", "win32"):
+            QMessageBox.warning(self, "Denoise", "Background denoise supports Windows and Linux.")
+            return
+        if not str(clip_path or "").strip():
+            QMessageBox.information(self, "Denoise", "Select an original clip to denoise.")
+            return
         job = {"timelines": [{"shots": [dict(shot_card.data or {})]}]}
-        tasks, skipped = self._collect_denoise_tasks(job, filesIO.Folders())
+        tasks, skipped = self._collect_denoise_tasks(job, filesIO.Folders(), source_path=clip_path)
         self._start_template_denoise(tasks, skipped)
 
-    def _collect_denoise_tasks(self, active_job, files_io):
+    def _collect_denoise_tasks(self, active_job, files_io, *, source_path=None):
         from denoise_template import collect_tasks
-        return collect_tasks(active_job, files_io)
+        return collect_tasks(active_job, files_io, source_path=source_path)
 
-    def _start_template_denoise(self, tasks, skipped):
+    def _start_template_denoise(self, tasks, skipped, *, timeline_name=None):
         from denoise_controller import choose_output_mode
         if not tasks:
             QMessageBox.information(self, "Denoise", f"No source media found.\n\nSkipped: {skipped}")
             return
-        mode = choose_output_mode(self, len(tasks), skipped)
+        mode = choose_output_mode(self, len(tasks), skipped, timeline_name=timeline_name, include_destination=True)
         if mode is None:
             return
+        import uuid
+        deadline = mode.get("deadline") if isinstance(mode, dict) else None
+        batch_name = f"Shotbox Denoise — {timeline_name or 'Selected clips'} — {uuid.uuid4().hex[:8]}"
         for task in tasks:
-            task["media"]["mode"] = mode
+            task["media"]["mode"] = mode["mode"] if isinstance(mode, dict) else mode
+            if deadline:
+                task["media"]["deadline"] = {**deadline, "batch_name": batch_name}
         self._ensure_denoise_controller().start_batch(tasks, skipped=skipped)
 
     def _on_denoise_all_clicked(self):
@@ -2135,12 +2146,12 @@ class page_nukedash(QMainWindow):
         if sys.platform not in ("linux", "win32"):
             QMessageBox.warning(self, "Denoise", "Background denoise supports Windows and Linux.")
             return
-        job = self._jobs_by_id.get(self._active_job_id)
-        if not job:
-            QMessageBox.information(self, "Denoise", "No job selected.")
+        timeline = self._active_timeline_data()
+        if not timeline:
+            QMessageBox.information(self, "Denoise", "No timeline selected.")
             return
-        tasks, skipped = self._collect_denoise_tasks(job, filesIO.Folders())
-        self._start_template_denoise(tasks, skipped)
+        tasks, skipped = self._collect_denoise_tasks({"timelines": [timeline]}, filesIO.Folders())
+        self._start_template_denoise(tasks, skipped, timeline_name=timeline.get("title") or "Untitled timeline")
 
     def _populate_filter_dropdowns(self):
         """Populate artist and status filter dropdowns."""

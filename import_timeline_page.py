@@ -108,6 +108,9 @@ class ImportTimelinePage(XMLImportPage):
         self.layout().insertLayout(2, loading_row)
         timeline_row = QHBoxLayout()
         timeline_row.addWidget(QLabel('Timeline:'))
+        self.timeline_name_edit = QLineEdit()
+        self.timeline_name_edit.setPlaceholderText("Name for the imported timeline")
+        self.timeline_name_edit.textChanged.connect(self._timeline_name_changed)
         self.timeline_combo = QComboBox()
         timeline_row.addWidget(self.timeline_combo, 1)
         self.layout().insertLayout(3, timeline_row)
@@ -185,7 +188,7 @@ class ImportTimelinePage(XMLImportPage):
         worker.start()
 
     def _set_read_controls(self, enabled):
-        for widget in (self.btnSelectXML, self.folder_edit, self.timeline_combo,
+        for widget in (self.btnSelectXML, self.folder_edit, self.timeline_combo, self.timeline_name_edit,
                        self.updateBtn, self.accept_handles_button, self.tableWidgetTemp,
                        self.detect_colourspace_check):
             widget.setEnabled(enabled)
@@ -258,22 +261,25 @@ class ImportTimelinePage(XMLImportPage):
         self.timeline_combo.blockSignals(True)
         self.timeline_combo.clear()
         self.timeline_combo.addItem('Choose a timeline…', None)
-        paths = sorted(self.discovery.timelines, key=lambda p: (Path(p).suffix.lower() != '.xml', p.casefold()))
+        paths = sorted(self.discovery.timelines, key=lambda p: ({'.drt': 0, '.xml': 1, '.otio': 2}.get(Path(p).suffix.lower(), 3), p.casefold()))
         for path in paths:
             self.timeline_combo.addItem(str(Path(path).relative_to(self.discovery.folder)), path)
         self.timeline_combo.blockSignals(False)
         self.btnSelecRoot.setEnabled(True)
         self.btnShotTable.setEnabled(True)
         xmls = [path for path in paths if Path(path).suffix.lower() == '.xml']
-        # Prefer a single XML over its OTIO alternative. Multiple XML edits
-        # still need a choice rather than selecting an arbitrary timeline.
-        preferred = xmls[0] if len(xmls) == 1 else paths[0] if len(paths) == 1 else None
+        drts = [path for path in paths if Path(path).suffix.lower() == '.drt']
+        # Prefer DRT only when the other exports represent the same named edit.
+        if drts:
+            preferred = drts[0] if len(drts) == 1 and len({Path(p).stem.casefold() for p in paths}) == 1 else None
+        else:
+            preferred = xmls[0] if len(xmls) == 1 else paths[0] if len(paths) == 1 else None
         if preferred:
             # A fast scan may already have emitted finished before this queued
             # result is handled; let the permanent completion slot select it.
             self._pending_timeline = preferred
         elif not self.discovery.timelines:
-            self.validation_text.setPlainText('No supported XML/OTIO timelines found. DRT is reference-only.')
+            self.validation_text.setPlainText('No supported DRT/XML/OTIO timelines found.')
             self._set_review_status('No supported timeline found', 'warning')
         else:
             self.validation_text.setPlainText(f'{len(self.discovery.media)} media files found. Choose one timeline.\n' + '\n'.join(self.discovery.warnings))
@@ -315,8 +321,21 @@ class ImportTimelinePage(XMLImportPage):
 
     def _documents_loaded(self, value):
         self.document = value
-        self.parser.edit_name = self.document.name
+        self.timeline_name_edit.setText(self.document.name)
         self._refresh_preview()
+
+    def _timeline_name_changed(self):
+        self.parser.edit_name = self.timeline_name_edit.text().strip()
+        self._refresh_preview()
+
+    def _validated_timeline_name(self):
+        name = self.timeline_name_edit.text().strip()
+        if not name:
+            raise ValueError('Enter a timeline name in Import settings.')
+        if (name in ('.', '..') or name.endswith('.')
+                or any(ord(c) < 32 or c in '/\\:*?"<>|' for c in name)):
+            raise ValueError('Timeline name must be a valid folder name without path separators.')
+        return name
 
     def _on_show_table(self):
         self._refresh_preview()
@@ -382,13 +401,15 @@ class ImportTimelinePage(XMLImportPage):
                 auto_colourspace=self.detect_colourspace_check.isChecked(),
                 colourspace_overrides=self.colourspace_overrides,
                 manual_colourspace=self.colourspaceComboBox.currentText())
+            try:
+                self.parser.edit_name = self._validated_timeline_name()
+            except ValueError as exc:
+                self.prepared.errors.append(str(exc))
             self.shots = self.prepared.shots
             self._apply_generated_shot_names()
             self._show_colourspace_detection()
             self._populate_review()
             warnings = list(self.discovery.warnings if self.discovery else []) + self.document.warnings
-            if self.discovery and self.discovery.references:
-                warnings.append(f'{len(self.discovery.references)} DRT reference file(s); not imported')
             self.review_summary_label.setText(
                 f'{len(self.shots)} shots · {len(self.prepared.rows)} clips · {Path(self.document.path).suffix[1:].upper()}')
             messages = [f'{len(self.shots)} included shots, {len(self.prepared.rows)} media occurrences. Timing from {Path(self.document.path).name}.']

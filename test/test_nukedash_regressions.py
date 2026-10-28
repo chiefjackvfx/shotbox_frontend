@@ -696,17 +696,21 @@ class NukeDashRegressionTests(unittest.TestCase):
             generator.begin_preview_batch.assert_called_once_with()
             generator.end_preview_batch.assert_called_once_with()
 
-    def test_denoise_button_queues_sources_without_scripts_including_hidden_shots(self):
+    def test_denoise_button_queues_selected_timeline_sources_including_hidden_shots(self):
         with tempfile.TemporaryDirectory(dir=app_cache.cache_directory("temp")) as directory:
             root = Path(directory)
             source = root / "source.mov"
             source.write_bytes(b"native decoding tested separately")
-            first = {"id": 1, "title": "SH010", "base_path": str(root / "SH010"), "original_clip": str(source)}
+            secondary = root / "secondary.mov"
+            secondary.write_bytes(b"secondary source")
+            first = {"id": 1, "title": "SH010", "base_path": str(root / "SH010"),
+                     "original_clips": [str(source), str(secondary)]}
             hidden = {"id": 2, "title": "SH020", "base_path": str(root / "SH020"), "original_clip": str(source), "hidden": True}
             missing = {"id": 3, "title": "SH030", "base_path": str(root / "SH030")}
+            other = {"id": 4, "title": "SH040", "base_path": str(root / "SH040"), "original_clip": str(source)}
             job = {"id": 1, "title": "Current job", "timelines": [
-                {"id": 11, "title": "One", "shots": [first, missing]},
-                {"id": 12, "title": "Two", "shots": [hidden, first, missing]},
+                {"id": 11, "title": "One", "shots": [first, hidden, missing]},
+                {"id": 12, "title": "Two", "shots": [other]},
             ]}
             page = self.page([job])
             controller = mock.Mock(busy=False)
@@ -714,19 +718,49 @@ class NukeDashRegressionTests(unittest.TestCase):
                     mock.patch("denoise_controller.choose_output_mode", return_value="overwrite") as choice:
                 page.btn_denoise.click()
             tasks = controller.start_batch.call_args.args[0]
-            self.assertEqual([task["shot"]["id"] for task in tasks], [1, 2])
-            self.assertTrue(all(task["media"]["source"] == str(source) for task in tasks))
+            self.assertEqual([task["shot"]["id"] for task in tasks], [1, 1, 2])
+            self.assertEqual([task["media"]["source"] for task in tasks], [str(source), str(secondary), str(source)])
             self.assertTrue(all(task["media"]["mode"] == "overwrite" for task in tasks))
             self.assertEqual(controller.start_batch.call_args.kwargs, {"skipped": 1})
-            choice.assert_called_once_with(page, 2, 1)
+            choice.assert_called_once_with(page, 3, 1, timeline_name='One', include_destination=True)
             alias = {**first, "id": 99}
             collected, skipped = page._collect_denoise_tasks({"timelines": [{"shots": [first, alias]}]}, filesIO.Folders())
-            self.assertEqual(len(collected), 1)
+            self.assertEqual(len(collected), 2)
             self.assertEqual(skipped, 0)
             with mock.patch.object(page, "_ensure_denoise_controller", return_value=controller), \
                     mock.patch("denoise_controller.choose_output_mode", return_value="new"):
-                page._handle_denoise_request(mock.Mock(data=first))
-            self.assertEqual(controller.start_batch.call_args.args[0][0]["media"]["mode"], "new")
+                page._handle_denoise_request(mock.Mock(data=first), str(secondary))
+            single = controller.start_batch.call_args.args[0]
+            self.assertEqual(len(single), 1)
+            self.assertEqual(single[0]["media"]["mode"], "new")
+            self.assertEqual(single[0]["media"]["plate"], "plate_02")
+            self.assertEqual(single[0]["media"]["source"], str(secondary))
+            page.timelines_tabs.setCurrentIndex(1)
+            with mock.patch.object(page, "_ensure_denoise_controller", return_value=controller), \
+                    mock.patch("denoise_controller.choose_output_mode", return_value='overwrite') as choice:
+                page.btn_denoise.click()
+            self.assertEqual([task['shot']['id'] for task in controller.start_batch.call_args.args[0]], [4])
+            choice.assert_called_once_with(page, 1, 0, timeline_name='Two', include_destination=True)
+
+    def test_denoise_without_selected_timeline_does_not_collect_entire_job(self):
+        page = self.page(jobs_data())
+        with mock.patch.object(page, '_active_timeline_data', return_value=None), \
+                mock.patch.object(page, '_collect_denoise_tasks') as collect, \
+                mock.patch.object(dash.QMessageBox, 'information') as information:
+            page.btn_denoise.click()
+        collect.assert_not_called()
+        self.assertIn('No timeline selected', information.call_args.args[2])
+
+    def test_stale_or_missing_single_clip_does_not_denoise_another_source(self):
+        page = self.page(jobs_data())
+        with mock.patch.object(page, '_ensure_denoise_controller') as controller, \
+                mock.patch('denoise_controller.choose_output_mode') as choose, \
+                mock.patch.object(dash.QMessageBox, 'information') as information:
+            page._handle_denoise_request(self.shot(page), '/no-longer-listed.mov')
+            page._handle_denoise_request(self.shot(page), None)
+        choose.assert_not_called()
+        controller.assert_not_called()
+        self.assertEqual(information.call_count, 2)
 
     def test_denoise_button_decline_or_missing_sources_does_not_launch(self):
         page = self.page(jobs_data())

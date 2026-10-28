@@ -6,16 +6,27 @@ changes or migrations are needed.
 
 Drop one media-managed folder anywhere on the Import Timeline panel, including
 the table or text fields, or use **Select Folder**. Scanning and parsing start
-automatically. Shotbox scans subfolders for video media, xmeml XML and OTIO
-timelines, without following symlinks. A single XML is selected by default ahead
-of OTIO. Multiple XML timelines require a choice; a sole OTIO is selected when
-there is no XML. Only the selected file is imported and supplies timing; XML and
-OTIO are alternatives, with no automatic comparison or timing merge. Folder drops
-are ignored while a scan or import is running. DRT files are reference-only. Any folder
-may be used; the development example is not a configured path or filename rule.
+automatically. Shotbox scans subfolders for video media, Resolve DRT, xmeml XML
+and OTIO timelines, without following symlinks. A single DRT is preferred when
+all discovered exports share its filename stem. DRTs alongside differently named
+edits require a choice. Without DRT, a single XML is preferred over OTIO; a sole
+OTIO is selected when there is no XML. Only the selected file supplies timing,
+with no automatic comparison or timing merge. Folder drops are ignored while a
+scan or import is running. Any folder may be used.
+
+DRT import reads the archive directly without extracting or changing it. It
+supports the normal-speed and two-point forward constant-speed timing encodings
+validated against a Resolve 21.1 export. Cut positions, gaps, repeated media and
+source cut anchors are preserved. Unknown retime encodings, speed ramps, reverse
+or freeze timing, unsupported clip/track flags, transitions and nested timeline
+items require review or an XML/OTIO export. Resolve grades and Fusion effects
+are not recreated. Other Resolve export versions may use unsupported encodings.
 
 Choose the project destination, naming, input transform, handle settings and
-existing database/task options. Review the preview before importing:
+existing database/task options. **Timeline name** starts with the loaded timeline
+name and can be edited before import. It controls the imported timeline name and
+its output folder; the source file stays unchanged. Loading another timeline
+resets this field to that timeline’s name. Review the preview before importing:
 
 - **Detect input colour space** is enabled by default. Supported
   explicit colour-space tags take priority over camera-model inference. The
@@ -36,7 +47,7 @@ existing database/task options. Review the preview before importing:
 - Source and local start timecodes determine local cut positions. The displayed
   source offset is zero-based. Missing timecodes can be corrected by entering
   a local cut start; incompatible frame rates are blocked.
-- Select either XML or OTIO in **Timeline to import**. That file supplies both
+- Select DRT, XML or OTIO in **Timeline to import**. That file supplies both
   shot structure and timing, including retimed source starts and speeds. Switching
   files rebuilds the preview and clears previous matching/range overrides. Other
   timelines do not contribute timing, participate in comparison, or block import.
@@ -113,7 +124,7 @@ cut; the project range retains the handles.
 Complete local media is copied. At 100% speed the template's existing Retime
 setup is retained for frame numbering; no replacement TimeWarp is created.
 Changed-speed plates use a linear TimeWarp preserving fractional source anchors.
-Other template connections are preserved. No source XML/OTIO files are rewritten.
+Other template connections are preserved. No source DRT/XML/OTIO files are rewritten.
 
 New asset directories use `job_assets`, `timeline_assets` and `shot_assets`.
 Existing `Job_Assets`, `Timeline_Assets` and `Shot_Assets` directories are reused
@@ -155,7 +166,11 @@ frontend JSON sidecar and generated script. No new server fields are required.
   reports a missing module, run `setup_runtime.sh` (Linux/macOS) or
   `setup_runtime.ps1` (Windows), then restart Shotbox. Import errors identify the
   interpreter and original loading failure to distinguish another Python environment.
-- Video clips are grouped using the existing V1-first, aligned V2–V5 logic.
+- Video clips are grouped using V1 as primary, with aligned upper tracks.
+  V1–V16 are supported through media preparation and Nuke plate creation.
+  Occupied tracks above V16 block import with an error; empty higher tracks
+  are ignored. Upper clips must match a
+  V1 cut’s start and duration; empty tracks preserve their track numbers.
   Unaligned layers, transitions, nested timelines, mixed source/timeline rates,
   reverse/freeze effects and variable-speed retimes are reported as unsupported.
 - Forward constant-speed retimes are supported. Audio, grading, transforms and

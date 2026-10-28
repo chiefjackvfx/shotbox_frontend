@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
 import time
+import uuid
 
-from PyQt6.QtCore import QObject, QProcess, QTimer, QUrl, pyqtSignal
+from PyQt6.QtCore import QObject, QProcess, QTimer, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtWidgets import QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QVBoxLayout
+from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QVBoxLayout
 
 import app_cache
 from nuke_denoise import create_request, parse_event
@@ -19,10 +21,24 @@ from nuke_headless_tasks import find_nuke_executable
 from settings import get_settings_manager
 
 
-def choose_output_mode(parent, count, skipped=0):
+def batch_worker_limit():
+    """Overlap isolated Linux workers only on hosts with ample spare resources."""
+    import psutil
+    if (sys.platform != "linux" or (os.cpu_count() or 1) < 64
+            or psutil.virtual_memory().available < 32 * 1024**3):
+        return 1
+    return 1 if os.environ.get("SHOTBOX_DENOISE_BATCH_WORKERS") == "1" else 2
+
+
+def choose_output_mode(parent, count, skipped=0, *, timeline_name=None, include_destination=False):
     dialog = QDialog(parent)
     dialog.setWindowTitle("Denoise")
     layout = QVBoxLayout(dialog)
+    if timeline_name is not None:
+        scope = QLabel(f"Timeline: {timeline_name}")
+        scope.setTextFormat(Qt.TextFormat.PlainText)
+        scope.setWordWrap(True)
+        layout.addWidget(scope)
     label = QLabel(f"Denoise {count} source clip(s).\nMaximum width: 4096 pixels; smaller footage stays unchanged.")
     label.setWordWrap(True)
     layout.addWidget(label)
@@ -33,6 +49,25 @@ def choose_output_mode(parent, count, skipped=0):
     new.setToolTip("Create the next unused denoise version and keep existing versions.")
     layout.addWidget(overwrite)
     layout.addWidget(new)
+    destination = deadline_options = None
+    if include_destination:
+        from deadline_ui import DeadlineOptions
+        destination = QComboBox(dialog)
+        destination.addItems(["Local", "Deadline"])
+        destination.setAccessibleName("Denoise destination")
+        layout.addWidget(QLabel("Run on:"))
+        layout.addWidget(destination)
+        deadline_options = DeadlineOptions(dialog)
+        layout.addWidget(deadline_options)
+        deadline_options.hide()
+
+        def changed(index):
+            deadline_options.setVisible(index == 1)
+            overwrite.setEnabled(index == 0)
+            if index == 1:
+                new.setChecked(True)
+
+        destination.currentIndexChanged.connect(changed)
     layout.addWidget(QLabel("Overwrite replaces the latest matching denoise version.\nVersion up creates the next unused version.", dialog))
     if skipped:
         layout.addWidget(QLabel(f"Skipped (missing source or shot folder): {skipped}", dialog))
@@ -44,8 +79,12 @@ def choose_output_mode(parent, count, skipped=0):
     try:
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
+        if destination is not None and destination.currentIndex() == 1:
+            return {"mode": "new", "deadline": deadline_options.options()}
         return "overwrite" if overwrite.isChecked() else "new"
     finally:
+        if deadline_options is not None:
+            deadline_options.stop()
         dialog.deleteLater()
 
 
@@ -163,6 +202,8 @@ class DenoiseController(QObject):
         self._pending_result = None
         self._closing = False
         self._batch = None
+        self._batch_owner = None
+        self._workers = {}
         self._batch_timer = QTimer(self)
         self._batch_timer.setSingleShot(True)
         self._batch_timer.timeout.connect(self._advance_batch)
@@ -181,7 +222,7 @@ class DenoiseController(QObject):
         if self.busy or not tasks:
             return False
         self._batch = {"tasks": list(tasks), "index": 0, "completed": 0, "failed": 0,
-                       "skipped": skipped, "errors": []}
+                       "skipped": skipped, "errors": [], "workers": batch_worker_limit(), "submitted": [], "unknown": []}
         self.busy = True
         self._cancelled = False
         self.busy_changed.emit(True)
@@ -192,6 +233,9 @@ class DenoiseController(QObject):
         batch = self._batch
         if batch is None:
             return
+        if batch["workers"] > 1:
+            self._advance_parallel_batch()
+            return
         if self._cancelled or self._closing or batch["index"] == len(batch["tasks"]):
             self._finish_batch()
             return
@@ -201,23 +245,73 @@ class DenoiseController(QObject):
             self._record_batch_result(self.last_result)
             self._batch_timer.start(0)
 
-    def _record_batch_result(self, result):
+    def _advance_parallel_batch(self):
+        batch = self._batch
+        while (not self._cancelled and not self._closing
+               and len(self._workers) < batch["workers"] and batch["index"] < len(batch["tasks"])):
+            task = batch["tasks"][batch["index"]]
+            # Serialize shared shot folders, including independently supplied tasks.
+            destination = os.path.normcase(str(Path(task["media"]["shot_dir"]).resolve()))
+            if any(destination == os.path.normcase(str(Path(t["media"]["shot_dir"]).resolve()))
+                   for t in self._workers.values()):
+                break
+            batch["index"] += 1
+            worker = DenoiseController(self.window)
+            worker._batch_owner = self
+            self._workers[worker] = task
+            worker.idle.connect(lambda w=worker: self._parallel_finished(w))
+            if worker._start_job(task["shot"], task["media"]):
+                self.dialog = worker.dialog
+                worker.dialog.batch_status.setVisible(True)
+                worker.dialog.batch_status.setText(f"Clip {batch['index']} of {len(batch['tasks'])} · Parallel batch")
+            else:
+                self._parallel_finished(worker)
+        for worker in self._workers:
+            worker.dialog.batch_status.setText(
+                f"Running: {len(self._workers)} · Completed: {batch['completed']} · "
+                f"Failed: {batch['failed']} · Queued: {len(batch['tasks']) - batch['index']}"
+            )
+        if not self._workers:
+            self._finish_batch()
+
+    def _parallel_finished(self, worker):
+        task = self._workers.pop(worker)
+        result = worker.last_result
+        self._record_batch_result(result, task=task, directory=worker.directory)
+        if result.get("stage") == "cancelled":
+            self.cancel()
+        self.dialog = next((w.dialog for w in self._workers), None)
+        if worker.dialog is None or result.get("stage") in ("complete", "submitted"):
+            if worker.dialog is not None:
+                worker.dialog.deleteLater()
+            worker.deleteLater()
+        else:
+            worker.dialog.finished.connect(worker.deleteLater)
+            worker.dialog.finished.connect(worker.dialog.deleteLater)
+        self._batch_timer.start(0)
+
+    def _record_batch_result(self, result, *, task=None, directory=None):
         batch = self._batch
         if result.get("stage") == "complete":
             batch["completed"] += 1
+        elif result.get("stage") == "submitted":
+            batch["submitted"].append({"job_id": result["job_id"], "receipt": result.get("receipt")})
         elif result.get("stage") != "cancelled":
+            if result.get("stage") == "submission_unknown":
+                batch["unknown"].append(result.get("receipt"))
             batch["failed"] += 1
-            task = batch["tasks"][batch["index"] - 1]
+            task = task or batch["tasks"][batch["index"] - 1]
             title = task["shot"].get("title") or Path(task["media"]["source"]).stem
             error = f"{title}: {result.get('error', 'Denoise failed')}"
-            if self.directory is not None:
-                error += f"\nLogs: {self.directory}"
+            directory = directory or self.directory
+            if directory is not None:
+                error += f"\nLogs: {directory}"
             batch["errors"].append(error)
 
     def _finish_batch(self):
         batch, self._batch = self._batch, None
         self._batch_timer.stop()
-        self.last_batch_result = {key: batch[key] for key in ("completed", "failed", "skipped", "errors")}
+        self.last_batch_result = {key: batch[key] for key in ("completed", "failed", "skipped", "errors", "submitted", "unknown")}
         self.last_batch_result.update(cancelled=self._cancelled or self._closing,
                                       remaining=len(batch["tasks"]) - batch["index"])
         result = self.last_batch_result
@@ -227,6 +321,12 @@ class DenoiseController(QObject):
         )
         if result["errors"]:
             summary += "\n\n" + "\n\n".join(result["errors"][:5])
+        if result["submitted"]:
+            summary += (f"\n\nSubmitted: {len(result['submitted'])} (queued, not rendered)\n"
+                        + "\n".join(item["job_id"] for item in result["submitted"])
+                        + "\nManage or cancel these jobs in Deadline Monitor.")
+        if result["unknown"]:
+            summary += "\n\nUncertain submissions must be reconciled in Deadline Monitor before retrying."
         self.busy = False
         self.busy_changed.emit(False)
         self.idle.emit()
@@ -238,6 +338,14 @@ class DenoiseController(QObject):
         source = media["source"]
         self._debug(f"Requested input: {source}")
         try:
+            if media.get("deadline"):
+                from deadline_client import discover_client, within
+                options = media["deadline"]
+                discover_client(options.get("client", ""))
+                for shared_path in (source, media["shot_dir"]):
+                    if not options.get("allow_local", False) and not any(within(str(Path(shared_path).resolve()), root) for root in options.get("shared_roots", [])):
+                        raise RuntimeError(f"Configure a shared project root in Settings → Deadline Denoise for: {shared_path}")
+                media = dict(media, mode="new")
             discover_tools()
             if sys.platform == "linux" and importlib.util.find_spec("Xlib") is None:
                 raise RuntimeError("Python Xlib is missing. Run Shotbox's runtime setup to install its dependencies.")
@@ -248,13 +356,18 @@ class DenoiseController(QObject):
             self._lease.__enter__()
             self.directory = Path(tempfile.mkdtemp(prefix="denoise-", dir=app_cache.cache_directory("temp")))
             self.request_path = create_request(self.directory, media, executable)
+            if media.get("deadline"):
+                request = json.loads(self.request_path.read_text())
+                request["deadline"] = {**media["deadline"], "shot_dir": media["shot_dir"],
+                                       "submission_id": uuid.uuid4().hex}
+                self.request_path.write_text(json.dumps(request, indent=2))
         except Exception as exc:
             self._debug(f"Cannot start: {exc}")
             if self._lease:
                 self._lease.__exit__(None, None, None)
                 self._lease = None
             self.last_result = {"stage": "failed", "error": str(exc)}
-            if self._batch is None:
+            if self._batch is None and self._batch_owner is None:
                 QMessageBox.warning(self.window, "Denoise", str(exc))
             return False
         if self.dialog:
@@ -280,7 +393,8 @@ class DenoiseController(QObject):
         self.process.readyReadStandardOutput.connect(self._read)
         self.process.finished.connect(self._finished)
         self.process.errorOccurred.connect(self._error)
-        self.process.start(sys.executable, [str(Path(__file__).with_name("nuke_denoise.py")),
+        worker_script = "deadline_denoise.py" if media.get("deadline") else "nuke_denoise.py"
+        self.process.start(sys.executable, [str(Path(__file__).with_name(worker_script)),
                                            "--request", str(self.request_path)])
         return True
 
@@ -315,6 +429,9 @@ class DenoiseController(QObject):
         if self._cancelled:
             return
         labels = {"starting": (1, "Starting NukeX and loading plugins…"),
+                  "deadline_preflight": (1, "Checking Deadline repository and shared paths…"),
+                  "submitting": (7, "Submitting prepared clip to Deadline…"),
+                  "submitted": (8, "Submitted to Deadline: " + str(event.get("job_id", ""))),
                   "display_mode": (1, event.get("message", "Starting Windows denoise…")),
                   "display_fallback": (1, "Hidden profiling did not complete. Retrying visibly…"),
                   "loading": (2, "Loading the denoise template and source…"),
@@ -329,7 +446,7 @@ class DenoiseController(QObject):
                   "keyboard_applying_profile": (5, "Enter sent. Waiting for Neat Video to close…"),
                   "checking_profile": (4, "Profile Check is preparing its preview…"),
                   "applying_profile": (5, "Auto Profile finished. Applying the noise profile…"),
-                  "profile_ready": (6, "Noise profile cached. Starting denoised output…")}
+                  "profile_ready": (6, "Noise profile prepared.")}
         if stage == "rendering":
             detail = str(event.get("output", ""))
             if "frame" in event:
@@ -349,9 +466,14 @@ class DenoiseController(QObject):
             self.dialog.set_status(message, detail, step=step)
 
     def cancel(self):
+        if self._batch_owner is not None and not self._batch_owner._cancelled:
+            self._batch_owner.cancel()
+            return
         if not self.busy or self._cancelled:
             return
         self._cancelled = True
+        for worker in list(self._workers):
+            worker.cancel()
         self._debug("Cancellation requested; closing this job's Nuke process.")
         if self.process is not None:
             (self.directory / "cancel").touch()
@@ -379,6 +501,14 @@ class DenoiseController(QObject):
                 result = json.loads(result_path.read_text(encoding="utf-8"))
             except (ValueError, OSError):
                 pass
+        if self.request_path.is_file():
+            request = json.loads(self.request_path.read_text())
+            if request.get("deadline"):
+                from deadline_denoise import recover_result
+                try:
+                    result = recover_result(request, result)
+                except (OSError, ValueError, KeyError):
+                    result = {"stage": "submission_unknown", "error": "Submission receipt unreadable. Inspect Deadline Monitor before retrying."}
         if result.get("stage") == "complete" and (exit_code != 0 or exit_status != QProcess.ExitStatus.NormalExit):
             result = {"stage": "failed", "error": "The denoise supervisor crashed after rendering."}
         self._pending_result = result
@@ -398,11 +528,15 @@ class DenoiseController(QObject):
         stage = result.get("stage")
         if stage == "complete":
             message = f"Denoise complete. Rendered {result['total']} frames."
+        elif stage == "submitted":
+            message = f"Submitted to Deadline: {result['job_id']}. Queued, not rendered. Manage in Deadline Monitor."
+        elif stage == "submission_unknown":
+            message = f"Submission outcome unknown. Reconcile in Deadline Monitor before retrying. Receipt: {result.get('receipt')}"
         elif stage == "cancelled":
             message = "Denoise cancelled."
         else:
             message = "Denoise failed. " + str(result.get("error") or "See the job logs.")
-        if stage != "complete":
+        if stage not in ("complete", "submitted", "submission_unknown"):
             message += " Any completed EXR frames have been retained."
         self._debug(message)
         self._debug(f"Cleanup complete. Logs: {self.directory}")
@@ -411,8 +545,8 @@ class DenoiseController(QObject):
         self.dialog.elapsed_timer.stop()
         self.dialog._update_timing()
         self.dialog.progress.setRange(0, 1)
-        self.dialog.progress.setValue(1 if stage == "complete" else 0)
-        self.dialog.progress.setFormat({"complete": "Complete", "cancelled": "Cancelled"}.get(stage, "Failed"))
+        self.dialog.progress.setValue(1 if stage in ("complete", "submitted") else 0)
+        self.dialog.progress.setFormat({"complete": "Complete", "submitted": "Submitted", "submission_unknown": "Needs reconciliation", "cancelled": "Cancelled"}.get(stage, "Failed"))
         self.dialog.active = False
         self.dialog.button.setText("Close")
         self.dialog.button.setEnabled(True)
@@ -423,7 +557,7 @@ class DenoiseController(QObject):
         if self.process:
             self.process.deleteLater()
             self.process = None
-        if stage == "complete":
+        if stage in ("complete", "submitted"):
             self.dialog.accept()
         if self._batch is not None:
             self._record_batch_result(result)

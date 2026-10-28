@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PyQt6.QtCore import QPoint, QProcess
-from PyQt6.QtWidgets import QApplication, QDialog, QMainWindow, QPushButton, QRadioButton, QWidget
+from PyQt6.QtWidgets import QApplication, QDialog, QLabel, QMainWindow, QPushButton, QRadioButton, QWidget
 
 import app_cache
 import denoise_controller as ui
@@ -20,6 +20,17 @@ import widgets
 
 
 class DenoiseUiTests(unittest.TestCase):
+    def test_batch_confirmation_identifies_timeline_and_clip_count_as_plain_text(self):
+        def execute(dialog):
+            labels = dialog.findChildren(QLabel)
+            scope = next(label for label in labels if label.text().startswith('Timeline:'))
+            self.assertEqual(scope.text(), 'Timeline: <Edit A>')
+            self.assertEqual(scope.textFormat(), ui.Qt.TextFormat.PlainText)
+            self.assertTrue(any('Denoise 3 source clip(s)' in label.text() for label in labels))
+            return QDialog.DialogCode.Rejected
+        with mock.patch.object(QDialog, 'exec', execute):
+            self.assertIsNone(ui.choose_output_mode(self.window, 3, 1, timeline_name='<Edit A>'))
+
     def test_output_choice_defaults_to_overwrite_and_supports_new_and_cancel(self):
         for choice, expected in (("overwrite", "overwrite"), ("new", "new"), ("cancel", None)):
             def execute(dialog):
@@ -31,6 +42,32 @@ class DenoiseUiTests(unittest.TestCase):
                 return QDialog.DialogCode.Rejected if choice == "cancel" else QDialog.DialogCode.Accepted
             with mock.patch.object(QDialog, "exec", execute):
                 self.assertEqual(ui.choose_output_mode(self.window, 2, 1), expected)
+
+    def test_deadline_choice_forces_new_versions_and_allows_local_linux_projects(self):
+        settings = mock.Mock()
+        values = {"deadline_pool": "linux", "deadline_group": "none", "deadline_priority": 50,
+                  "deadline_shared_roots": ["/Volumes/projects/PROJECTS"]}
+        settings.get.side_effect = lambda key, default=None: values.get(key, default)
+
+        def execute(dialog):
+            destination = next(c for c in dialog.findChildren(ui.QComboBox) if c.accessibleName() == "Denoise destination")
+            self.assertEqual(destination.currentText(), "Local")
+            destination.setCurrentText("Deadline")
+            overwrite, new = dialog.findChildren(QRadioButton)
+            self.assertFalse(overwrite.isEnabled())
+            self.assertTrue(new.isChecked())
+            return QDialog.DialogCode.Accepted
+
+        with mock.patch("deadline_ui.get_settings_manager", return_value=settings), \
+                mock.patch.object(ui.sys, "platform", "linux"), mock.patch.object(QDialog, "exec", execute):
+            result = ui.choose_output_mode(self.window, 4, include_destination=True)
+        self.assertEqual(result["mode"], "new")
+        self.assertTrue(result["deadline"]["allow_local"])
+        self.assertEqual(result["deadline"]["pool"], "linux")
+        self.assertEqual(result["deadline"]["shared_roots"], values["deadline_shared_roots"])
+        self.assertTrue(result["deadline"]["chunked"])
+        self.assertEqual(result["deadline"]["chunk_size"], 10)
+        self.assertEqual(result["deadline"]["concurrent_tasks"], 1)
 
     @classmethod
     def setUpClass(cls):
@@ -50,6 +87,7 @@ class DenoiseUiTests(unittest.TestCase):
         for name in ("ProcessChannelMode", "ExitStatus", "ProcessError"):
             setattr(constructor, name, getattr(QProcess, name))
         patchers = [mock.patch.object(ui, "discover_tools"),
+                    mock.patch.object(ui, "batch_worker_limit", return_value=1),
                     mock.patch.object(ui.importlib.util, "find_spec", return_value=object()),
                     mock.patch.object(ui, "find_nuke_executable", return_value="/nuke"),
                     mock.patch.object(ui, "get_settings_manager", return_value=mock.Mock()),
@@ -143,6 +181,108 @@ class DenoiseUiTests(unittest.TestCase):
 
     def batch_tasks(self):
         return [{"shot": {"title": title}, "media": dict(self.media)} for title in ("SH010", "SH020")]
+
+    def parallel_tasks(self):
+        return [{"shot": {"title": f"SH{i}"}, "media": dict(self.media, shot_dir=self.media["shot_dir"] + str(i))}
+                for i in range(4)]
+
+    def finish_worker(self, worker, stage="complete"):
+        (worker.directory / "result.json").write_text(json.dumps({"stage": stage, "total": 3, "error": "Bad clip"}))
+        worker._finished(0, QProcess.ExitStatus.NormalExit)
+        self.app.processEvents()
+
+    def test_parallel_batch_refills_slots_and_reports_failures_once(self):
+        idle = mock.Mock()
+        self.controller.idle.connect(idle)
+        with mock.patch.object(ui, "batch_worker_limit", return_value=2), mock.patch.object(ui.QMessageBox, "information") as summary:
+            self.controller.start_batch(self.parallel_tasks())
+            self.assertEqual(len(self.controller._workers), 2)
+            first, second = self.controller._workers
+            self.finish_worker(second, "failed")
+            self.assertEqual(len(self.controller._workers), 2)
+            self.assertEqual(self.controller._batch["index"], 3)
+            self.finish_worker(first)
+            self.assertEqual(self.controller._batch["index"], 4)
+            for worker in list(self.controller._workers):
+                self.finish_worker(worker)
+            self.assertFalse(self.controller.busy)
+            self.assertEqual(self.controller.last_batch_result["completed"], 3)
+            self.assertEqual(self.controller.last_batch_result["failed"], 1)
+            self.assertIn("SH1: Bad clip", self.controller.last_batch_result["errors"][0])
+            summary.assert_called_once()
+            idle.assert_called_once()
+
+    def test_parallel_cancel_from_either_dialog_cancels_all_and_waits(self):
+        with mock.patch.object(ui, "batch_worker_limit", return_value=2), mock.patch.object(ui.QMessageBox, "information"):
+            self.controller.start_batch(self.parallel_tasks())
+            workers = list(self.controller._workers)
+            workers[0].cancel()
+            self.assertTrue(all((w.directory / "cancel").exists() for w in workers))
+            self.finish_worker(workers[0], "cancelled")
+            self.assertTrue(self.controller.busy)
+            self.finish_worker(workers[1], "cancelled")
+            self.assertFalse(self.controller.busy)
+            self.assertEqual(self.controller.last_batch_result["remaining"], 2)
+            self.assertTrue(self.controller.last_batch_result["cancelled"])
+
+    def test_parallel_batch_serializes_shared_output_folders(self):
+        with mock.patch.object(ui, "batch_worker_limit", return_value=2), mock.patch.object(ui.QMessageBox, "information"):
+            self.controller.start_batch(self.batch_tasks())
+            self.assertEqual(len(self.controller._workers), 1)
+            self.finish_worker(next(iter(self.controller._workers)))
+            self.assertEqual(len(self.controller._workers), 1)
+            self.finish_worker(next(iter(self.controller._workers)))
+            self.assertEqual(self.controller.last_batch_result["completed"], 2)
+
+    def test_parallel_startup_failures_do_not_show_modal_warnings(self):
+        tasks = self.parallel_tasks()
+        for task in tasks:
+            task["media"]["source"] = str(self.script) + ".missing"
+        with mock.patch.object(ui, "batch_worker_limit", return_value=2), \
+                mock.patch.object(ui.QMessageBox, "information") as summary, \
+                mock.patch.object(ui.QMessageBox, "warning") as warning:
+            self.controller.start_batch(tasks)
+            self.assertFalse(self.controller.busy)
+            self.assertEqual(self.controller.last_batch_result["failed"], 4)
+            summary.assert_called_once()
+            warning.assert_not_called()
+
+    def test_local_deadline_start_reserves_new_version_and_uses_submission_worker(self):
+        media = dict(self.media, mode="overwrite", deadline={"allow_local": True, "shared_roots": [],
+                                                           "pool": "linux", "group": "none", "batch_name": "test"})
+        with mock.patch("deadline_client.discover_client", return_value="/client"):
+            self.assertTrue(self.controller.start({"title": "local"}, media))
+        request = json.loads(self.controller.request_path.read_text())
+        self.assertTrue(request["deadline"]["allow_local"])
+        self.assertEqual(len(request["deadline"]["submission_id"]), 32)
+        self.assertTrue(self.fake_process.start.call_args.args[1][0].endswith("deadline_denoise.py"))
+
+    def test_submitted_batch_ids_survive_cancellation_of_remaining_clips(self):
+        with mock.patch.object(ui.QMessageBox, "information") as summary:
+            self.controller.start_batch(self.batch_tasks())
+            result = {"stage": "submitted", "job_id": "a" * 24, "receipt": "/shot/receipt.json"}
+            (self.controller.directory / "result.json").write_text(json.dumps(result))
+            self.controller._finished(0, QProcess.ExitStatus.NormalExit)
+            self.controller.cancel()
+            self.app.processEvents()
+        self.assertEqual(self.controller.last_batch_result["submitted"][0]["job_id"], "a" * 24)
+        self.assertIn("queued, not rendered", summary.call_args.args[2])
+        self.assertEqual(self.controller.last_batch_result["remaining"], 1)
+
+    def test_parallel_shutdown_waits_for_both_workers(self):
+        with mock.patch.object(ui, "batch_worker_limit", return_value=2), \
+                mock.patch.object(ui.QMessageBox, "information") as summary, \
+                mock.patch.object(ui.QTimer, "singleShot") as close:
+            self.controller.start_batch(self.parallel_tasks())
+            workers = list(self.controller._workers)
+            self.assertFalse(self.controller.shutdown())
+            self.finish_worker(workers[0], "cancelled")
+            close.assert_not_called()
+            self.assertTrue(self.controller.busy)
+            self.finish_worker(workers[1], "cancelled")
+            self.assertFalse(self.controller.busy)
+            close.assert_called_once()
+            summary.assert_not_called()
 
     def test_batch_runs_serially_continues_after_failure_and_emits_idle_once(self):
         busy, idle = [], mock.Mock()
@@ -244,6 +384,10 @@ class DenoiseUiTests(unittest.TestCase):
 class CardHarness(QWidget):
     contextMenuEvent = widgets.ShotCard.contextMenuEvent
     _denoise_dashboard = widgets.ShotCard._denoise_dashboard
+    _populate_original_clip_menu = widgets.ShotCard._populate_original_clip_menu
+    _populate_original_clip_submenu = widgets.ShotCard._populate_original_clip_submenu
+    _resolve_original_clip_entries = widgets.ShotCard._resolve_original_clip_entries
+    _is_valid_original_clip_path = widgets.ShotCard._is_valid_original_clip_path
 
     def __init__(self, owner):
         super().__init__()
@@ -252,9 +396,15 @@ class CardHarness(QWidget):
         self.btn_open_nuke.setGeometry(0, 0, 150, 30)
         self.btn_latest_render.setGeometry(0, 40, 150, 30)
         self.btn_open_nuke.setProperty("file_path", "/shot/clicked.nk")
+        self.label_original_clip = QLabel('Original clips', self)
+        self.label_original_clip.setGeometry(0, 80, 150, 30)
+        self.data = {'original_clips': ['/shot/plate1.mov', '/shot/plate2.mov']}
+        self._original_clip_entries = self._resolve_original_clip_entries()
         self._nuke_open_handler = owner._handle_nuke_open_request
         self.filesIO = mock.Mock()
         self._copy_to_clipboard = mock.Mock()
+        self._on_make_preview_clicked = mock.Mock()
+        self._on_make_precomp_exr_clicked = mock.Mock()
 
 
 class CardMenuTests(unittest.TestCase):
@@ -277,19 +427,20 @@ class CardMenuTests(unittest.TestCase):
 
         def execute(menu, _):
             menus.append(menu)
-            action = next(action for action in menu.actions() if action.text() == "Denoise")
-            if owner._denoise_controller is None:
+            submenu = menu.actions()[1].menu()
+            action = next(action for action in submenu.actions() if action.text() == "Denoise")
+            if owner._denoise_controller is None and widgets.sys.platform in ('linux', 'win32'):
                 self.assertTrue(action.isEnabled())
                 card.btn_open_nuke.setProperty("file_path", "/shot/newer.nk")
                 action.trigger()
             else:
                 self.assertFalse(action.isEnabled())
         event = mock.Mock()
-        event.pos.return_value = QPoint(10, 10)
-        event.globalPos.return_value = QPoint(10, 10)
+        event.pos.return_value = QPoint(10, 90)
+        event.globalPos.return_value = QPoint(10, 90)
         with mock.patch.object(widgets.QMenu, "exec", execute), mock.patch.object(widgets.sys, "platform", "linux"):
             card.contextMenuEvent(event)
-            self.assertIsNone(owner.path)
+            self.assertEqual(owner.path, '/shot/plate2.mov')
             owner._denoise_controller = mock.Mock(busy=True)
             card.contextMenuEvent(event)
         self.assertEqual(len(menus), 2)
@@ -297,6 +448,49 @@ class CardMenuTests(unittest.TestCase):
         with mock.patch.object(widgets.QMenu, "exec", execute), mock.patch.object(widgets.sys, "platform", "win32"):
             card.contextMenuEvent(event)
         self.assertEqual(len(menus), 3)
+        with mock.patch.object(widgets.QMenu, "exec", execute), mock.patch.object(widgets.sys, "platform", "darwin"):
+            card.contextMenuEvent(event)
+
+    def test_clip_denoise_is_disabled_without_dashboard(self):
+        card = CardHarness(mock.Mock())
+        card._nuke_open_handler = None
+        self.addCleanup(card.deleteLater)
+        menu = widgets.QMenu(card)
+        card._populate_original_clip_menu(menu)
+        for action in menu.actions():
+            denoise = next(item for item in action.menu().actions() if item.text() == 'Denoise')
+            self.assertFalse(denoise.isEnabled())
+
+    def test_nuke_menu_never_offers_denoise(self):
+        owner = mock.Mock()
+        card = CardHarness(owner)
+        self.addCleanup(card.deleteLater)
+        event = mock.Mock()
+        event.pos.return_value = QPoint(10, 10)
+        def execute(menu, _):
+            self.assertNotIn('Denoise', [action.text() for action in menu.actions()])
+        with mock.patch.object(widgets.QMenu, 'exec', execute):
+            for path in ('/shot/comp.nk', None):
+                card.btn_open_nuke.setProperty('file_path', path)
+                card.contextMenuEvent(event)
+
+
+class BatchWorkerLimitTests(unittest.TestCase):
+    def test_only_large_linux_hosts_use_two_workers_and_opt_out_is_respected(self):
+        import psutil
+        from types import SimpleNamespace
+        for platform, cpus, gib, override, expected in (
+            ("linux", 128, 64, "", 2), ("linux", 64, 32, "", 2),
+            ("linux", 32, 64, "", 1), ("linux", None, 64, "", 1),
+            ("linux", 128, 31, "", 1), ("linux", 128, 64, "1", 1),
+            ("win32", 128, 64, "", 1),
+        ):
+            with self.subTest(platform=platform, cpus=cpus, gib=gib, override=override), \
+                    mock.patch.object(ui.sys, "platform", platform), \
+                    mock.patch.object(ui.os, "cpu_count", return_value=cpus), \
+                    mock.patch.object(psutil, "virtual_memory", return_value=SimpleNamespace(available=gib * 1024**3)), \
+                    mock.patch.dict(os.environ, SHOTBOX_DENOISE_BATCH_WORKERS=override):
+                self.assertEqual(ui.batch_worker_limit(), expected)
 
 
 if __name__ == "__main__":

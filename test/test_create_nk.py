@@ -571,9 +571,25 @@ class CreateNkTests(unittest.TestCase):
             extra_a.write_bytes(b"v2")
             extra_b.write_bytes(b"v3")
             request.extra_plate_paths = [str(extra_a), str(extra_b)]
+            for track in range(4, 17):
+                plate = root / 'shot' / 'plates' / f'V{track}.mov'
+                plate.write_bytes(b'plate')
+                request.extra_plate_paths.append(str(plate))
+            request.head_handles = request.tail_handles = 0
+            request.cut_duration = request.duration
+            request.plate_timings = [
+                {'frames': 1000, 'cut_start': track * 10, 'speed': 1,
+                 'input_colourspace': 'ARRI LogC4' if track % 2 == 0 else 'ARRI LogC3 (EI800)'}
+                for track in range(1, 17)]
 
             nuke = _FakeNuke()
             module._TemplateEditor(nuke).edit(request)
+
+            for track in range(1, 17):
+                self.assertEqual(nuke.toNode(f'Retime{track}')['input.first'].value(), track * 10 + 1)
+                self.assertEqual(nuke.toNode(f'Read{track}')['last'].value(), 1000)
+                self.assertEqual(nuke.toNode(f'Read{track}')['colorspace'].value(),
+                                 'ARRI LogC4' if track % 2 == 0 else 'ARRI LogC3 (EI800)')
 
             read1 = nuke.toNode("Read1")
             retime1 = nuke.toNode("Retime1")
@@ -596,6 +612,13 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(retime3["ypos"].value(), retime1["ypos"].value())
             self.assertIs(retime2.input(0), read2)
             self.assertIs(retime3.input(0), read3)
+            for track in range(4, 17):
+                read = nuke.toNode(f'Read{track}')
+                retime = nuke.toNode(f'Retime{track}')
+                self.assertIsNotNone(read)
+                self.assertIsNotNone(retime)
+                self.assertIs(retime.input(0), read)
+                self.assertEqual(read['xpos'].value(), read1['xpos'].value() + 150 * (track - 1))
 
     def test_edit_fails_when_required_template_node_is_missing(self):
         with tempfile.TemporaryDirectory() as tmpdir:

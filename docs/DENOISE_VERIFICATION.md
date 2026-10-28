@@ -4,6 +4,35 @@ The current workflow uses `template_denoise_v01.nk` and original source media.
 Saved-comp denoising and its legacy acceptance/benchmark scripts have been removed.
 Shared native startup and lifecycle helpers live in `test/denoise_test_support.py`.
 
+## Starting denoise
+
+Right-click a shot's original-clips label, open the desired clip's submenu,
+and choose **Denoise**. Only that source is queued. A saved artist `.nk` is not
+required, and the Nuke-file context menu no longer contains Denoise. If the
+selected source has disappeared or is no longer listed on the shot, processing
+does not fall back to another clip.
+
+The dashboard's **Denoise** button queues all original clips in the selected
+timeline, including secondary layers and shots hidden by display filters.
+It uses the timeline's complete shot data and excludes other timelines in the
+job. No selected timeline means no batch. The confirmation names the timeline
+and reports the source count and skipped sources before processing starts.
+Legacy shots with an empty `original_clips` list use `original_clip`.
+
+Single-clip and batch processing share output identities. For `sho010`, a
+single source produces `renders/precomp/sho010_DN_v001/` and a multi-source
+shot produces `sho010_plate_01_DN_v001/`, `sho010_plate_02_DN_v001/`, etc.
+EXRs use the directory's name plus `_1001.exr`, `_1002.exr`, and so on.
+Choosing plate 2 individually retains its plate-2 output name. Missing
+unselected sources do not increase that single request's skipped count.
+Repeated tasks for the same destination are deduplicated; shared sources in
+different shot folders retain separate outputs. **Overwrite** targets the
+latest matching version, while **Version up** creates the next version.
+
+The existing template, input transform, 4096-pixel width limit, cancellation,
+progress and Windows/Linux processing remain unchanged. Denoise stays disabled
+while another denoise request is running or on unsupported platforms.
+
 ## Native template acceptance
 
 From the frontend folder on Linux:
@@ -375,3 +404,44 @@ rendering still need testing there.
 Automated native PASS plus both UI entry points on Windows 17.1v2 with an
 accepted Neat version are required; Linux results do not qualify
 Windows. Codec availability is installation-dependent, not universal.
+
+
+## Four-clip batch scheduling benchmark (2026-10-27)
+
+Batch denoise now overlaps two isolated Linux Nuke workers when the host has
+at least 64 logical CPUs and 32 GiB available RAM. Windows and smaller hosts
+remain serial; `SHOTBOX_DENOISE_BATCH_WORKERS=1` forces serial operation.
+Shared shot output folders are serialized. Cancelling either progress dialog
+cancels the whole batch; shutdown waits for all workers to clean up.
+
+On this 128-thread workstation, the first four sorted 000test source clips
+(sho010, sho020, sho030, sho040; 331 frames) took 92.55 seconds serially.
+Two isolated workers took 57.42 seconds (38.0% reduction), and the integrated
+Qt controller completed all four in 57.87 seconds (37.5% reduction).
+A repeat serial run took 95.67 seconds. The 50% stretch target was not reached.
+All benchmark outputs are isolated under `.cache/temp/denoise-four-*`.
+
+The final change retains the original 16-thread cap, template, fresh per-clip
+Auto Profile, resolution, colourspace, half-float RGBA and one-scanline ZIP
+compression. 32-thread and 16-scanline ZIP trials were not retained.
+Request settings, template digests and media dimensions matched the baseline
+for every clip. First-frame pixel comparisons found tiny differences also
+present between two unchanged serial runs (mean absolute channel differences
+around 3e-9). Exact pixel equality is therefore not claimed. Full-frame
+comparison was stopped at the user's request; quality verification is limited
+to unchanged processing settings and the sampled repeatability checks.
+
+Validation: 25 controller/UI tests, 31 host tests and 14 template tests passed.
+New tests cover slot refilling, failure attribution, cancellation from either
+dialog, shared-folder serialization, startup failures, shutdown and host limits.
+Reproduce with `test/denoise_batch_benchmark.py` (`--workers 1` or `2`) or
+`test/denoise_controller_benchmark.py`, passing the 000test root and `--nuke`.
+`test/compare_denoise_benchmarks.py` checks decoded images; `--measure` reports
+variation rather than requiring exact equality.
+
+## Deadline submission
+
+See [Deadline denoising](DEADLINE_DENOISE.md) for Linux setup, local-project
+worker restriction, chunk sizes, concurrency, persistent submission receipts,
+reconciliation and native four-clip verification evidence. Cross-platform
+mapping enforcement is deferred at the user's request.

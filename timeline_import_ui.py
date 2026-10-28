@@ -51,7 +51,7 @@ def arrange_timeline_page(page):
         page.checkBoxAddToDB, page.checkBoxCreateTasks, page.checkBoxSkipActivityLogging,
         page.btnMakeShot, page.tableWidgetTemp, page.folder_edit, page.cancel_scan_button,
         page.loading_label, page.loading_progress, page.timeline_combo, page.accept_handles_button,
-        page.validation_text,
+        page.validation_text, page.timeline_name_edit,
     }
 
     def clear(layout):
@@ -78,7 +78,7 @@ def arrange_timeline_page(page):
     titles.addWidget(_label('Import Timeline', 'pageTitle'))
     titles.addWidget(_label('Turn a media-managed edit into ready-to-work shots.'))
     header.addLayout(titles, 1)
-    header.addWidget(_label('XML / OTIO', 'formatBadge'))
+    header.addWidget(_label('DRT / XML / OTIO', 'formatBadge'))
     header.addSpacing(12)
     header.addWidget(page.btnMakeShot)
     root.addLayout(header)
@@ -107,9 +107,9 @@ def arrange_timeline_page(page):
     folder_row.addWidget(page.folder_edit, 1)
     folder_row.addWidget(page.btnSelectXML)
     page.btnSelectXML.setIcon(page.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
-    page.folder_edit.setPlaceholderText('Folder containing your clips and XML / OTIO timeline')
+    page.folder_edit.setPlaceholderText('Folder containing your clips and DRT / XML / OTIO timeline')
     source_layout.addLayout(folder_row)
-    timelines = _field('Timeline to import · choose XML or OTIO', page.timeline_combo)
+    timelines = _field('Timeline to import · choose DRT, XML or OTIO', page.timeline_combo)
     page.timeline_combo.setMinimumWidth(0)
     page.timeline_combo.setPlaceholderText('Select a folder first')
     source_layout.addLayout(timelines)
@@ -126,6 +126,7 @@ def arrange_timeline_page(page):
     settings, settings_layout, settings_heading = _card('02', 'Import settings')
     settings_heading.addWidget(page.updateBtn)
     page.updateBtn.setText('Apply settings')
+    settings_layout.addLayout(_field('Timeline name', page.timeline_name_edit))
     settings_grid = QGridLayout()
     settings_grid.setHorizontalSpacing(24)
     settings_grid.setVerticalSpacing(10)
@@ -163,8 +164,8 @@ def arrange_timeline_page(page):
     page.lableRoot.setProperty('role', 'muted')
     page.lableRoot.setWordWrap(True)
     page.lableRoot.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-    destination.addWidget(page.lableRoot, 1)
     destination.addWidget(page.btnSelecRoot)
+    destination.addWidget(page.lableRoot, 1)
     settings_layout.addLayout(destination)
     options = QHBoxLayout()
     options.setSpacing(20)

@@ -149,6 +149,57 @@ class TemplateTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "missing frames"):
             template.resolve_source(str(self.root / "image.####.dpx"))
 
+    def test_selected_secondary_keeps_batch_identity_and_ignores_other_missing_sources(self):
+        files = mock.Mock(convert_path=lambda path: path)
+        shot = {"id": 1, "title": "sho010", "base_path": str(self.root / "shot"),
+                "original_clips": [str(self.root / "missing.mov"), str(self.source), str(self.root / "also-missing.mov")]}
+        job = {"timelines": [{"shots": [shot]}]}
+        batch, skipped = template.collect_tasks(job, files)
+        self.assertEqual(skipped, 2)
+        selected, skipped = template.collect_tasks(job, files, source_path=str(self.source))
+        self.assertEqual(skipped, 0)
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected[0], batch[0])
+        self.assertEqual(selected[0]["media"]["plate"], "plate_02")
+        output = template.output_directory(selected[0]["media"])
+        self.assertEqual(output.name, "sho010_plate_02_DN_v001")
+        self.assertEqual(template.output_directory(batch[0]["media"]), output)
+
+    def test_selected_clip_must_belong_to_current_shot_and_exist(self):
+        files = mock.Mock(convert_path=lambda path: path)
+        missing = str(self.root / "missing.mov")
+        shot = {"base_path": str(self.root / "shot"), "original_clip": str(self.source),
+                "original_clips": [missing]}
+        job = {"timelines": [{"shots": [shot]}]}
+        for path in (missing, str(self.source), str(self.root / "stale.mov")):
+            with self.subTest(source=path):
+                self.assertEqual(template.collect_tasks(job, files, source_path=path), ([], 1))
+
+    def test_selected_path_alias_uses_same_deduplicated_batch_output(self):
+        files = mock.Mock(convert_path=lambda path: path)
+        (self.root / 'nested').mkdir()
+        alias = str(self.root / 'nested' / '..' / self.source.name)
+        shot = {'base_path': str(self.root / 'shot'), 'original_clips': [str(self.source), alias]}
+        job = {'timelines': [{'shots': [shot]}]}
+        batch, _ = template.collect_tasks(job, files)
+        selected, skipped = template.collect_tasks(job, files, source_path=alias)
+        self.assertEqual(skipped, 0)
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(selected, batch)
+        self.assertEqual(selected[0]['media']['plate'], 'plate_01')
+
+    def test_legacy_selected_clip_and_shared_sources_keep_separate_shot_outputs(self):
+        files = mock.Mock(convert_path=lambda path: path)
+        first = {"id": 1, "base_path": str(self.root / "one"),
+                 "original_clips": [], "original_clip": str(self.source)}
+        second = {**first, "id": 2, "base_path": str(self.root / "two")}
+        alias = {**first, "id": 3}
+        tasks, skipped = template.collect_tasks({"timelines": [{"shots": [first, second, alias, first]}]},
+                                               files, source_path=str(self.source))
+        self.assertEqual(skipped, 0)
+        self.assertEqual([task["shot"]["id"] for task in tasks], [1, 2])
+        self.assertTrue(all(task["media"]["plate"] is None for task in tasks))
+
 
 if __name__ == "__main__":
     unittest.main()

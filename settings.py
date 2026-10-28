@@ -79,6 +79,14 @@ def normalize_shots_layout_mode(mode: str) -> str:
     return normalized if normalized in {"grid", "v02_grid"} else "list"
 
 
+def default_deadline_shared_roots():
+    """Use existing Shotbox project mounts when Deadline roots are unset."""
+    import platform
+    from path_mapping import PATH_MAPPINGS
+    return list(dict.fromkeys(root for mapping in PATH_MAPPINGS
+                             for root in mapping.roots_for(platform.system()) if Path(root).is_dir()))
+
+
 # Default settings values
 DEFAULT_SETTINGS = {
     # User identification
@@ -98,6 +106,14 @@ DEFAULT_SETTINGS = {
     "preview_output_subdir": "renders/precomp/previews",
     "preview_overwrite": False,
     "nuke_exe_path": "",
+    "deadline_client": "",
+    "deadline_shared_roots": [],
+    "deadline_pool": "linux",
+    "deadline_group": "none",
+    "deadline_priority": 50,
+    "deadline_chunked": True,
+    "deadline_chunk_size": 10,
+    "deadline_concurrent_tasks": 1,
     "threede_exe_path": "",
     "houdini_user_pref_dir": "",
     
@@ -237,6 +253,8 @@ class SettingsManager:
                     self._settings["shots_layout_mode"] = normalize_shots_layout_mode(
                         self._settings["shots_layout_mode"]
                     )
+                    if not self._settings.get("deadline_shared_roots"):
+                        self._settings["deadline_shared_roots"] = default_deadline_shared_roots()
             except Exception as e:
                 print(f"[Settings] Error loading settings: {e}")
                 self._settings = DEFAULT_SETTINGS.copy()
@@ -563,6 +581,37 @@ class SettingsPage(QWidget):
         preview_layout.addRow("3DE Executable:", three_de_path_layout)
 
         container_layout.addWidget(preview_group)
+
+        deadline_group = self._create_group_box("Deadline Denoise")
+        deadline_layout = QFormLayout(deadline_group)
+        self.deadline_client_edit = QLineEdit()
+        self.deadline_client_edit.setPlaceholderText("Auto-detect deadlinecommand")
+        deadline_layout.addRow("Deadline Client:", self.deadline_client_edit)
+        self.deadline_roots_edit = QLineEdit()
+        self.deadline_roots_edit.setPlaceholderText("Shared project roots, separated by semicolons")
+        deadline_layout.addRow("Shared Project Roots:", self.deadline_roots_edit)
+        self.deadline_pool_edit = QLineEdit()
+        self.deadline_group_edit = QLineEdit()
+        self.deadline_priority_spin = NoScrollSpinBox()
+        self.deadline_priority_spin.setRange(0, 100)
+        deadline_layout.addRow("Default Pool:", self.deadline_pool_edit)
+        deadline_layout.addRow("Default Group:", self.deadline_group_edit)
+        deadline_layout.addRow("Default Priority:", self.deadline_priority_spin)
+        self.deadline_chunked_check = QCheckBox("Render clips in chunks")
+        self.deadline_chunk_size_spin = NoScrollSpinBox()
+        self.deadline_chunk_size_spin.setRange(1, 1000000)
+        deadline_layout.addRow(self.deadline_chunked_check)
+        deadline_layout.addRow("Frames per Task:", self.deadline_chunk_size_spin)
+        self.deadline_concurrent_tasks_spin = NoScrollSpinBox()
+        self.deadline_concurrent_tasks_spin.setRange(1, 16)
+        deadline_layout.addRow("Concurrent Tasks per Worker:", self.deadline_concurrent_tasks_spin)
+        self.deadline_chunked_check.toggled.connect(self.deadline_chunk_size_spin.setEnabled)
+        deadline_help = QLabel("Uses the client's configured repository. Profiles locally, then submits clips to Linux workers. "
+                              "Shared paths must be accessible on the workers; local projects are restricted to this computer. "
+                              "Deadline always creates new output versions. Cross-platform mapping checks are deferred.")
+        deadline_help.setWordWrap(True)
+        deadline_layout.addRow(deadline_help)
+        container_layout.addWidget(deadline_group)
 
         plugins_group = self._create_group_box("Plugins")
         plugins_layout = QFormLayout(plugins_group)
@@ -1117,6 +1166,15 @@ class SettingsPage(QWidget):
         )
         self.preview_overwrite_check.setChecked(self._settings.get("preview_overwrite", False))
         self.nuke_exe_path_edit.setText(self._settings.get("nuke_exe_path", ""))
+        self.deadline_client_edit.setText(self._settings.get("deadline_client", ""))
+        self.deadline_roots_edit.setText("; ".join(self._settings.get("deadline_shared_roots", [])))
+        self.deadline_pool_edit.setText(self._settings.get("deadline_pool", "linux"))
+        self.deadline_group_edit.setText(self._settings.get("deadline_group", "none"))
+        self.deadline_priority_spin.setValue(self._settings.get("deadline_priority", 50))
+        self.deadline_chunked_check.setChecked(self._settings.get("deadline_chunked", True))
+        self.deadline_chunk_size_spin.setValue(self._settings.get("deadline_chunk_size", 10))
+        self.deadline_chunk_size_spin.setEnabled(self.deadline_chunked_check.isChecked())
+        self.deadline_concurrent_tasks_spin.setValue(self._settings.get("deadline_concurrent_tasks", 1))
         self.threede_exe_path_edit.setText(self._settings.get("threede_exe_path", ""))
         self._refresh_plugins_panel()
         self.houdini_pref_combo.setCurrentText(self._settings.get("houdini_user_pref_dir", ""))
@@ -1430,6 +1488,14 @@ class SettingsPage(QWidget):
         self._set_pending_setting("preview_output_subdir", self.preview_output_subdir_edit.text().strip(), save=False)
         self._set_pending_setting("preview_overwrite", self.preview_overwrite_check.isChecked(), save=False)
         self._set_pending_setting("nuke_exe_path", self.nuke_exe_path_edit.text().strip(), save=False)
+        self._set_pending_setting("deadline_client", self.deadline_client_edit.text().strip(), save=False)
+        self._set_pending_setting("deadline_shared_roots", [p.strip() for p in self.deadline_roots_edit.text().split(";") if p.strip()], save=False)
+        self._set_pending_setting("deadline_pool", self.deadline_pool_edit.text().strip() or "linux", save=False)
+        self._set_pending_setting("deadline_group", self.deadline_group_edit.text().strip() or "none", save=False)
+        self._set_pending_setting("deadline_priority", self.deadline_priority_spin.value(), save=False)
+        self._set_pending_setting("deadline_chunked", self.deadline_chunked_check.isChecked(), save=False)
+        self._set_pending_setting("deadline_chunk_size", self.deadline_chunk_size_spin.value(), save=False)
+        self._set_pending_setting("deadline_concurrent_tasks", self.deadline_concurrent_tasks_spin.value(), save=False)
         self._set_pending_setting("threede_exe_path", self.threede_exe_path_edit.text().strip(), save=False)
         self._set_pending_setting("houdini_user_pref_dir", self.houdini_pref_combo.currentText().strip(), save=False)
         

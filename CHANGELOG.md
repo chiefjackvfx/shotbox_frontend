@@ -6,9 +6,40 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-27T21:04:49+00:00] Configure Deadline chunks and concurrent tasks per worker.
+
+
+- [2026-10-27T21:01:17+00:00] Submit denoise profiles to Deadline with persistent job receipts.
+- [2026-10-27T21:01:17+00:00] Render local projects through the verified local Linux worker.
+
+
+- [2026-10-27T20:28:03+00:00] Allow editing timeline names in import settings.
+
+- [2026-10-27T20:22:40+00:00] Import Resolve DRT timelines with constant-speed retimes and validation.
+
+- [2026-10-27T20:15:48+00:00] Show additional original clip counts beside shot source filenames.
+
+- [2026-10-27T20:14:23+00:00] Test clip menus, timeline scoping, deduplication, and plate identity.
+
 ### Changed
 
+- [2026-10-27T20:35:06+00:00] Extend timeline import and shot linking to sixteen video layers.
+
+- [2026-10-27T20:34:11+00:00] Parallelize Linux denoise batches without changing image settings.
+
+
+- [2026-10-27T20:31:54+00:00] Move project path button left of the destination path.
+
+- [2026-10-27T20:14:23+00:00] Move denoise into each original clip's context menu.
+- [2026-10-27T20:14:23+00:00] Limit batch denoise to the selected timeline's original clips.
+- [2026-10-27T20:14:23+00:00] Document source denoise scope and single/batch output naming.
+
 ### Fixed
+
+- [2026-10-27T21:01:17+00:00] Recover configured project shares when Deadline roots are empty.
+
+
+- [2026-10-27T20:14:23+00:00] Preserve selected plate outputs and ignore unrelated missing clips.
 
 ## 5.3.0 - 2026-10-27
 

@@ -154,7 +154,7 @@ def _run_once(request_path, notify=emit):
                                     stage = next_stage
                                     deadline = time.monotonic() + 300
                                 profiled = profiled or stage == "profile_ready"
-                                if stage in ("complete", "failed"):
+                                if stage in ("complete", "prepared", "failed"):
                                     terminal = event
                                 else:
                                     notify(event)
@@ -163,7 +163,7 @@ def _run_once(request_path, notify=emit):
                     if nuke.poll() is not None:
                         # Read any last events before deciding success.
                         if terminal is not None:
-                            if nuke.returncode != 0 and terminal["stage"] == "complete":
+                            if nuke.returncode != 0 and terminal["stage"] in ("complete", "prepared"):
                                 raise RuntimeError(f"Nuke exited with code {nuke.returncode} after rendering.")
                             break
                         if events.exists() and events.stat().st_size > offset:
@@ -213,7 +213,7 @@ def run(request_path, notify=emit):
 
             def relay(event):
                 # The first attempt's failure is not the overall job result.
-                if event["stage"] not in {"complete", "failed", "cancelled"}:
+                if event["stage"] not in {"complete", "prepared", "failed", "cancelled"}:
                     notify(event)
 
             result = _run_once(attempt_path, notify=relay)
@@ -246,4 +246,4 @@ if __name__ == "__main__":
     parser.add_argument("--request", required=True)
     args = parser.parse_args()
     result = run(args.request)
-    sys.exit(0 if result["stage"] == "complete" else 1)
+    sys.exit(0 if result["stage"] in ("complete", "prepared") else 1)

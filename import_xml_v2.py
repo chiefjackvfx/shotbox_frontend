@@ -35,6 +35,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QFont, QColor, QPixmap
 
+from timeline_limits import validate_video_track
+
 import create_nk
 import path_mapping
 from asset_paths import asset_path
@@ -207,7 +209,7 @@ class XMLTimelineParser:
         Returns:
             List of ParsedShot objects with linked clips
         """
-        self.clips_by_track = {i: [] for i in range(1, 6)}  # V1-V5
+        self.clips_by_track = {}
         
         # Set project root and edit name from path
         self._set_paths_from_xml(xml_path)
@@ -223,8 +225,9 @@ class XMLTimelineParser:
                 for video in media.findall("video"):
                     for video_track in video.findall("track"):
                         track_num += 1
-                        if track_num > 5:
-                            break
+                        if video_track.findall("clipitem"):
+                            validate_video_track(track_num)
+                        self.clips_by_track[track_num] = []
                             
                         for clip_elem in video_track.findall("clipitem"):
                             clip = self._parse_clip(clip_elem, track_num, handles)
@@ -250,7 +253,7 @@ class XMLTimelineParser:
         """
         # Find first online clip
         first_online_path = None
-        for track_num in range(1, 6):
+        for track_num in sorted(self.clips_by_track):
             for clip in self.clips_by_track.get(track_num, []):
                 if clip.filepath and clip.filepath != "offline" and os.path.exists(clip.filepath):
                     first_online_path = clip.filepath
@@ -260,7 +263,7 @@ class XMLTimelineParser:
         
         if not first_online_path:
             # No online clips found, try to use any path even if not accessible
-            for track_num in range(1, 6):
+            for track_num in sorted(self.clips_by_track):
                 for clip in self.clips_by_track.get(track_num, []):
                     if clip.filepath and clip.filepath != "offline":
                         first_online_path = clip.filepath
@@ -313,7 +316,7 @@ class XMLTimelineParser:
     def get_all_online_clip_paths(self) -> List[str]:
         """Return list of all online clip paths for user review."""
         paths = []
-        for track_num in range(1, 6):
+        for track_num in sorted(self.clips_by_track):
             for clip in self.clips_by_track.get(track_num, []):
                 if clip.filepath and clip.filepath != "offline":
                     paths.append(clip.filepath)
@@ -428,8 +431,11 @@ class XMLTimelineParser:
         return path_mapping.convert_path(canonical_path)
     
     def _link_clips_to_shots(self, handles: int) -> List[ParsedShot]:
-        """Link clips from V2-V5 to V1 clips based on matching start frames."""
+        """Link clips from all upper tracks to V1 by matching start frames."""
         shots = []
+        for track, clips in self.clips_by_track.items():
+            if clips:
+                validate_video_track(track)
         v1_clips = self.clips_by_track.get(1, [])
         
         for idx, v1_clip in enumerate(v1_clips):
@@ -443,7 +449,7 @@ class XMLTimelineParser:
             shot.clips.append(v1_clip)
             
             # Find matching clips from other tracks by start frame
-            for track_num in range(2, 6):
+            for track_num in sorted(t for t in self.clips_by_track if t > 1):
                 for clip in self.clips_by_track.get(track_num, []):
                     if clip.start_frame == v1_clip.start_frame:
                         shot.clips.append(clip)

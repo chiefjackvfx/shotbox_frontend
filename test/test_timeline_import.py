@@ -57,8 +57,8 @@ def test_discovery_is_generic_recursive_and_does_not_follow_symlinks(tmp_path):
     (tmp_path / 'link').symlink_to(nested, target_is_directory=True)
     found = module.discover(str(tmp_path))
     assert len(found.media) == 1
-    assert len(found.timelines) == 2
-    assert len(found.references) == 1
+    assert len(found.timelines) == 3
+    assert len(found.references) == 0
     assert len(found.warnings) == 2
 
 
@@ -488,3 +488,69 @@ def test_unknown_idt_requires_override_in_automatic_mode(tmp_path):
     result = module.prepare_import(doc, {path: info}, auto_colourspace=True, colourspace_overrides={'1:0': 'ACES - ACEScg'})
     assert not result.errors
     assert result.shots[0].primary_clip.media_timing['colourspace_source'] == 'manual'
+
+
+@pytest.mark.parametrize("extra", ["none", "empty", "occupied"])
+def test_xml_and_legacy_parser_keep_sixteen_layers(tmp_path, extra):
+    import copy
+    import xml.etree.ElementTree as ET
+    from import_xml_v2 import XMLTimelineParser
+    root = ET.fromstring(xml_text())
+    video = root.find('sequence/media/video')
+    for _ in range(15):
+        video.append(copy.deepcopy(video[0]))
+    if extra != 'none':
+        video.append(copy.deepcopy(video[0]) if extra == 'occupied' else ET.Element('track'))
+    path = tmp_path / 'layers.xml'
+    ET.ElementTree(root).write(path)
+    if extra == 'occupied':
+        with pytest.raises(ValueError, match='V17.*V16'):
+            module.read_timeline(str(path))
+        with pytest.raises(ValueError, match='V17.*V16'):
+            XMLTimelineParser().parse(str(path), handles=0)
+        return
+    result = module.read_timeline(str(path))
+    assert [c.track for c in result.clips] == list(range(1, 17))
+    assert all(not c.error for c in result.clips)
+    legacy = XMLTimelineParser().parse(str(path), handles=0)
+    assert [c.track for c in legacy[0].clips] == list(range(1, 17))
+
+
+def test_sparse_high_layers_survive_shot_preparation(tmp_path):
+    path, info = media_file(tmp_path)
+    tracks = [1, 6, 16]
+    clips = [occurrence(uid=f'{n}:0', track=n) for n in tracks]
+    result = module.prepare_import(document(tmp_path, clips), {path: info}, handles=0)
+    assert not result.errors
+    assert [c.track for c in result.shots[0].clips] == tracks
+    assert all(c.media_timing['cut_start'] == 10 for c in result.shots[0].clips)
+
+
+@pytest.mark.parametrize("extra", ["none", "empty", "occupied"])
+def test_otio_keeps_sixteenth_video_track(tmp_path, extra):
+    otio = pytest.importorskip('opentimelineio')
+    rt = otio.opentime.RationalTime
+    tr = otio.opentime.TimeRange
+    tracks = []
+    for n in range(16 if extra == "none" else 17):
+        clips = []
+        if n in (0, 15) or (n == 16 and extra == "occupied"):
+            clips.append(otio.schema.Clip(name='camera.mxf',
+                media_reference=otio.schema.ExternalReference(target_url='/old/camera.mxf'),
+                source_range=tr(rt(910, 25), rt(20, 25))))
+        tracks.append(otio.schema.Track(kind=otio.schema.TrackKind.Video, children=clips))
+    path = tmp_path / 'layers.otio'
+    otio.adapters.write_to_file(otio.schema.Timeline(tracks=tracks, global_start_time=rt(0, 25)), str(path))
+    if extra == 'occupied':
+        with pytest.raises(ValueError, match='V17.*V16'):
+            module.read_timeline(str(path))
+        return
+    result = module.read_timeline(str(path))
+    assert [c.track for c in result.clips] == [1, 16]
+    assert all(not c.error for c in result.clips)
+
+
+def test_sixteenth_layer_still_requires_alignment(tmp_path):
+    doc = document(tmp_path, [occurrence(), occurrence(uid='16:0', track=16, timeline_start=1)])
+    with pytest.raises(ValueError, match='not aligned'):
+        module._validate_structure(doc)

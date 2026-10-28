@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<MediaPool>
+  <Sm2Timeline>
+    <Name>DRT regression</Name>
+    <Sequence>
+      <Sm2Sequence DbId="sequence">
+        <MediaExtents>00000000c092e1400048e17a14ae4840</MediaExtents>
+        <FrameRate>00000000000039400000000000000000</FrameRate>
+      </Sm2Sequence>
+    </Sequence>
+  </Sm2Timeline>
+</MediaPool>

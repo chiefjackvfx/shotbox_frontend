@@ -16,7 +16,12 @@ from nuke_headless_tasks import preview_input_exists, resolve_preview_sequence_i
 TEMPLATE = Path(__file__).with_name("template_denoise_v01.nk")
 
 
-def collect_tasks(job, files_io):
+def collect_tasks(job, files_io, *, source_path=None):
+    """Collect source tasks, retaining full-shot plate numbering when selecting one."""
+    def source_identity(source):
+        local = str(Path(files_io.convert_path(source)).resolve())
+        return local, os.path.normcase(resolve_preview_sequence_input(local)[0])
+
     tasks, seen_shots, seen_outputs = [], set(), set()
     skipped = 0
     for timeline in job.get("timelines", []) or []:
@@ -30,26 +35,34 @@ def collect_tasks(job, files_io):
             if isinstance(sources, str):
                 sources = [sources]
             sources = list(dict.fromkeys(str(p).strip() for p in sources if p and str(p).strip().lower() not in {"none", "offline", "—"}))
-            if not base or not sources:
+            selected = [(index, source) for index, source in enumerate(sources, 1)
+                        if source_path is None or source == str(source_path).strip()]
+            if not base or not selected:
                 skipped += 1
                 continue
             try:
                 local_base = str(Path(files_io.convert_path(base)).resolve())
+                selected_identity = source_identity(selected[0][1])[1] if source_path is not None else None
             except (OSError, ValueError):
-                skipped += len(sources)
+                skipped += len(selected)
                 continue
             seen_sources = set()
             for index, source in enumerate(sources, 1):
                 try:
-                    local = str(Path(files_io.convert_path(source)).resolve())
-                    canonical = os.path.normcase(resolve_preview_sequence_input(local)[0])
-                    exists = preview_input_exists(local)
+                    local, canonical = source_identity(source)
                 except (OSError, ValueError):
-                    skipped += 1
+                    if source_path is None or source == str(source_path).strip():
+                        skipped += 1
+                    continue
+                if selected_identity is not None and canonical != selected_identity:
                     continue
                 if canonical in seen_sources:
                     continue
                 seen_sources.add(canonical)
+                try:
+                    exists = preview_input_exists(local)
+                except (OSError, ValueError):
+                    exists = False
                 if not exists:
                     skipped += 1
                     continue
