@@ -109,6 +109,7 @@ DEFAULT_SETTINGS = {
     "deadline_client": "",
     "deadline_shared_roots": [],
     "deadline_pool": "linux",
+    "deadline_qualified_workers": [],
     "deadline_group": "none",
     "deadline_priority": 50,
     "deadline_chunked": True,
@@ -590,6 +591,10 @@ class SettingsPage(QWidget):
         self.deadline_roots_edit = QLineEdit()
         self.deadline_roots_edit.setPlaceholderText("Shared project roots, separated by semicolons")
         deadline_layout.addRow("Shared Project Roots:", self.deadline_roots_edit)
+        self.deadline_workers_edit = QLineEdit()
+        self.deadline_workers_edit.setPlaceholderText("Verified worker names, separated by commas")
+        self.deadline_workers_edit.setToolTip("Only admit workers after native Nuke/Neat, licence and shared-storage render tests pass.")
+        deadline_layout.addRow("Qualified Workers:", self.deadline_workers_edit)
         self.deadline_pool_edit = QLineEdit()
         self.deadline_group_edit = QLineEdit()
         self.deadline_priority_spin = NoScrollSpinBox()
@@ -606,7 +611,7 @@ class SettingsPage(QWidget):
         self.deadline_concurrent_tasks_spin.setRange(1, 16)
         deadline_layout.addRow("Concurrent Tasks per Worker:", self.deadline_concurrent_tasks_spin)
         self.deadline_chunked_check.toggled.connect(self.deadline_chunk_size_spin.setEnabled)
-        deadline_help = QLabel("Uses the client's configured repository. Profiles locally, then submits clips to Linux workers. "
+        deadline_help = QLabel("Uses the client's configured repository. Profiles locally, then submits clips to qualified Windows/Linux workers. "
                               "Shared paths must be accessible on the workers; local projects are restricted to this computer. "
                               "Deadline always creates new output versions. Cross-platform mapping checks are deferred.")
         deadline_help.setWordWrap(True)
@@ -1168,6 +1173,7 @@ class SettingsPage(QWidget):
         self.nuke_exe_path_edit.setText(self._settings.get("nuke_exe_path", ""))
         self.deadline_client_edit.setText(self._settings.get("deadline_client", ""))
         self.deadline_roots_edit.setText("; ".join(self._settings.get("deadline_shared_roots", [])))
+        self.deadline_workers_edit.setText(", ".join(self._settings.get("deadline_qualified_workers", [])))
         self.deadline_pool_edit.setText(self._settings.get("deadline_pool", "linux"))
         self.deadline_group_edit.setText(self._settings.get("deadline_group", "none"))
         self.deadline_priority_spin.setValue(self._settings.get("deadline_priority", 50))
@@ -1490,6 +1496,7 @@ class SettingsPage(QWidget):
         self._set_pending_setting("nuke_exe_path", self.nuke_exe_path_edit.text().strip(), save=False)
         self._set_pending_setting("deadline_client", self.deadline_client_edit.text().strip(), save=False)
         self._set_pending_setting("deadline_shared_roots", [p.strip() for p in self.deadline_roots_edit.text().split(";") if p.strip()], save=False)
+        self._set_pending_setting("deadline_qualified_workers", list(dict.fromkeys(p.strip() for p in self.deadline_workers_edit.text().split(",") if p.strip())), save=False)
         self._set_pending_setting("deadline_pool", self.deadline_pool_edit.text().strip() or "linux", save=False)
         self._set_pending_setting("deadline_group", self.deadline_group_edit.text().strip() or "none", save=False)
         self._set_pending_setting("deadline_priority", self.deadline_priority_spin.value(), save=False)

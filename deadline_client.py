@@ -79,8 +79,6 @@ def within(path, root, *, case_sensitive=True):
 
 
 def validate_shared(paths, roots, info):
-    # Linux-first delivery: preserve paths verbatim. Cross-platform mapping
-    # enforcement is deferred at the user's request.
     if not roots:
         raise RuntimeError("Configure shared project roots in Settings → Deadline Denoise.")
     for path in paths:
@@ -92,6 +90,8 @@ def validate_destination(paths, options, info, executable, **kwargs):
     """Local projects may render only on this computer's verified worker."""
     roots = options.get("shared_roots", [])
     if roots and all(any(within(path, root) for root in roots) for path in paths):
+        select_workers(options, info)
+        validate_mapping_coverage(paths, options["platforms"], info)
         return
     if sys.platform != "linux" or not options.get("allow_local", False):
         validate_shared(paths, roots, info)
@@ -103,7 +103,59 @@ def validate_destination(paths, options, info, executable, **kwargs):
             or worker.get("MachineOperatingSystem") != "Linux"
             or worker.get("Enabled") != "True" or worker.get("ID") != hostname):
         raise RuntimeError("Local project submission needs an enabled Linux Deadline worker named after this computer: " + hostname)
-    options.update(machine_list=hostname, pool="none", group="none", local_project=True)
+    options.update(machine_list=hostname, pool="none", group="none", local_project=True, platforms=["linux"])
+
+
+def eligible_workers(options, info):
+    """Qualification is an explicit operator decision, never inferred from config."""
+    qualified = options.get("qualified_workers", [])
+    requested = options.get("machine_list", "").split(",") if options.get("machine_list") else None
+    return [w for w in info.get("workers", [])
+            if w["name"] in qualified and (requested is None or w["name"] in requested)
+            and w.get("enabled") and w.get("platform") in {"linux", "win32"}
+            and (options.get("pool", "none") == "none" or options["pool"] in w.get("pools", []))
+            and (options.get("group", "none") == "none" or options["group"] in w.get("groups", []))]
+
+
+def select_workers(options, info):
+    if not options.get("qualified_workers"):
+        raise RuntimeError("Configure qualified workers in Settings → Deadline Denoise after native render qualification.")
+    workers = eligible_workers(options, info)
+    if not workers:
+        raise RuntimeError("No qualified Windows/Linux workers match the selected pool and group.")
+    options.update(machine_list=",".join(sorted(w["name"] for w in workers)),
+                   platforms=sorted({w["platform"] for w in workers}))
+
+
+def validate_mapping_coverage(paths, platforms, info):
+    # Linux-only jobs retain native paths. Windows jobs require explicit coverage.
+    # Actual replacement is performed by Deadline, never by Shotbox.
+    if "win32" not in platforms:
+        return
+    if not info.get("path_mapping_enabled"):
+        raise RuntimeError("Enable Path Mapping in Deadline's Nuke plugin for Windows workers.")
+    mapping = info.get("path_mappings", {})
+    rules = mapping.get("GlobalRules", []) + mapping.get("SubmissionTimeRules", [])
+    for path in paths:
+        covered = False
+        for rule in rules:
+            if rule.get("RegularExpression") or rule.get("Region", "All") != "All":
+                raise RuntimeError("Mixed denoise preflight requires literal, All-region path mappings; complex mappings need separate qualification.")
+            if within(path, rule.get("Path", ""), case_sensitive=rule.get("CaseSensitive", True)):
+                target = rule.get("WindowsPath", "").replace("\\", "/")
+                if not re.match(r"^(?:[A-Za-z]:(?:/|$)|//[^/]+/[^/]+)", target):
+                    raise RuntimeError(f"Missing absolute Windows mapping for {path}")
+                covered = True
+                break
+        if not covered:
+            raise RuntimeError(f"No Windows Deadline path mapping covers: {path}")
+
+
+def render_guard(version, platforms):
+    return ("import nuke, sys\nif sys.platform not in " + repr(tuple(platforms))
+            + ":\n    raise RuntimeError('Worker platform was not selected for this Shotbox job')\n"
+            + "if nuke.NUKE_VERSION_STRING != " + repr(version)
+            + ":\n    raise RuntimeError('Shotbox denoise requires the exact profiling Nuke version')\n")
 
 
 def validate_options(options, info):
@@ -121,14 +173,21 @@ def validate_options(options, info):
         raise RuntimeError("Concurrent Deadline tasks per worker must be between 1 and 16.")
 
 
-def validate_version(version, info):
+def validate_version(version, info, platforms=("linux",)):
     match = re.fullmatch(r"(17\.\d+)v\d+", version)
     if not match:
         raise RuntimeError(f"Unsupported Nuke version: {version}")
     executable = info["executables"].get("RenderExecutable" + match[1].replace(".", "_"), "")
     paths = executable.split(";")
-    if not any(p.startswith("/") and "nuke" + version.casefold() in p.casefold() for p in paths):
-        raise RuntimeError(f"Configure exact Nuke {version} executables for Linux in Deadline; version fallback is not allowed.")
+    for platform in platforms:
+        if platform not in {"linux", "win32"}:
+            raise RuntimeError(f"Unsupported worker platform: {platform}")
+        def matches(path):
+            normalized = path.replace("\\", "/")
+            native = bool(re.match(r"^(?:[A-Za-z]:/|//)", normalized)) if platform == "win32" else normalized.startswith("/") and not normalized.startswith("//")
+            return native and bool(re.search(r"(?:^|/)Nuke" + re.escape(version) + r"(?:/|$)", normalized, re.I))
+        if not any(matches(p) for p in paths):
+            raise RuntimeError(f"Configure exact Nuke {version} executables for {platform} in Deadline; version fallback is not allowed.")
     return match[1]
 
 
@@ -145,7 +204,7 @@ def write_info(path, values):
 def submission_files(directory, request, prepared, info):
     from nuke_denoise import build_nuke_command
     options = request["deadline"]
-    version = validate_version(prepared["nuke_version"], info)
+    version = validate_version(prepared["nuke_version"], info, options.get("platforms", ["linux"]))
     first, last = prepared["first"], prepared["last"]
     if last < first:
         raise ValueError("Invalid frame range.")

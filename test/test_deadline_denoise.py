@@ -14,6 +14,7 @@ import deadline_denoise as workflow
 def repository():
     return {"repository": "/repo", "pools": ["linux", "none"], "groups": ["none"], "max_priority": 100,
             "path_mapping_enabled": False, "mapping": {},
+            "workers": [{"name": "linux-worker", "platform": "linux", "enabled": True, "pools": ["linux"], "groups": []}],
             "executables": {"RenderExecutable17_1": "/opt/Nuke17.1v2/Nuke17.1"}}
 
 
@@ -28,7 +29,7 @@ class DeadlineTests(unittest.TestCase):
                         "output_pattern": str(self.root / "shot/renders/new_v001/new_####.exr"),
                         "deadline": {"submission_id": "a" * 32, "shot_dir": str(self.root / "shot"),
                                      "batch_name": "Batch with spaces", "pool": "linux", "group": "none",
-                                     "priority": 50, "shared_roots": [str(self.root)], "client": "/client"}}
+                                     "qualified_workers": ["linux-worker"], "priority": 50, "shared_roots": [str(self.root)], "client": "/client"}}
         self.path = self.root / "request.json"
         self.path.write_text(json.dumps(self.request))
         self.prepared = {"stage": "prepared", "first": 1001, "last": 1179, "nuke_version": "17.1v2"}
@@ -82,7 +83,7 @@ class DeadlineTests(unittest.TestCase):
             with self.subTest(concurrent_tasks=invalid), self.assertRaises(RuntimeError):
                 client.validate_options({"concurrent_tasks": invalid}, repository())
 
-    def test_shared_roots_are_required_but_mapping_is_deferred(self):
+    def test_shared_roots_are_required(self):
         client.validate_shared(["/show/A/clip.mxf"], ["/show"], repository())
         for path in ("/show-other/clip.mxf", "/home/local/clip.mxf"):
             with self.assertRaisesRegex(RuntimeError, "Local-only"):
@@ -124,11 +125,11 @@ class DeadlineTests(unittest.TestCase):
     def test_local_project_requires_opt_in_and_shared_paths_keep_pool(self):
         with self.assertRaises(RuntimeError):
             client.validate_destination([str(self.source)], {}, repository(), "/client")
-        options = {"shared_roots": [str(self.root)], "pool": "linux", "allow_local": True}
+        options = {"shared_roots": [str(self.root)], "pool": "linux", "allow_local": True, "qualified_workers": ["linux-worker"]}
         with mock.patch.object(client, "command") as command:
             client.validate_destination([str(self.source)], options, repository(), "/client")
         command.assert_not_called()
-        self.assertNotIn("machine_list", options)
+        self.assertEqual(options["machine_list"], "linux-worker")
         self.assertEqual(options["pool"], "linux")
 
     def test_rejects_invalid_queue_priority_and_injected_fields(self):
@@ -137,6 +138,73 @@ class DeadlineTests(unittest.TestCase):
                 client.validate_options(options, repository())
         with self.assertRaises(ValueError):
             client.write_info(self.root / "bad.job", {"Name": "a\nPool=other"})
+
+    def test_worker_intersection_and_missing_qualification(self):
+        info = repository()
+        info["workers"] += [{"name": "windows-worker", "platform": "win32", "enabled": True, "pools": ["houdini"], "groups": []},
+                            {"name": "disabled", "platform": "linux", "enabled": False, "pools": ["linux"], "groups": []}]
+        with self.assertRaisesRegex(RuntimeError, "Configure qualified"):
+            client.select_workers({}, info)
+        options = {"qualified_workers": ["linux-worker", "windows-worker", "disabled"], "pool": "none"}
+        client.select_workers(options, info)
+        self.assertEqual(options["machine_list"], "linux-worker,windows-worker")
+        self.assertEqual(options["platforms"], ["linux", "win32"])
+        options.update(pool="houdini", machine_list="")
+        client.select_workers(options, info)
+        self.assertEqual(options["machine_list"], "windows-worker")
+        options.update(group="missing")
+        with self.assertRaisesRegex(RuntimeError, "No qualified"):
+            client.select_workers(options, info)
+
+    def test_windows_mapping_requires_enabled_covered_absolute_destination(self):
+        info = repository()
+        paths = ["/show/a/source.mxf", "/show/a/render/out_####.exr"]
+        with self.assertRaisesRegex(RuntimeError, "Enable Path"):
+            client.validate_mapping_coverage(paths, ["linux", "win32"], info)
+        info.update(path_mapping_enabled=True, path_mappings={"GlobalRules": [
+            {"Path": "/show", "WindowsPath": "Z:", "CaseSensitive": True}]})
+        client.validate_mapping_coverage(paths, ["linux", "win32"], info)
+        for path in ("/show-other/a", "/SHOW/a"):
+            with self.assertRaisesRegex(RuntimeError, "No Windows"):
+                client.validate_mapping_coverage([path], ["win32"], info)
+        rule = info["path_mappings"]["GlobalRules"][0]
+        rule.update(CaseSensitive=False, WindowsPath=r"\\server\share")
+        client.validate_mapping_coverage(["/SHOW/a"], ["win32"], info)
+        rule["WindowsPath"] = "relative/path"
+        with self.assertRaisesRegex(RuntimeError, "absolute Windows"):
+            client.validate_mapping_coverage(paths, ["win32"], info)
+
+    def test_exact_build_validation_on_both_platforms(self):
+        info = repository()
+        with self.assertRaisesRegex(RuntimeError, "win32"):
+            client.validate_version("17.1v2", info, ["linux", "win32"])
+        info["executables"]["RenderExecutable17_1"] += r";C:\Program Files\Nuke17.1v2\Nuke17.1.exe"
+        client.validate_version("17.1v2", info, ["linux", "win32"])
+        info["executables"]["RenderExecutable17_1"] = "/opt/Nuke17.1v20/Nuke17.1"
+        with self.assertRaisesRegex(RuntimeError, "exact Nuke"):
+            client.validate_version("17.1v2", info)
+
+    def test_guard_allows_only_selected_platforms_and_exact_build(self):
+        from types import SimpleNamespace
+        guard = client.render_guard("17.1v2", ["linux", "win32"])
+        for platform, version, allowed in (("win32", "17.1v2", True), ("linux", "17.1v2", True),
+                                           ("darwin", "17.1v2", False), ("win32", "17.1v3", False)):
+            with mock.patch.dict("sys.modules", {"nuke": SimpleNamespace(NUKE_VERSION_STRING=version),
+                                                 "sys": SimpleNamespace(platform=platform)}):
+                if allowed:
+                    exec(guard, {})
+                else:
+                    with self.assertRaises(RuntimeError):
+                        exec(guard, {})
+
+    def test_unqualified_submission_never_profiles(self):
+        self.request["deadline"]["qualified_workers"] = []
+        self.path.write_text(json.dumps(self.request))
+        result, profile, command = self.run_workflow()
+        self.assertEqual(result["stage"], "failed")
+        self.assertIn("qualified", result["error"])
+        profile.assert_not_called()
+        command.assert_not_called()
 
     def test_missing_client_is_actionable(self):
         with self.assertRaisesRegex(RuntimeError, "Settings"):

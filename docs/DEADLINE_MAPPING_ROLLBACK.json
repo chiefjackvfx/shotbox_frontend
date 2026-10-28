@@ -1,0 +1,38 @@
+{
+  "repository": "/mnt/DeadlineRepository10",
+  "plugin": "Nuke",
+  "setting": "EnablePathMapping",
+  "before": "False",
+  "after": "True",
+  "mapping_export": {
+    "PathMapping": {
+      "Version": 1,
+      "Settings": {
+        "GlobalRules": [
+          {
+            "Path": "/Volumes/projects",
+            "WindowsPath": "Z:",
+            "LinuxPath": "/Volumes/projects",
+            "MacPath": "",
+            "CaseSensitive": true,
+            "RegularExpression": false,
+            "MapPrefixOnly": false,
+            "Region": "All"
+          },
+          {
+            "Path": "Z:",
+            "WindowsPath": "",
+            "LinuxPath": "/Volumes/projects",
+            "MacPath": "",
+            "CaseSensitive": false,
+            "RegularExpression": false,
+            "MapPrefixOnly": false,
+            "Region": "All"
+          }
+        ],
+        "SubmissionTimeRules": [],
+        "RecursivelyApplyRules": true
+      }
+    }
+  }
+}

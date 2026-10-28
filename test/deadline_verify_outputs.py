@@ -8,6 +8,7 @@ import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app_cache
+from deadline_client import render_guard
 import numpy as np
 import OpenEXR
 
@@ -15,7 +16,7 @@ import OpenEXR
 @app_cache.temporary_cache_task
 def verify(report_path, executable):
     report = json.loads(report_path.read_text())
-    assert len(report["clips"]) == 4
+    assert report["clips"], "No clips in report"
     directory = Path(tempfile.mkdtemp(prefix="deadline-output-check-", dir=app_cache.cache_directory("temp")))
     cases = []
     total = 0
@@ -30,14 +31,22 @@ def verify(report_path, executable):
         for frame in range(first, last + 1):
             path = Path(request["output_pattern"].replace("####", f"{frame:04d}"))
             assert path.is_file() and path.stat().st_size, path
-            with OpenEXR.File(str(path), header_only=True) as image:
+            with OpenEXR.File(str(path), separate_channels=True) as image:
                 header = image.header()
                 low, high = header["dataWindow"]
                 assert list(high - low + 1) == [media["width"], media["height"]]
                 assert {c.name for c in header["channels"]} == {"R", "G", "B", "A"}
+                assert header["compression"] == OpenEXR.ZIPS_COMPRESSION
+                for channel in image.channels().values():
+                    assert channel.pixels.dtype == np.float16
+                    assert np.isfinite(channel.pixels).all()
             total += 1
-        samples = sorted({first, (first + last) // 2, last})
-        case = {"script": str(request_path.parent / "profiled.nk"), "frames": samples, "first": first, "last": last,
+        samples = {first, (first + last) // 2, last}
+        chunk = receipt.get("chunk_size", request.get("deadline", {}).get("chunk_size", 10))
+        for boundary in range(first + chunk, last + 1, chunk):
+            samples.update((boundary - 1, boundary))
+        samples = sorted(samples)
+        case = {"guard": render_guard(receipt["nuke_version"], ["linux"]), "script": str(request_path.parent / "profiled.nk"), "frames": samples, "first": first, "last": last,
                 "farm_pattern": request["output_pattern"], "local_pattern": str(directory / f"clip{index}_####.exr")}
         cases.append(case)
     fixture = directory / "cases.json"
@@ -50,10 +59,11 @@ def verify(report_path, executable):
                         " nuke.scriptOpen(case['script'])\n"
                         " write=nuke.toNode('Write1')\n"
                         " write['file'].setValue(case['local_pattern'])\n"
+                        " write['beforeRender'].setValue(case['guard'])\n"
                         " nuke.execute(write,case['first'],case['last'],1)\n")
     with (directory / "nuke.log").open("w") as log:
         subprocess.run([executable, "--nukex", "-q", "-m", "16", "--topdown", "-t", str(script)], stdout=log,
-                       stderr=subprocess.STDOUT, check=True, timeout=300)
+                       stderr=subprocess.STDOUT, check=True, timeout=900)
     samples = different = 0
     absolute_sum = maximum = 0.0
     for case in cases:

@@ -39,7 +39,7 @@ def acceptance(source_root, staging_root, executable, worker):
         request["deadline"] = {"submission_id": uuid.uuid4().hex, "shot_dir": str(shot),
                                "batch_name": "Shotbox four-clip acceptance " + token[:8], "pool": "linux",
                                "group": "none", "priority": 50, "shared_roots": [str(staging_root)],
-                               "machine_list": worker}
+                               "qualified_workers": [worker], "machine_list": worker}
         path.write_text(json.dumps(request, indent=2))
         events = []
 
@@ -74,7 +74,7 @@ def reuse_staging(report_path, executable, worker, concurrent):
             "shot_name": shot.name, "colourspace": old["colourspace"], "fps": old["fps"], "mode": "new"}, executable)
         request = json.loads(path.read_text())
         request["deadline"] = {**old["deadline"], "submission_id": uuid.uuid4().hex,
-                               "batch_name": batch, "machine_list": worker,
+                               "batch_name": batch, "qualified_workers": [worker], "machine_list": worker,
                                "chunked": True, "chunk_size": 10, "concurrent_tasks": concurrent}
         path.write_text(json.dumps(request, indent=2))
         events = []

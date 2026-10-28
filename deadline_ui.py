@@ -6,7 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import QProcess, QTimer
 from PyQt6.QtWidgets import QApplication, QCheckBox, QComboBox, QFormLayout, QLabel, QPushButton, QSpinBox, QWidget
 
-from deadline_client import discover_client
+from deadline_client import discover_client, eligible_workers
 from input_behaviour import install_input_wheel_guard
 from settings import get_settings_manager
 
@@ -17,6 +17,7 @@ class DeadlineOptions(QWidget):
         install_input_wheel_guard(QApplication.instance())
         settings = get_settings_manager()
         layout = QFormLayout(self)
+        self.repository = None
         self.pool, self.group = QComboBox(), QComboBox()
         for combo, key, default in ((self.pool, "deadline_pool", "linux"), (self.group, "deadline_group", "none")):
             combo.setEditable(True)
@@ -50,10 +51,15 @@ class DeadlineOptions(QWidget):
         self.refresh = QPushButton("Refresh Deadline queues")
         self.refresh.clicked.connect(self.load_queues)
         layout.addRow(self.refresh)
-        self.status = QLabel("Profiles are prepared locally. Linux workers render new versions.\n"
+        self.status = QLabel("Profiles are prepared locally. Qualified Windows/Linux workers render new versions.\n"
                              "Manage submitted jobs in Deadline Monitor.")
         self.status.setWordWrap(True)
         layout.addRow(self.status)
+        self.eligible = QLabel("Refresh Deadline queues to check qualified workers.")
+        self.eligible.setWordWrap(True)
+        layout.addRow(self.eligible)
+        self.pool.currentTextChanged.connect(self.update_eligible)
+        self.group.currentTextChanged.connect(self.update_eligible)
         self.process = QProcess(self)
         self.process.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.process.finished.connect(self.loaded)
@@ -82,6 +88,7 @@ class DeadlineOptions(QWidget):
                 raise ValueError(text)
             line = next(line for line in text.splitlines() if line.startswith("SHOTBOX_DEADLINE "))
             data = json.loads(line.removeprefix("SHOTBOX_DEADLINE "))
+            self.repository = data
             for combo, key in ((self.pool, "pools"), (self.group, "groups")):
                 selected = combo.currentText()
                 combo.clear()
@@ -89,8 +96,19 @@ class DeadlineOptions(QWidget):
                 combo.setCurrentText(selected)
             self.priority.setMaximum(data["max_priority"])
             self.status.setText("Repository: " + data["repository"])
+            self.update_eligible()
         except (ValueError, KeyError, StopIteration) as exc:
             self.status.setText("Deadline unavailable: " + (str(exc) or text)[-1000:])
+
+    def update_eligible(self, *_args):
+        if self.repository is None:
+            return
+        options = {"pool": self.pool.currentText(), "group": self.group.currentText(),
+                   "qualified_workers": get_settings_manager().get("deadline_qualified_workers", [])}
+        workers = eligible_workers(options, self.repository)
+        self.eligible.setText("Eligible shared-farm workers: " + (
+            ", ".join(w["name"] + " (" + w["platform"] + ")" for w in workers)
+            or "None. Configure qualified workers and select a matching queue."))
 
     def stop(self):
         self.timeout.stop()
@@ -102,6 +120,7 @@ class DeadlineOptions(QWidget):
         settings = get_settings_manager()
         values = {"pool": self.pool.currentText().strip(), "group": self.group.currentText().strip(),
                   "priority": self.priority.value(), "client": settings.get("deadline_client", ""),
+                  "qualified_workers": settings.get("deadline_qualified_workers", []),
                   "shared_roots": settings.get("deadline_shared_roots", []),
                   "allow_local": self.allow_local.isChecked(),
                   "chunked": self.chunked.isChecked(), "chunk_size": self.chunk_size.value(),

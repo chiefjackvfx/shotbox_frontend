@@ -50,12 +50,18 @@ def run(request_path, notify=emit):
                 result = {"stage": "submitted", "job_id": old["job_id"], "receipt": str(receipt_path)}
                 return result
             raise RuntimeError(f"This submission was already attempted. Review receipt before explicitly retrying: {receipt_path}")
+        if sys.platform != "linux":
+            raise RuntimeError("Deadline denoise submission currently requires Linux Shotbox.")
         executable = client.discover_client(options.get("client", ""))
         notify({"stage": "deadline_preflight", "message": "Checking Deadline repository and shared paths…"})
         info = client.repository_info(executable, cancelled=cancelled, directory=directory)
         client.validate_options(options, info)
         client.validate_destination([request["source"], request["output_pattern"]], options, info,
                                     executable, cancelled=cancelled, directory=directory)
+        match = re.search(r"Nuke(17\.\d+v\d+)(?:[/\\]|$)", request["nuke"], re.I)
+        if not match:
+            raise RuntimeError("Cannot identify exact Nuke build from executable path; use its versioned installation path.")
+        client.validate_version(match[1], info, options["platforms"])
         metadata.mkdir(parents=True, exist_ok=True)
         try:
             with lock.open("x", encoding="utf-8") as stream:
@@ -65,6 +71,8 @@ def run(request_path, notify=emit):
         acquired = True
         receipt["repository"] = info["repository"]
         receipt["machine_list"] = options.get("machine_list", "")
+        receipt["platforms"] = options["platforms"]
+        receipt["path_mappings"] = info.get("path_mappings", {})
         receipt["chunked"] = options.get("chunked", True)
         receipt["chunk_size"] = options.get("chunk_size", 10)
         receipt["concurrent_tasks"] = options.get("concurrent_tasks", 1)

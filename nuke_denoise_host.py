@@ -94,7 +94,8 @@ def start(request_path):
             from denoise_template import prepare, remove_stale_frames
             if request.get("profile_only"):
                 from deadline_client import validate_version
-                validate_version(str(nuke.NUKE_VERSION_STRING), request["deadline_repository"])
+                validate_version(str(nuke.NUKE_VERSION_STRING), request["deadline_repository"],
+                                 request.get("deadline", {}).get("platforms", ["linux"]))
             media = prepare(nuke, request)
             (directory / "media.json").write_text(json.dumps(media, indent=2), encoding="utf-8")
             event("media", **media)
@@ -140,8 +141,9 @@ def start(request_path):
             cached_script = directory / "profiled.nk"
             if request.get("profile_only"):
                 # Guard against Deadline's automatic minor-version fallback.
-                guard = ("import nuke, sys\nif sys.platform != 'linux':\n    raise RuntimeError('Shotbox Deadline denoise currently targets Linux workers')\nif nuke.NUKE_VERSION_STRING != " + repr(str(nuke.NUKE_VERSION_STRING))
-                         + ":\n    raise RuntimeError('Shotbox denoise requires the exact profiling Nuke version')\n")
+                from deadline_client import render_guard
+                guard = render_guard(str(nuke.NUKE_VERSION_STRING),
+                                     request.get("deadline", {}).get("platforms", ["linux"]))
                 before = write["beforeRender"].value()
                 write["beforeRender"].setValue(guard + (before or ""))
             nuke.scriptSaveAs(str(cached_script), overwrite=True)
