@@ -59,6 +59,9 @@ class GenerateNkRequest:
     cut_duration: Optional[int] = None
     head_handles: Optional[int] = None
     tail_handles: Optional[int] = None
+    # Primary-first unique sources; read_index maps back to plate_timings/ReadN.
+    # Source ranges may be omitted and probed inside Nuke before saving.
+    denoise_plates: list[dict] = field(default_factory=list)
     dn_exr_file: str = ""
     comp_mov_file: str = ""
     comp_exr_file: str = ""
@@ -100,6 +103,7 @@ class GenerateNkRequest:
             cut_duration=data.get("cut_duration"),
             head_handles=data.get("head_handles"),
             tail_handles=data.get("tail_handles"),
+            denoise_plates=list(data.get("denoise_plates", [])),
             dn_exr_file=str(data.get("dn_exr_file", "")),
             comp_mov_file=str(data.get("comp_mov_file", "")),
             comp_exr_file=str(data.get("comp_exr_file", "")),
@@ -154,23 +158,12 @@ def _coerce_request(request: GenerateNkRequest | dict) -> GenerateNkRequest:
 
 
 def compute_target_root_format(source_width: int, source_height: int) -> tuple[int, int]:
-    """Return a 4096-wide root format with height rounded to the nearest even integer."""
-    width = TARGET_ROOT_FORMAT_WIDTH
-    source_width = int(source_width or 0)
-    source_height = int(source_height or 0)
-
+    """Match denoise sizing: preserve native dimensions up to 4096 pixels wide."""
+    from denoise_template import output_size
+    source_width, source_height = int(source_width or 0), int(source_height or 0)
     if source_width <= 0 or source_height <= 0:
-        return width, 2304
-
-    raw_height = (source_height / source_width) * width
-    height = int(round(raw_height))
-    if height < 2:
-        height = 2
-    if height % 2:
-        lower = height - 1
-        upper = height + 1
-        height = upper if abs(upper - raw_height) <= abs(raw_height - lower) else lower
-    return width, height
+        return 1920, 1080
+    return output_size(source_width, source_height)
 
 
 def _resolve_template_path(request: GenerateNkRequest) -> Path:
@@ -361,6 +354,8 @@ class _TemplateEditor:
         self.request = request
         self._open_template()
         self._validate_template()
+        if request.denoise_plates:
+            self._denoise_prototypes()
         self._update_root()
         self._update_info_backdrop()
         self._update_primary_plate()
@@ -369,6 +364,7 @@ class _TemplateEditor:
         self._update_edit_cut_range()
         self._update_reformats()
         self._update_outputs()
+        self._update_denoised_plates()
         self._update_slate_overlay()
         self._update_preview_text()
 
@@ -406,6 +402,119 @@ class _TemplateEditor:
             raise RuntimeError(f"Template node not found: {name}")
         return node
 
+    def _denoise_prototypes(self):
+        read = self._required_node("ReadDN1")
+        anchors = [node for node in self.nuke.allNodes()
+                   if "identifier" in node.knobs() and node["identifier"].value() == "anchor"
+                   and node.input(0) is read]
+        if len(anchors) != 1:
+            raise RuntimeError("Template needs one Stamps anchor connected to ReadDN1.")
+        anchor = anchors[0]
+        stamps = [node for node in self.nuke.allNodes()
+                  if "identifier" in node.knobs() and node["identifier"].value() == "wired"
+                  and "anchor" in node.knobs() and node["anchor"].value() == anchor.name()
+                  and node.input(0) is anchor]
+        if not stamps:
+            raise RuntimeError("Template denoise anchor needs a connected wired Stamps prototype.")
+        for node in (anchor, stamps[0]):
+            missing = {"title", "prev_title", "knobChanged"} - node.knobs().keys()
+            if missing:
+                raise RuntimeError(f"Template Stamps prototype {node.name()} is missing knobs: {', '.join(sorted(missing))}")
+        return anchor, stamps[0]
+
+    @temporary_cache_task
+    def _clone_stamp(self, prototype, name, title, xpos, ypos, input_node, anchor=None):
+        # Nuke serialization preserves user knobs, plugin buttons, and callbacks.
+        self._clear_selection()
+        callback = prototype["knobChanged"].value()
+        path = None
+        try:
+            prototype["knobChanged"].setValue("")
+            prototype["selected"].setValue(True)
+            with tempfile.NamedTemporaryFile(dir=cache_directory("temp"), suffix=".nk", delete=False) as handle:
+                path = handle.name
+            self.nuke.nodeCopy(path)
+            self._clear_selection()
+            node = self.nuke.nodePaste(path)
+            for key, value in (("name", name), ("title", title), ("prev_title", title),
+                               ("xpos", xpos), ("ypos", ypos), ("selected", False),
+                               ("showing", 0), ("toReconnect", False),
+                               ("lockCallbacks", False), ("auto_reconnect_by_title", False)):
+                self._set_optional_knob(node, key, value)
+            self._set_optional_knob(node, "prev_name", node.name())
+            if anchor is not None:
+                self._set_optional_knob(node, "anchor", anchor.name())
+            node.setInput(0, input_node)
+            node["knobChanged"].setValue(callback)
+            return node
+        finally:
+            prototype["knobChanged"].setValue(callback)
+            self._clear_selection()
+            if path:
+                os.unlink(path)
+
+    def _update_denoised_plates(self):
+        if not self.request.denoise_plates:
+            return
+        anchor, stamp = self._denoise_prototypes()
+        primary_read = self._required_node("ReadDN1")
+        base_x = self._node_position(primary_read, "xpos", 0)
+        read_y = self._node_position(primary_read, "ypos", 0)
+        retime_y = read_y + 180
+        anchor_y = retime_y + 180
+        stamp_y = anchor_y + 180
+        for offset, plate in enumerate(self.request.denoise_plates):
+            index = int(plate["read_index"])
+            xpos = base_x + offset * 250
+            read = primary_read if offset == 0 else self._create_node(
+                "Read", f"ReadDN{index}", xpos=xpos, ypos=read_y)
+            first, last = plate.get("source_first"), plate.get("source_last")
+            if first is None or last is None:
+                from denoise_template import native_sequence, resolve_source
+                source, first, last = resolve_source(native_sequence(self.nuke, plate["source"]))
+                if first is None or last is None:
+                    probe = self.nuke.nodes.Read()
+                    try:
+                        probe["file"].fromUserText(_normalize_path(source))
+                        first, last = int(probe["first"].value()), int(probe["last"].value())
+                    finally:
+                        self.nuke.delete(probe)
+            if last < first:
+                raise ValueError(f"Invalid source frame range for {plate['source']}")
+            dn_last = 1001 + last - first
+            self._set_knob(read["file"], plate["file"])
+            for key, value in (("file_type", "exr"), ("first", 1001), ("last", dn_last),
+                               ("origfirst", 1001), ("origlast", dn_last), ("origset", True),
+                               ("colorspace", "ACES - ACEScg")):
+                self._set_optional_knob(read, key, value)
+            source_label = escape(Path(plate["source"]).name).replace("[", "&#91;").replace("]", "&#93;")
+            self._set_knob(read["label"], source_label + "\n" + READ_NODE_LABEL)
+            output = self._create_node("Retime", f"RetimeDN{index}",
+                                       xpos=xpos, ypos=retime_y, inputs=[read])
+            for key, value in (
+                ("input.first", 1001), ("input.first_lock", True),
+                ("input.last", dn_last), ("input.last_lock", False),
+                ("output.first", 1001), ("output.first_lock", True),
+                ("output.last", dn_last), ("output.last_lock", False),
+                ("speed", 1.0), ("reverse", False), ("time", ""),
+            ):
+                self._set_optional_knob(output, key, value)
+            if offset == 0:
+                anchor.setInput(0, output)
+                self._set_knob(anchor["ypos"], anchor_y)
+                self._set_knob(stamp["ypos"], stamp_y)
+            else:
+                title = "degrain_" + plate["plate"]
+                new_anchor = self._clone_stamp(anchor, f"Anchor_DN{index}", title,
+                                               xpos, anchor_y, output)
+                self._clone_stamp(stamp, f"Stamp_DN{index}", title,
+                                  xpos, stamp_y, new_anchor, anchor=new_anchor)
+        for backdrop in self.nuke.allNodes("BackdropNode"):
+            if "DENOISE" in str(backdrop["label"].value()).upper():
+                right = base_x + (len(self.request.denoise_plates) - 1) * 250 + 180
+                self._set_knob(backdrop["bdwidth"], max(float(backdrop["bdwidth"].value()), right - self._node_position(backdrop, "xpos", 0)))
+                self._set_knob(backdrop["bdheight"], max(float(backdrop["bdheight"].value()), stamp_y + 100 - self._node_position(backdrop, "ypos", 0)))
+
     def _update_root(self):
         root = self.nuke.root()
         request = self.request
@@ -433,9 +542,11 @@ class _TemplateEditor:
         reformat3 = self._required_node("Reformat3")
         if "type" in reformat3.knobs():
             self._set_optional_knob(reformat3, "type", "to box")
-        self._set_optional_knob(reformat3, "box_width", self.request.format_width)
+        self._set_optional_knob(reformat3, "box_width", TARGET_ROOT_FORMAT_WIDTH)
         self._set_optional_knob(reformat3, "box_height", self.request.format_height)
-        self._set_optional_knob(reformat3, "box_fixed", True)
+        self._set_optional_knob(reformat3, "box_fixed", False)
+        self._set_optional_knob(reformat3, "resize", "width")
+        reformat3["disable"].setExpression(f"input.width <= {TARGET_ROOT_FORMAT_WIDTH}")
 
     def _update_info_backdrop(self):
         node = self._required_node('BackdropINFO')
@@ -511,6 +622,21 @@ class _TemplateEditor:
             read = self._required_node(f'Read{index}')
             retime = self._required_node(f'Retime{index}')
             frames = int(timing['frames'])
+            if timing.get('single_shot'):
+                source_first = int(timing.get('source_first', 1))
+                source_last = source_first + frames - 1
+                for key, value in (('first', source_first), ('origfirst', source_first),
+                                   ('last', source_last), ('origlast', source_last), ('origset', True)):
+                    self._set_knob(read[key], value)
+                if timing.get('input_colourspace'):
+                    self._set_knob(read['colorspace'], map_input_colorspace(timing['input_colourspace']))
+                for key, value in (('input.first', source_first), ('input.first_lock', True),
+                                   ('input.last', source_last), ('input.last_lock', False),
+                                   ('output.first', 1001), ('output.first_lock', True),
+                                   ('output.last', 1000 + frames), ('output.last_lock', False),
+                                   ('speed', 1.0), ('reverse', False), ('time', '')):
+                    self._set_optional_knob(retime, key, value)
+                continue
             speed = float(timing['speed'])
             source_first = float(timing['cut_start']) + 1  # Movie Read nodes are one-based.
             working_source_first = source_first - (self.request.head_handles or 0) * speed
@@ -578,7 +704,7 @@ class _TemplateEditor:
         self._set_optional_knob(read_dn, "origfirst", self.request.frame_first)
         self._set_optional_knob(read_dn, "origlast", self.request.frame_last)
         self._set_optional_knob(read_dn, "origset", True)
-        self._set_knob(read_dn["colorspace"], map_input_colorspace(self.request.colourspace))
+        self._set_knob(read_dn["colorspace"], "ACES - ACEScg")
         self._set_knob(read_dn["label"], READ_NODE_LABEL)
 
         self._configure_write_node(
@@ -681,6 +807,9 @@ class _TemplateEditor:
         return _normalize_path(os.path.relpath(target_path, script_dir))
 
     def _set_file_knob(self, knob, absolute_path: str):
+        if Path(absolute_path).suffix.lower() == '.exr':
+            from nuke_headless_tasks import resolve_preview_sequence_input
+            absolute_path = resolve_preview_sequence_input(absolute_path)[0]
         normalized_absolute = _normalize_path(absolute_path)
         from_user_text = getattr(knob, "fromUserText", None)
         if callable(from_user_text):

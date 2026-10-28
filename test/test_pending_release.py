@@ -36,6 +36,22 @@ class PendingCoreTests(unittest.TestCase):
         self.assertEqual(rm.parse_pending_notes(final), dict.fromkeys(rm.NOTE_SECTIONS, []))
         self.assertLess(final.index("## Unreleased"), final.index("## 1.1.0"))
 
+    def test_twelve_hour_timestamps_preserve_pending_notes_and_strip_for_release(self):
+        for time in ('12:00:00 AM', '12:00:00 PM', '09:04:49 PM'):
+            with self.subTest(time=time):
+                stamp = f'[2026-10-28 {time} +00:00]'
+                source = SOURCE.replace(STAMP, stamp)
+                notes = rm.parse_pending_notes(source)
+                self.assertEqual(notes['Added'], [f'{stamp} New feature'])
+                self.assertEqual(rm.release_note_text(f'{stamp} New feature'), 'New feature')
+                entry = rm.build_changelog_entry('1.1.0', '2026-10-28',
+                                                notes['Added'], [], notes['Fixed'])
+                final = rm.finalize_pending_release(source, entry)
+                self.assertNotIn(stamp, final)
+                self.assertTrue(final.endswith(HISTORY))
+        self.assertEqual(rm.release_note_text('[2026-07-01 02:30:00 PM +01:00] Summer fix'),
+                         'Summer fix')
+
     def test_timestamp_stripping_preserves_other_bracketed_notes(self):
         self.assertEqual(rm.release_note_text("[Windows] Fixed installer"), "[Windows] Fixed installer")
         draft = rm.build_release_draft("1.0.0", "patch", "2026-09-24",

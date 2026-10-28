@@ -158,7 +158,7 @@ Read {
  origfirst 1001
  origlast 1100
  origset true
- colorspace scene_linear
+ colorspace "ACES - ACEScg"
  name ReadDN1
  label "Fr. range: \[value first] - \[value last]\nRes: \[value width] * \[value height]"
  xpos 180

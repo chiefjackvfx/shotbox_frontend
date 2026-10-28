@@ -6,40 +6,57 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-27T21:04:49+00:00] Configure Deadline chunks and concurrent tasks per worker.
+- [2026-10-28 12:16:25 PM +00:00] Detect single-shot durations; support EXRs, metadata, and editable notes.
+- [2026-10-28 12:16:25 PM +00:00] Support sixteen single-shot layers with scrollable media review.
+
+- [2026-10-28 11:34:27 AM +00:00] Set up multiple denoised plates with connected Stamps branches.
+
+- [2026-10-27 09:04:49 PM +00:00] Configure Deadline chunks and concurrent tasks per worker.
 
 
-- [2026-10-27T21:01:17+00:00] Submit denoise profiles to Deadline with persistent job receipts.
-- [2026-10-27T21:01:17+00:00] Render local projects through the verified local Linux worker.
+- [2026-10-27 09:01:17 PM +00:00] Submit denoise profiles to Deadline with persistent job receipts.
+- [2026-10-27 09:01:17 PM +00:00] Render local projects through the verified local Linux worker.
 
 
-- [2026-10-27T20:28:03+00:00] Allow editing timeline names in import settings.
+- [2026-10-27 08:28:03 PM +00:00] Allow editing timeline names in import settings.
 
-- [2026-10-27T20:22:40+00:00] Import Resolve DRT timelines with constant-speed retimes and validation.
+- [2026-10-27 08:22:40 PM +00:00] Import Resolve DRT timelines with constant-speed retimes and validation.
 
-- [2026-10-27T20:15:48+00:00] Show additional original clip counts beside shot source filenames.
+- [2026-10-27 08:15:48 PM +00:00] Show additional original clip counts beside shot source filenames.
 
-- [2026-10-27T20:14:23+00:00] Test clip menus, timeline scoping, deduplication, and plate identity.
+- [2026-10-27 08:14:23 PM +00:00] Test clip menus, timeline scoping, deduplication, and plate identity.
 
 ### Changed
 
-- [2026-10-27T20:35:06+00:00] Extend timeline import and shot linking to sixteen video layers.
+- [2026-10-28 12:16:25 PM +00:00] Test movie durations, EXR thumbnails, notes, and Nuke playback.
 
-- [2026-10-27T20:34:11+00:00] Parallelize Linux denoise batches without changing image settings.
+- [2026-10-28 11:58:43 AM +00:00] Use dated 12-hour timestamps for pending changelog notes.
+
+- [2026-10-28 11:53:23 AM +00:00] Use plain denoise Retimes starting at 1001; increase spacing.
+
+- [2026-10-27 08:35:06 PM +00:00] Extend timeline import and shot linking to sixteen video layers.
+
+- [2026-10-27 08:34:11 PM +00:00] Parallelize Linux denoise batches without changing image settings.
 
 
-- [2026-10-27T20:31:54+00:00] Move project path button left of the destination path.
+- [2026-10-27 08:31:54 PM +00:00] Move project path button left of the destination path.
 
-- [2026-10-27T20:14:23+00:00] Move denoise into each original clip's context menu.
-- [2026-10-27T20:14:23+00:00] Limit batch denoise to the selected timeline's original clips.
-- [2026-10-27T20:14:23+00:00] Document source denoise scope and single/batch output naming.
+- [2026-10-27 08:14:23 PM +00:00] Move denoise into each original clip's context menu.
+- [2026-10-27 08:14:23 PM +00:00] Limit batch denoise to the selected timeline's original clips.
+- [2026-10-27 08:14:23 PM +00:00] Document source denoise scope and single/batch output naming.
 
 ### Fixed
 
-- [2026-10-27T21:01:17+00:00] Recover configured project shares when Deadline roots are empty.
+- [2026-10-28 12:19:44 PM +00:00] Set every denoised Read input transform to ACEScg.
+
+- [2026-10-28 12:19:10 PM +00:00] Preserve aspect ratios; only downscale sources wider than 4096.
+
+- [2026-10-28 12:16:25 PM +00:00] Copy complete EXR sequences and preserve native source frame ranges.
+
+- [2026-10-27 09:01:17 PM +00:00] Recover configured project shares when Deadline roots are empty.
 
 
-- [2026-10-27T20:14:23+00:00] Preserve selected plate outputs and ignore unrelated missing clips.
+- [2026-10-27 08:14:23 PM +00:00] Preserve selected plate outputs and ignore unrelated missing clips.
 
 ## 5.3.0 - 2026-10-27
 

@@ -32,10 +32,10 @@ from PyQt6.QtWidgets import (
     QLineEdit, QComboBox, QCheckBox, QSpinBox, QMenu, QHeaderView,
     QFileDialog, QMessageBox, QDialog, QProgressBar, QSpacerItem, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QRunnable, QThreadPool, QTimer
 from PyQt6.QtGui import QFont, QColor, QPixmap
 
-from timeline_limits import validate_video_track
+from timeline_limits import validate_video_track, MAX_VIDEO_LAYERS
 
 import create_nk
 import path_mapping
@@ -69,14 +69,14 @@ SHOT_TITLE_MAX_LENGTH = 50
 IMPORT_VERSION_PADDING = 3
 INITIAL_IMPORT_VERSION = 1
 INITIAL_IMPORT_VERSION_TAG = f"v{INITIAL_IMPORT_VERSION:0{IMPORT_VERSION_PADDING}d}"
-MAX_SINGLE_SHOT_CLIPS = 5
+MAX_SINGLE_SHOT_CLIPS = MAX_VIDEO_LAYERS
 IMPORT_API_TIMEOUT_SECONDS = 30.0
 IMPORT_API_RETRY_COUNT = 3
 IMPORT_API_RETRY_BACKOFF_SECONDS = 1.0
 SINGLE_SHOT_VIDEO_EXTENSIONS = {
-    ".mov", ".mp4", ".mxf", ".avi", ".mkv", ".r3d", ".braw", ".arx"
+    ".mov", ".mp4", ".mxf", ".avi", ".mkv", ".r3d", ".braw", ".arx", ".exr"
 }
-SINGLE_SHOT_VIDEO_FILTER = "Video Files (*.mov *.mp4 *.mxf *.avi *.mkv *.r3d *.braw *.arx);;All Files (*)"
+SINGLE_SHOT_VIDEO_FILTER = "Media Files (*.mov *.mp4 *.mxf *.avi *.mkv *.r3d *.braw *.arx *.exr);;All Files (*)"
 PROJECTS_UNC_PREFIX = "//192.168.10.20/projects/PROJECTS/"
 PROJECTS_DRIVE_PREFIX = "Z:/PROJECTS/"
 
@@ -133,6 +133,7 @@ class ParsedShot:
     requested_handles: Optional[int] = None
     timeline_inpoint: Optional[int] = None
     timeline_outpoint: Optional[int] = None
+    notes: str = ""
     detected_head_handles: Optional[int] = None
     detected_tail_handles: Optional[int] = None
 
@@ -171,6 +172,20 @@ class ParsedShot:
         if copied_paths:
             return copied_paths
         return [clip.filepath for clip in self.clips if clip.filepath != "offline"]
+
+
+
+def shot_note_lines(shot):
+    from media_colourspace import camera_note_lines
+    lines = camera_note_lines([(clip.track, clip.media_timing or {}) for clip in shot.clips])
+    for clip in shot.clips:
+        timing = clip.media_timing or {}
+        if timing.get('single_shot'):
+            prefix = '' if clip.track == 1 else f'V{clip.track} '
+            lines.append(f"{prefix}Source frames: {timing['source_first']}-{timing['source_last']} at {timing['fps']:g} fps")
+            if timing.get('input_colourspace'):
+                lines.append(f"{prefix}Input transform: {timing['input_colourspace']}")
+    return lines + shot.notes.splitlines()
 
 
 @dataclass 
@@ -548,6 +563,17 @@ class NukeScriptGenerator:
                 continue
             if not os.path.isfile(clip.filepath):
                 raise FileNotFoundError(f"Clip not found for copy: {clip.filepath}")
+            if Path(clip.filepath).suffix.lower() == '.exr':
+                from single_shot_media import exr_source
+                _, frames, _, _ = exr_source(clip.filepath)
+                destination = Path(plates_folder) / f'plate_{clip.track:02d}'
+                destination.mkdir(parents=True, exist_ok=True)
+                for frame in frames:
+                    target = destination / frame.name
+                    if frame.resolve() != target.resolve():
+                        shutil.copy2(frame, target)
+                clip.copied_filepath = str(destination / frames[0].name)
+                continue
             if clip.media_timing and clip.media_timing.get('signature'):
                 stat = os.stat(clip.filepath)
                 if (stat.st_size, stat.st_mtime_ns) != tuple(clip.media_timing['signature']):
@@ -634,7 +660,11 @@ class NukeScriptGenerator:
             raise RuntimeError(f"Shot {shot.name} has no primary clip.")
 
         primary_clip_path = primary_clip.copied_filepath or primary_clip.filepath
-        source_width, source_height = self._get_video_format(primary_clip_path)
+        primary_metadata = primary_clip.media_timing or {}
+        if primary_metadata.get('width') and primary_metadata.get('height'):
+            source_width, source_height = primary_metadata['width'], primary_metadata['height']
+        else:
+            source_width, source_height = self._get_video_format(primary_clip_path)
         width, height = create_nk.compute_target_root_format(source_width, source_height)
         frame_first = 1001
         frame_last = frame_first + max(shot.duration, 1) - 1
@@ -653,7 +683,36 @@ class NukeScriptGenerator:
             raise RuntimeError(f"Shot {shot.name} has no online plates to build a Nuke script from.")
 
         output_files = self._build_nuke_output_files(shot_folder, script_path, shot.name)
-        from media_colourspace import camera_note_lines
+        from denoise_paths import normalized_sources, source_identity, plate_identifier, resolve_output
+
+        # Number using the persisted source list, not the primary-first graph order.
+        sources = normalized_sources(shot.original_clip_paths)
+        identities = {}
+        for index, source in enumerate(sources, 1):
+            identities.setdefault(source_identity(source), plate_identifier(index, len(sources)))
+        denoise_plates = []
+        seen = set()
+        ordered_clips = [primary_clip] + [
+            c for c in sorted(shot.clips, key=lambda c: (c.track, c.name, c.filepath))
+            if c is not primary_clip and c.filepath != "offline"
+        ]
+        for graph_index, clip in enumerate(ordered_clips, 1):
+            source = clip.copied_filepath or clip.filepath
+            identity = source_identity(source)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            plate = identities[identity]
+            pattern, first, last = resolve_output(shot_folder, shot.name, plate)
+            timing = clip.media_timing or {}
+            denoise_plates.append({
+                "source": source, "source_identity": identity, "plate": plate,
+                "read_index": graph_index,
+                "file": self._relative_to_script_path(script_path, pattern),
+                "source_first": timing.get("source_first", 1) if timing.get("frames") else None,
+                "source_last": timing.get("source_last", timing.get("frames")),
+                "render_first": first, "render_last": last,
+            })
 
         return create_nk.GenerateNkRequest(
             template_path=str(create_nk.get_runtime_template_path()),
@@ -680,11 +739,12 @@ class NukeScriptGenerator:
             cut_duration=shot.cut_duration,
             head_handles=shot.head_handles,
             tail_handles=shot.tail_handles,
+            denoise_plates=denoise_plates,
             dn_exr_file=output_files["dn_exr_file"],
             comp_mov_file=output_files["comp_mov_file"],
             comp_exr_file=output_files["comp_exr_file"],
             preview_mp4_file=output_files["preview_mp4_file"],
-            shot_metadata_lines=camera_note_lines([(clip.track, clip.media_timing or {}) for clip in shot.clips]),
+            shot_metadata_lines=shot_note_lines(shot),
         )
 
     def _build_nuke_output_files(self, shot_folder: str, script_path: str, shot_name: str) -> Dict[str, str]:
@@ -778,6 +838,24 @@ class ThumbnailGenerator:
         if not os.path.isfile(video_path):
             print(f"[Thumbnail] Video not found: {video_path}")
             return None
+
+        if Path(video_path).suffix.lower() == '.exr':
+            try:
+                from single_shot_media import exr_source
+                from review_media import EXRSequenceReader, display_image
+                from thumbnail_colour import thumbnail_display_processor
+                _, files, _, _ = exr_source(video_path)
+                pixels = EXRSequenceReader.read_pixels(files[min(max(0, int(frame)), len(files) - 1)])
+                image = display_image(pixels, thumbnail_display_processor(input_colourspace or 'ACES - ACEScg'))
+                image = image.scaled(640, 360, Qt.AspectRatioMode.KeepAspectRatio,
+                                     Qt.TransformationMode.SmoothTransformation)
+                Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+                if not image.save(output_path, 'JPEG', 90):
+                    raise OSError(f'Could not save thumbnail: {output_path}')
+                return output_path
+            except Exception as exc:
+                print(f'[Thumbnail] Could not decode EXR {video_path}: {exc}')
+                return None
 
         if not input_colourspace:
             from media_colourspace import detect_input_colourspace
@@ -918,9 +996,7 @@ class DjangoImporter:
             "original_clip": shot.original_clip_name,
             "original_clips": shot.original_clip_paths,
         }
-        from media_colourspace import camera_note_lines
-
-        camera_lines = camera_note_lines([(clip.track, clip.media_timing or {}) for clip in shot.clips])
+        camera_lines = shot_note_lines(shot)
         if camera_lines:
             current = shot_data if created else self.api.get_shot(shot_id)
             if not isinstance(current, dict):
@@ -1760,6 +1836,8 @@ class XMLImportPage(QWidget):
         self,
         shot_name: str,
         clip_file_paths: List[str],
+        *, colourspace: str = DEFAULT_COLOURSPACE, automatic_colourspace: bool = True,
+        fps: float = 25,
     ):
         """Create a ParsedShot from ordered clip paths, using a 1001-based timeline convention."""
 
@@ -1770,35 +1848,28 @@ class XMLImportPage(QWidget):
         if not ordered_clip_paths:
             raise ValueError("At least one valid clip path is required to build a single shot.")
 
-        primary_duration_frames = ThumbnailGenerator.get_video_duration(ordered_clip_paths[0])
-
-        timeline_start_frame = 1001
-        timeline_end_frame = timeline_start_frame + max(0, primary_duration_frames - 1)
-
-        parsed_clips: List[ParsedClip] = []
-        for track_index, clip_file_path in enumerate(ordered_clip_paths, start=1):
-            clip_duration_frames = ThumbnailGenerator.get_video_duration(clip_file_path)
-            clip_end_frame = timeline_start_frame + max(0, clip_duration_frames - 1)
-            parsed_clips.append(
-                ParsedClip(
-                    name=os.path.basename(clip_file_path),
-                    filepath=clip_file_path,
-                    in_point=0,
-                    out_point=clip_duration_frames,
-                    duration=clip_duration_frames,
-                    start_frame=timeline_start_frame,
-                    end_frame=clip_end_frame,
-                    track=track_index,
-                )
-            )
-
+        from single_shot_media import probe_single_media
+        parsed_clips = []
+        for track_index, path in enumerate(ordered_clip_paths, 1):
+            source, timing = probe_single_media(
+                path, fallback_colourspace=colourspace,
+                automatic=automatic_colourspace, fallback_fps=fps)
+            frames = timing['frames']
+            parsed_clips.append(ParsedClip(
+                name=Path(source).name, filepath=source, in_point=0, out_point=frames,
+                duration=frames, start_frame=1001, end_frame=1000 + frames,
+                track=track_index, media_timing=timing))
+        primary_duration_frames = parsed_clips[0].duration
+        primary_fps = parsed_clips[0].media_timing['fps']
+        for clip in parsed_clips[1:]:
+            if abs(clip.media_timing['fps'] - primary_fps) > 0.01:
+                raise ValueError(f"{clip.name}: frame rate differs from the primary plate ({primary_fps:g} fps).")
         parsed_shot = ParsedShot(
-            index=0,
-            name=self._validated_shot_name(shot_name),
-            clips=parsed_clips,
-            duration=primary_duration_frames,
-            edit_inpoint=timeline_start_frame,
-            edit_outpoint=timeline_end_frame,
+            index=0, name=self._validated_shot_name(shot_name), clips=parsed_clips,
+            duration=primary_duration_frames, edit_inpoint=1001,
+            edit_outpoint=1000 + primary_duration_frames,
+            fps=parsed_clips[0].media_timing['fps'], cut_duration=primary_duration_frames,
+            head_handles=0, tail_handles=0,
         )
 
         return parsed_shot
@@ -1841,13 +1912,22 @@ class XMLImportPage(QWidget):
         job_name = getattr(creation_dialog, 'job_name', '')
         timeline_name = getattr(creation_dialog, 'timeline_name', '')
         selected_colourspace = creation_dialog.colourspace
+        automatic_colourspace = creation_dialog.automatic_colourspace
+        fps = creation_dialog.fps
+        local_work = self.local_work
+        handles = self.handles
 
-        try:
+        notes = creation_dialog.notes
+        nuke_path = self._current_nuke_path()
+        warnings = []
+        def create_shot():
             parsed_shot = self._build_parsed_shot_from_clip_files(
                 shot_name=entered_shot_name,
-                clip_file_paths=selected_clip_file_paths,
+                clip_file_paths=selected_clip_file_paths, colourspace=selected_colourspace,
+                automatic_colourspace=automatic_colourspace, fps=fps,
             )
 
+            parsed_shot.notes = notes
             shot_folder_path = self._create_single_shot_folder_structure(
                 output_directory_path=selected_output_directory_path,
                 shot_name=entered_shot_name,
@@ -1861,9 +1941,10 @@ class XMLImportPage(QWidget):
             )
             if not os.path.isfile(thumbnail_file_path):
                 ThumbnailGenerator.generate(
-                    video_path=selected_clip_file_paths[0],
+                    video_path=parsed_shot.primary_clip.filepath,
                     output_path=thumbnail_file_path,
-                    input_colourspace=selected_colourspace,
+                    input_colourspace=parsed_shot.primary_clip.media_timing['input_colourspace'],
+                    frame=0,
                 )
 
             if os.path.isfile(thumbnail_file_path):
@@ -1872,8 +1953,8 @@ class XMLImportPage(QWidget):
             # Create Nuke script
             nuke_script_generator = NukeScriptGenerator(
                 colourspace=selected_colourspace,
-                local_work=self.local_work,
-                nuke_path=self._current_nuke_path(),
+                local_work=local_work,
+                nuke_path=nuke_path,
             )
 
             resolved_project_name = job_name or os.path.basename(os.path.normpath(selected_output_directory_path))
@@ -1896,25 +1977,86 @@ class XMLImportPage(QWidget):
                         job_title=job_name,
                         timeline_title=timeline_name,
                         colourspace=selected_colourspace,
-                        handles=self.handles
+                        handles=handles
                     )
                     parsed_shot.db_shot_id = shot_id
                     
                     # Upload thumbnail
-                    if created and parsed_shot.thumbnail_path:
-                        importer.upload_thumbnail(shot_id, parsed_shot.thumbnail_path, parsed_shot.name)
+                    if parsed_shot.thumbnail_path:
+                        if not importer.upload_thumbnail(shot_id, parsed_shot.thumbnail_path, parsed_shot.name):
+                            warnings.append("Thumbnail was saved locally but could not be uploaded.")
                     
                     # Create default tasks
                     if created and create_tasks:
                         importer.create_default_tasks(shot_id, shot_name=parsed_shot.name)
                         
                 except Exception as db_error:
-                    print(f"[SingleShot] DB Error: {db_error}")
+                    warnings.append(f"Database update failed: {db_error}")
 
-            print(f"[SingleShot] Created: {shot_folder_path}")
+            if not parsed_shot.thumbnail_path:
+                warnings.append("The thumbnail could not be decoded. Check the input transform.")
+            return shot_folder_path, warnings
 
+        progress = QtWidgets.QProgressDialog("Inspecting media and creating shot…", "", 0, 0, self)
+        progress.setWindowTitle("Create Single Shot")
+        progress.setCancelButton(None)
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setMinimumDuration(0)
+        worker = SingleShotWorker(create_shot, self)
+        self._single_shot_worker = worker
+        def completed(folder, warnings):
+            progress.close()
+            if warnings:
+                QMessageBox.warning(self, "Shot created with warnings", f"Created {folder}\n\n" + "\n".join(warnings))
+            else:
+                QMessageBox.information(self, "Shot created", f"Created {folder}")
+        def failed(message):
+            progress.close()
+            QMessageBox.critical(self, "Single-shot creation failed", message)
+        worker.completed.connect(completed)
+        worker.failed.connect(failed)
+        worker.finished.connect(worker.deleteLater)
+        worker.start()
+        progress.exec()
+
+
+class SingleShotWorker(QThread):
+    completed = pyqtSignal(str, list)
+    failed = pyqtSignal(str)
+
+    def __init__(self, create, parent=None):
+        super().__init__(parent)
+        self.create = create
+
+    def run(self):
+        try:
+            folder, warnings = self.create()
+            self.completed.emit(folder, warnings)
         except Exception as error:
-            print(f"[SingleShot] Error: {error}")
+            self.failed.emit(str(error))
+
+
+class SingleShotInspectionSignals(QObject):
+    ready = pyqtSignal(int, list)
+
+
+class SingleShotInspection(QRunnable):
+    def __init__(self, generation, paths, options):
+        super().__init__()
+        self.generation, self.paths, self.options = generation, paths, options
+        self.signals = SingleShotInspectionSignals()
+
+    def run(self):
+        from single_shot_media import probe_single_media
+        results = []
+        for path in self.paths:
+            try:
+                _, timing = probe_single_media(path, **self.options)
+                results.append(timing)
+            except Exception as error:
+                results.append({'error': str(error)})
+        self.signals.ready.emit(self.generation, results)
+
 
 class SingleShotClipSlot(QWidget):
     """One ordered clip input slot used by the single-shot dialog."""
@@ -1924,6 +2066,7 @@ class SingleShotClipSlot(QWidget):
         self.index = index
         self._browse_callback = browse_callback
         self._clear_callback = clear_callback
+        self.setMinimumWidth(200)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(6)
@@ -1940,6 +2083,9 @@ class SingleShotClipSlot(QWidget):
         self.drop_label.setWordWrap(True)
         layout.addWidget(self.drop_label)
 
+        self.duration_label = QLabel()
+        self.duration_label.setWordWrap(True)
+        layout.addWidget(self.duration_label)
         self.path_line_edit = QLineEdit()
         self.path_line_edit.setPlaceholderText("Clip path...")
         layout.addWidget(self.path_line_edit)
@@ -1960,7 +2106,7 @@ class SingleShotClipSlot(QWidget):
 
 # This dialog collects: video file(s), output folder, shot name with DRAG AND DROP support
 class SingleShotCreationDialog(QDialog):
-    """Dialog to create one shot from one or more video files without an XML."""
+    """Create a standalone shot from movies and EXR sequences."""
 
     def __init__(self, parent=None, default_shot_name: str = "sho010", 
                  colourspace: str = "", handles: int = 25,
@@ -1987,12 +2133,20 @@ class SingleShotCreationDialog(QDialog):
         self.create_tasks = create_tasks
         self.skip_activity_logging = skip_activity_logging
 
-        main_layout = QVBoxLayout(self)
+        outer_layout = QVBoxLayout(self)
+        form = QWidget()
+        main_layout = QVBoxLayout(form)
+        main_layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
+        form_scroll = QtWidgets.QScrollArea()
+        form_scroll.setWidgetResizable(True)
+        form_scroll.setWidget(form)
+        outer_layout.addWidget(form_scroll)
         main_layout.setSpacing(12)
         main_layout.setContentsMargins(20, 20, 20, 20)
 
         # Instructions
-        instructions = QLabel("Drag clips left to right. The first clip is Primary/V1, then V2-V5.")
+        instructions = QLabel(f"Drag clips left to right: Primary/V1 through V{MAX_SINGLE_SHOT_CLIPS}. Drop an EXR frame or sequence folder into a clip slot.")
+        instructions.setWordWrap(True)
         instructions.setStyleSheet("color: #888; font-style: italic;")
         main_layout.addWidget(instructions)
 
@@ -2017,7 +2171,12 @@ class SingleShotCreationDialog(QDialog):
             )
             self.clip_slots.append(slot_widget)
             self.clip_slots_layout.addWidget(slot_widget, 1)
-        main_layout.addWidget(self.clip_slots_container)
+        clip_scroll = QtWidgets.QScrollArea()
+        clip_scroll.setWidgetResizable(True)
+        clip_scroll.setWidget(self.clip_slots_container)
+        clip_scroll.setMinimumHeight(250)
+        clip_scroll.setMaximumHeight(280)
+        main_layout.addWidget(clip_scroll)
         self._refresh_clip_slots()
 
         # Output directory drop zone
@@ -2081,6 +2240,26 @@ class SingleShotCreationDialog(QDialog):
 
         main_layout.addLayout(colourspace_row_layout)
 
+        self.auto_colourspace_checkbox = QCheckBox("Detect input transforms from media metadata")
+        self.auto_colourspace_checkbox.setChecked(True)
+        main_layout.addWidget(self.auto_colourspace_checkbox)
+        hint = QLabel("Unknown movie transforms use the selection above. Untagged EXRs default to ACEScg; disable detection to override.")
+        hint.setWordWrap(True)
+        main_layout.addWidget(hint)
+        fps_row = QHBoxLayout()
+        fps_row.addWidget(QLabel("EXR frame rate (when metadata is missing):"))
+        self.fps_spinbox = QtWidgets.QDoubleSpinBox()
+        self.fps_spinbox.setRange(1, 240)
+        self.fps_spinbox.setDecimals(3)
+        self.fps_spinbox.setValue(25)
+        fps_row.addWidget(self.fps_spinbox)
+        main_layout.addLayout(fps_row)
+        main_layout.addWidget(QLabel("Shot notes:"))
+        self.notes_edit = QtWidgets.QPlainTextEdit()
+        self.notes_edit.setPlaceholderText("Additional notes; camera and lens metadata are added automatically.")
+        self.notes_edit.setMaximumHeight(90)
+        main_layout.addWidget(self.notes_edit)
+
         # Options row
         options_row_layout = QHBoxLayout()
         
@@ -2136,8 +2315,49 @@ class SingleShotCreationDialog(QDialog):
         self.create_shot_button.setStyleSheet("background-color: #f05a20; color: white; font-weight: bold; padding: 8px 16px;")
         action_buttons_row_layout.addWidget(self.create_shot_button)
 
-        main_layout.addLayout(action_buttons_row_layout)
-    
+        outer_layout.addLayout(action_buttons_row_layout)
+        self._review_generation = 0
+        self._review_timer = QTimer(self)
+        self._review_timer.setSingleShot(True)
+        self._review_timer.setInterval(250)
+        self._review_timer.timeout.connect(self._inspect_media)
+        self.auto_colourspace_checkbox.toggled.connect(self._queue_media_review)
+        self.colourspace_combo_box.currentTextChanged.connect(self._queue_media_review)
+        self.fps_spinbox.valueChanged.connect(self._queue_media_review)
+
+    def _queue_media_review(self, *_args):
+        if not hasattr(self, '_review_timer'):
+            return
+        self._review_generation += 1
+        for slot in self.clip_slots:
+            slot.duration_label.setText('Inspecting media…' if slot.path_line_edit.text().strip() else '')
+        if self.isVisible():
+            self._review_timer.start()
+
+    def _inspect_media(self):
+        paths = [slot.path_line_edit.text().strip() for slot in self.clip_slots
+                 if slot.path_line_edit.text().strip()]
+        task = SingleShotInspection(self._review_generation, paths, dict(
+            fallback_colourspace=self.colourspace_combo_box.currentText(),
+            automatic=self.auto_colourspace_checkbox.isChecked(), fallback_fps=self.fps_spinbox.value()))
+        task.signals.ready.connect(self._media_inspected)
+        QThreadPool.globalInstance().start(task)
+
+    def _media_inspected(self, generation, results):
+        if generation != self._review_generation:
+            return
+        from media_colourspace import camera_note_lines
+        slots = [slot for slot in self.clip_slots if slot.path_line_edit.text().strip()]
+        for slot, timing in zip(slots, results):
+            if timing.get('error'):
+                slot.duration_label.setText('Cannot read media')
+                slot.duration_label.setToolTip(timing['error'])
+            else:
+                frames, fps = timing['frames'], timing['fps']
+                slot.duration_label.setText(f'{frames:,} frames · {frames / fps:.3f} seconds · {fps:g} fps')
+                slot.duration_label.setToolTip('\n'.join(camera_note_lines([(slot.index + 1, timing)]) +
+                                                       [f"Input transform: {timing['input_colourspace']}"]))
+
     def _toggle_db_options(self):
         """Show/hide database options based on checkbox."""
         db_enabled = self.add_to_db_checkbox.isChecked()
@@ -2157,8 +2377,8 @@ class SingleShotCreationDialog(QDialog):
     def _default_clip_drop_text(self, index: int) -> str:
         role = self._slot_role_label(index)
         if index == 0:
-            return f"🎬 {role} clip\nDrag and drop video here"
-        return f"🎞️ {role} clip\nDrag and drop video here"
+            return f"🎬 {role} clip\nDrag a movie or EXR frame here"
+        return f"🎞️ {role} clip\nDrag a movie or EXR frame here"
 
     def _apply_clip_slot_style(self, slot: SingleShotClipSlot, *, valid: bool, invalid: bool = False):
         if valid:
@@ -2236,6 +2456,7 @@ class SingleShotCreationDialog(QDialog):
             slot_text = self.selected_clip_file_paths[index] if index < len(self.selected_clip_file_paths) else ""
             self._set_clip_line_edit_text(index, slot_text)
             self._update_clip_slot_visual(index)
+        self._queue_media_review()
 
     def _refresh_clip_slots(self):
         self._set_selected_clip_paths(list(self.selected_clip_file_paths))
@@ -2250,7 +2471,19 @@ class SingleShotCreationDialog(QDialog):
         self._set_selected_clip_paths(updated_paths)
 
     def _add_clip_paths(self, clip_paths: List[str], start_index: Optional[int] = None):
-        valid_paths = [path for path in clip_paths if self._supported_video_file(path)]
+        from denoise_paths import source_identity
+        unique_paths = {}
+        expanded = []
+        for path in clip_paths:
+            if Path(path).is_dir():
+                expanded.extend(str(child) for child in sorted(Path(path).iterdir())
+                                if child.is_file() and child.suffix.lower() == '.exr')
+            else:
+                expanded.append(path)
+        for path in expanded:
+            if self._supported_video_file(path):
+                unique_paths.setdefault(source_identity(path), path)
+        valid_paths = list(unique_paths.values())
         if not valid_paths:
             return
 
@@ -2276,6 +2509,7 @@ class SingleShotCreationDialog(QDialog):
 
     def _on_clip_path_text_changed(self, index: int):
         self._update_clip_slot_visual(index)
+        self._queue_media_review()
 
     def _on_clip_path_editing_finished(self, index: int):
         slot = self.clip_slots[index]
@@ -2486,7 +2720,11 @@ class SingleShotCreationDialog(QDialog):
                 self.timeline_name_line_edit.setFocus()
                 return
 
-        self.selected_clip_file_paths = ordered_clip_paths[:MAX_SINGLE_SHOT_CLIPS]
+        from denoise_paths import source_identity
+        unique = {}
+        for path in ordered_clip_paths:
+            unique.setdefault(source_identity(path), path)
+        self.selected_clip_file_paths = list(unique.values())[:MAX_SINGLE_SHOT_CLIPS]
         self.selected_video_file_path = self.selected_clip_file_paths[0]
         self.selected_output_directory_path = output_directory_path
         self.entered_shot_name = shot_name
@@ -2494,6 +2732,9 @@ class SingleShotCreationDialog(QDialog):
         self.add_to_db = self.add_to_db_checkbox.isChecked()
         self.create_tasks = self.create_tasks_checkbox.isChecked()
         self.skip_activity_logging = self.skip_activity_logging_checkbox.isChecked()
+        self.notes = self.notes_edit.toPlainText().strip()
+        self.automatic_colourspace = self.auto_colourspace_checkbox.isChecked()
+        self.fps = self.fps_spinbox.value()
         self.job_name = self.job_name_line_edit.text().strip()
         self.timeline_name = self.timeline_name_line_edit.text().strip()
 

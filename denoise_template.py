@@ -13,6 +13,8 @@ from fractions import Fraction
 
 from nuke_headless_tasks import preview_input_exists, resolve_preview_sequence_input, resolve_preview_input_colourspace, map_input_colorspace
 
+from denoise_paths import normalized_sources, plate_identifier, output_stem, source_identity as canonical_source_identity
+
 TEMPLATE = Path(__file__).with_name("template_denoise_v01.nk")
 
 
@@ -20,7 +22,7 @@ def collect_tasks(job, files_io, *, source_path=None):
     """Collect source tasks, retaining full-shot plate numbering when selecting one."""
     def source_identity(source):
         local = str(Path(files_io.convert_path(source)).resolve())
-        return local, os.path.normcase(resolve_preview_sequence_input(local)[0])
+        return local, canonical_source_identity(local)
 
     tasks, seen_shots, seen_outputs = [], set(), set()
     skipped = 0
@@ -32,9 +34,7 @@ def collect_tasks(job, files_io, *, source_path=None):
                 continue
             seen_shots.add(key)
             sources = shot.get("original_clips") or [shot.get("original_clip")]
-            if isinstance(sources, str):
-                sources = [sources]
-            sources = list(dict.fromkeys(str(p).strip() for p in sources if p and str(p).strip().lower() not in {"none", "offline", "—"}))
+            sources = normalized_sources(sources)
             selected = [(index, source) for index, source in enumerate(sources, 1)
                         if source_path is None or source == str(source_path).strip()]
             if not base or not selected:
@@ -66,7 +66,7 @@ def collect_tasks(job, files_io, *, source_path=None):
                 if not exists:
                     skipped += 1
                     continue
-                plate = f"plate_{index:02d}" if len(sources) > 1 else None
+                plate = plate_identifier(index, len(sources))
                 destination = (os.path.normcase(local_base), plate)
                 if destination in seen_outputs:
                     continue
@@ -81,12 +81,7 @@ def collect_tasks(job, files_io, *, source_path=None):
 def output_directory(media):
     if media.get("mode", "overwrite") not in {"overwrite", "new"}:
         raise ValueError("Unknown denoise output mode.")
-    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(media["shot_name"])).strip(" .") or "shot"
-    if media.get("plate"):
-        if not re.fullmatch(r"plate_\d+", media["plate"]):
-            raise ValueError("Invalid denoise plate identifier.")
-        name += "_" + media["plate"]
-    stem = name + "_DN"
+    stem = output_stem(media["shot_name"], media.get("plate"))
     parent = Path(media["shot_dir"]).resolve() / "renders/precomp"
     parent.mkdir(parents=True, exist_ok=True)
     pattern = re.compile(re.escape(stem) + r"_v(\d+)$")
@@ -244,11 +239,11 @@ def prepare(nuke, request):
     reformat.setInput(0, offset)
     out_width, out_height = output_size(width, height)
     reformat["disable"].setValue(width <= 4096)
+    reformat["box_fixed"].setValue(False)
     if width > 4096:
         reformat["type"].setValue("to box")
         reformat["box_width"].setValue(out_width)
         reformat["box_height"].setValue(out_height)
-        reformat["box_fixed"].setValue(True)
         reformat["resize"].setValue("width")
         if reformat.knob("box_pixel_aspect"):
             reformat["box_pixel_aspect"].setValue(aspect)

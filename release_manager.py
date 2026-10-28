@@ -88,8 +88,10 @@ def bump_version(version: str, bump_kind: str) -> str:
 
 
 PENDING_TIMESTAMP_RE = re.compile(
-    r"^\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?"
-    r"(?:Z|[+-]\d{2}:\d{2})\]\s*"
+    r"^\[\d{4}-\d{2}-\d{2}(?:"
+    r"T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})"
+    r"| (?:0[1-9]|1[0-2]):[0-5]\d:[0-5]\d (?:AM|PM) [+-]\d{2}:\d{2}"
+    r")\]\s*"
 )
 
 

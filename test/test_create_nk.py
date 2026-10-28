@@ -150,6 +150,8 @@ class _FakeNode:
         "box_width",
         "box_height",
         "box_fixed",
+        "disable",
+        "resize",
     )
 
     def __init__(self, name, xpos=0, ypos=0):
@@ -377,6 +379,75 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(fake.toNode('Viewer1')['frame_range'].value(), '1011-1030')
             self.assertEqual(fake.toNode('Read1')['colorspace'].value(), 'ARRI LogC3 (EI800)')
 
+    def test_denoise_branches_use_plain_retimes_and_vertical_spacing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            request = self._request(Path(directory))
+            request.extra_plate_paths = ['second.mov', 'third.mov']
+            request.plate_timings = [{'frames': 100, 'cut_start': 10.25, 'speed': 0.5}] * 3
+            request.cut_duration = 6
+            request.head_handles = 2
+            request.denoise_plates = [dict(source=f'plate {index}.mov', source_first=1, source_last=100,
+                                         read_index=index, plate=f'plate_{4-index:02}', file=f'../plate{index}.####.exr')
+                                      for index in (1, 2, 3)]
+            restored = module.GenerateNkRequest.from_dict(request.to_dict())
+            self.assertEqual(restored.denoise_plates, request.denoise_plates)
+            fake = _FakeNuke()
+            anchor = _FakeNode('ExistingAnchor')
+            stamp = _FakeNode('ExistingStamp')
+            for node, identifier in ((anchor, 'anchor'), (stamp, 'wired')):
+                node._nuke = fake
+                node._knobs['identifier'] = _FakeKnob('identifier', identifier, node)
+                for key in ('title', 'prev_title', 'knobChanged'):
+                    node._knobs[key] = _FakeKnob(key, '', node)
+                fake.top_nodes.append(node)
+            stamp._knobs['anchor'] = _FakeKnob('anchor', anchor.name(), stamp)
+            anchor.setInput(0, fake.toNode('ReadDN1'))
+            stamp.setInput(0, anchor)
+            downstream = fake.toNode('WriteCompEXR')
+            downstream.setInput(0, stamp)
+            editor = module._TemplateEditor(fake)
+            def clone(prototype, name, title, xpos, ypos, input_node, anchor=None):
+                node = editor._create_node('NoOp', name, xpos=xpos, ypos=ypos, inputs=[input_node])
+                node._knobs['title'] = _FakeKnob('title', title, node)
+                if anchor:
+                    node._knobs['anchor'] = _FakeKnob('anchor', anchor.name(), node)
+                return node
+            with mock.patch.object(editor, '_clone_stamp', side_effect=clone):
+                editor.edit(restored)
+            self.assertIs(downstream.input(0), stamp)
+            self.assertIs(stamp.input(0), anchor)
+            self.assertIs(anchor.input(0), fake.toNode('RetimeDN1'))
+            for index in (1, 2, 3):
+                read = fake.toNode(f'ReadDN{index}')
+                self.assertEqual(read['colorspace'].value(), 'ACES - ACEScg')
+                self.assertEqual((read['first'].value(), read['last'].value()), (1001, 1100))
+                retime = fake.toNode(f'RetimeDN{index}')
+                self.assertEqual(retime.node_class, 'Retime')
+                self.assertEqual(retime['input.first'].value(), 1001)
+                self.assertEqual(retime['output.first'].value(), 1001)
+                self.assertEqual(retime['output.last'].value(), 1100)
+                self.assertEqual(retime['speed'].value(), 1.0)
+                self.assertEqual(retime['time'].value(), '')
+                self.assertEqual(retime['ypos'].value() - read['ypos'].value(), 180)
+                branch_anchor = anchor if index == 1 else fake.toNode(f'Anchor_DN{index}')
+                branch_stamp = stamp if index == 1 else fake.toNode(f'Stamp_DN{index}')
+                self.assertEqual(branch_anchor['ypos'].value() - retime['ypos'].value(), 180)
+                self.assertEqual(branch_stamp['ypos'].value() - branch_anchor['ypos'].value(), 180)
+            self.assertEqual(fake.toNode('Anchor_DN2')['title'].value(), 'degrain_plate_02')
+            self.assertEqual(fake.toNode('Stamp_DN3')['anchor'].value(), 'Anchor_DN3')
+            self.assertIs(fake.toNode('Stamp_DN2').input(0), fake.toNode('Anchor_DN2'))
+            self.assertEqual(fake.toNode('Stamp_DN2').dependent(fake.INPUTS), [])
+            self.assertEqual(fake.toNode('WriteDN1')['file'].value(), request.dn_exr_file)
+
+    def test_denoise_missing_stamps_prototypes_fails_before_save(self):
+        with tempfile.TemporaryDirectory() as directory:
+            request = self._request(Path(directory))
+            request.denoise_plates = [{'read_index': 1}]
+            fake = _FakeNuke()
+            with self.assertRaisesRegex(RuntimeError, 'Stamps anchor'):
+                module._TemplateEditor(fake).edit(request)
+            self.assertIsNone(fake.saved)
+
     def _request(self, root: Path, template_path: Path | None = None) -> module.GenerateNkRequest:
         template = template_path or root / "template_current.nk"
         primary_plate = root / "shot" / "plates" / "V1.mov"
@@ -525,6 +596,7 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(nuke.toNode("Retime1")["output.first"].value(), 1001)
             self.assertEqual(nuke.toNode("WriteDN1")["file"].value(), request.dn_exr_file)
             self.assertEqual(nuke.toNode("ReadDN1")["file"].value(), request.dn_exr_file)
+            self.assertEqual(nuke.toNode("ReadDN1")["colorspace"].value(), "ACES - ACEScg")
             self.assertEqual(nuke.toNode("WriteCompMov")["file"].value(), COMP_MOV_EXPR)
             self.assertEqual(nuke.toNode("ReadCompMov")["file"].value(), COMP_MOV_EXPR)
             self.assertEqual(nuke.toNode("WriteCompEXR")["file"].value(), COMP_EXR_EXPR)
@@ -532,7 +604,9 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(nuke.toNode("WriteCompMP4")["file"].value(), PREVIEW_MP4_EXPR)
             self.assertEqual(nuke.toNode("Reformat3")["box_width"].value(), 4096)
             self.assertEqual(nuke.toNode("Reformat3")["box_height"].value(), 2304)
-            self.assertEqual(nuke.toNode("Reformat3")["box_fixed"].value(), True)
+            self.assertEqual(nuke.toNode("Reformat3")["box_fixed"].value(), False)
+            self.assertEqual(nuke.toNode("Reformat3")["resize"].value(), "width")
+            self.assertEqual(nuke.toNode("Reformat3")["disable"].expression, "input.width <= 4096")
 
             slate = nuke.toNode("MS_slate_overlay")
             self.assertEqual(slate["projecttext"].value(), "ProjectA")
@@ -632,24 +706,13 @@ class CreateNkTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Template is missing required nodes: WriteCompMP4"):
                 module._TemplateEditor(nuke).edit(request)
 
-    def test_compute_target_root_format_uses_4096_width(self):
-        width, height = module.compute_target_root_format(6048, 4032)
-
-        self.assertEqual(width, 4096)
-        self.assertEqual(height, 2730)
-
-    def test_compute_target_root_format_varies_by_aspect_ratio(self):
-        width, height = module.compute_target_root_format(2048, 858)
-
-        self.assertEqual(width, 4096)
-        self.assertEqual(height, 1716)
-
-    def test_compute_target_root_format_rounds_to_nearest_even_height(self):
-        width, height = module.compute_target_root_format(1000, 501)
-
-        self.assertEqual(width, 4096)
-        self.assertEqual(height, 2052)
-        self.assertEqual(height % 2, 0)
+    def test_compute_target_root_format_caps_width_without_upscaling(self):
+        cases = [((6048, 4032), (4096, 2731)), ((2048, 858), (2048, 858)),
+                 ((1000, 501), (1000, 501)), ((2160, 8192), (2160, 8192)),
+                 ((4096, 2160), (4096, 2160)), ((8192, 2160), (4096, 1080))]
+        for source, expected in cases:
+            with self.subTest(source=source):
+                self.assertEqual(module.compute_target_root_format(*source), expected)
 
 
 if __name__ == "__main__":

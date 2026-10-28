@@ -122,7 +122,7 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
             self.assertEqual(request.artist_name, "Jack")
             self.assertEqual(request.colourspace, generator.colourspace)
             self.assertEqual(request.format_width, 4096)
-            self.assertEqual(request.format_height, 2730)
+            self.assertEqual(request.format_height, 2731)
             self.assertEqual(Path(request.template_path).name, "template_current.nk")
             self.assertEqual(Path(request.primary_plate_path).name, "plate.mov")
             self.assertEqual([Path(path).name for path in request.extra_plate_paths], ["plate_2.mov"])
@@ -130,6 +130,26 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
             self.assertEqual(request.comp_mov_file, "../renders/comp/seq010_v001.mov")
             self.assertEqual(request.comp_exr_file, "../renders/comp/seq010_v001/seq010_v001_####.exr")
             self.assertEqual(request.preview_mp4_file, "../renders/precomp/previews/seq010_v001.mp4")
+
+    def test_denoise_descriptors_use_persisted_order_and_deduplicate_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            def clip(name, track):
+                path = str(root / (name + '.mov'))
+                return module.ParsedClip(name=name, filepath=path, copied_filepath=path,
+                                         in_point=0, out_point=1, duration=10,
+                                         start_frame=1001, end_frame=1010, track=track)
+            second, primary, duplicate = clip('second', 2), clip('primary', 1), clip('second', 3)
+            offline = clip('offline', 4)
+            offline.filepath, offline.copied_filepath = 'offline', None
+            shot = module.ParsedShot(index=0, name='shot', clips=[second, primary, duplicate, offline],
+                                     duration=10, edit_inpoint=0, edit_outpoint=10)
+            generator = module.NukeScriptGenerator()
+            with mock.patch.object(generator, '_get_video_format', return_value=(1920, 1080)):
+                request = generator._build_create_nk_request(shot, str(root), str(root/'scripts/shot.nk'), 'project')
+            self.assertEqual([p['plate'] for p in request.denoise_plates], ['plate_02', 'plate_01'])
+            self.assertEqual([p['read_index'] for p in request.denoise_plates], [1, 2])
+            self.assertIn('../renders/precomp/shot_plate_02_DN_v001/', request.denoise_plates[0]['file'])
 
     def test_single_shot_folder_structure_uses_new_assets_scaffold(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -207,11 +227,10 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
     def test_build_parsed_shot_from_clip_files_orders_tracks_and_uses_primary_range(self):
         page = module.XMLImportPage.__new__(module.XMLImportPage)
 
-        with mock.patch.object(
-            module.ThumbnailGenerator,
-            "get_video_duration",
-            side_effect=[12, 12, 8, 15],
-        ):
+        with mock.patch('single_shot_media.probe_single_media', side_effect=[
+            (f'/tmp/V{i}.mov', {'frames': frames, 'fps': 25, 'single_shot': True})
+            for i, frames in enumerate((12, 8, 15), 1)
+        ]):
             shot = module.XMLImportPage._build_parsed_shot_from_clip_files(
                 page,
                 shot_name="seq010",
@@ -627,13 +646,13 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
             dialog.deleteLater()
             self.app.processEvents()
 
-    def test_single_shot_dialog_clip_slots_expand_compact_and_cap_at_five(self):
+    def test_single_shot_dialog_clip_slots_expand_compact_and_cap_at_sixteen(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             dialog = module.SingleShotCreationDialog(add_to_db=False)
             try:
                 clips = []
-                for index in range(6):
+                for index in range(17):
                     clip_path = root / f"clip_{index + 1}.mov"
                     clip_path.write_bytes(b"clip")
                     clips.append(str(clip_path))
@@ -648,17 +667,17 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
                 self.assertEqual(dialog.clip_slots[2].role_label.text(), "V3")
 
                 dialog._add_clip_paths(clips[2:], start_index=2)
-                self.assertEqual(dialog.selected_clip_file_paths, clips[:5])
-                self.assertEqual(sum(1 for slot in dialog.clip_slots if not slot.isHidden()), 5)
-                self.assertEqual(dialog.clip_slots[4].role_label.text(), "V5")
+                self.assertEqual(dialog.selected_clip_file_paths, clips[:16])
+                self.assertEqual(sum(1 for slot in dialog.clip_slots if not slot.isHidden()), 16)
+                self.assertEqual(dialog.clip_slots[15].role_label.text(), "V16")
 
                 dialog._clear_clip_slot(1)
-                self.assertEqual(dialog.selected_clip_file_paths, [clips[0], clips[2], clips[3], clips[4]])
+                self.assertEqual(dialog.selected_clip_file_paths, [clips[0]] + clips[2:16])
                 self.assertEqual(dialog.clip_slots[1].path_line_edit.text(), clips[2])
                 self.assertEqual(dialog.clip_slots[2].path_line_edit.text(), clips[3])
                 self.assertEqual(dialog.clip_slots[3].path_line_edit.text(), clips[4])
-                self.assertEqual(sum(1 for slot in dialog.clip_slots if not slot.isHidden()), 5)
-                self.assertEqual(dialog.clip_slots[4].path_line_edit.text(), "")
+                self.assertEqual(sum(1 for slot in dialog.clip_slots if not slot.isHidden()), 16)
+                self.assertEqual(dialog.clip_slots[15].path_line_edit.text(), "")
             finally:
                 dialog.close()
                 dialog.deleteLater()
