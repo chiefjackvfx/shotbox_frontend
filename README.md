@@ -72,6 +72,45 @@ the change, with identical decoded frames. See
 [batch preview verification](docs/PREVIEW_BATCH_VERIFICATION.md) for measurements,
 test commands, and the limits of this comparison.
 
+## Houdini job assets
+
+In NukeDash, open the **Job Assets** menu (left-click or right-click) and choose
+**Create CG Asset**. Enter a new asset name, select camera exports, then use
+**Inspect Cameras** to import them in background Houdini and calculate duration.
+ShotBox discovers `*_hou.py` exports from job, timeline and shot matchmove export
+folders; **Browse** adds other 3DE Houdini Python exports. Only selected files
+are executed, when you inspect them. No camera is required for an empty scene.
+
+FPS defaults to 25. Cameras and their keyed hierarchies are shifted to frame
+1001, preserving frame spacing. The longest selected camera sets the duration;
+**Override camera duration** allows another frame count. Static cameras or
+exports without detectable keyframes require a manual duration. Inspect again
+after changing the selection, source files or FPS.
+
+**Create and Open** saves `job_assets/cg/<name>/<name>_v001.hip`, creates `geo/`
+and `assets/`, sets `$JOB` to the asset folder, and launches Houdini. Existing
+`Job_Assets` folders are reused. Creation requires a new name; version existing
+assets in Houdini. Filename buttons beside Job Assets open each asset's latest
+numeric `.hip` version; right-click a button to open its folder in Explorer.
+
+Set **Houdini Executable** in Settings if Houdini is not available through `HFS`
+or `PATH`. Its matching `hython` is required, together with an available
+commercial licence. Workers use factory Houdini paths and isolated preferences;
+opening the saved `.hip` directly bypasses the personal `123.py` new-scene
+picker. The original startup script is not modified.
+
+Run the live creation/reopening check with an available licence:
+
+```bash
+venv/bin/python test/houdini_cg_acceptance.py --houdini /path/to/houdini
+```
+
+Add `--export /path/to/camera_hou.py` once per real camera export to validate
+those files. Without exports, the check generates two representative cameras.
+The check creates all scenes under the protected application cache and removes
+them afterward. Interactive opening and the absence of a competing startup
+dialog should also be checked in the desktop application.
+
 ## Cache and temporary files
 
 Runtime caches and disposable working files live in `.cache` beside `main.py`,
@@ -80,6 +119,9 @@ thumbnail uploads, exports, and Nuke/3DE requests use `.cache/temp`. Runtime
 setup downloads and disposable installation files also use `.cache/temp`,
 protected while setup runs. Persistent Python, setup tools and environment
 backups live under `.runtime` and are not deleted by Clear Cache.
+Houdini CG preparation uses `.cache/temp/houdini-cg-*`, protected until its
+worker exits. It includes isolated worker preferences, requests, diagnostics
+and prepared scenes; these files are disposable.
 Proxy JPEGs sit directly inside each job folder, named
 `original_frame_name_<unique_id>.jpg`. The stable suffix identifies the source
 path, keeping matching names from different shots and sequences separate.

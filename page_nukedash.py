@@ -39,6 +39,7 @@ from asset_paths import asset_path
 from nuke_lock_worker import NukeLockWorker
 import project_load_profiler
 import nukedash_excel_export
+import cg_asset_actions
 from nuke_lock_utils import display_owner_name, parse_lock_info
 from settings import get_settings_manager
 from timeline_matchmove_dialog import TimelineMatchmoveCandidate, TimelineMatchmoveDialog
@@ -1706,6 +1707,10 @@ class page_nukedash(QMainWindow):
         open_assets.setEnabled(self._resolve_job_assets_dir() is not None or self._resolved_job_matchmove_dir() is not None)
         open_assets.triggered.connect(self._on_open_job_assets_clicked)
         menu.addSeparator()
+        create_cg = menu.addAction("Create CG Asset")
+        create_cg.setEnabled(self._resolve_job_assets_dir() is not None)
+        create_cg.triggered.connect(lambda checked=False: cg_asset_actions.create_for_job(self))
+        menu.addSeparator()
         try:
             directory = self._resolved_job_matchmove_dir()
             projects = widgets.list_matchmove_projects(str(directory)) if directory else []
@@ -2108,6 +2113,7 @@ class page_nukedash(QMainWindow):
             )
             self._set_timeline_matchmove_state([], None)
             self._set_job_matchmove_state([], None)
+            cg_asset_actions.refresh_buttons(self, loading=True)
             return
 
         legacy_assets = self._legacy_timeline_assets_dir()
@@ -2124,6 +2130,7 @@ class page_nukedash(QMainWindow):
         )
         self._refresh_timeline_matchmove_state()
         self._refresh_job_matchmove_state()
+        cg_asset_actions.refresh_buttons(self)
 
     def _open_assets_directory(self, folder_path: Path | None, folder_label: str) -> None:
         if folder_path is None:

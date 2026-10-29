@@ -70,6 +70,18 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
                 settings_manager=InMemorySettingsManager()
             )
 
+    def test_houdini_executable_browse_and_settings_persistence(self):
+        page = self._make_settings_page()
+        self.addCleanup(page.close)
+        self.assertEqual(page.houdini_exe_path_edit.text(), "")
+        with mock.patch.object(settings.QFileDialog, "getOpenFileName", return_value=("/Houdini/bin/houdini", "")):
+            page.houdini_exe_browse_btn.click()
+        self.assertEqual(page._settings.get("houdini_exe_path"), "")
+        page._save_all_settings(automatic=True)
+        self.assertEqual(page._settings.get("houdini_exe_path"), "/Houdini/bin/houdini")
+        page._load_current_values()
+        self.assertEqual(page.houdini_exe_path_edit.text(), "/Houdini/bin/houdini")
+
     def _update_status(self, *, can_update=True):
         return settings.app_update.UpdateStatus(
             supported=True,

@@ -116,6 +116,7 @@ DEFAULT_SETTINGS = {
     "deadline_chunk_size": 10,
     "deadline_concurrent_tasks": 1,
     "threede_exe_path": "",
+    "houdini_exe_path": "",
     "houdini_user_pref_dir": "",
     
     # UI density settings
@@ -581,6 +582,15 @@ class SettingsPage(QWidget):
         self.threede_exe_browse_btn.setFixedWidth(80)
         three_de_path_layout.addWidget(self.threede_exe_browse_btn)
         preview_layout.addRow("3DE Executable:", three_de_path_layout)
+
+        houdini_exe_row = QHBoxLayout()
+        self.houdini_exe_path_edit = QLineEdit()
+        self.houdini_exe_path_edit.setPlaceholderText("Auto-detect using HFS or PATH")
+        houdini_exe_row.addWidget(self.houdini_exe_path_edit)
+        self.houdini_exe_browse_btn = QPushButton("Browse")
+        self.houdini_exe_browse_btn.setFixedWidth(80)
+        houdini_exe_row.addWidget(self.houdini_exe_browse_btn)
+        preview_layout.addRow("Houdini Executable:", houdini_exe_row)
 
         container_layout.addWidget(preview_group)
 
@@ -1183,6 +1193,7 @@ class SettingsPage(QWidget):
         self.deadline_chunk_size_spin.setEnabled(self.deadline_chunked_check.isChecked())
         self.deadline_concurrent_tasks_spin.setValue(self._settings.get("deadline_concurrent_tasks", 1))
         self.threede_exe_path_edit.setText(self._settings.get("threede_exe_path", ""))
+        self.houdini_exe_path_edit.setText(self._settings.get("houdini_exe_path", ""))
         self._refresh_plugins_panel()
         self.houdini_pref_combo.setCurrentText(self._settings.get("houdini_user_pref_dir", ""))
         self._refresh_houdini_plugin_panel()
@@ -1355,6 +1366,7 @@ class SettingsPage(QWidget):
         # Browse Nuke executable
         self.nuke_exe_browse_btn.clicked.connect(self._on_browse_nuke_exe)
         self.threede_exe_browse_btn.clicked.connect(self._on_browse_threede_exe)
+        self.houdini_exe_browse_btn.clicked.connect(self._on_browse_houdini_exe)
         self.threede_exe_path_edit.textChanged.connect(self._refresh_plugins_panel)
         self.install_3de_plugins_btn.clicked.connect(self._on_install_3de_plugins)
         self.houdini_pref_combo.currentTextChanged.connect(self._refresh_houdini_plugin_panel)
@@ -1505,6 +1517,7 @@ class SettingsPage(QWidget):
         self._set_pending_setting("deadline_chunk_size", self.deadline_chunk_size_spin.value(), save=False)
         self._set_pending_setting("deadline_concurrent_tasks", self.deadline_concurrent_tasks_spin.value(), save=False)
         self._set_pending_setting("threede_exe_path", self.threede_exe_path_edit.text().strip(), save=False)
+        self._set_pending_setting("houdini_exe_path", self.houdini_exe_path_edit.text().strip(), save=False)
         self._set_pending_setting("houdini_user_pref_dir", self.houdini_pref_combo.currentText().strip(), save=False)
         
         # Debug modes
@@ -1632,6 +1645,7 @@ class SettingsPage(QWidget):
             self._emit_saved_setting("preview_overwrite", self.preview_overwrite_check.isChecked())
             self._emit_saved_setting("nuke_exe_path", self.nuke_exe_path_edit.text().strip())
             self._emit_saved_setting("threede_exe_path", self.threede_exe_path_edit.text().strip())
+            self._emit_saved_setting("houdini_exe_path", self.houdini_exe_path_edit.text().strip())
 
             # UI density settings
             self._emit_saved_setting(
@@ -1830,6 +1844,11 @@ class SettingsPage(QWidget):
             self._refresh_houdini_plugin_panel()
         self.houdini_status_label.setText(message)
         (QMessageBox.warning if failed else QMessageBox.information)(self, "Houdini Plugin Installation", message)
+
+    def _on_browse_houdini_exe(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Select Houdini Executable", "", "All Files (*)")
+        if path:
+            self.houdini_exe_path_edit.setText(path)
 
     def _on_browse_threede_exe(self):
         """Browse for 3DE executable path."""

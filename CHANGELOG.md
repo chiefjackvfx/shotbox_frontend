@@ -6,6 +6,9 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-29 12:11:48 PM +00:00] Create job CG assets with cameras and Houdini launchers.
+- [2026-10-29 12:11:48 PM +00:00] Test Houdini asset timing, cancellation, saving, and dashboard integration.
+
 - [2026-10-29 11:37:46 AM +00:00] Open job matchmove projects through a separate filename button.
 
 - [2026-10-28 03:49:30 PM +00:00] Test Deadline cache cleanup, recovery, and active-worker protection.
@@ -49,6 +52,8 @@ All notable frontend publish changes should be documented in this file.
 - [2026-10-27 08:14:23 PM +00:00] Test clip menus, timeline scoping, deduplication, and plate identity.
 
 ### Changed
+
+- [2026-10-29 12:20:57 PM +00:00] Add humorous Houdini licence errors suggesting checking with Jack.
 
 - [2026-10-29 11:42:56 AM +00:00] Show separate job 3DE buttons; wrap projects across rows.
 - [2026-10-29 11:42:56 AM +00:00] Document and test multiple projects, version refreshes, and removal.
