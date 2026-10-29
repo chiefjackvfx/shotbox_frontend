@@ -8,6 +8,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-10-29 03:46:05 PM +00:00] Style Houdini asset buttons like 3DE with orange accents.
+
 ### Fixed
 
 ## 5.4.1 - 2026-10-29

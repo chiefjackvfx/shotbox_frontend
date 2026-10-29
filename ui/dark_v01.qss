@@ -225,7 +225,8 @@ QPushButton:disabled {
 
 QToolButton#btn_open_timeline_assets,
 QToolButton#btn_open_job_assets,
-QToolButton#btn_open_job_matchmove {
+QToolButton#btn_open_job_matchmove,
+QToolButton#btn_open_job_cg {
     background-color: #2F3542;
     color: #D4D4D4;
     border: 2px solid #404754;
@@ -237,7 +238,8 @@ QToolButton#btn_open_job_matchmove {
 
 QToolButton#btn_open_timeline_assets:hover,
 QToolButton#btn_open_job_assets:hover,
-QToolButton#btn_open_job_matchmove:hover {
+QToolButton#btn_open_job_matchmove:hover,
+QToolButton#btn_open_job_cg:hover {
     background-color: #FF6B35;
     border-color: #FF6B35;
     color: #FFFFFF;
@@ -245,14 +247,16 @@ QToolButton#btn_open_job_matchmove:hover {
 
 QToolButton#btn_open_timeline_assets:pressed,
 QToolButton#btn_open_job_assets:pressed,
-QToolButton#btn_open_job_matchmove:pressed {
+QToolButton#btn_open_job_matchmove:pressed,
+QToolButton#btn_open_job_cg:pressed {
     background-color: #D85A28;
     border-color: #D85A28;
 }
 
 QToolButton#btn_open_timeline_assets:disabled,
 QToolButton#btn_open_job_assets:disabled,
-QToolButton#btn_open_job_matchmove:disabled {
+QToolButton#btn_open_job_matchmove:disabled,
+QToolButton#btn_open_job_cg:disabled {
     background-color: #252931;
     border-color: #2F3542;
     color: #6B7280;
@@ -265,7 +269,8 @@ QToolButton#btn_open_job_assets::menu-indicator {
     right: 6px;
 }
 
-QToolButton#btn_open_job_matchmove { padding: 6px 12px; }
+QToolButton#btn_open_job_matchmove,
+QToolButton#btn_open_job_cg { padding: 6px 12px; }
 
 /* Flat Buttons */
 QPushButton[flat="true"] {
@@ -945,6 +950,37 @@ QToolButton#btn_open_timeline_assets[has_matchmove="true"]:pressed {
 QPushButton#btn_open_matchmove[has_matchmove="true"]:disabled,
 QToolButton#btn_open_job_matchmove[has_matchmove="true"]:disabled,
 QToolButton#btn_open_timeline_assets[has_matchmove="true"]:disabled {
+    background-color: #252931;
+    border-color: #404754;
+    color: #818793;
+}
+
+/* Houdini project identity: the same asset-button treatment in orange. */
+QToolButton#btn_open_job_cg {
+    background-color: #3D2C24;
+    border-color: #B45B24;
+    border-left-color: #FF6600;
+    border-left-width: 3px;
+    color: #FFE0C4;
+}
+
+QToolButton#btn_open_job_cg:hover {
+    background-color: #503525;
+    border-color: #FF8A3D;
+    color: #FFF0E3;
+}
+
+QToolButton#btn_open_job_cg:focus {
+    border-color: #FFBA80;
+}
+
+QToolButton#btn_open_job_cg:pressed {
+    background-color: #61402A;
+    border-color: #FF9B59;
+    color: #FFFFFF;
+}
+
+QToolButton#btn_open_job_cg:disabled {
     background-color: #252931;
     border-color: #404754;
     color: #818793;
