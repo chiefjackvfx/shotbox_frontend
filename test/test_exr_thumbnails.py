@@ -555,6 +555,55 @@ class EXRThumbnailTests(unittest.TestCase):
             self.assertEqual(read.call_count, 2)  # Initial still and proxy, then cache reuse.
             folder_menu.hide()
 
+    def test_matchmove_sequence_menu_reuses_previews_and_selects_correct_sequence(self):
+        from test.test_shotcard_matchmove import ShotCardMatchmoveTests
+
+        fixture = ShotCardMatchmoveTests()
+        self.addCleanup(fixture.doCleanups)
+        root = Path(self.temporary.name)
+        frames = []
+        pixels = np.full((80, 160), 0.25, dtype=np.float32)
+        for name in ("plateA", "plateB"):
+            folder = root / "renders" / "precomp" / name
+            folder.mkdir(parents=True)
+            frame = folder / f"{name}.1001.exr"
+            OpenEXR.File({}, {channel: pixels.copy() for channel in "RGB"}).write(str(frame))
+            second = folder / f"{name}.1002.exr"
+            second.write_bytes(frame.read_bytes())
+            frames.append((str(frame), str(second)))
+        work = root / "shot_assets" / "matchmove" / "work"
+        work.mkdir(parents=True)
+        (work / "sho010_matchmove_v001.3de").touch()
+        card, _ = fixture._make_card(str(root))
+        menu = QMenu(card)
+        self.addCleanup(menu.deleteLater)
+        with mock.patch.object(exr_thumbnails.EXRThumbnailLoader, "instance", return_value=self.loader), \
+                mock.patch.object(exr_thumbnails, "read_thumbnail", wraps=exr_thumbnails.read_thumbnail) as read, \
+                mock.patch.object(card, "_create_matchmove_project") as create:
+            card._populate_assets_menu(menu)
+            create_menu = next(action.menu() for action in menu.actions() if action.text() == "Create Matchmove")
+            sequence_menus = [action.menu() for action in create_menu.actions()]
+            self.assertEqual([child.title() for child in sequence_menus], ["plateA", "plateB"])
+            previews = [child.findChild(exr_thumbnails.EXRMenuPreview) for child in sequence_menus]
+            for index, preview in enumerate(previews):
+                self.assertEqual(preview._frames, frames[index])
+                self.assertFalse(preview.isVisible())
+            read.assert_not_called()
+            create.assert_not_called()
+            create_menu.popup(QPoint(100, 100))
+            create_menu.setActiveAction(sequence_menus[0].menuAction())
+            self.wait_for(lambda: previews[0].isVisible() and bool(previews[0]._proxy_pixmaps))
+            self.assertFalse(previews[0].geometry().intersects(create_menu.geometry()))
+            create_menu.setActiveAction(sequence_menus[1].menuAction())
+            self.wait_for(lambda: previews[1].isVisible() and bool(previews[1]._proxy_pixmaps))
+            self.assertFalse(previews[0].isVisible())
+            self.assertEqual(sequence_menus[1].actions()[0].text(), "Create Matchmove")
+            sequence_menus[1].actions()[0].trigger()
+            create.assert_called_once()
+            self.assertEqual(Path(create.call_args.args[0].folder_path).name, "plateB")
+            create_menu.hide()
+            self.assertFalse(previews[1].isVisible())
+
     def test_preview_uses_left_side_when_right_side_has_no_space(self):
         menu = QMenu()
         menu.addAction("Open Folder")

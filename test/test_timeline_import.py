@@ -336,8 +336,7 @@ def test_missing_otio_identifies_the_app_interpreter_and_setup_script(tmp_path):
     assert ('setup_runtime.ps1' if os.name == 'nt' else 'setup_runtime.sh') in str(error.value)
 
 
-def test_frontend_sidecar_records_uneven_handles_and_database_payload_is_unchanged(tmp_path):
-    import json
+def test_import_omits_sidecar_and_preserves_uneven_handles_and_database_payload(tmp_path):
     from import_xml_v2 import DjangoImporter, NukeScriptGenerator
 
     path, info = media_file(tmp_path)
@@ -346,16 +345,14 @@ def test_frontend_sidecar_records_uneven_handles_and_database_payload_is_unchang
     shot = prepared.shots[0]
     shot.name = 'sho010'
     folder = NukeScriptGenerator().create_shot_folder(shot, str(tmp_path / 'output'), 'edit')
-    metadata = json.loads(Path(folder, 'shot_assets', 'timeline_import.json').read_text())
-    assert (metadata['head_handles'], metadata['tail_handles'], metadata['requested_handles']) == (5, 7, 25)
-    assert metadata['cut_duration'] == 20
-    assert metadata['working_first'] == 1001
-    assert metadata['schema_version'] == 3
-    assert (metadata['cut_first'], metadata['cut_last']) == (1006, 1025)
-    assert (metadata['timeline_inpoint'], metadata['timeline_outpoint']) == (200, 220)
-    assert (metadata['edit_inpoint'], metadata['edit_outpoint']) == (200, 220)
-    assert metadata['plates'][0]['local_path'] == path
-    assert Path(metadata['plates'][0]['copied_path']).read_bytes() == Path(path).read_bytes()
+    assert not list(Path(folder).rglob('timeline_import.json'))
+    assert (shot.head_handles, shot.tail_handles, shot.requested_handles) == (5, 7, 25)
+    assert shot.cut_duration == 20
+    assert (shot.cut_first, shot.cut_last) == (1006, 1025)
+    assert (shot.timeline_inpoint, shot.timeline_outpoint) == (200, 220)
+    assert (shot.edit_inpoint, shot.edit_outpoint) == (200, 220)
+    assert shot.clips[0].filepath == path
+    assert Path(shot.clips[0].copied_filepath).read_bytes() == Path(path).read_bytes()
     api = mock.Mock()
     api.get_or_create_job.return_value = ({'id': 1}, True)
     api.get_or_create_timeline.return_value = ({'id': 2}, True)
@@ -365,7 +362,7 @@ def test_frontend_sidecar_records_uneven_handles_and_database_payload_is_unchang
     assert set(fields) == {'duration', 'edit_inpoint', 'edit_outpoint', 'colourspace', 'handles', 'original_clip', 'original_clips'}
     assert fields['handles'] == '25'
     assert fields['duration'] == '32'
-    assert fields['original_clip'] == metadata['plates'][0]['copied_path']
+    assert fields['original_clip'] == shot.clips[0].copied_filepath
     assert (fields['edit_inpoint'], fields['edit_outpoint']) == ('200', '220')
     with mock.patch.object(NukeScriptGenerator, '_get_video_format', return_value=(1920, 1080)):
         request = NukeScriptGenerator()._build_create_nk_request(shot, folder, str(Path(folder, 'scripts', 'test.nk')), 'Job')

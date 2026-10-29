@@ -13,6 +13,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app_cache
+from denoise_test_support import source_settings
 from nuke_denoise import create_request, run
 import nuke_denoise
 
@@ -20,11 +21,10 @@ import nuke_denoise
 def run_clip(index, source, directory, executable, threads):
     job = directory / str(index)
     job.mkdir()
-    metadata = json.loads((source.parent.parent / "shot_assets/timeline_import.json").read_text())
-    plate = next(p for p in metadata["plates"] if Path(p.get("copied_path", "")).name == source.name)
+    media_settings = source_settings(source)
     request = create_request(job, {"source": str(source), "shot_dir": str(job / "shot"),
                                   "shot_name": source.parent.parent.name,
-                                  "colourspace": plate["input_colourspace"], "fps": metadata["fps"]}, executable)
+                                  "colourspace": media_settings["colourspace"], "fps": media_settings["fps"]}, executable)
     clip_started = time.monotonic()
     events = []
 

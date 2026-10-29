@@ -440,6 +440,11 @@ class DjangoAPI:
         r = self._request('GET', url, operation="get_job")
         return r.json()
 
+    def update_job(self, job_id: int, **fields):
+        url = f"{self.base_url}jobs/{job_id}"
+        r = self._request('PATCH', url, json=fields, operation="update_job")
+        return r.json()
+
     def update_timeline(self, timeline_id: int, **fields):
         url = f"{self.base_url}timelines/{timeline_id}"
         r = self._request('PATCH', url, json=fields, operation="update_timeline")

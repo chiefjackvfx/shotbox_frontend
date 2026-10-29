@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtCore import QTimer
 import app_cache
+from denoise_test_support import source_settings
 import denoise_controller as ui
 
 
@@ -24,11 +25,10 @@ def benchmark(source_root, executable):
     print(directory, flush=True)
     tasks = []
     for index, source in enumerate(sources, 1):
-        metadata = json.loads((source.parent.parent / "shot_assets/timeline_import.json").read_text())
-        plate = next(p for p in metadata["plates"] if Path(p.get("copied_path", "")).name == source.name)
+        media_settings = source_settings(source)
         tasks.append({"shot": {"title": source.parent.parent.name}, "media": {
             "source": str(source), "shot_dir": str(directory / str(index) / "shot"),
-            "shot_name": source.parent.parent.name, "colourspace": plate["input_colourspace"], "fps": metadata["fps"]}})
+            "shot_name": source.parent.parent.name, "colourspace": media_settings["colourspace"], "fps": media_settings["fps"]}})
     app = QApplication.instance() or QApplication([])
     window = QMainWindow()
     controller = ui.DenoiseController(window)

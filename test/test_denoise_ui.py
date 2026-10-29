@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import json
 from pathlib import Path
 import sys
@@ -69,6 +70,27 @@ class DenoiseUiTests(unittest.TestCase):
         self.assertEqual(result["deadline"]["chunk_size"], 10)
         self.assertEqual(result["deadline"]["concurrent_tasks"], 1)
 
+    def test_deadline_eligible_workers_follow_queue_selection(self):
+        from deadline_ui import DeadlineOptions
+        settings = mock.Mock()
+        values = {"deadline_qualified_workers": ["linux-worker", "windows-worker"], "deadline_pool": "linux"}
+        settings.get.side_effect = lambda key, default=None: values.get(key, default)
+        with mock.patch("deadline_ui.get_settings_manager", return_value=settings):
+            form = DeadlineOptions(self.window)
+            form.repository = {"workers": [
+                {"name": "linux-worker", "platform": "linux", "enabled": True, "pools": ["linux"]},
+                {"name": "windows-worker", "platform": "win32", "enabled": True, "pools": ["houdini"]}]}
+            form.update_eligible()
+            self.assertIn("linux-worker", form.eligible.text())
+            self.assertNotIn("windows-worker", form.eligible.text())
+            form.pool.setCurrentText("houdini")
+            self.assertIn("windows-worker", form.eligible.text())
+            self.assertNotIn("linux-worker", form.eligible.text())
+            self.assertEqual(form.options()["qualified_workers"], values["deadline_qualified_workers"])
+            form.pool.setCurrentText("missing")
+            self.assertIn("None.", form.eligible.text())
+            form.stop()
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
@@ -104,6 +126,76 @@ class DenoiseUiTests(unittest.TestCase):
 
     def start(self, **values):
         self.controller.start({"id": 4, "title": "SH010", **values}, dict(self.media))
+
+    def start_deadline(self, status="submitted"):
+        import deadline_denoise
+        media = dict(self.media, deadline={"allow_local": True, "client": "/client"})
+        with mock.patch("deadline_client.discover_client", return_value="/client"):
+            self.controller.start({"id": 4, "title": "SH010"}, media)
+        directory = self.controller.directory
+        self.addCleanup(shutil.rmtree, directory, True)
+        if self.controller.request_path is None:
+            return directory, None
+        request = json.loads(self.controller.request_path.read_text())
+        receipt, lock = deadline_denoise.submission_paths(request)
+        receipt.parent.mkdir(parents=True, exist_ok=True)
+        lock.write_text(str(receipt))
+        receipt.write_text(json.dumps({"status": status, "job_id": "b" * 24,
+                                       "lock": str(lock), "directory": str(directory)}))
+        self.addCleanup(receipt.unlink, missing_ok=True)
+        self.addCleanup(lock.unlink, missing_ok=True)
+        result = {"stage": "submission_unknown" if status == "unknown" else status,
+                  "job_id": "b" * 24, "receipt": str(receipt), "error": "test failure"}
+        (directory / "result.json").write_text(json.dumps(result))
+        (directory / "job-info.job").write_text("submission package")
+        return directory, receipt
+
+    def test_deadline_receipt_and_workspace_removed_only_after_children_stop(self):
+        directory, receipt = self.start_deadline()
+        with mock.patch.object(ui, "stop_recorded_children", side_effect=[True, False]), \
+                mock.patch.object(ui.QTimer, "singleShot") as retry:
+            self.controller._finished(0, QProcess.ExitStatus.NormalExit)
+            self.assertTrue(directory.exists())
+            self.assertTrue(receipt.exists())
+            self.assertIsNotNone(self.controller._lease)
+            retry.call_args.args[1]()
+        self.assertFalse(directory.exists())
+        self.assertFalse(receipt.exists())
+        self.assertEqual(self.controller.last_result["job_id"], "b" * 24)
+        self.assertNotIn("receipt", self.controller.last_result)
+        self.assertFalse(self.controller.dialog.logs_button.isEnabled())
+        self.assertIsNone(self.controller._lease)
+        self.assertFalse((Path(self.media["shot_dir"]) / "shot_assets/deadline").exists())
+
+    def test_deadline_cancelled_and_failed_workspaces_are_removed(self):
+        for status in ("cancelled", "failed"):
+            with self.subTest(status=status):
+                directory, receipt = self.start_deadline(status)
+                self.controller._finished(1, QProcess.ExitStatus.NormalExit)
+                self.assertFalse(directory.exists())
+                self.assertFalse(receipt.exists())
+                self.assertEqual(self.controller.last_result["stage"], status)
+                self.assertNotIn("receipt", self.controller.last_result)
+
+    def test_deadline_unknown_outcome_keeps_only_cache_recovery_files(self):
+        directory, receipt = self.start_deadline("unknown")
+        self.controller._finished(1, QProcess.ExitStatus.NormalExit)
+        self.assertTrue(directory.exists())
+        self.assertTrue(receipt.exists())
+        self.assertEqual(self.controller.last_result["stage"], "submission_unknown")
+        self.assertEqual(self.controller.last_result["receipt"], str(receipt))
+        self.assertTrue(self.controller.dialog.logs_button.isEnabled())
+        self.assertFalse((Path(self.media["shot_dir"]) / "shot_assets/deadline").exists())
+
+    def test_deadline_startup_failure_removes_allocated_workspace(self):
+        with mock.patch.object(ui, "create_request", side_effect=OSError("request failed")), \
+                mock.patch.object(ui.QMessageBox, "warning"), \
+                mock.patch("deadline_client.discover_client", return_value="/client"):
+            media = dict(self.media, deadline={"allow_local": True, "client": "/client"})
+            self.controller.start({"id": 4, "title": "SH010"}, media)
+        self.assertFalse(self.controller.directory.exists())
+        self.assertIsNone(self.controller._lease)
+        self.assertEqual(self.controller.last_result["stage"], "failed")
 
     def test_existing_own_and_foreign_locks_do_not_block_or_change(self):
         for owner in ("artist@desk", "someone@other"):

@@ -301,6 +301,15 @@ def setup_shot_card_ui(widget):
     
     widget.horizontalLayout_3.addWidget(widget.btn_open_assets)
     
+    widget.btn_open_matchmove = FlexibleButton(widget.shot_btns)
+    widget.btn_open_matchmove.fit_text = True
+    widget.btn_open_matchmove.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
+    widget.btn_open_matchmove.elide_mode = Qt.TextElideMode.ElideMiddle
+    widget.btn_open_matchmove.setObjectName("btn_open_matchmove")
+    widget.btn_open_matchmove.setText("3DE")
+    widget.btn_open_matchmove.hide()
+    widget.horizontalLayout_3.addWidget(widget.btn_open_matchmove)
+
     widget.btn_open_precomp = QToolButton(widget.shot_btns)
     widget.btn_open_precomp.setObjectName("btn_open_precomp")
     widget.btn_open_precomp.setText("Precomp")

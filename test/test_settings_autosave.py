@@ -43,6 +43,11 @@ class SettingsAutosaveTests(unittest.TestCase):
     def read_saved(self, key):
         return settings.SettingsManager(str(self.path)).get(key)
 
+    def test_deadline_qualified_workers_are_deduplicated_and_persisted(self):
+        self.page.deadline_workers_edit.setText("linux-worker, windows-worker, linux-worker, ")
+        QTest.qWait(650)
+        self.assertEqual(self.read_saved("deadline_qualified_workers"), ["linux-worker", "windows-worker"])
+
     def test_initial_load_and_changelog_browsing_do_not_save(self):
         self.page.change_log_combo.setCurrentIndex(1)
         self.page._load_current_values()

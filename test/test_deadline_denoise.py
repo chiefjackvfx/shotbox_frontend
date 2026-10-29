@@ -23,6 +23,9 @@ class DeadlineTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(dir=app_cache.cache_directory("temp"))
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
+        cache = mock.patch.object(app_cache, "CACHE_ROOT", self.root / "frontend-cache")
+        cache.start()
+        self.addCleanup(cache.stop)
         self.source = self.root / "source with spaces.mxf"
         self.source.touch()
         self.request = {"source": str(self.source), "nuke": "/opt/Nuke17.1v2/Nuke17.1",
@@ -174,12 +177,34 @@ class DeadlineTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "absolute Windows"):
             client.validate_mapping_coverage(paths, ["win32"], info)
 
+    def test_none_queue_respects_repository_exclusion(self):
+        info = repository()
+        options = {"qualified_workers": ["linux-worker"], "pool": "none"}
+        self.assertEqual(len(client.eligible_workers(options, info)), 1)
+        info["exclude_in_none_pool"] = True
+        self.assertEqual(client.eligible_workers(options, info), [])
+        info["workers"][0]["pools"] = []
+        self.assertEqual(len(client.eligible_workers(options, info)), 1)
+
+    def test_invalid_linux_mapping_and_complex_rules_fail_closed(self):
+        info = repository()
+        rule = {"Path": "/show", "LinuxPath": "relative", "WindowsPath": "Z:"}
+        info.update(path_mapping_enabled=True, path_mappings={"GlobalRules": [rule]})
+        with self.assertRaisesRegex(RuntimeError, "absolute Linux"):
+            client.validate_mapping_coverage(["/show/a"], ["linux", "win32"], info)
+        rule.update(LinuxPath="/mnt/show", RegularExpression=True)
+        with self.assertRaisesRegex(RuntimeError, "literal"):
+            client.validate_mapping_coverage(["/show/a"], ["linux", "win32"], info)
+
     def test_exact_build_validation_on_both_platforms(self):
         info = repository()
         with self.assertRaisesRegex(RuntimeError, "win32"):
             client.validate_version("17.1v2", info, ["linux", "win32"])
         info["executables"]["RenderExecutable17_1"] += r";C:\Program Files\Nuke17.1v2\Nuke17.1.exe"
         client.validate_version("17.1v2", info, ["linux", "win32"])
+        info["executables"]["RenderExecutable17_1"] = "/Applications/Nuke17.1v2/Nuke17.1v2.app/Contents/MacOS/Nuke17.1"
+        with self.assertRaisesRegex(RuntimeError, "exact Nuke"):
+            client.validate_version("17.1v2", info, ["linux"])
         info["executables"]["RenderExecutable17_1"] = "/opt/Nuke17.1v20/Nuke17.1"
         with self.assertRaisesRegex(RuntimeError, "exact Nuke"):
             client.validate_version("17.1v2", info)
@@ -196,6 +221,14 @@ class DeadlineTests(unittest.TestCase):
                 else:
                     with self.assertRaises(RuntimeError):
                         exec(guard, {})
+
+    def test_windows_submission_is_rejected_before_repository_or_profiling(self):
+        with mock.patch.object(workflow.sys, "platform", "win32"):
+            result, profile, command = self.run_workflow()
+        self.assertEqual(result["stage"], "failed")
+        self.assertIn("requires Linux", result["error"])
+        profile.assert_not_called()
+        command.assert_not_called()
 
     def test_unqualified_submission_never_profiles(self):
         self.request["deadline"]["qualified_workers"] = []
@@ -216,6 +249,8 @@ class DeadlineTests(unittest.TestCase):
         self.assertEqual(result["job_id"], self.job_id)
         receipt = json.loads(Path(result["receipt"]).read_text())
         self.assertEqual(receipt["status"], "submitted")
+        self.assertEqual(receipt["platforms"], ["linux"])
+        self.assertEqual(receipt["machine_list"], "linux-worker")
         self.assertEqual(receipt["first"], 1001)
         self.assertFalse(Path(receipt["lock"]).exists())
         self.assertTrue(json.loads(self.path.read_text())["profile_only"])
@@ -223,6 +258,123 @@ class DeadlineTests(unittest.TestCase):
         self.assertEqual(again["job_id"], self.job_id)
         command.assert_not_called()
         profiling.assert_not_called()
+
+    def test_known_submission_is_cached_then_removed_without_shot_metadata(self):
+        result, _, _ = self.run_workflow(return_value="JobID=" + self.job_id)
+        receipt = Path(result["receipt"])
+        self.assertTrue(receipt.is_relative_to(app_cache.cache_directory("temp")))
+        self.assertFalse((Path(self.request["deadline"]["shot_dir"]) / "shot_assets/deadline").exists())
+        self.assertEqual(workflow.recover_result(self.request, {})["job_id"], self.job_id)
+        self.assertTrue(workflow.cleanup_submission(self.request, result))
+        self.assertFalse(receipt.exists())
+        self.assertFalse(receipt.parent.exists())
+
+    def test_unknown_submission_keeps_cache_recovery_until_reconciled(self):
+        result, _, _ = self.run_workflow(side_effect=client.CommandInterrupted("timeout"))
+        receipt = Path(result["receipt"])
+        lock = Path(json.loads(receipt.read_text())["lock"])
+        self.assertFalse(workflow.cleanup_submission(self.request, result))
+        self.assertTrue(receipt.exists())
+        self.assertTrue(lock.exists())
+        self.assertFalse((Path(self.request["deadline"]["shot_dir"]) / "shot_assets").exists())
+        with mock.patch.object(client, "discover_client", return_value="/client"), \
+                mock.patch.object(client, "command", return_value='SHOTBOX_DEADLINE ' + json.dumps({"jobs": [self.job_id]})):
+            resolved = workflow.reconcile(receipt, "/client")
+        self.assertEqual(resolved["job_id"], self.job_id)
+        self.assertFalse(receipt.exists())
+        self.assertFalse(lock.exists())
+
+    def test_reconciliation_waits_for_children_then_removes_cached_package(self):
+        result, _, _ = self.run_workflow(side_effect=client.CommandInterrupted("timeout"))
+        receipt_path = Path(result["receipt"])
+        receipt = json.loads(receipt_path.read_text())
+        lock = Path(receipt["lock"])
+        workspace = Path(tempfile.mkdtemp(prefix="denoise-", dir=app_cache.cache_directory("temp")))
+        (workspace / "profiled.nk").write_text("farm package")
+        receipt["directory"] = str(workspace)
+        receipt_path.write_text(json.dumps(receipt))
+        with mock.patch.object(client, "discover_client", return_value="/client"), \
+                mock.patch.object(client, "command", return_value='SHOTBOX_DEADLINE ' + json.dumps({"jobs": [self.job_id]})) as command, \
+                mock.patch("nuke_denoise_display.stop_recorded_children", side_effect=[True, False]):
+            with self.assertRaisesRegex(RuntimeError, "cleanup is still running"):
+                workflow.reconcile(receipt_path, "/client")
+            self.assertTrue(workspace.exists())
+            self.assertTrue(receipt_path.exists())
+            self.assertTrue(lock.exists())
+            resolved = workflow.reconcile(receipt_path, "/client")
+            command.assert_called_once()
+        self.assertEqual(resolved["job_id"], self.job_id)
+        self.assertFalse(workspace.exists())
+        self.assertFalse(receipt_path.exists())
+        self.assertFalse(lock.exists())
+
+    def test_active_submission_receipt_survives_clear_cache(self):
+        path, _ = workflow.submission_paths(self.request)
+        def profiled(*args, **kwargs):
+            result = app_cache.clear_cache_files()
+            self.assertTrue(result["active_temp"])
+            self.assertTrue(path.exists())
+            return self.prepared
+        a, b, _ = self.patches()
+        with a, b, mock.patch.object(workflow, "profile", side_effect=profiled), \
+                mock.patch.object(client, "command", return_value="JobID=" + self.job_id):
+            result = workflow.run(self.path, notify=lambda event: None)
+        self.assertEqual(result["stage"], "submitted")
+
+    def test_cleanup_does_not_remove_another_live_preparation_receipt(self):
+        import os
+        import psutil
+        path, lock = workflow.submission_paths(self.request)
+        path.parent.mkdir(parents=True)
+        lock.write_text(str(path))
+        path.write_text(json.dumps({"status": "preparing", "lock": str(lock),
+                                    "supervisor_pid": os.getpid(),
+                                    "supervisor_created": psutil.Process().create_time()}))
+        self.assertFalse(workflow.cleanup_submission(self.request, {"stage": "failed"}))
+        self.assertTrue(path.exists())
+        self.assertTrue(lock.exists())
+
+    def test_cleanup_workspace_only_removes_owned_temp_cache_directories(self):
+        directory = Path(tempfile.mkdtemp(prefix="denoise-", dir=app_cache.cache_directory("temp")))
+        (directory / "profiled.nk").touch()
+        self.assertTrue(workflow.cleanup_workspace(directory))
+        self.assertFalse(directory.exists())
+        outside = self.root / "denoise-project"
+        outside.mkdir()
+        (outside / "artist.nk").touch()
+        self.assertFalse(workflow.cleanup_workspace(outside))
+        self.assertTrue((outside / "artist.nk").exists())
+
+    def test_legacy_receipt_recovers_without_resubmission_and_cleans_only_its_files(self):
+        cached, lock = workflow.submission_paths(self.request)
+        legacy = Path(self.request["deadline"]["shot_dir"]) / "shot_assets/deadline"
+        legacy.mkdir(parents=True)
+        path = legacy / cached.name
+        legacy_lock = legacy / lock.name
+        path.write_text(json.dumps({"status": "submitted", "job_id": self.job_id, "lock": str(legacy_lock)}))
+        legacy_lock.write_text(str(path))
+        (legacy / "keep.txt").write_text("unrelated")
+        self.assertEqual(workflow.recover_result(self.request, {})["job_id"], self.job_id)
+        result, profile, command = self.run_workflow(side_effect=AssertionError("duplicate"))
+        self.assertEqual(result["job_id"], self.job_id)
+        profile.assert_not_called()
+        command.assert_not_called()
+        self.assertTrue(workflow.cleanup_submission(self.request, result))
+        self.assertFalse(path.exists())
+        self.assertFalse(legacy_lock.exists())
+        self.assertEqual((legacy / "keep.txt").read_text(), "unrelated")
+
+    def test_legacy_unresolved_source_lock_blocks_new_submission(self):
+        cached, lock = workflow.submission_paths(self.request)
+        legacy = Path(self.request["deadline"]["shot_dir"]) / "shot_assets/deadline"
+        legacy.mkdir(parents=True)
+        (legacy / lock.name).write_text(str(legacy / "previous.json"))
+        result, profile, command = self.run_workflow(side_effect=AssertionError("duplicate"))
+        self.assertEqual(result["stage"], "failed")
+        self.assertIn("unresolved legacy", result["error"])
+        profile.assert_not_called()
+        command.assert_not_called()
+        self.assertFalse(cached.exists())
 
     def test_timeout_keeps_lock_and_blocks_another_submission_for_source(self):
         result, _, _ = self.run_workflow(side_effect=client.CommandInterrupted("timeout"))

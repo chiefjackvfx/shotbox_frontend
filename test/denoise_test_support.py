@@ -11,6 +11,31 @@ import time
 FRONTEND = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(FRONTEND))
 
+def source_settings(source):
+    """Read optional legacy overrides, otherwise probe the actual source media."""
+    from asset_paths import asset_path
+    from media_colourspace import detect_input_colourspace
+    from timeline_import import probe_media
+    source = Path(source)
+    try:
+        metadata = json.loads(asset_path(source.parent.parent, 'shot_assets', 'timeline_import.json').read_text())
+        metadata = metadata if isinstance(metadata, dict) else {}
+    except (OSError, ValueError):
+        metadata = {}
+    plates = metadata.get('plates', [])
+    plates = plates if isinstance(plates, list) else []
+    plate = next((plate for plate in plates if isinstance(plate, dict)
+                  and Path(str(plate.get('copied_path', '')).replace('\\', '/')).name == source.name), {})
+    fps, colourspace = metadata.get('fps'), plate.get('input_colourspace')
+    if not fps or not colourspace:
+        info = probe_media(str(source))
+        if info.error:
+            raise RuntimeError(f'Could not probe denoise source {source}: {info.error}')
+        fps = fps or info.fps
+        colourspace = colourspace or detect_input_colourspace(info.metadata).colourspace
+    return {'fps': fps or 25, 'colourspace': colourspace}
+
+
 def host_command(executable, mode, directory, environment, *, expected_version=None, script_path=None):
     """Keep even Windows test processes on an owned private desktop."""
     from contextlib import nullcontext

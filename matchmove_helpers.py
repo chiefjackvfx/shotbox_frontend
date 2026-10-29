@@ -55,9 +55,9 @@ SHOT_ASSETS_DIRNAME = "shot_assets"
 MATCHMOVE_DIRNAME = "matchmove"
 MATCHMOVE_WORK_DIRNAME = "work"
 MATCHMOVE_EXPORT_DIRNAME = "export"
-PROJECT_FILENAME_RE = r"^{shot}_matchmove_v(\d{{3}})\.3de$"
+PROJECT_FILENAME_RE = r"^{shot}_matchmove_v(\d{{3,}})\.3de$"
 GENERIC_PROJECT_FILENAME_RE = re.compile(
-    r"^(?P<base>.+)_matchmove_v(?P<version>\d{3})\.3de$",
+    r"^(?P<base>.+)_matchmove_v(?P<version>\d{3,})\.3de$",
     re.IGNORECASE,
 )
 
@@ -367,18 +367,20 @@ def list_matchmove_projects(matchmove_dir: str) -> list[Path]:
         if path.is_file() and path.suffix.lower() == ".3de"
     ]
 
-    def _sort_key(path: Path):
-        match = GENERIC_PROJECT_FILENAME_RE.match(path.name)
-        if match:
-            return (
-                0,
-                match.group("base").lower(),
-                -int(match.group("version")),
-                path.name.lower(),
-            )
-        return (1, path.name.lower())
+    return latest_matchmove_projects(projects)
 
-    return sorted(projects, key=_sort_key)
+
+def latest_matchmove_projects(projects: list[Path]) -> list[Path]:
+    """Return the highest numbered version per name; keep standalone files."""
+    selected: dict[tuple[str, str], tuple[int, Path]] = {}
+    for path in sorted(projects, key=lambda item: (item.name.casefold(), item.name)):
+        match = GENERIC_PROJECT_FILENAME_RE.match(path.name)
+        key = ("versioned", match.group("base").casefold()) if match else ("standalone", path.name.casefold())
+        version = int(match.group("version")) if match else 0
+        if key not in selected or version > selected[key][0]:
+            selected[key] = (version, path)
+    return sorted((value[1] for value in selected.values()), key=lambda path: (path.name.casefold(), path.name))
+
 
 
 def detect_exr_sequence(folder_path: str) -> SequenceInfo:

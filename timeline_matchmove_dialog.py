@@ -30,6 +30,11 @@ class TimelineMatchmoveCandidate:
     shot_title: str
     shot_root: str
     sequence_info: shared_matchmove.SequenceInfo
+    timeline_title: str = ""
+
+    @property
+    def display_title(self) -> str:
+        return f"{self.timeline_title} / {self.shot_title}" if self.timeline_title else self.shot_title
 
 
 class TimelineMatchmoveCandidateRow(QFrame):
@@ -47,7 +52,7 @@ class TimelineMatchmoveCandidateRow(QFrame):
         self.check_box = QCheckBox(self)
         layout.addWidget(self.check_box)
 
-        self.label_shot = QLabel(candidate.shot_title, self)
+        self.label_shot = QLabel(candidate.display_title, self)
         self.label_shot.setMinimumWidth(120)
         layout.addWidget(self.label_shot)
 
@@ -93,14 +98,16 @@ class TimelineMatchmoveDialog(QDialog):
         candidates: list[TimelineMatchmoveCandidate],
         matchmove_dir: str,
         parent=None,
+        scope_label: str = "Timeline",
     ):
         super().__init__(parent)
+        self._scope_label = scope_label
         self._timeline_title = str(timeline_title or "").strip() or "Timeline"
         self._matchmove_dir = shared_matchmove.normalize_user_path(matchmove_dir)
         self._candidates = sorted(
             list(candidates or []),
             key=lambda candidate: (
-                candidate.shot_title.lower(),
+                candidate.display_title.lower(),
                 Path(candidate.sequence_info.folder_path).name.lower(),
             ),
         )
@@ -108,7 +115,7 @@ class TimelineMatchmoveDialog(QDialog):
         self._group_labels: list[QLabel] = []
         self._built_request: shared_matchmove.MatchmoveProjectRequest | None = None
 
-        self.setWindowTitle("Create Timeline Matchmove")
+        self.setWindowTitle(f"Create {self._scope_label} Matchmove")
         self.resize(1040, 780)
         self._build_ui()
         self._update_create_state()
@@ -119,7 +126,7 @@ class TimelineMatchmoveDialog(QDialog):
         layout.setSpacing(12)
 
         intro = QLabel(
-            "Select one or more EXR precomp sequences from the active timeline and build a multi-clip 3DE project."
+            f"Select one or more EXR precomp sequences from the active {self._scope_label.lower()} and build a multi-clip 3DE project."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -186,8 +193,8 @@ class TimelineMatchmoveDialog(QDialog):
 
         current_shot_title = None
         for candidate in self._candidates:
-            if candidate.shot_title != current_shot_title:
-                current_shot_title = candidate.shot_title
+            if candidate.display_title != current_shot_title:
+                current_shot_title = candidate.display_title
                 shot_label = QLabel(current_shot_title, scroll_contents)
                 shot_label.setStyleSheet("font-weight: bold; color: #ddd; margin-top: 6px;")
                 self._group_labels.append(shot_label)

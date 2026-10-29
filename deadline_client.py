@@ -110,11 +110,18 @@ def eligible_workers(options, info):
     """Qualification is an explicit operator decision, never inferred from config."""
     qualified = options.get("qualified_workers", [])
     requested = options.get("machine_list", "").split(",") if options.get("machine_list") else None
+
+    def in_queue(worker, key):
+        queue = options.get(key, "none")
+        memberships = worker.get(key + "s", [])
+        if queue == "none":
+            return not info.get("exclude_in_none_" + key, False) or not memberships or "none" in memberships
+        return queue in memberships
+
     return [w for w in info.get("workers", [])
             if w["name"] in qualified and (requested is None or w["name"] in requested)
             and w.get("enabled") and w.get("platform") in {"linux", "win32"}
-            and (options.get("pool", "none") == "none" or options["pool"] in w.get("pools", []))
-            and (options.get("group", "none") == "none" or options["group"] in w.get("groups", []))]
+            and in_queue(w, "pool") and in_queue(w, "group")]
 
 
 def select_workers(options, info):
@@ -128,27 +135,31 @@ def select_workers(options, info):
 
 
 def validate_mapping_coverage(paths, platforms, info):
-    # Linux-only jobs retain native paths. Windows jobs require explicit coverage.
-    # Actual replacement is performed by Deadline, never by Shotbox.
-    if "win32" not in platforms:
-        return
-    if not info.get("path_mapping_enabled"):
+    """Validate literal rule coverage; Deadline remains responsible for replacement."""
+    if "win32" in platforms and not info.get("path_mapping_enabled"):
         raise RuntimeError("Enable Path Mapping in Deadline's Nuke plugin for Windows workers.")
+    if not info.get("path_mapping_enabled"):
+        return  # Native Linux paths do not require mapping.
     mapping = info.get("path_mappings", {})
     rules = mapping.get("GlobalRules", []) + mapping.get("SubmissionTimeRules", [])
+    if any(r.get("RegularExpression") or r.get("Region", "All") != "All" for r in rules):
+        raise RuntimeError("Denoise preflight requires literal, All-region path mappings; complex mappings need separate qualification.")
     for path in paths:
-        covered = False
-        for rule in rules:
-            if rule.get("RegularExpression") or rule.get("Region", "All") != "All":
-                raise RuntimeError("Mixed denoise preflight requires literal, All-region path mappings; complex mappings need separate qualification.")
-            if within(path, rule.get("Path", ""), case_sensitive=rule.get("CaseSensitive", True)):
-                target = rule.get("WindowsPath", "").replace("\\", "/")
-                if not re.match(r"^(?:[A-Za-z]:(?:/|$)|//[^/]+/[^/]+)", target):
-                    raise RuntimeError(f"Missing absolute Windows mapping for {path}")
-                covered = True
-                break
-        if not covered:
-            raise RuntimeError(f"No Windows Deadline path mapping covers: {path}")
+        matching = [r for r in rules if within(path, r.get("Path", ""),
+                                               case_sensitive=r.get("CaseSensitive", True))]
+        for platform in platforms:
+            key = "WindowsPath" if platform == "win32" else "LinuxPath"
+            targets = [r.get(key, "").replace("\\", "/") for r in matching if r.get(key)]
+            if not targets and platform == "win32":
+                raise RuntimeError(f"No Windows Deadline path mapping covers: {path}")
+            # An empty Linux replacement preserves the native Linux input path.
+            for target in targets:
+                if platform == "win32":
+                    absolute = bool(re.match(r"^(?:[A-Za-z]:(?:/|$)|//[^/]+/[^/]+)", target))
+                else:
+                    absolute = target.startswith("/") and not target.startswith("//")
+                if not absolute:
+                    raise RuntimeError(f"Missing absolute {'Windows' if platform == 'win32' else 'Linux'} mapping for {path}")
 
 
 def render_guard(version, platforms):
@@ -182,9 +193,14 @@ def validate_version(version, info, platforms=("linux",)):
     for platform in platforms:
         if platform not in {"linux", "win32"}:
             raise RuntimeError(f"Unsupported worker platform: {platform}")
+
         def matches(path):
-            normalized = path.replace("\\", "/")
-            native = bool(re.match(r"^(?:[A-Za-z]:/|//)", normalized)) if platform == "win32" else normalized.startswith("/") and not normalized.startswith("//")
+            normalized = path.strip().replace("\\", "/")
+            if platform == "win32":
+                native = bool(re.match(r"^(?:[A-Za-z]:/|//)", normalized))
+            else:
+                native = (normalized.startswith("/") and not normalized.startswith("//")
+                          and ".app/Contents/MacOS/" not in normalized)
             return native and bool(re.search(r"(?:^|/)Nuke" + re.escape(version) + r"(?:/|$)", normalized, re.I))
         if not any(matches(p) for p in paths):
             raise RuntimeError(f"Configure exact Nuke {version} executables for {platform} in Deadline; version fallback is not allowed.")

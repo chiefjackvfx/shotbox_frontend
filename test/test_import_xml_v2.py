@@ -85,7 +85,7 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
 
             self.assertEqual(shot_folder, root / "VFX" / "timeline_A" / "seq010")
             self.assertTrue((root / "VFX" / "job_assets").is_dir())
-            self.assertTrue((root / "VFX" / "timeline_A" / "timeline_assets").is_dir())
+            self.assertFalse((root / "VFX" / "timeline_A" / "timeline_assets").exists())
             self.assertTrue((shot_folder / "shot_assets").is_dir())
             self.assertFalse((shot_folder / "assets").exists())
             self.assertTrue((shot_folder / "plates").is_dir())
@@ -169,7 +169,7 @@ class ImportXmlV2GeneratorTests(unittest.TestCase):
 
             self.assertEqual(shot_folder, timeline_dir / "sho010")
             self.assertTrue((root / "VFX" / "job_assets").is_dir())
-            self.assertTrue((timeline_dir / "timeline_assets").is_dir())
+            self.assertFalse((timeline_dir / "timeline_assets").exists())
             self.assertTrue((shot_folder / "shot_assets").is_dir())
             self.assertFalse((shot_folder / "assets").exists())
 

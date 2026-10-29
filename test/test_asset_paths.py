@@ -1,6 +1,5 @@
 """Asset naming changes must not hide or duplicate existing project assets."""
 from pathlib import Path
-import json
 import sys
 
 import pytest
@@ -71,14 +70,16 @@ def test_import_reuses_title_case_assets_without_creating_duplicate_folders(tmp_
     for assets in (vfx / 'Job_Assets', timeline / 'Timeline_Assets', shot_root / 'Shot_Assets'):
         assets.mkdir(parents=True)
         (assets / 'artist_asset.txt').write_text('keep me')
+    legacy_metadata = shot_root / 'Shot_Assets' / 'timeline_import.json'
+    legacy_metadata.write_text('{"legacy": true}')
     clip = ParsedClip('plate', str(source), 0, 20, 20, 0, 20, 1)
     shot = ParsedShot(0, 'sho010', [clip], duration=20, cut_duration=20)
     folder = NukeScriptGenerator().create_shot_folder(shot, str(tmp_path), 'edit')
-    metadata = json.loads(Path(folder, 'Shot_Assets', 'timeline_import.json').read_text())
-    assert metadata['cut_duration'] == 20
+    assert Path(folder, 'Shot_Assets', 'timeline_import.json').read_text() == '{"legacy": true}'
     page = XMLImportPage.__new__(XMLImportPage)
     single = Path(page._create_single_shot_folder_structure(str(timeline), 'sho020', None))
     assert (single / 'shot_assets').is_dir()
+    assert not (single / 'shot_assets' / 'timeline_import.json').exists()
     for root, canonical, legacy in ((vfx, 'job_assets', 'Job_Assets'),
                                      (timeline, 'timeline_assets', 'Timeline_Assets'),
                                      (shot_root, 'shot_assets', 'Shot_Assets')):

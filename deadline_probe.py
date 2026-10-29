@@ -25,7 +25,11 @@ def __main__(*args):
                         "pools": list(setting.SlavePools), "groups": list(setting.SlaveGroups)})
     mappings = json.loads(ClientUtils.ExecuteCommandAndGetOutput(
         ["ExportRepositorySettings", "-Settings", "PathMapping"]))["PathMapping"]["Settings"]
+    scheduling = json.loads(ClientUtils.ExecuteCommandAndGetOutput(
+        ["ExportRepositorySettings", "-Settings", "WorkerSettings"]))["WorkerSettings"]["Settings"]
     print("SHOTBOX_DEADLINE " + json.dumps({
+        "exclude_in_none_pool": scheduling.get("ExcludeInNonePool", False),
+        "exclude_in_none_group": scheduling.get("ExcludeInNoneGroup", False),
         "workers": workers, "path_mappings": mappings,
         "repository": RepositoryUtils.GetRepositoryPath("", False),
         "pools": list(RepositoryUtils.GetPoolNames()),

@@ -133,16 +133,13 @@ buttons, matchmove and thumbnail sidecar lookup share this convention. When both
 spellings exist, lowercase is preferred, with fallback to an existing requested
 file or subfolder in the title-case directory.
 
-Each timeline shot contains `shot_assets/timeline_import.json`, schema version 3
-(or the existing legacy `Shot_Assets` directory):
-
-- Cut/working duration, timeline FPS, detected and used head/tail handles.
-- Working start/end, inclusive Nuke cut in/out, and editorial timeline in/out
-  (timeline out remains exclusive). `requested_handles` is null
-  in detection mode and a number for a manual request.
-- Original reference, selected local/copy paths, track, source position, speed,
-  timing source and reviewed media fingerprint per plate, plus detected camera,
-  chosen input transform and colour-space detection/override provenance.
+New imports do not create `timeline_import.json`. Cut timing, handles, source
+mapping and reviewed colour transforms stay in memory while the Nuke script,
+initial thumbnail and existing database fields are generated. Older projects'
+existing sidecars remain optional inputs for thumbnail lookup; importing again
+does not rewrite them. Without a sidecar, dashboard thumbnail refresh uses the
+stored primary clip references and probes source media for its colour transform,
+falling back to the media midpoint when cut-specific timing is unavailable.
 
 Existing database fields are used. `duration` records working duration.
 `edit_inpoint`/`edit_outpoint` record timeline-relative editorial cut positions,

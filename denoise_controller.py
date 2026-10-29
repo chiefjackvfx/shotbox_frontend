@@ -134,9 +134,9 @@ class DenoiseProgress(QDialog):
         self._update_timing()
         self.record("Starting NukeX…")
         buttons = QHBoxLayout()
-        logs = QPushButton("Open Logs", self)
-        logs.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(controller.directory))))
-        buttons.addWidget(logs)
+        self.logs_button = QPushButton("Open Logs", self)
+        self.logs_button.clicked.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(str(controller.directory))))
+        buttons.addWidget(self.logs_button)
         buttons.addStretch()
         self.button = QPushButton("Cancel", self)
         self.button.clicked.connect(self._clicked)
@@ -193,6 +193,7 @@ class DenoiseController(QObject):
         self.window = window
         self.busy = False
         self.directory = None
+        self._deadline_job = False
         self.dialog = None
         self.process = None
         self._lease = None
@@ -304,7 +305,7 @@ class DenoiseController(QObject):
             title = task["shot"].get("title") or Path(task["media"]["source"]).stem
             error = f"{title}: {result.get('error', 'Denoise failed')}"
             directory = directory or self.directory
-            if directory is not None:
+            if directory is not None and Path(directory).is_dir():
                 error += f"\nLogs: {directory}"
             batch["errors"].append(error)
 
@@ -335,6 +336,8 @@ class DenoiseController(QObject):
 
     def _start_job(self, shot, media):
         self.directory = None
+        self.request_path = None
+        self._deadline_job = bool(media.get("deadline"))
         source = media["source"]
         self._debug(f"Requested input: {source}")
         try:
@@ -363,6 +366,12 @@ class DenoiseController(QObject):
                 self.request_path.write_text(json.dumps(request, indent=2))
         except Exception as exc:
             self._debug(f"Cannot start: {exc}")
+            if self._deadline_job and self.directory is not None:
+                from deadline_denoise import cleanup_workspace
+                try:
+                    cleanup_workspace(self.directory)
+                except OSError as cleanup_error:
+                    self._debug(f"Temporary Deadline cleanup failed: {cleanup_error}")
             if self._lease:
                 self._lease.__exit__(None, None, None)
                 self._lease = None
@@ -523,7 +532,27 @@ class DenoiseController(QObject):
             return
         self._finish(self._pending_result)
 
+    def _cleanup_deadline_files(self, result):
+        if not self._deadline_job or result.get("stage") not in {"submitted", "failed", "cancelled"}:
+            return False
+        from deadline_denoise import cleanup_submission, cleanup_workspace
+        try:
+            if self.request_path is not None and self.request_path.is_file():
+                request = json.loads(self.request_path.read_text())
+                if request.get("deadline") and not cleanup_submission(request, result):
+                    return False
+            cleaned = cleanup_workspace(self.directory)
+            if cleaned:
+                result.pop("receipt", None)
+                result.pop("directory", None)
+            return cleaned
+        except (OSError, ValueError, KeyError) as exc:
+            self._debug(f"Temporary Deadline cleanup failed: {exc}")
+            return False
+
     def _finish(self, result):
+        result = dict(result)
+        cleaned = self._cleanup_deadline_files(result)
         self.last_result = result
         stage = result.get("stage")
         if stage == "complete":
@@ -539,7 +568,11 @@ class DenoiseController(QObject):
         if stage not in ("complete", "submitted", "submission_unknown"):
             message += " Any completed EXR frames have been retained."
         self._debug(message)
-        self._debug(f"Cleanup complete. Logs: {self.directory}")
+        if cleaned:
+            self.dialog.logs_button.setEnabled(False)
+            self._debug("Temporary Deadline submission files removed.")
+        else:
+            self._debug(f"Cleanup complete. Logs: {self.directory}")
         self.dialog.label.setText(message)
         self.dialog.record(message)
         self.dialog.elapsed_timer.stop()

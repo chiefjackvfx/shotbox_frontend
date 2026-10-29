@@ -1,4 +1,4 @@
-"""Profile locally and submit once, with persistent receipts outside the cache."""
+"""Profile and submit with temporary, recoverable Deadline cache receipts."""
 from __future__ import annotations
 
 import argparse
@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import re
+import shutil
 from pathlib import Path
 import sys
 
@@ -22,7 +23,85 @@ def save_receipt(path, data):
     temp.replace(path)
 
 
+def submission_paths(request):
+    """Share active locks across workers without writing into the shot."""
+    options = request["deadline"]
+    token = options["submission_id"]
+    if not re.fullmatch(r"[a-f0-9]{32}", token):
+        raise ValueError("Invalid submission ID.")
+    shot_key = hashlib.sha256(str(Path(options["shot_dir"]).resolve()).encode()).hexdigest()
+    source_key = hashlib.sha256(str(Path(request["source"]).resolve()).encode()).hexdigest()
+    metadata = app_cache.cache_directory("temp") / "deadline-submissions" / shot_key
+    return metadata / (token + ".json"), metadata / (source_key + ".lock")
+
+
+def receipt_paths(request):
+    cached, _ = submission_paths(request)
+    legacy = Path(request["deadline"]["shot_dir"]) / "shot_assets/deadline" / cached.name
+    return cached, legacy
+
+
+def _remove_receipt(path):
+    receipt = json.loads(path.read_text())
+    lock = Path(receipt["lock"])
+    if lock.parent == path.parent and lock.exists() and lock.read_text() == str(path):
+        lock.unlink()
+    path.with_suffix(".pending").unlink(missing_ok=True)
+    path.unlink(missing_ok=True)
+    try:
+        path.parent.rmdir()
+        if path.parent.parent.name == "deadline-submissions":
+            path.parent.parent.rmdir()
+    except OSError:
+        pass  # Another submission may still own files in the shared directory.
+
+
+def _owned_workspace(directory):
+    if directory is None:
+        return None
+    directory = Path(directory).resolve()
+    temp_root = app_cache.cache_directory("temp").resolve()
+    return directory if directory.parent == temp_root and directory.name.startswith("denoise-") else None
+
+
+def cleanup_workspace(directory):
+    """Remove only a desktop-owned denoise workspace inside the temp cache."""
+    directory = _owned_workspace(directory)
+    if directory is None:
+        return False
+    if directory.exists():
+        shutil.rmtree(directory)
+    return True
+
+
+def _supervisor_alive(receipt):
+    import psutil
+    try:
+        process = psutil.Process(receipt["supervisor_pid"])
+        return process.create_time() == receipt["supervisor_created"] and process.is_running()
+    except (psutil.NoSuchProcess, KeyError):
+        return False
+    except psutil.AccessDenied:
+        return True
+
+
+def cleanup_submission(request, result):
+    """Acknowledge a known result after the desktop has recovered it."""
+    if result.get("stage") not in {"submitted", "failed", "cancelled"}:
+        return False
+    for path in receipt_paths(request):
+        if path.exists():
+            receipt = json.loads(path.read_text())
+            if receipt["status"] in {"submitting", "unknown"}:
+                return False
+            if receipt["status"] == "preparing" and _supervisor_alive(receipt):
+                return False
+            _remove_receipt(path)
+    return True
+
+
 @app_cache.temporary_cache_task
+@app_cache.temporary_cache_lease()
 def run(request_path, notify=emit):
     import os
     import psutil
@@ -33,23 +112,26 @@ def run(request_path, notify=emit):
     token = options["submission_id"]
     if not re.fullmatch(r"[a-f0-9]{32}", token):
         raise ValueError("Invalid submission ID.")
-    metadata = Path(options["shot_dir"]) / "shot_assets/deadline"
-    receipt_path = metadata / (token + ".json")
-    key = hashlib.sha256(str(Path(request["source"]).resolve()).encode()).hexdigest()
-    lock = metadata / (key + ".lock")
-    cancelled = lambda: (directory / "cancel").exists()
+    receipt_path, lock = submission_paths(request)
+    metadata = receipt_path.parent
+    legacy_receipt = receipt_paths(request)[1]
+    legacy_lock = legacy_receipt.parent / lock.name
+    def cancelled():
+        return (directory / "cancel").exists()
     acquired = attempted = False
     receipt = {"submission_id": token, "source": request["source"], "output_pattern": request["output_pattern"],
                "created": datetime.now(timezone.utc).isoformat(), "status": "preparing", "lock": str(lock),
-               "supervisor_pid": os.getpid(), "supervisor_created": psutil.Process().create_time()}
+               "supervisor_pid": os.getpid(), "supervisor_created": psutil.Process().create_time(),
+               "directory": str(directory)}
     result = None
     try:
-        if receipt_path.exists():
-            old = json.loads(receipt_path.read_text())
+        previous = next((candidate for candidate in (receipt_path, legacy_receipt) if candidate.exists()), None)
+        if previous is not None:
+            old = json.loads(previous.read_text())
             if old["status"] == "submitted":
-                result = {"stage": "submitted", "job_id": old["job_id"], "receipt": str(receipt_path)}
+                result = {"stage": "submitted", "job_id": old["job_id"], "receipt": str(previous)}
                 return result
-            raise RuntimeError(f"This submission was already attempted. Review receipt before explicitly retrying: {receipt_path}")
+            raise RuntimeError(f"This submission was already attempted. Review receipt before explicitly retrying: {previous}")
         if sys.platform != "linux":
             raise RuntimeError("Deadline denoise submission currently requires Linux Shotbox.")
         executable = client.discover_client(options.get("client", ""))
@@ -62,6 +144,8 @@ def run(request_path, notify=emit):
         if not match:
             raise RuntimeError("Cannot identify exact Nuke build from executable path; use its versioned installation path.")
         client.validate_version(match[1], info, options["platforms"])
+        if legacy_lock.exists():
+            raise RuntimeError(f"An active or unresolved legacy submission exists for this clip. Reconcile its receipt: {legacy_lock.read_text()}")
         metadata.mkdir(parents=True, exist_ok=True)
         try:
             with lock.open("x", encoding="utf-8") as stream:
@@ -123,10 +207,9 @@ def run(request_path, notify=emit):
 
 
 def recover_result(request, fallback):
-    """A persisted farm receipt takes precedence over a crashed local worker."""
-    options = request["deadline"]
-    path = Path(options["shot_dir"]) / "shot_assets/deadline" / (options["submission_id"] + ".json")
-    if path.exists():
+    """A cached farm receipt takes precedence over a crashed local worker."""
+    path = next((candidate for candidate in receipt_paths(request) if candidate.exists()), None)
+    if path is not None:
         receipt = json.loads(path.read_text())
         if receipt["status"] == "submitted":
             return {"stage": "submitted", "job_id": receipt["job_id"], "receipt": str(path)}
@@ -138,26 +221,31 @@ def recover_result(request, fallback):
     return fallback
 
 
+def _finish_reconciliation(path, receipt):
+    directory = _owned_workspace(receipt.get("directory"))
+    if directory is not None and directory.exists():
+        from nuke_denoise_display import stop_recorded_children
+        if stop_recorded_children(directory, force=True):
+            raise RuntimeError("Local denoise cleanup is still running. Reconcile again when those processes have stopped.")
+    _remove_receipt(path)
+    cleanup_workspace(directory)
+    return receipt
+
+
+@app_cache.temporary_cache_task
+@app_cache.temporary_cache_lease()
 def reconcile(path, executable):
     path = Path(path).resolve()
     receipt = json.loads(path.read_text())
     if receipt["status"] == "preparing":
-        import psutil
-        try:
-            process = psutil.Process(receipt["supervisor_pid"])
-            alive = process.create_time() == receipt["supervisor_created"] and process.is_running()
-        except (psutil.NoSuchProcess, KeyError):
-            alive = False
+        alive = _supervisor_alive(receipt)
         if alive:
             raise RuntimeError("This clip is still being prepared. Cancel it in Shotbox before reconciling.")
         receipt.update(status="failed", error="Preparation supervisor exited before farm submission.")
         save_receipt(path, receipt)
-        lock = Path(receipt["lock"])
-        if lock.exists() and lock.read_text() == str(path):
-            lock.unlink()
-        return receipt
+        return _finish_reconciliation(path, receipt)
     if receipt["status"] not in {"unknown", "submitting"}:
-        return receipt
+        return _finish_reconciliation(path, receipt)
     response = client.command(client.discover_client(executable), ["-ExecuteScript",
                               Path(__file__).with_name("deadline_probe.py"), "reconcile", receipt["submission_id"]])
     jobs = json.loads(next(line.removeprefix("SHOTBOX_DEADLINE ") for line in response.splitlines()
@@ -166,10 +254,7 @@ def reconcile(path, executable):
         raise RuntimeError("Could not identify exactly one job. Leave the receipt locked and inspect Deadline Monitor; do not resubmit automatically.")
     receipt.update(status="submitted", job_id=jobs[0])
     save_receipt(path, receipt)
-    lock = Path(receipt["lock"])
-    if lock.exists() and lock.read_text() == str(path.resolve()):
-        lock.unlink()
-    return receipt
+    return _finish_reconciliation(path, receipt)
 
 
 if __name__ == "__main__":

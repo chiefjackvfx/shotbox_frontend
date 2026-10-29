@@ -99,3 +99,26 @@ def test_failed_colour_transform_does_not_write_an_uncorrected_thumbnail(tmp_pat
     with mock.patch.object(thumbnail_updates, 'extract_preview_thumbnail', side_effect=ValueError('Unsupported IDT')):
         assert import_xml_v2.ThumbnailGenerator.generate(str(source), str(output), input_colourspace='Unsupported IDT') is None
     assert not output.exists()
+
+
+def test_dashboard_thumbnail_without_sidecar_uses_primary_reference_and_media_idt(tmp_path):
+    import timeline_import
+    primary = tmp_path / 'plates' / 'primary.mxf'
+    primary.parent.mkdir()
+    primary.touch()
+    (primary.parent / 'secondary.mxf').touch()
+    shot = {'id': 1, 'base_path': str(tmp_path), 'original_clip': '/old/shot/plates/primary.mxf',
+            'original_clips': ['/old/shot/plates/primary.mxf', '/old/shot/plates/secondary.mxf']}
+    assert thumbnail_updates.latest_thumbnail_preview(shot, filesIO.Folders()) == str(primary)
+    info = timeline_import.MediaInfo(str(primary), metadata={'colorspace': 'LogC4'})
+    image = QImage(64, 32, QImage.Format.Format_RGB888)
+    image.fill(0x808080)
+    worker = thumbnail_updates.BatchThumbnailWorker([shot], mock.Mock(), filesIO.Folders())
+    with mock.patch.object(timeline_import, 'probe_media', return_value=info), \
+            mock.patch.object(thumbnail_updates, 'extract_preview_thumbnail', return_value=image) as extract, \
+            mock.patch.object(thumbnail_updates, 'upload_thumbnail_image', return_value={'thumbnail': 'new.png'}):
+        worker.run()
+    assert extract.call_args.args[0] == str(primary)
+    assert extract.call_args.kwargs['input_colourspace'] == 'ARRI LogC4'
+    assert 'frame_index' not in extract.call_args.kwargs
+    assert not list(tmp_path.rglob('timeline_import.json'))

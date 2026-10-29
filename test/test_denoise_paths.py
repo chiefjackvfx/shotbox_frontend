@@ -34,3 +34,42 @@ class DenoisePathsTests(unittest.TestCase):
             self.assertEqual((first, last), (1001, 1010))
             self.assertIn('_v003', str(resolve_output(root, 'shot name', 'plate_02')[0]))
             self.assertIn('shot name_DN_v001', str(resolve_output(root, 'shot name')[0]))
+
+
+def test_denoise_tools_probe_media_without_an_import_sidecar(tmp_path):
+    from types import SimpleNamespace
+    from unittest import mock
+    import timeline_import
+    import media_colourspace
+    from test.denoise_test_support import source_settings
+
+    source = tmp_path / 'plates' / 'camera.mxf'
+    source.parent.mkdir()
+    source.touch()
+    info = timeline_import.MediaInfo(str(source), fps=24, metadata={'camera': 'ARRI'})
+    with mock.patch.object(timeline_import, 'probe_media', return_value=info) as probe, \
+            mock.patch.object(media_colourspace, 'detect_input_colourspace',
+                              return_value=SimpleNamespace(colourspace='ARRI LogC4')) as detect:
+        assert source_settings(source) == {'fps': 24, 'colourspace': 'ARRI LogC4'}
+        probe.assert_called_once_with(str(source))
+        detect.assert_called_once_with(info.metadata)
+    assert not list(tmp_path.rglob('timeline_import.json'))
+
+
+def test_denoise_tools_still_read_existing_legacy_overrides(tmp_path):
+    import json
+    from unittest import mock
+    import timeline_import
+    from test.denoise_test_support import source_settings
+
+    source = tmp_path / 'plates' / 'camera.mxf'
+    source.parent.mkdir()
+    source.touch()
+    assets = tmp_path / 'Shot_Assets'
+    assets.mkdir()
+    (assets / 'timeline_import.json').write_text(json.dumps({
+        'fps': 25, 'plates': [{'copied_path': str(source), 'input_colourspace': 'ARRI LogC3 (EI800)'}],
+    }))
+    with mock.patch.object(timeline_import, 'probe_media') as probe:
+        assert source_settings(source) == {'fps': 25, 'colourspace': 'ARRI LogC3 (EI800)'}
+        probe.assert_not_called()

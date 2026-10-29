@@ -121,6 +121,7 @@ DEFAULT_SETTINGS = {
     # UI density settings
     "shots_layout_mode": "list",  # list/grid/v02_grid
     "compact_view_enabled": False,
+    "nukedash_show_tasks": True,
     "nukedash_task_style": "checklist",  # card/checklist
     "preview_thumbnail_size": "Medium",  # NoThumb/Tiny/Small/Medium/Large
     "card_spacing": 8,  # px between shot cards

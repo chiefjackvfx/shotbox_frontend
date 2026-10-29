@@ -425,6 +425,77 @@ class NukeDashRegressionTests(unittest.TestCase):
             self.assertIsNone(new.cached_username_from_id(10))
         request.assert_not_called()
 
+    def test_show_tasks_checkbox_hides_sections_and_preserves_data_and_filters(self):
+        data = jobs_data()
+        shot_data = data[0]['timelines'][0]['shots'][0]
+        template = shot_data['tasks'][0]
+        shot_data['tasks'] = [dict(template, id=index, title=f'Task {index}') for index in range(7, 13)]
+        page = self.page(data)
+        card = self.shot(page)
+        task = self.task(page)
+        original_tasks = list(card.data['tasks'])
+        original_filter = page._current_structured_filter_state()
+        self.assertTrue(page.checkBox_show_tasks.isChecked())
+        self.assertTrue(page.search_bar.isAncestorOf(page.checkBox_show_tasks))
+        self.assertFalse(page.top_bar.isAncestorOf(page.checkBox_show_tasks))
+        self.assertFalse(card.frame.isHidden())
+        self.assertFalse(card.frame_tasks.isHidden())
+        self.app.processEvents()
+        full_height = card.sizeHint().height()
+        before_requests = len(self.requests)
+        page.checkBox_show_tasks.setChecked(False)
+        self.app.processEvents()
+        self.assertTrue(card.frame.isHidden())
+        self.assertTrue(card.frame_tasks.isHidden())
+        self.assertLess(card.sizeHint().height(), full_height)
+        self.assertFalse(self.settings.get('nukedash_show_tasks'))
+        self.assertEqual(card.data['tasks'], original_tasks)
+        self.assertEqual(page._current_structured_filter_state(), original_filter)
+        self.assertEqual(len(self.requests), before_requests)
+        page.checkBox_show_tasks.setChecked(True)
+        self.app.processEvents()
+        self.assertFalse(card.frame.isHidden())
+        self.assertFalse(card.frame_tasks.isHidden())
+        self.assertIs(self.task(page), task)
+        self.assertTrue(self.settings.get('nukedash_show_tasks'))
+
+    def test_hidden_task_sections_survive_refresh_loading_and_layout_changes(self):
+        import copy
+        self.settings.set('nukedash_show_tasks', False)
+        page = self.page(jobs_data())
+        self.assertFalse(page.checkBox_show_tasks.isChecked())
+        self.assertTrue(self.shot(page).frame_tasks.isHidden())
+        data = copy.deepcopy(jobs_data()[0])
+        additional = copy.deepcopy(data['timelines'][0]['shots'][0])
+        additional['id'] = 1002
+        additional['title'] = 'SH020'
+        additional['tasks'][0]['id'] = 8
+        data['timelines'][0]['shots'].append(additional)
+        other_timeline = copy.deepcopy(data['timelines'][0])
+        other_timeline['id'] = 102
+        other_timeline['title'] = 'Other timeline'
+        other_timeline['shots'] = [copy.deepcopy(additional)]
+        other_timeline['shots'][0]['id'] = 1003
+        data['timelines'].append(other_timeline)
+        page._silent_update_job(data)
+        self.assertEqual(len(list(page._iter_shot_cards())), 3)
+        for mode in ('grid', 'v02_grid', 'list'):
+            page._shots_layout_mode = mode
+            for compact in (True, False):
+                page.checkBox_compact_view.setChecked(compact)
+                page._apply_compact_view_state()
+                for card in page._iter_shot_cards():
+                    self.assertTrue(card.frame.isHidden())
+                    self.assertTrue(card.frame_tasks.isHidden())
+        page._start_job_loading(data)
+        self.wait(lambda: not page._is_chunked_loading)
+        self.assertEqual(len(list(page._iter_shot_cards())), 3)
+        for card in page._iter_shot_cards():
+            self.assertTrue(card.frame_tasks.isHidden())
+        restored = self.page(jobs_data())
+        self.assertFalse(restored.checkBox_show_tasks.isChecked())
+        self.assertTrue(self.shot(restored).frame_tasks.isHidden())
+
     def test_empty_initial_response_finishes_modal_loading(self):
         page = self.page()
         page._initial_load = True

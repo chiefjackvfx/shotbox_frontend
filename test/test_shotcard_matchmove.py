@@ -110,6 +110,9 @@ class FakeMenu:
     def exec(self, pos):
         self.exec_pos = pos
 
+    def deleteLater(self):
+        self.deleted = True
+
 
 class AcceptedMatchmoveDialog:
     camera_preset_name = "Alexa 35"
@@ -215,7 +218,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             card, fake_folders = self._make_card(str(shot_root))
 
             menu = FakeMenu()
-            with mock.patch.object(widgets, "find_latest_matchmove_project", return_value=None), \
+            with mock.patch.object(widgets, "list_matchmove_projects", return_value=[]), \
                 mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[]):
                 card._populate_assets_menu(menu)
 
@@ -246,22 +249,172 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 [(str(render_path), False, "SQ010_SH020")],
             )
 
-    def test_assets_menu_opens_latest_matchmove_when_project_exists(self):
+    def test_render_button_green_tracks_latest_render_and_backend_conform_updates(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            card, _ = self._make_card(tmpdir, {"last_conform": "sho010_v001.mov"})
+            card.setStyleSheet((FRONTEND_DIR / "ui" / "dark_v01.qss").read_text())
+            card._set_render_file_state(render_path=str(Path(tmpdir) / "sho010_v001.mov"),
+                                        render_display="sho010_v001.mov", render_type="mov")
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "true")
+            self.assertEqual(card.btn_latest_render.palette().button().color().name(), "#2f4237")
+            card._set_render_file_state(render_path=str(Path(tmpdir) / "sho010_v002.mov"),
+                                        render_display="sho010_v002.mov", render_type="mov")
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "false")
+            self.assertNotEqual(card.btn_latest_render.palette().button().color().name(), "#2f4237")
+            card.update_from_data(dict(card.data, last_conform="sho010_v002.mov"))
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "true")
+            card._set_render_file_state()
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "false")
+            self.assertEqual(card.label_last_conform.styleSheet(), "")
+
+    def test_render_conform_comparison_supports_exr_labels_paths_and_compact_cards(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cases = [
+                ("sho010_v003.####.exr 1001-1040 (EXR)", "sho010_v003.####.exr 1001-1060"),
+                (r"R:\show\renders\sho010_v003.mov", "sho010_v003.mov"),
+                ("sho010_v003.mov (MOV)", "sho010_v003.mov"),
+            ]
+            for last_conform, display in cases:
+                with self.subTest(last_conform=last_conform):
+                    card, _ = self._make_card(tmpdir, {"last_conform": last_conform})
+                    card._set_render_file_state(render_path=str(Path(tmpdir) / "render"), render_display=display)
+                    for grid in (True, False):
+                        card.set_v02_grid(grid)
+                        for compact in (True, False):
+                            card.set_compact_mode(compact)
+                            card._refresh_last_conform_indicator()
+                            self.assertEqual(card.btn_latest_render.property("is_conformed"), "true")
+
+    def test_render_without_last_conform_never_shows_conformed_green(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            card, _ = self._make_card(tmpdir)
+            card._set_render_file_state(render_path=str(Path(tmpdir) / "sho010_v001.mov"),
+                                        render_display="sho010_v001.mov")
+            for value in (None, "", "None", "sho010_v002.mov"):
+                card.update_from_data(dict(card.data, last_conform=value))
+                self.assertEqual(card.btn_latest_render.property("is_conformed"), "false")
+
+    def test_successful_dvr_push_updates_green_even_when_api_save_fails(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            card, _ = self._make_card(tmpdir)
+            card._set_render_file_state(render_path=str(Path(tmpdir) / "sho010_v001.mov"),
+                                        render_display="sho010_v001.mov", render_type="mov")
+            with mock.patch.object(card._api, "update_shot", side_effect=RuntimeError("offline")):
+                card.btn_latest_render.click()
+            self.assertEqual(card.data["last_conform"], "sho010_v001.mov")
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "true")
+
+    def test_compact_dvr_push_uses_filename_when_render_display_is_missing(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            card, _ = self._make_card(tmpdir)
+            card._set_render_file_state(render_path=str(Path(tmpdir) / "sho010_v001.mov"), render_type="mov")
+            card.set_compact_mode(True)
+            self.assertEqual(card.btn_latest_render.text(), "Render")
+            card.btn_latest_render.click()
+            self.assertEqual(card.data["last_conform"], "sho010_v001.mov")
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "true")
+
+    def test_failed_dvr_push_does_not_mark_render_conformed(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            card, folders = self._make_card(tmpdir)
+            card._set_render_file_state(render_path=str(Path(tmpdir) / "sho010_v001.mov"),
+                                        render_display="sho010_v001.mov", render_type="mov")
+            with mock.patch.object(folders, "push2dvr", return_value=False), \
+                    mock.patch.object(card._api, "update_shot") as update:
+                card.btn_latest_render.click()
+                update.assert_not_called()
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "false")
+
+    def test_polled_new_render_clears_green_without_flashing_conformed_colour(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            card, folders = self._make_card(tmpdir, {"last_conform": "sho010_v001.mov"})
+            card._set_render_file_state(render_path=str(Path(tmpdir) / "sho010_v001.mov"),
+                                        render_display="sho010_v001.mov", render_type="mov")
+            new_render = {"render_path": str(Path(tmpdir) / "sho010_v002.mov"),
+                          "display_name": "sho010_v002.mov", "render_relpath": "sho010_v002.mov",
+                          "type": "mov", "version": 2, "mtime": 123}
+            with mock.patch.object(folders, "latest_render_info", return_value=new_render), \
+                    mock.patch.object(card, "_flash_button_green") as flash:
+                card._check_for_new_render()
+                flash.assert_not_called()
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "false")
+            card.update_from_data(dict(card.data, last_conform="sho010_v002.mov"))
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "true")
+            with mock.patch.object(folders, "latest_render_info", return_value=None):
+                card._check_for_new_render()
+            self.assertEqual(card.btn_latest_render.property("is_conformed"), "false")
+
+    def test_existing_project_uses_direct_3de_button_and_leaves_assets_menu_plain(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
-            shot_root.mkdir(parents=True)
-            card, _fake_folders = self._make_card(str(shot_root))
+            work = shot_root / "Shot_Assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            (work / "sho010_matchmove_v001.3de").touch()
+            latest = work / "sho010_matchmove_v003.3de"
+            latest.touch()
+            card, _ = self._make_card(str(shot_root))
+            self.assertFalse(card.btn_open_matchmove.isHidden())
+            self.assertEqual(card.btn_open_matchmove.text(), latest.name.replace("_matchmove", ""))
+            with mock.patch.object(widgets, "open_3de_project") as open_project:
+                card.btn_open_matchmove.click()
+                open_project.assert_called_once_with(str(latest))
+            menu = FakeMenu()
+            card._populate_assets_menu(menu)
+            self.assertEqual([action.text for action in menu.actions],
+                             ["Open Assets in File Browser", "No renders/precomp folder found"])
+            self.assertFalse(menu.actions[1].enabled)
+            self.assertEqual(menu.submenus, [])
+            self.assertEqual(menu.separator_count, 1)
+            self.assertEqual(card.btn_open_assets.text(), "Assets")
+            self.assertIsNone(card.btn_open_assets.property("has_matchmove"))
+            self.assertNotIn("3DE", card.btn_open_assets.toolTip())
 
+    def test_assets_right_click_allows_creation_with_existing_project(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work = Path(tmpdir) / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            project = work / "sho010_matchmove_v003.3de"
+            project.write_text("existing project")
+            sequence = SimpleNamespace(folder_path=str(Path(tmpdir) / "renders" / "precomp" / "plateA"))
+            card, _ = self._make_card(tmpdir)
             FakeMenu.instances = []
             with mock.patch.object(widgets, "QMenu", FakeMenu), \
-                mock.patch.object(widgets, "find_latest_matchmove_project", return_value=shot_root / "Shot_Assets" / "matchmove" / "work" / "sho010_matchmove_v003.3de"), \
-                mock.patch.object(card, "_open_matchmove_project") as open_project:
-                shown = card._show_assets_matchmove_menu(QPoint(10, 20))
-                self.assertTrue(shown)
-                self.assertEqual(FakeMenu.instances[0].actions[0].text, "Open Assets in File Browser")
-                self.assertEqual(FakeMenu.instances[0].actions[1].text, "Open sho010_matchmove_v003.3de")
-                FakeMenu.instances[0].actions[1].triggered.fire()
-                open_project.assert_called_once()
+                    mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[sequence]), \
+                    mock.patch.object(card, "_create_matchmove_project") as create:
+                card.btn_open_assets.customContextMenuRequested.emit(QPoint(1, 2))
+                menu = FakeMenu.instances[0]
+                self.assertEqual(menu.submenus[0][0], "Create Matchmove")
+                menu.submenus[0][1].submenus[0][1].actions[0].triggered.fire()
+                create.assert_called_once_with(sequence)
+            self.assertEqual(project.read_text(), "existing project")
+            self.assertFalse(card.btn_open_matchmove.isHidden())
+            self.assertNotIn(f"Open {project.name}", [action.text for action in menu.actions])
+
+    def test_3de_chooser_selects_latest_per_name_and_keeps_standalone_projects(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
+            work = shot_root / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            for name in ("A_matchmove_v001.3de", "A_matchmove_v002.3de", "B.3DE"):
+                (work / name).touch()
+            card, _ = self._make_card(str(shot_root))
+            FakeMenu.instances = []
+            with mock.patch.object(widgets, "QMenu", FakeMenu), \
+                    mock.patch.object(widgets, "open_3de_project") as open_project:
+                card.btn_open_matchmove.click()
+                open_project.assert_not_called()
+                menu = FakeMenu.instances[0]
+                self.assertEqual([action.text for action in menu.actions],
+                                 ["Open A_matchmove_v002.3de", "Open B.3DE"])
+                menu.actions[0].triggered.fire()
+                menu.actions[1].triggered.fire()
+                self.assertEqual(open_project.call_args_list,
+                                 [mock.call(str(work / "A_matchmove_v002.3de")),
+                                  mock.call(str(work / "B.3DE"))])
+            self.assertIn("A_matchmove_v002.3de", card.btn_open_matchmove.toolTip())
+            self.assertNotIn("A_matchmove_v001.3de", card.btn_open_matchmove.toolTip())
+            self.assertIn("B.3DE", card.btn_open_matchmove.toolTip())
+            self.assertEqual(card.btn_open_matchmove.text(), "A_v002.3de (+1)")
 
     def test_assets_menu_lists_multiple_precomp_sequences_under_create_submenu(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -279,14 +432,30 @@ class ShotCardMatchmoveTests(unittest.TestCase):
 
             FakeMenu.instances = []
             with mock.patch.object(widgets, "QMenu", FakeMenu), \
-                mock.patch.object(widgets, "find_latest_matchmove_project", return_value=None), \
+                mock.patch.object(widgets, "list_matchmove_projects", return_value=[]), \
                 mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=sequence_infos):
                 shown = card._show_assets_matchmove_menu(QPoint(1, 2))
 
             self.assertTrue(shown)
             self.assertEqual(FakeMenu.instances[0].submenus[0][0], "Create Matchmove")
             submenu = FakeMenu.instances[0].submenus[0][1]
-            self.assertEqual([action.text for action in submenu.actions], ["plateA", "plateB"])
+            self.assertEqual([label for label, _ in submenu.submenus], ["plateA", "plateB"])
+            self.assertTrue(FakeMenu.instances[0].deleted)
+            self.assertEqual([action.text for action in submenu.submenus[0][1].actions], ["Create Matchmove"])
+
+    def test_unavailable_sequence_preview_does_not_block_matchmove_creation(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            card, _ = self._make_card(tmpdir)
+            sequence = SimpleNamespace(folder_path=str(Path(tmpdir) / "plateA"))
+            menu = FakeMenu()
+            with mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[sequence]), \
+                    mock.patch.object(widgets, "find_exr_preview_frames", side_effect=OSError("offline")), \
+                    mock.patch.object(widgets, "EXRMenuPreview") as preview, \
+                    mock.patch.object(card, "_create_matchmove_project") as create:
+                card._populate_assets_menu(menu)
+                menu.submenus[0][1].submenus[0][1].actions[0].triggered.fire()
+                preview.assert_not_called()
+                create.assert_called_once_with(sequence)
 
     def test_assets_menu_shows_disabled_message_when_no_valid_sequences_exist(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -296,7 +465,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
 
             FakeMenu.instances = []
             with mock.patch.object(widgets, "QMenu", FakeMenu), \
-                mock.patch.object(widgets, "find_latest_matchmove_project", return_value=None), \
+                mock.patch.object(widgets, "list_matchmove_projects", return_value=[]), \
                 mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[]):
                 shown = card._show_assets_matchmove_menu(QPoint(3, 4))
 
@@ -315,7 +484,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
 
             FakeMenu.instances = []
             with mock.patch.object(widgets, "QMenu", FakeMenu), \
-                mock.patch.object(widgets, "find_latest_matchmove_project", return_value=None), \
+                mock.patch.object(widgets, "list_matchmove_projects", return_value=[]), \
                 mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=sequence_infos) as list_sequences:
                 shown = card._show_assets_matchmove_menu(QPoint(6, 7))
 
@@ -343,9 +512,10 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             card, _fake_folders = self._make_card(str(shot_root))
 
             self.assertEqual(card.btn_open_assets.text(), "Assets")
-            self.assertEqual(card.btn_open_assets.property("has_matchmove"), "false")
+            self.assertEqual(card.btn_open_matchmove.property("has_matchmove"), "false")
+            self.assertTrue(card.btn_open_matchmove.isHidden())
 
-            invalid_project = work_dir / "different_name.3de"
+            invalid_project = work_dir / "different_name.txt"
             invalid_project.write_text("")
             card.apply_file_state_snapshot(None)
             self.assertEqual(card.btn_open_assets.text(), "Assets")
@@ -353,15 +523,17 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             valid_project = work_dir / "sho010_matchmove_v003.3de"
             valid_project.write_text("")
             card.apply_file_state_snapshot(None)
-            self.assertEqual(card.btn_open_assets.text(), "Assets · 3DE")
-            self.assertEqual(card.btn_open_assets.property("has_matchmove"), "true")
-            self.assertIn(valid_project.name, card.btn_open_assets.toolTip())
-            self.assertIn(str(valid_project), card.btn_open_assets.toolTip())
+            self.assertEqual(card.btn_open_assets.text(), "Assets")
+            self.assertFalse(card.btn_open_matchmove.isHidden())
+            self.assertEqual(card.btn_open_matchmove.property("has_matchmove"), "true")
+            self.assertIn(valid_project.name, card.btn_open_matchmove.toolTip())
+            self.assertIn(str(valid_project), card.btn_open_matchmove.toolTip())
 
             valid_project.unlink()
             card.apply_file_state_snapshot(None)
             self.assertEqual(card.btn_open_assets.text(), "Assets")
-            self.assertEqual(card.btn_open_assets.property("has_matchmove"), "false")
+            self.assertEqual(card.btn_open_matchmove.property("has_matchmove"), "false")
+            self.assertTrue(card.btn_open_matchmove.isHidden())
 
     def test_matchmove_indicator_uses_configured_matchmove_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -378,8 +550,207 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 data_overrides={"matchmove_path": str(configured_dir)},
             )
 
-            self.assertEqual(card.btn_open_assets.text(), "Assets · 3DE")
-            self.assertIn(project.name, card.btn_open_assets.toolTip())
+            self.assertEqual(card.btn_open_assets.text(), "Assets")
+            self.assertFalse(card.btn_open_matchmove.isHidden())
+            self.assertIn(project.name, card.btn_open_matchmove.toolTip())
+
+    def test_3de_visibility_follows_data_updates_and_compact_mode(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "VFX" / "edit" / "sho010"
+            root.mkdir(parents=True)
+            custom = Path(tmpdir) / "custom" / "work"
+            custom.mkdir(parents=True)
+            project = custom / "solve.3de"
+            project.touch()
+            card, _ = self._make_card(str(root))
+            self.assertTrue(card.btn_open_matchmove.isHidden())
+            data = dict(card.data, matchmove_path=str(custom.parent))
+            card.update_from_data(data)
+            self.assertFalse(card.btn_open_matchmove.isHidden())
+            card.set_compact_mode(True)
+            self.assertTrue(card.btn_open_matchmove.isHidden())
+            card.apply_file_state_snapshot(None)
+            self.assertTrue(card.btn_open_matchmove.isHidden())
+            card.update_from_data(data)
+            self.assertTrue(card.btn_open_matchmove.isHidden())
+            card.set_compact_mode(False)
+            self.assertFalse(card.btn_open_matchmove.isHidden())
+            project.unlink()
+            card.apply_file_state_snapshot(None)
+            self.assertTrue(card.btn_open_matchmove.isHidden())
+            card.set_compact_mode(True)
+            card.set_compact_mode(False)
+            self.assertTrue(card.btn_open_matchmove.isHidden())
+
+    def test_3de_click_rescans_and_opens_newer_version(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work = Path(tmpdir) / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            (work / "solve_matchmove_v001.3de").touch()
+            card, _ = self._make_card(tmpdir)
+            latest = work / "solve_matchmove_v002.3de"
+            latest.touch()
+            with mock.patch.object(widgets, "open_3de_project") as launch:
+                card.btn_open_matchmove.click()
+                launch.assert_called_once_with(str(latest))
+                self.assertEqual(card.btn_open_matchmove.text(), latest.name.replace("_matchmove", ""))
+
+    def test_3de_click_handles_deleted_files_and_launch_errors(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work = Path(tmpdir) / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            project = work / "solve.3de"
+            project.touch()
+            card, _ = self._make_card(tmpdir)
+            with mock.patch.object(widgets, "open_3de_project", side_effect=RuntimeError("launch failed")) as launch, \
+                    mock.patch.object(widgets.QMessageBox, "warning") as warning:
+                card.btn_open_matchmove.click()
+                self.assertIn("launch failed", warning.call_args.args[2])
+                project.unlink()
+                launch.reset_mock()
+                card.btn_open_matchmove.click()
+                launch.assert_not_called()
+                self.assertTrue(card.btn_open_matchmove.isHidden())
+                self.assertIn("No 3DE projects", warning.call_args.args[2])
+
+    def test_matchmove_right_click_opens_work_and_export_folders(self):
+        from PyQt6.QtCore import Qt
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "sho010"
+            root.mkdir()
+            for relative, configured in (("shot_assets/matchmove", False),
+                                         ("Shot_Assets/matchmove", False),
+                                         ("custom_matchmove", True)):
+                with self.subTest(relative=relative):
+                    directory = root / relative
+                    work = directory / "work"
+                    work.mkdir(parents=True)
+                    export = directory / "export"
+                    export.mkdir()
+                    project = work / "solve_matchmove_v003.3de"
+                    project.touch()
+                    overrides = {"matchmove_path": str(directory)} if configured else None
+                    card, folders = self._make_card(str(root), overrides)
+                    self.assertEqual(card.btn_open_matchmove.text(), project.name.replace("_matchmove", ""))
+                    self.assertEqual(card.btn_open_matchmove.contextMenuPolicy(), Qt.ContextMenuPolicy.CustomContextMenu)
+                    FakeMenu.instances = []
+                    with mock.patch.object(widgets, "QMenu", FakeMenu):
+                        card.btn_open_matchmove.customContextMenuRequested.emit(QPoint(3, 4))
+                        menu = FakeMenu.instances[0]
+                        self.assertEqual(menu.exec_pos, card.btn_open_matchmove.mapToGlobal(QPoint(3, 4)))
+                        self.assertEqual([action.text for action in menu.actions],
+                                         ["Open Work in Explorer", "Open Export in Explorer"])
+                        menu.actions[0].triggered.fire()
+                        menu.actions[1].triggered.fire()
+                    self.assertEqual(folders.opened_locations, [work, export])
+                    project.unlink()
+                    work.rmdir()
+                    export.rmdir()
+                    directory.rmdir()
+
+    def test_matchmove_label_shortens_name_without_renaming_project(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work = Path(tmpdir) / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            project = work / "sho010_MATCHMOVE_v003.3DE"
+            project.touch()
+            card, _ = self._make_card(tmpdir)
+            self.assertEqual(card.btn_open_matchmove.text(), "sho010_v003.3DE")
+            self.assertIn(project.name, card.btn_open_matchmove.toolTip())
+            with mock.patch.object(widgets, "open_3de_project") as launch:
+                card.btn_open_matchmove.click()
+                launch.assert_called_once_with(str(project))
+            self.assertTrue(project.is_file())
+
+    def test_matchmove_folder_errors_do_not_create_missing_directory(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir) / "sho010"
+            work = root / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            project = work / "solve.3de"
+            project.touch()
+            card, folders = self._make_card(str(root))
+            with mock.patch.object(widgets.QMessageBox, "warning") as warning:
+                with mock.patch.object(folders, "openFileLocation", side_effect=OSError("Explorer failed")):
+                    card._open_matchmove_folder()
+                    self.assertIn("Explorer failed", warning.call_args.args[2])
+                project.unlink()
+                work.rmdir()
+                card._open_matchmove_folder()
+                self.assertIn("unavailable", warning.call_args.args[2])
+                self.assertFalse(work.exists())
+                self.assertEqual(folders.opened_locations, [])
+                card._open_matchmove_folder("export")
+                self.assertIn("export folder is unavailable", warning.call_args.args[2])
+                self.assertFalse((work.parent / "export").exists())
+
+    def test_long_matchmove_filename_fits_grid_button_with_full_tooltip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work = Path(tmpdir) / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            project = work / ("long_solve_name_" * 7 + "matchmove_v003.3de")
+            project.touch()
+            card, _ = self._make_card(tmpdir)
+            card.setStyleSheet((FRONTEND_DIR / "ui" / "dark_v01.qss").read_text())
+            card.set_v02_grid(True)
+            card.prepare_layout_width(400)
+            card.resize(400, 500)
+            card.show()
+            self.app.processEvents()
+            self.assertEqual(card.btn_open_matchmove.text(), project.name.replace("_matchmove", ""))
+            self.assertIn(str(project), card.btn_open_matchmove.toolTip())
+            self.assertLessEqual(card.btn_open_matchmove.width(), card.btn_open_matchmove.preferred_width_limit)
+            self.assertEqual(card.btn_open_matchmove.height(), card.btn_open_assets.height())
+
+    def test_3de_click_reports_discovery_failure(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work = Path(tmpdir) / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            (work / "solve.3de").touch()
+            card, _ = self._make_card(tmpdir)
+            with mock.patch.object(widgets, "list_matchmove_projects", side_effect=OSError("access denied")), \
+                    mock.patch.object(widgets.QMessageBox, "warning") as warning:
+                card.btn_open_matchmove.click()
+                self.assertIn("access denied", warning.call_args.args[2])
+                self.assertTrue(card.btn_open_matchmove.isHidden())
+
+    def test_3de_chooser_rechecks_file_before_launch(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work = Path(tmpdir) / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            first = work / "first.3de"
+            first.touch()
+            (work / "second.3de").touch()
+            card, _ = self._make_card(tmpdir)
+            FakeMenu.instances = []
+            with mock.patch.object(widgets, "QMenu", FakeMenu), \
+                    mock.patch.object(widgets, "open_3de_project") as launch, \
+                    mock.patch.object(widgets.QMessageBox, "warning") as warning:
+                card.btn_open_matchmove.click()
+                first.unlink()
+                FakeMenu.instances[0].actions[0].triggered.fire()
+                launch.assert_not_called()
+                self.assertIn("moved or been deleted", warning.call_args.args[2])
+
+    def test_3de_button_stays_in_order_when_switching_grid_layouts(self):
+        from v02_cards import arrange_shot_actions
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work = Path(tmpdir) / "shot_assets" / "matchmove" / "work"
+            work.mkdir(parents=True)
+            (work / "solve.3de").touch()
+            card, _ = self._make_card(tmpdir)
+            for _ in range(2):
+                self.assertEqual([card.horizontalLayout_3.itemAt(i).widget() for i in (1, 2, 3)],
+                                 [card.btn_open_assets, card.btn_open_matchmove, card.btn_open_precomp])
+                card.set_v02_grid(True)
+                arrange_shot_actions(card)
+                folders = card.horizontalLayout_3.itemAt(1).layout()
+                self.assertEqual([folders.itemAt(i).widget() for i in range(3)],
+                                 [card.btn_open_assets, card.btn_open_matchmove, card.btn_open_precomp])
+                self.assertEqual(card.btn_open_matchmove.property("v02"), "true")
+                self.assertFalse(card.btn_open_matchmove.isHidden())
+                card.set_v02_grid(False)
+            self.assertFalse(card.btn_open_matchmove.isHidden())
 
     def test_resolve_preview_project_name_prefers_job_title(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -481,10 +852,24 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             make_precomp.assert_called_once_with(clip_path=str(clip_b), plate_name="plate_02")
 
     def test_create_matchmove_project_creates_work_and_export_and_patches_shot(self):
+        self._assert_matchmove_creation()
+
+    def test_assets_creates_next_version_in_existing_default_or_custom_directory(self):
+        for custom in (False, True):
+            with self.subTest(custom=custom):
+                self._assert_matchmove_creation(custom=custom, existing_version=3)
+
+    def _assert_matchmove_creation(self, *, custom=False, existing_version=0):
         with tempfile.TemporaryDirectory() as tmpdir:
             shot_root = Path(tmpdir) / "VFX" / "timeline_A" / "sho010"
             shot_root.mkdir(parents=True)
-            card, _fake_folders = self._make_card(str(shot_root))
+            matchmove_dir = Path(tmpdir) / "shared_matchmove" if custom else shot_root / "shot_assets" / "matchmove"
+            if existing_version:
+                (matchmove_dir / "work").mkdir(parents=True)
+                old_project = matchmove_dir / "work" / f"sho010_matchmove_v{existing_version:03d}.3de"
+                old_project.write_text("preserve existing project")
+            overrides = {"matchmove_path": str(matchmove_dir)} if custom else None
+            card, _fake_folders = self._make_card(str(shot_root), overrides)
 
             sequence_info = SequenceInfo(
                 folder_path=str(shot_root / "renders" / "precomp" / "plateA"),
@@ -507,7 +892,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 status_path="/tmp/status.json",
             )
             updated_data = dict(card.data)
-            updated_data["matchmove_path"] = str(shot_root / "shot_assets" / "matchmove")
+            updated_data["matchmove_path"] = str(matchmove_dir)
 
             def create_project_file(request, _log_callback):
                 Path(request.project_path).touch()
@@ -518,17 +903,25 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 mock.patch.object(widgets, "cleanup_headless_artifacts") as cleanup, \
                 mock.patch.object(widgets, "open_3de_project", return_value=["run_3DE4", "-open", "dummy"]) as open_project, \
                 mock.patch.object(widgets.QMessageBox, "information"), \
-                mock.patch.object(card._api, "update_shot", return_value=updated_data) as update_shot:
-                card._create_matchmove_project(sequence_info)
+                mock.patch.object(card._api, "update_shot", return_value=updated_data) as update_shot, \
+                mock.patch.object(widgets, "list_valid_precomp_sequences", return_value=[sequence_info]):
+                menu = FakeMenu()
+                card._populate_assets_menu(menu)
+                menu.submenus[0][1].submenus[0][1].actions[0].triggered.fire()
 
-            matchmove_dir = shot_root / "shot_assets" / "matchmove"
             self.assertTrue((matchmove_dir / "work").is_dir())
             self.assertTrue((matchmove_dir / "export").is_dir())
             update_shot.assert_called_once_with(card._shot_id, matchmove_path=str(matchmove_dir))
             run_headless.assert_called_once()
-            open_project.assert_called_once()
+            request = run_headless.call_args.args[0]
+            self.assertEqual(request.version, existing_version + 1)
+            self.assertEqual(Path(request.project_path).parent, matchmove_dir / "work")
+            if existing_version:
+                self.assertEqual(old_project.read_text(), "preserve existing project")
+            open_project.assert_called_once_with(request.project_path)
             cleanup.assert_called_once_with(fake_headless_result)
-            self.assertEqual(card.btn_open_assets.text(), "Assets · 3DE")
+            self.assertEqual(card.btn_open_assets.text(), "Assets")
+            self.assertFalse(card.btn_open_matchmove.isHidden())
 
 
 if __name__ == "__main__":

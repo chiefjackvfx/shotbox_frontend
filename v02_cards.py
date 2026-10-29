@@ -109,7 +109,7 @@ def arrange_shot_actions(card):
     files = row(card.btn_open_nuke, card.btn_latest_render)
     files.setStretch(1, 1)
     actions.addLayout(files)
-    folders = row(card.btn_open_assets, card.btn_open_precomp)
+    folders = row(card.btn_open_assets, card.btn_open_matchmove, card.btn_open_precomp)
     folders.addStretch()
     actions.addLayout(folders)
 
@@ -178,7 +178,10 @@ def set_shot_presentation(card, enabled):
         for index, stretch in enumerate(card._legacy_preview_stretches):
             card.horizontalLayout_2.setStretch(index, stretch)
     mark_v02(card, enabled)
-    for frame in (card.frame_7, card.frame_tasks, card.frame_metadata, card.btn_open_assets, card.btn_open_precomp):
+    for frame in (
+        card.frame_7, card.frame_tasks, card.frame_metadata,
+        card.btn_open_assets, card.btn_open_matchmove, card.btn_open_precomp,
+    ):
         frame.setProperty("v02", "true" if enabled else "false")
         frame.style().unpolish(frame)
         frame.style().polish(frame)
@@ -217,6 +220,11 @@ def apply_shot_width(card, width):
     if card.btn_open_nuke.preferred_width_limit != nuke_width_limit:
         card.btn_open_nuke.preferred_width_limit = nuke_width_limit
         card.btn_open_nuke.updateGeometry()
+    matchmove_width_limit = max(1, details_width - card.btn_open_assets.sizeHint().width()
+                                - card.btn_open_precomp.sizeHint().width() - 12)
+    if card.btn_open_matchmove.preferred_width_limit != matchmove_width_limit:
+        card.btn_open_matchmove.preferred_width_limit = matchmove_width_limit
+        card.btn_open_matchmove.updateGeometry()
     arrange_shot_actions(card)
     card.label_last_conform.setToolTip(card.label_last_conform.text())
     for task in getattr(card, "_task_widgets_by_id", {}).values():

@@ -1292,6 +1292,7 @@ class ShotCard(QWidget):
         self._current_thumbnail_url = None
         self._thumbnails_enabled = bool(THUMBNAILS_ENABLED)
         self._compact_mode = False
+        self._tasks_visible = bool(getattr(parent, "_tasks_visible", True))
         self._task_style = _normalize_task_style(task_style)
         self._task_render_state = {}
         self._task_widgets_by_id = {}
@@ -1338,6 +1339,7 @@ class ShotCard(QWidget):
         self._last_render_mtime = None
         self._last_preview_version = None
         self._latest_matchmove_project = None
+        self._matchmove_projects = []
 
         # Color buttons are now styled via QSS (styles_v02.qss)
         # Initial color indicator will be set in update_from_data via _apply_colour_code
@@ -1379,6 +1381,9 @@ class ShotCard(QWidget):
         self.btn_open_assets.customContextMenuRequested.connect(
             lambda pos: self._show_assets_matchmove_menu(self.btn_open_assets.mapToGlobal(pos))
         )
+        self.btn_open_matchmove.clicked.connect(self._on_open_matchmove_clicked)
+        self.btn_open_matchmove.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.btn_open_matchmove.customContextMenuRequested.connect(self._on_matchmove_context_menu)
         self._precomp_menu = QMenu(self)
         self._precomp_menu.aboutToShow.connect(
             lambda: self._populate_precomp_menu(self._precomp_menu)
@@ -1397,6 +1402,7 @@ class ShotCard(QWidget):
         self.set_thumbnails_enabled(self._thumbnails_enabled)
 
         self.update_from_data(data)
+        self.set_tasks_visible(self._tasks_visible)
 
     def _set_nuke_file_state(
         self,
@@ -1644,35 +1650,86 @@ class ShotCard(QWidget):
         assets_dir.mkdir(parents=True, exist_ok=True)
         self.filesIO.openFileLocation(assets_dir)
 
-    def _set_matchmove_project_state(self, latest_project) -> None:
-        self._latest_matchmove_project = latest_project
-        has_matchmove = latest_project is not None
-        _set_dynamic_property(
-            self.btn_open_assets,
-            "has_matchmove",
-            "true" if has_matchmove else "false",
-        )
-        self.btn_open_assets.setText("Assets · 3DE" if has_matchmove else "Assets")
-        if has_matchmove:
-            project_path = str(latest_project)
-            self.btn_open_assets.setToolTip(
-                f"Matchmove: {latest_project.name}\n{project_path}\nClick to open assets · Right-click for options"
-            )
+    def _update_matchmove_button_visibility(self) -> None:
+        self.btn_open_matchmove.setVisible(bool(self._matchmove_projects) and not self._compact_mode)
+
+    def _set_matchmove_project_state(self, projects) -> None:
+        if projects is None:
+            projects = []
+        elif isinstance(projects, (str, Path)):
+            projects = [Path(projects)]
+        self._matchmove_projects = list(projects)
+        self._latest_matchmove_project = projects[0] if projects else None
+        self._update_matchmove_button_visibility()
+        _set_dynamic_property(self.btn_open_matchmove, "has_matchmove", "true" if projects else "false")
+        self.btn_open_assets.setText("Assets")
+        self.btn_open_assets.setToolTip("Open assets folder · Right-click to create matchmove")
+        if projects:
+            suffix = f" (+{len(projects) - 1})" if len(projects) > 1 else ""
+            label = re.sub(r"_matchmove", "", projects[0].name, flags=re.IGNORECASE)
+            self.btn_open_matchmove.setText(f"{label}{suffix}")
+            self.btn_open_matchmove.elide_suffix = suffix
+            details = "\n".join(str(path) for path in projects)
+            action = "Open 3DE project" if len(projects) == 1 else "Choose a 3DE project"
+            self.btn_open_matchmove.setToolTip(f"{action}\n{details}\nRight-click to open work or export folders")
         else:
-            self.btn_open_assets.setToolTip("Open assets folder · Right-click for matchmove options")
+            self.btn_open_matchmove.setText("3DE")
+            self.btn_open_matchmove.elide_suffix = ""
+            self.btn_open_matchmove.setToolTip("")
+
+    def _on_matchmove_context_menu(self, pos) -> None:
+        menu = QMenu(self)
+        for folder in ("work", "export"):
+            action = menu.addAction(f"Open {folder.title()} in Explorer")
+            action.triggered.connect(
+                lambda checked=False, folder=folder: self._open_matchmove_folder(folder)
+            )
+        menu.exec(self.btn_open_matchmove.mapToGlobal(pos))
+
+    def _open_matchmove_folder(self, folder: str = "work") -> None:
+        try:
+            helpers = _load_matchmove_helpers()
+            builders = {"work": helpers.build_work_directory, "export": helpers.build_export_directory}
+            directory = Path(builders[folder](self._resolved_matchmove_dir()))
+            if not directory.is_dir():
+                raise FileNotFoundError(f"The 3DE {folder} folder is unavailable:\n{directory}")
+            self.filesIO.openFileLocation(str(directory))
+        except Exception as exc:
+            QMessageBox.warning(self, "Open Matchmove Folder", f"Could not open the {folder} folder.\n\n{exc}")
+
+    def _on_open_matchmove_clicked(self) -> None:
+        try:
+            projects = list_matchmove_projects(self._resolved_matchmove_dir())
+            self._set_matchmove_project_state(projects)
+        except Exception as exc:
+            self._set_matchmove_project_state([])
+            QMessageBox.warning(self, "Open Matchmove", f"Could not find the 3DE projects.\n\n{exc}")
+            return
+        if not projects:
+            QMessageBox.warning(
+                self, "Open Matchmove",
+                "No 3DE projects are available for this shot. The files may have moved or been deleted.",
+            )
+        elif len(projects) == 1:
+            self._open_matchmove_project(str(projects[0]))
+        else:
+            menu = QMenu(self)
+            for project in projects:
+                action = menu.addAction(f"Open {project.name}")
+                action.triggered.connect(
+                    lambda checked=False, path=str(project): self._open_matchmove_project(path)
+                )
+            menu.exec(self.btn_open_matchmove.mapToGlobal(self.btn_open_matchmove.rect().bottomLeft()))
 
     def _refresh_matchmove_state(self):
-        latest_project = None
+        projects = []
         if self.shot_dir:
             try:
-                latest_project = find_latest_matchmove_project(
-                    self._resolved_matchmove_dir(),
-                    self._shot_title(),
-                )
+                projects = list_matchmove_projects(self._resolved_matchmove_dir())
             except Exception:
-                latest_project = None
-        self._set_matchmove_project_state(latest_project)
-        return latest_project
+                pass
+        self._set_matchmove_project_state(projects)
+        return projects[0] if projects else None
 
     def _populate_assets_menu(self, menu: QMenu) -> bool:
         if not self.shot_dir:
@@ -1681,46 +1738,46 @@ class ShotCard(QWidget):
         menu.clear()
         open_assets = menu.addAction("Open Assets in File Browser")
         open_assets.triggered.connect(self._open_shot_assets)
-        menu.addSeparator()
-
         try:
             try:
                 _load_matchmove_helpers()
             except Exception as exc:
                 self._set_matchmove_project_state(None)
                 _show_matchmove_unavailable(self, exc)
+                menu.addSeparator()
                 unavailable = menu.addAction("Matchmove unavailable")
                 unavailable.setEnabled(False)
                 return True
 
-            shot_name = self._shot_title()
             matchmove_dir = self._resolved_matchmove_dir()
-            latest_project = find_latest_matchmove_project(matchmove_dir, shot_name)
-            self._set_matchmove_project_state(latest_project)
+            projects = list_matchmove_projects(matchmove_dir)
+            self._set_matchmove_project_state(projects)
             shot_root = self._normalized_shot_dir()
 
-            if latest_project is not None:
-                action = menu.addAction(f"Open {latest_project.name}")
-                action.triggered.connect(
-                    lambda checked=False, path=str(latest_project): self._open_matchmove_project(path)
-                )
+            menu.addSeparator()
+            sequence_infos = list_valid_precomp_sequences(shot_root)
+            if sequence_infos:
+                create_menu = menu.addMenu("Create Matchmove")
+                for sequence_info in sequence_infos:
+                    label = Path(sequence_info.folder_path).name
+                    sequence_menu = create_menu.addMenu(label)
+                    action = sequence_menu.addAction("Create Matchmove")
+                    action.triggered.connect(
+                        lambda checked=False, info=sequence_info: self._create_matchmove_project(info)
+                    )
+                    try:
+                        preview_frames = find_exr_preview_frames(sequence_info.folder_path)
+                    except OSError:
+                        preview_frames = ()
+                    if preview_frames:
+                        EXRMenuPreview(sequence_menu, preview_frames)
             else:
-                sequence_infos = list_valid_precomp_sequences(shot_root)
-                if sequence_infos:
-                    create_menu = menu.addMenu("Create Matchmove")
-                    for sequence_info in sequence_infos:
-                        label = Path(sequence_info.folder_path).name
-                        action = create_menu.addAction(label)
-                        action.triggered.connect(
-                            lambda checked=False, info=sequence_info: self._create_matchmove_project(info)
-                        )
+                precomp_dir = Path(shot_root) / "renders" / "precomp"
+                if precomp_dir.is_dir():
+                    empty_action = menu.addAction("No valid EXR precomp folders found")
                 else:
-                    precomp_dir = Path(shot_root) / "renders" / "precomp"
-                    if precomp_dir.is_dir():
-                        empty_action = menu.addAction("No valid EXR precomp folders found")
-                    else:
-                        empty_action = menu.addAction("No renders/precomp folder found")
-                    empty_action.setEnabled(False)
+                    empty_action = menu.addAction("No renders/precomp folder found")
+                empty_action.setEnabled(False)
             return True
         except Exception as exc:
             self._set_matchmove_project_state(None)
@@ -1748,13 +1805,19 @@ class ShotCard(QWidget):
     def _show_assets_matchmove_menu(self, global_pos) -> bool:
         """Show the Assets menu at an explicit position for compatibility."""
         menu = QMenu(self)
-        shown = self._populate_assets_menu(menu)
-        if shown:
-            menu.exec(global_pos)
-        return shown
+        try:
+            shown = self._populate_assets_menu(menu)
+            if shown:
+                menu.exec(global_pos)
+            return shown
+        finally:
+            menu.deleteLater()
 
     def _open_matchmove_project(self, project_path: str) -> None:
         try:
+            if not Path(project_path).is_file():
+                self._refresh_matchmove_state()
+                raise FileNotFoundError("The 3DE project has moved or been deleted.")
             open_3de_project(project_path)
         except Exception as exc:
             QMessageBox.warning(
@@ -1775,7 +1838,7 @@ class ShotCard(QWidget):
             return
 
         shot_name = self._shot_title()
-        matchmove_dir = self._default_matchmove_dir()
+        matchmove_dir = self._resolved_matchmove_dir()
         project_dir, export_dir, project_path, version = resolve_project_path(matchmove_dir, shot_name)
 
         os.makedirs(matchmove_dir, exist_ok=True)
@@ -2038,24 +2101,28 @@ class ShotCard(QWidget):
             self.btn_latest_render.setText("No Render")
 
     def _refresh_last_conform_indicator(self) -> None:
-        if not hasattr(self, "label_last_conform"):
-            return
-
         last_conform = (self.data or {}).get("last_conform")
-        if last_conform and last_conform not in (None, "None", ""):
-            self.label_last_conform.setText(last_conform)
-            current_render = (
-                self.btn_latest_render.property("render_display")
-                or self.btn_latest_render.text()
-            )
-            if current_render and self._normalize_render_label(last_conform) == self._normalize_render_label(current_render):
-                self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
-            else:
-                self.label_last_conform.setStyleSheet("")
-            return
+        current_render = (
+            self.btn_latest_render.property("render_display")
+            or self.btn_latest_render.property("render_sequence_path")
+            or self.btn_latest_render.property("render_relpath")
+            or self.btn_latest_render.property("file_path")
+        )
 
-        self.label_last_conform.setText("None")
-        self.label_last_conform.setStyleSheet("")
+        def identity(value):
+            text = self._normalize_render_label(str(value or ""))
+            return text.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+
+        conformed_name = identity(last_conform)
+        is_conformed = bool(
+            self.btn_latest_render.property("file_path")
+            and conformed_name not in ("", "none")
+            and conformed_name == identity(current_render)
+        )
+        _set_dynamic_property(self.btn_latest_render, "is_conformed", "true" if is_conformed else "false")
+        if hasattr(self, "label_last_conform"):
+            self.label_last_conform.setText(str(last_conform) if conformed_name not in ("", "none") else "None")
+            self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;" if is_conformed else "")
 
     def _set_hide_button_label(self) -> None:
         hidden = bool((self.data or {}).get("hidden", False))
@@ -2115,6 +2182,7 @@ class ShotCard(QWidget):
             getattr(self, "btn_latest_render", None),
             getattr(self, "bnt_addTask", None),
             getattr(self, "btn_open_assets", None),
+            getattr(self, "btn_open_matchmove", None),
             getattr(self, "btn_open_precomp", None),
             getattr(self, "frame_tasks", None),
         ):
@@ -2379,6 +2447,13 @@ class ShotCard(QWidget):
         self._reorder_loaded_task_widgets()
         self._apply_loaded_task_visibility()
 
+    def set_tasks_visible(self, visible: bool) -> None:
+        self._tasks_visible = bool(visible)
+        self.frame.setVisible(self._tasks_visible)
+        self.frame_tasks.setVisible(self._tasks_visible)
+        self.layout().invalidate()
+        self.updateGeometry()
+
     def set_task_style(self, task_style: str) -> None:
         normalized_style = _normalize_task_style(task_style)
         if normalized_style == getattr(self, "_task_style", "card"):
@@ -2482,6 +2557,7 @@ class ShotCard(QWidget):
             self.btn_open_precomp.setToolTip("Open precomp folder · Right-click to browse folders")
             self.btn_open_precomp.setVisible(not self._compact_mode)
 
+        self._update_matchmove_button_visibility()
         self._set_hide_button_label()
         self._set_nuke_button_label()
         self._set_render_button_text()
@@ -2910,17 +2986,7 @@ class ShotCard(QWidget):
 
             if not render_info:
                 if self._last_render_file is not None:
-                    self._last_render_file = None
-                    self._last_render_mtime = None
-                    self.btn_latest_render.setProperty("file_path", None)  # Clear stored path
-                    self.btn_latest_render.setProperty("render_relpath", None)
-                    self.btn_latest_render.setProperty("render_display", None)
-                    self.btn_latest_render.setProperty("render_type", None)
-                    self.btn_latest_render.setProperty("render_sequence_path", None)
-                    self.btn_latest_render.setProperty("render_dir", None)
-                    self.btn_latest_render.setProperty("render_version", None)
-                    self._set_render_button_text()
-                    self._apply_compact_tooltips()
+                    self._set_render_file_state()
                 return
 
             render_path = render_info.get("render_path")
@@ -2963,9 +3029,6 @@ class ShotCard(QWidget):
                 rpath = render_path
                 self.btn_latest_render.clicked.connect(self._on_push_to_dvr_clicked)
                 
-                # Visual feedback
-                self._flash_button_green(self.btn_latest_render)
-                
                 # Update tracking
                 self._last_render_file = render_id
                 self._last_render_mtime = current_mtime
@@ -2973,14 +3036,8 @@ class ShotCard(QWidget):
                 # Update tooltip immediately
                 self._update_render_tooltip()
                 
-                # Update last_conform label color based on whether it matches new render
-                if hasattr(self, 'label_last_conform'):
-                    last_conform = self.data.get("last_conform") if self.data else None
-                    if last_conform and self._normalize_render_label(last_conform) == self._normalize_render_label(render_display):
-                        self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
-                    else:
-                        self.label_last_conform.setStyleSheet("")
-                
+                self._refresh_last_conform_indicator()
+
                 # Update API with new render name
                 if render_relpath:
                     try:
@@ -3842,26 +3899,21 @@ class ShotCard(QWidget):
         
         render_display = self.btn_latest_render.property("render_display")
         if not render_display:
-            render_display = self.btn_latest_render.text()
-        if not render_display:
-            render_display = Path(render_path).name if render_path else None
+            source_path = render_sequence_path or render_path or render_dir
+            render_display = Path(source_path).name if source_path else None
         
         # Push to DaVinci Resolve - only update database if successful
         success = self.filesIO.push2dvr(dvr_path, shot_name=self._shot_title())
         
-        if success and self._shot_id and render_display:
-            try:
-                updated = self._api.update_shot(self._shot_id, last_conform=render_display)
-                # Update the label immediately
-                if hasattr(self, 'label_last_conform'):
-                    self.label_last_conform.setText(render_display)
-                    # Set green style since we just conformed the latest render
-                    self.label_last_conform.setStyleSheet("color: #4CAF50; font-weight: bold;")
-                # Update local data
-                self.data['last_conform'] = render_display
-                self._apply_compact_tooltips()
-            except Exception as e:
-                pass  # Silent fail - DVR push already happened
+        if success and render_display:
+            if self._shot_id:
+                try:
+                    self._api.update_shot(self._shot_id, last_conform=render_display)
+                except Exception:
+                    pass  # The DVR push succeeded; keep the local indicator current.
+            self.data['last_conform'] = render_display
+            self._refresh_last_conform_indicator()
+            self._apply_compact_tooltips()
 
 
     def contextMenuEvent(self, event):
@@ -4053,6 +4105,7 @@ class TimelineFrame(QWidget):
         folders=None,
         desired_order: list[str] | None = None,
         quick_view_controller=None,
+        tasks_visible=True,
     ):
         super().__init__()
         timeline = timeline or {}
@@ -4060,6 +4113,7 @@ class TimelineFrame(QWidget):
         self._last_timeline = timeline  # keep a copy for refreshes
         self._layout_mode = _normalize_layout_mode(layout_mode)
         self._compact_mode = bool(compact_mode)
+        self._tasks_visible = bool(tasks_visible)
         self._task_style = _normalize_task_style(task_style)
         self._nuke_open_handler = nuke_open_handler
         self._api = api
@@ -4175,6 +4229,7 @@ class TimelineFrame(QWidget):
         resolved_order = desired_order or api_order
         _ensure_order(self.shots_layout, resolved_order)
         self.set_compact_mode(self._compact_mode)
+        self.set_tasks_visible(self._tasks_visible)
 
     def set_layout_mode(self, layout_mode: str, card_spacing: int | None = None):
         """Switch the shots layout between list and grid, preserving shot cards."""
@@ -4219,6 +4274,16 @@ class TimelineFrame(QWidget):
             self.shots_layout.addItem(spacer)
 
         self._layout_mode = new_mode
+
+    def set_tasks_visible(self, visible: bool) -> None:
+        self._tasks_visible = bool(visible)
+        for index in range(self.shots_layout.count()):
+            item = self.shots_layout.itemAt(index)
+            card = item.widget() if item else None
+            if isinstance(card, ShotCard):
+                card.set_tasks_visible(self._tasks_visible)
+        self.shots_layout.invalidate()
+        self.updateGeometry()
 
     def set_task_style(self, task_style: str) -> None:
         self._task_style = _normalize_task_style(task_style)

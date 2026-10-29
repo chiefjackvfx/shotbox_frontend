@@ -1,4 +1,4 @@
-# Deadline denoising (Linux)
+# Deadline denoising (Linux submission, Windows/Linux workers)
 
 Choose **Deadline** in the single-clip or batch Denoise dialog. Local remains
 the default. Deadline always reserves a new output version, profiles each clip
@@ -9,7 +9,8 @@ does not mean the frames have rendered; track jobs in Deadline Monitor.
 Resolution, frame numbering, colourspace, Neat settings, half-float RGBA EXRs,
 one-scanline ZIP compression and the existing render-thread cap are preserved.
 Workers must have the exact profiling Nuke build and a compatible Neat plugin.
-The saved script checks the Nuke build and Linux platform before rendering.
+The saved script checks the exact Nuke build and selected worker platforms before rendering.
+Windows Shotbox submission is not supported in this phase; local Windows denoising is unchanged.
 
 ## Shared and local projects
 
@@ -20,9 +21,32 @@ The client supplies the repository connection; no repository path is hardcoded.
 Empty shared-root settings discover existing Shotbox project mounts.
 
 For this installation, the primary shared root is `/Volumes/projects/PROJECTS`.
-The `linux` pool is the default. Cross-platform mapping enforcement and Windows
-worker verification are deferred. Source and output paths remain as saved in
-the script; repository path mapping settings are never modified by Shotbox.
+Existing pool preferences are preserved (`linux` for a fresh installation).
+Choose a pool containing both platforms, such as this farm's `houdini` pool,
+when submitting mixed jobs. Settings → **Qualified Workers** contains exact
+worker names separated by commas. Leave workers out until native render tests
+confirm their Nuke build, Neat profile compatibility, licences, codecs and
+shared-storage access. An empty allowlist blocks shared-farm submission.
+
+Queue refresh displays eligible workers. Every submission rechecks enabled
+workers against the allowlist, pool, group and any explicit test-worker
+restriction, then writes the resulting Deadline allowlist. Offline but enabled
+qualified workers may receive queued jobs. Pool `none` and group `none` use
+Deadline's unrestricted scheduling convention, subject to the repository's
+ExcludeInNonePool/Group settings, which preflight also checks. No new pool is created.
+
+For Windows workers, enable **Nuke → Enable Path Mapping** and configure
+repository mappings from the Linux source and output roots to Windows paths
+accessible to the Worker account. This farm maps `/Volumes/projects` to `Z:`.
+Preflight requires literal, All-region rules and checks absolute destinations;
+regex/region-specific configurations fail with setup guidance. Source paths
+remain unchanged in the auxiliary script; Deadline maps its worker-local copy.
+The application only reads repository configuration during submission.
+
+Receipts record selected workers, platforms and the mapping snapshot, as well
+as the profile digest and job ID. These are diagnostic records, not proof that
+all listed workers rendered a task. Worker qualification is explicit and must
+be repeated after relevant software, licence or storage changes.
 
 **Allow local projects (this Linux computer only)** is enabled by default on
 Linux. A source or output outside the configured shared roots triggers a
@@ -44,29 +68,43 @@ jobs remain queued and are listed with their IDs; cancel them in Deadline
 Monitor. Successful submissions survive failures in other clips. Retry a failed
 clip by explicitly selecting it again; no failed jobs are retried automatically.
 
-Persistent receipts live in `shot_assets/deadline/<submission-id>.json`. They
-record the source, output, frame range, profile digest, repository and job ID.
-A per-source lock prevents concurrent or unresolved submissions for the same
-shot. If a submission is interrupted or Deadline returns no unambiguous ID,
-Shotbox marks it uncertain and blocks a blind retry.
+Submission receipts and source locks are temporary files under
+`.cache/temp/deadline-submissions/<shot-key>/`. New submissions do not create
+`shot_assets/deadline`. A receipt records the source, output, frame range,
+profile digest, repository and job ID while preparation and submission run.
+Per-shot/source cache locks prevent concurrent or unresolved submissions from
+the same Shotbox installation.
 
-Reconcile an uncertain receipt with the configured Deadline client:
+After Shotbox reads a confirmed submission, cancellation or failure and stops
+its local child processes, it removes the receipt and the matching
+`.cache/temp/denoise-*` workspace, including the submission package and logs.
+The progress dialog keeps its activity text; Open Logs is disabled after cleanup.
+Queued job IDs remain in the batch summary and Deadline Monitor. Deadline owns
+the submitted auxiliary script after acceptance, so deleting the local cache
+package does not remove scripts needed by queued jobs. Rendered frames, source
+footage, and artist assets are preserved.
+
+If submission is interrupted or Deadline returns no unambiguous ID, the cached
+receipt, lock and workspace remain available until the outcome is reconciled.
+The progress dialog reports the receipt path. Reconcile it with the configured
+Deadline client:
 
 ```sh
-venv/bin/python deadline_denoise.py --reconcile /path/to/shot/shot_assets/deadline/ID.json
+venv/bin/python deadline_denoise.py --reconcile .cache/temp/deadline-submissions/SHOT_KEY/ID.json
 ```
 
-Add `--client /path/to/deadlinecommand` if discovery is unavailable. The command
-matches the unique `ShotboxSubmission` metadata in Deadline. Exactly one match
-records its ID and releases the lock. Zero or multiple matches retain the lock
-for inspection in Monitor. A preparation-stage receipt whose supervisor has
-exited can be reconciled safely without submitting a job. Do not remove an
-uncertain submission lock until its farm outcome is established.
+Add `--client /path/to/deadlinecommand` if discovery is unavailable. Exactly one
+matching `ShotboxSubmission` job resolves the receipt and removes its temporary
+files. Zero or multiple matches retain recovery data for inspection in Monitor.
+A preparation-stage receipt whose supervisor has exited can also be reconciled;
+its recorded local children must stop before files are removed. Existing legacy
+receipts and unresolved source locks in shot assets remain recognized, and
+reconciling a selected legacy receipt removes only that receipt and its lock.
 
-Temporary launch files and submission packages stay in leased `.cache/temp`
-directories. Deadline owns the submitted auxiliary script after acceptance, so
-clearing Shotbox's cache does not remove scripts needed by queued jobs. The
-feature does not stage or copy source footage automatically.
+These files use the existing leased `temp` cache category. Cache clearing skips
+them while local submission/preparation is active. Unresolved recovery data is
+disposable cache, so inspect Deadline Monitor before retrying if it was cleared.
+The feature does not stage or copy source footage automatically.
 
 ## Chunk size and concurrency
 
@@ -82,7 +120,7 @@ applies. Each concurrent Nuke process retains the existing render-thread cap.
 Local-project jobs remain restricted to this computer even with concurrency
 above one. Pool, group, priority, chunk size and concurrency are remembered.
 
-## Verification
+## Historical Linux verification
 
 `test/deadline_denoise_acceptance.py` explicitly stages exactly four `000test`
 clips in a unique test folder and restricts their jobs to a named Linux worker.
@@ -106,7 +144,7 @@ and output resolution are preserved. Evidence:
 Automated coverage includes profile-only behavior, full-clip jobs, auxiliary
 files, missing clients, repository errors, local-worker pinning, invalid queues,
 new-version selection, cancellation, partial success, uncertain outcomes,
-duplicate prevention and reconciliation. Windows workers are not qualified.
+duplicate prevention and reconciliation. Windows workers were not qualified by those original tests.
 
 The final focused suite passed 147 tests, including chunk sizes and concurrency.
 A live local `000test` job (`6ae111dabb68121d97da560a`, `sho010_DN_v005`)
@@ -116,3 +154,36 @@ concurrency 2 are recorded in
 `.cache/temp/deadline-four-chunked-6ik7yaja/acceptance.json`; their IDs were no
 longer listed during follow-up, so complete execution of those four jobs is
 not claimed and they were not automatically resubmitted.
+
+
+## Mixed-farm acceptance tools
+
+`test/deadline_mixed_acceptance.py REPORT --nuke EXECUTABLE --workers WORKER... --pool POOL`
+reuses the four saved profiles from an existing acceptance report, reserving new
+output versions for each candidate. Start with `--smoke` (one frame of the first
+clip per candidate), then run full clips. This is an explicit qualification
+harness; its candidate list never updates the application's qualified workers.
+Reports record each accepted job and stop on an uncertain submission rather
+than automatically retrying. Inspect existing reports before rerunning.
+
+`test/deadline_ui_acceptance.py` accepts the same arguments and drives the real
+dashboard Denoise dialog/controller with an isolated four-clip backend fixture.
+Local profiling and farm submissions are real. It does not alter production
+backend records or the operator's settings.
+
+`test/deadline_verify_outputs.py REPORT --nuke EXECUTABLE` decodes every output,
+checks dimensions, finite half-float RGBA pixels and single-scanline ZIP, and
+compares first/middle/last frames plus both sides of each ten-frame boundary
+against continuous local renders of the same profiles. It reports numerical
+differences; it does not claim bit equality or impose an invented perceptual
+quality threshold. Temporary reports and reference renders use leased app cache.
+
+The repository change for this rollout is recorded in
+[DEADLINE_MAPPING_ROLLBACK.json](DEADLINE_MAPPING_ROLLBACK.json): Nuke's
+`EnablePathMapping` changed from `False` to `True`; mapping rules were preserved.
+To roll back, restore that value in Deadline Monitor → Tools → Configure Plugins
+→ Nuke. Mixed Windows submissions will then fail preflight until it is enabled.
+Do not use this installed Deadline version's `AddOrUpdatePluginConfigSetting`
+helper for rollback: it writes event-plugin configuration instead.
+
+See [mixed-farm verification](DEADLINE_MIXED_VERIFICATION.md) for native Windows/Linux results and current qualified workers.

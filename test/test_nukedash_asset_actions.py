@@ -36,6 +36,10 @@ class TimelineWidget(QWidget):
 
 
 class AssetsHarness(QMainWindow):
+    _legacy_timeline_assets_dir = page_nukedash.page_nukedash._legacy_timeline_assets_dir
+    _resolved_job_matchmove_dir = page_nukedash.page_nukedash._resolved_job_matchmove_dir
+    _set_job_matchmove_state = page_nukedash.page_nukedash._set_job_matchmove_state
+    _refresh_job_matchmove_state = page_nukedash.page_nukedash._refresh_job_matchmove_state
     _active_job_data = page_nukedash.page_nukedash._active_job_data
     _active_timeline_data = page_nukedash.page_nukedash._active_timeline_data
     _path_from_base_path = page_nukedash.page_nukedash._path_from_base_path
@@ -113,7 +117,7 @@ class NukeDashAssetActionsTests(unittest.TestCase):
         self.assertIn("btn_open_timeline_assets", widget_names)
         self.assertIn("btn_open_job_assets", widget_names)
         self.assertEqual(timeline_button.get("class"), "QToolButton")
-        self.assertEqual(job_button.get("class"), "QPushButton")
+        self.assertEqual(job_button.get("class"), "QToolButton")
 
     def test_resolves_job_and_timeline_assets_from_active_timeline_shot(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -261,6 +265,7 @@ class NukeDashAssetActionsTests(unittest.TestCase):
 
             timeline_assets_dir = base_root / "Edit_A" / "timeline_assets"
             job_assets_dir = base_root / "job_assets"
+            timeline_assets_dir.mkdir(parents=True)
 
             harness._on_open_timeline_assets_clicked()
             harness._on_open_job_assets_clicked()

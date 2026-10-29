@@ -6,6 +6,26 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-28 03:49:30 PM +00:00] Test Deadline cache cleanup, recovery, and active-worker protection.
+
+- [2026-10-28 03:22:37 PM +00:00] Mark latest renders green when matching their last conform.
+
+- [2026-10-28 03:19:29 PM +00:00] Show/hide shot tasks from filters row; remember visibility preference.
+
+- [2026-10-28 03:06:40 PM +00:00] Preview matchmove precomp sequences before creating 3DE projects.
+
+- [2026-10-28 02:57:11 PM +00:00] Test additional matchmove creation and preserve existing project versions.
+
+- [2026-10-28 02:50:09 PM +00:00] Test folder opening, filename updates, and styled narrow-grid layouts.
+
+- [2026-10-28 02:44:07 PM +00:00] Open existing shot matchmove projects through dedicated 3DE buttons.
+- [2026-10-28 02:44:07 PM +00:00] Test 3DE visibility, project selection, errors, and layout switching.
+
+- [2026-10-28 01:34:15 PM +00:00] Create job matchmove projects across timelines with labelled sequences.
+- [2026-10-28 01:34:15 PM +00:00] Test matchmove menus, job persistence, and legacy project compatibility.
+
+- [2026-10-28T13:09:44+00:00] Support qualified Windows/Linux Deadline denoise workers and path preflight.
+
 - [2026-10-28 12:16:25 PM +00:00] Detect single-shot durations; support EXRs, metadata, and editable notes.
 - [2026-10-28 12:16:25 PM +00:00] Support sixteen single-shot layers with scrollable media review.
 
@@ -28,6 +48,34 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-10-28 03:53:19 PM +00:00] Stop creating timeline import sidecars; preserve existing legacy files.
+- [2026-10-28 03:53:19 PM +00:00] Document and test imports, thumbnails, and denoise without sidecars.
+
+- [2026-10-28 03:49:30 PM +00:00] Keep Deadline submission files in cache; delete resolved artifacts.
+- [2026-10-28 03:49:30 PM +00:00] Document temporary Deadline receipts and legacy reconciliation.
+
+- [2026-10-28 03:22:37 PM +00:00] Document and test render conform indicators across views and refreshes.
+
+- [2026-10-28 03:19:29 PM +00:00] Document and test task visibility across layouts and reloads.
+
+- [2026-10-28 03:06:40 PM +00:00] Test preview lifecycle and clean up closed matchmove menus.
+
+- [2026-10-28 02:57:11 PM +00:00] Allow additional matchmove creation from Assets using existing paths.
+
+- [2026-10-28 02:54:00 PM +00:00] Shorten matchmove labels; add work/export folder actions and tests.
+
+- [2026-10-28 02:50:09 PM +00:00] Show 3DE filenames and document right-click folder access.
+
+- [2026-10-28 02:44:07 PM +00:00] Document dedicated 3DE buttons and simplify Assets menus.
+
+- [2026-10-28 01:49:16 PM +00:00] Rename folder controls label to Assets.
+
+- [2026-10-28 01:34:15 PM +00:00] Stop creating timeline assets; preserve access to legacy folders.
+- [2026-10-28 01:34:15 PM +00:00] Document matchmove workflows and backend migration deployment order.
+
+- [2026-10-28T13:09:44+00:00] Verify mixed-farm renders, chunk boundaries, and dashboard submissions.
+- [2026-10-28T13:09:44+00:00] Enable Nuke path mapping with documented configuration rollback.
+
 - [2026-10-28 12:16:25 PM +00:00] Test movie durations, EXR thumbnails, notes, and Nuke playback.
 
 - [2026-10-28 11:58:43 AM +00:00] Use dated 12-hour timestamps for pending changelog notes.
@@ -46,6 +94,16 @@ All notable frontend publish changes should be documented in this file.
 - [2026-10-27 08:14:23 PM +00:00] Document source denoise scope and single/batch output naming.
 
 ### Fixed
+
+- [2026-10-28 03:19:29 PM +00:00] Clear stale file polling targets before reloading shot cards.
+
+- [2026-10-28 02:50:09 PM +00:00] Keep filename buttons aligned with other grid action controls.
+
+- [2026-10-28 01:47:24 PM +00:00] Only show Timeline Assets when its folder already exists.
+
+- [2026-10-28 01:46:13 PM +00:00] Match Job Assets styling to timeline assets controls.
+
+- [2026-10-28 01:34:15 PM +00:00] Show latest 3DE version per project across asset menus.
 
 - [2026-10-28 12:19:44 PM +00:00] Set every denoised Read input transform to ACEScg.
 

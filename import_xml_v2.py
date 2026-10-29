@@ -17,7 +17,6 @@ import datetime
 import shutil
 import subprocess
 import getpass
-import json
 import urllib.parse
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -512,30 +511,10 @@ class NukeScriptGenerator:
 
         os.makedirs(asset_path(nuke_root, 'job_assets'), exist_ok=True)
         os.makedirs(work_folder, exist_ok=True)
-        if edit_name:
-            os.makedirs(asset_path(work_folder, 'timeline_assets'), exist_ok=True)
 
         shot_preexists = os.path.isdir(shot_folder)
         self._ensure_shot_subfolders(shot_folder)
         self._copy_clips_to_plates(shot, shot_folder)
-        if shot.cut_duration is not None:
-            metadata = {
-                'schema_version': 3, 'cut_duration': shot.cut_duration,
-                'head_handles': shot.head_handles, 'tail_handles': shot.tail_handles,
-                'detected_head_handles': shot.detected_head_handles,
-                'detected_tail_handles': shot.detected_tail_handles,
-                'requested_handles': shot.requested_handles,
-                'working_duration': shot.duration, 'fps': shot.fps,
-                'handle_mode': 'detected' if shot.requested_handles is None else 'requested',
-                'cut_first': shot.cut_first, 'cut_last': shot.cut_last,
-                'working_first': 1001, 'working_last': 1001 + shot.duration - 1,
-                'edit_inpoint': shot.edit_inpoint, 'edit_outpoint': shot.edit_outpoint,
-                'timeline_inpoint': shot.timeline_inpoint, 'timeline_outpoint': shot.timeline_outpoint,
-                'plates': [dict(clip.media_timing or {}, local_path=clip.filepath,
-                                copied_path=clip.copied_filepath, track=clip.track) for clip in shot.clips],
-            }
-            with open(asset_path(shot_folder, 'shot_assets', 'timeline_import.json'), 'w', encoding='utf-8') as stream:
-                json.dump(metadata, stream, indent=2)
 
         if shot_preexists:
             print(f"[NukeGen] Shot folder already exists: {shot_folder}")
@@ -1808,10 +1787,8 @@ class XMLImportPage(QWidget):
         output_directory_name = output_directory.name.lower()
         if output_directory_name in {"vfx", "nuke"}:
             vfx_root_directory = output_directory
-            timeline_assets_directory = None
         else:
             vfx_root_directory = output_directory.parent
-            timeline_assets_directory = asset_path(output_directory, 'timeline_assets')
 
         job_assets_directory = asset_path(vfx_root_directory, 'job_assets')
         plates_directory = os.path.join(shot_folder_path, "plates")
@@ -1821,8 +1798,6 @@ class XMLImportPage(QWidget):
         assets_directory = asset_path(shot_folder_path, 'shot_assets')
 
         os.makedirs(job_assets_directory, exist_ok=True)
-        if timeline_assets_directory is not None:
-            os.makedirs(timeline_assets_directory, exist_ok=True)
         os.makedirs(plates_directory, exist_ok=True)
         os.makedirs(renders_comp_directory, exist_ok=True)
         os.makedirs(renders_precomp_directory, exist_ok=True)

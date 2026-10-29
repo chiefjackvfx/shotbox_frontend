@@ -1,0 +1,23 @@
+{
+  "linux": {
+    "all_frames_verified": 331,
+    "sample_frames_compared": 71,
+    "channel_samples": 3316465664,
+    "different_samples": 0,
+    "pixel_identical_samples": true,
+    "mean_absolute_difference": 0.0,
+    "maximum_absolute_difference": 0.0
+  },
+  "windows": {
+    "all_frames_verified": 331,
+    "sample_frames_compared": 71,
+    "mean_absolute_difference": 0.0002894735698292345,
+    "maximum_absolute_difference": 0.6875,
+    "pixel_identical_samples": false
+  },
+  "evidence_directories": [
+    "deadline-output-check-w9jdrsn6",
+    "deadline-output-check-l5difeq3",
+    "deadline-output-check-i1i_gi4l"
+  ]
+}

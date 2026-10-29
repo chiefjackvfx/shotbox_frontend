@@ -325,6 +325,19 @@
               </widget>
              </item>
              <item>
+              <widget class="QCheckBox" name="checkBox_show_tasks">
+               <property name="text">
+                <string>Show tasks</string>
+               </property>
+               <property name="toolTip">
+                <string>Show or hide task sections on shot cards.</string>
+               </property>
+               <property name="checked">
+                <bool>true</bool>
+               </property>
+              </widget>
+             </item>
+             <item>
               <widget class="QLabel" name="label_sort">
                <property name="text">
                 <string>Sort</string>
@@ -404,7 +417,7 @@
              <item>
               <widget class="QLabel" name="label_assets_actions">
                <property name="text">
-                <string>Folders:</string>
+                <string>Assets:</string>
                </property>
               </widget>
              </item>
@@ -416,7 +429,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="btn_open_job_assets">
+              <widget class="QToolButton" name="btn_open_job_assets">
                <property name="text">
                 <string>Job Assets</string>
                </property>

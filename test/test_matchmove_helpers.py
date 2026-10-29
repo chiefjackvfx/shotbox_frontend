@@ -120,3 +120,20 @@ class MatchmoveHelpersTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_latest_projects_preserve_names_standalones_and_version_allocation(tmp_path):
+    work = tmp_path / "work"
+    work.mkdir()
+    names = ["Alpha_matchmove_v002.3de", "Alpha_matchmove_v010.3de",
+             "beta_matchmove_v999.3de", "beta_matchmove_v1000.3DE",
+             "custom.3DE", "ignore.txt"]
+    for name in names:
+        (work / name).touch()
+    (work / "directory.3de").mkdir()
+    expected = ["Alpha_matchmove_v010.3de", "beta_matchmove_v1000.3DE", "custom.3DE"]
+    assert [path.name for path in matchmove_helpers.list_matchmove_projects(str(tmp_path))] == expected
+    assert matchmove_helpers.resolve_project_path(str(tmp_path), "beta")[3] == 1001
+    assert matchmove_helpers.find_latest_matchmove_project(str(tmp_path), "beta").name == expected[1]
+    assert all((work / name).exists() for name in names)
+    assert matchmove_helpers.list_matchmove_projects(str(tmp_path / "missing")) == []

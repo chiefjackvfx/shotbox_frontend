@@ -192,6 +192,22 @@ The pipeline uses the official [OCIO viewing API](https://opencolorio.readthedoc
 and [OpenEXR Python reader](https://openexr.com/en/latest/python.html).
 
 
+## Conformed render indicator
+
+The shot card’s Push to DVR/render button is green when its latest available
+render matches Last Conform. It updates after a successful Resolve push or
+background refresh, and returns to its normal colour when a newer render appears
+or the render becomes unavailable. The indicator also works in compact and grid
+views. MOV/EXR display suffixes and EXR frame ranges do not change version matches.
+
+## Shot card task visibility
+
+Use **Show tasks** in the filters row, beside **Hidden tasks**, to show or hide
+task sections on shot cards, including their task headers and Add Task buttons.
+The preference is remembered across restarts and applies to all dashboard layouts
+and jobs.
+Task data and the existing task filters are preserved when sections are hidden.
+
 ## Shotbox Matte Toolbox and Nuke integration
 
 Open **Toolbox → Open Shotbox Matte** for the owned Matte pop-out. Its source

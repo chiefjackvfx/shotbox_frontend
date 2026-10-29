@@ -9,6 +9,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import app_cache
+from denoise_test_support import source_settings
 from denoise_template import create_template_request
 import deadline_denoise
 
@@ -29,12 +30,11 @@ def acceptance(source_root, staging_root, executable, worker):
         (shot / "plates").mkdir(parents=True)
         target = shot / "plates" / source.name
         shutil.copy2(source, target)
-        metadata = json.loads((source.parent.parent / "shot_assets/timeline_import.json").read_text())
-        plate = next(p for p in metadata["plates"] if Path(p.get("copied_path", "")).name == source.name)
+        media_settings = source_settings(source)
         job = directory / str(index)
         job.mkdir()
         path = create_template_request(job, {"source": str(target), "shot_dir": str(shot), "shot_name": shot.name,
-                                            "colourspace": plate["input_colourspace"], "fps": metadata["fps"], "mode": "new"}, executable)
+                                            "colourspace": media_settings["colourspace"], "fps": media_settings["fps"], "mode": "new"}, executable)
         request = json.loads(path.read_text())
         request["deadline"] = {"submission_id": uuid.uuid4().hex, "shot_dir": str(shot),
                                "batch_name": "Shotbox four-clip acceptance " + token[:8], "pool": "linux",
