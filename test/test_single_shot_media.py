@@ -140,7 +140,8 @@ class SingleShotMediaTests(unittest.TestCase):
             self.assertIn('Existing artist note.', notes)
             self.assertIn('Remove the marker.', notes)
             self.assertIn('Source frames: 1041-1043 at 25 fps', notes)
-            self.assertIn('Input transform: ACES - ACEScg', notes)
+            self.assertNotIn('Input transform:', notes)
+            self.assertEqual(api.update_shot.call_args.kwargs['colourspace'], 'ACES - ACEScg')
             self.assertEqual(api.update_shot.call_args.kwargs['handles'], '0')
 
     def test_exr_folder_drop_groups_sequences(self):

@@ -35,14 +35,14 @@ def wait_until(app, condition, seconds=5):
     app.processEvents()
 
 
-@pytest.fixture
-def dialog(app, tmp_path, monkeypatch):
+@pytest.fixture(params=["job_assets", "shot_assets"])
+def dialog(app, tmp_path, monkeypatch, request):
     work = tmp_path / "work"
     work.mkdir()
     sources = [tmp_path / name for name in ("short_hou.py", "long_hou.py")]
     for path in sources:
         path.write_text("raise AssertionError('the UI must never execute camera scripts')")
-    dialog = CgAssetDialog(tmp_path / "job_assets", sources, "", work)
+    dialog = CgAssetDialog(tmp_path / request.param / "cg", sources, "", work)
     warnings = []
     monkeypatch.setattr("cg_asset_dialog.QMessageBox.warning", lambda *args: warnings.append(args[-1]))
     monkeypatch.setattr(helpers, "resolve_houdini", lambda configured: (Path(sys.executable), Path(sys.executable)))
@@ -76,13 +76,13 @@ pathlib.Path(sys.argv[2]).write_text(json.dumps(dict(output=request['output'], c
 def test_dialog_empty_scene_requires_duration_and_publishes_after_worker_exit(app, dialog):
     dialog.name_edit.setText("Oak")
     assert not dialog.create_button.isEnabled()
-    assert not dialog.job_assets.exists()
+    assert not dialog.cg_root.parent.exists()
     dialog.duration_spin.setValue(100)
     assert dialog.create_button.isEnabled()
     assert dialog.range_label.text() == "1001 – 1100"
     dialog._create()
     assert dialog._busy and not dialog.inputs.isEnabled()
-    assert not dialog.job_assets.exists()
+    assert not dialog.cg_root.parent.exists()
     wait_until(app, lambda: not dialog._busy)
     assert dialog.result() == QDialog.DialogCode.Accepted
     assert dialog.process.state() == QProcess.ProcessState.NotRunning
@@ -112,7 +112,7 @@ def test_dialog_inspection_duration_override_invalidation_and_source_changes(app
     dialog._create()
     assert "changed" in dialog.test_warnings[-1]
     assert not dialog._prepared and not dialog.create_button.isEnabled()
-    assert not dialog.job_assets.exists()
+    assert not dialog.cg_root.parent.exists()
     dialog._inspect()
     wait_until(app, lambda: not dialog._busy)
     assert dialog.create_button.isEnabled()
@@ -126,14 +126,14 @@ def test_failed_save_and_cancellation_do_not_publish_asset(app, dialog):
     dialog._create()
     wait_until(app, lambda: not dialog._busy)
     assert "save failed" in dialog.test_warnings[-1]
-    assert not dialog.job_assets.exists()
+    assert not dialog.cg_root.parent.exists()
     assert dialog.create_button.isEnabled()
     dialog.duration_spin.setValue(999)
     dialog._create()
     dialog._cancel_or_close()
     wait_until(app, lambda: not dialog._busy)
     assert dialog.process.state() == QProcess.ProcessState.NotRunning
-    assert not dialog.job_assets.exists()
+    assert not dialog.cg_root.parent.exists()
     assert "cancelled" in dialog.status_label.text()
     assert dialog.inputs.isEnabled()
 
@@ -145,7 +145,7 @@ def test_close_waits_for_cancelled_worker(app, dialog):
     dialog.reject()
     wait_until(app, lambda: dialog.process.state() == QProcess.ProcessState.NotRunning)
     assert dialog.result() == QDialog.DialogCode.Rejected
-    assert not dialog.job_assets.exists()
+    assert not dialog.cg_root.parent.exists()
 
 
 def test_failed_to_start_reports_error_and_restores_inputs(app, dialog, monkeypatch):
@@ -157,7 +157,7 @@ def test_failed_to_start_reports_error_and_restores_inputs(app, dialog, monkeypa
     wait_until(app, lambda: not dialog._busy)
     assert dialog.test_warnings
     assert dialog.inputs.isEnabled()
-    assert not dialog.job_assets.exists()
+    assert not dialog.cg_root.parent.exists()
 
 
 class Page(QWidget):

@@ -1,4 +1,4 @@
-"""Create a job CG asset without blocking the desktop during Houdini work."""
+"""Create a CG asset without blocking the desktop during Houdini work."""
 from __future__ import annotations
 
 import json
@@ -19,11 +19,11 @@ from input_behaviour import install_input_wheel_guard
 
 
 class CgAssetDialog(QDialog):
-    def __init__(self, job_assets: Path, sources: list[Path], configured: str,
-                 work_dir: Path, parent=None):
+    def __init__(self, cg_root: Path, sources: list[Path], configured: str,
+                 work_dir: Path, parent=None, *, context_title=""):
         super().__init__(parent)
         install_input_wheel_guard(QApplication.instance())
-        self.job_assets = Path(job_assets)
+        self.cg_root = Path(cg_root)
         self.configured = configured
         self.work_dir = Path(work_dir)
         self.project_path = None
@@ -34,7 +34,7 @@ class CgAssetDialog(QDialog):
         self._close_after_cancel = False
         self._logs = ""
         self._mode = None
-        self.setWindowTitle("Create CG Asset")
+        self.setWindowTitle(f"Create CG Asset — {context_title}" if context_title else "Create CG Asset")
         self.resize(780, 650)
         layout = QVBoxLayout(self)
         self.inputs = QWidget(self)
@@ -130,7 +130,7 @@ class CgAssetDialog(QDialog):
 
     def _browse(self):
         paths, _ = QFileDialog.getOpenFileNames(self, "Select 3DE Houdini Exports",
-                                               str(self.job_assets), "Python Exports (*.py)")
+                                               str(self.cg_root.parent), "Python Exports (*.py)")
         for path in paths:
             self._add_source(path, checked=True)
         if paths:
@@ -159,12 +159,12 @@ class CgAssetDialog(QDialog):
         sources = self.selected_sources()
         error = ""
         try:
-            destination = helpers.asset_destination(self.job_assets, self.name_edit.text())
+            destination = helpers.asset_destination(self.cg_root, self.name_edit.text())
             self.destination_label.setText(str(destination))
             helpers.validate_new_destination(destination)
         except (ValueError, OSError) as exc:
             error = str(exc)
-            self.destination_label.setText(str(self.job_assets / "cg" / "<asset_name>"))
+            self.destination_label.setText(str(self.cg_root / "<asset_name>"))
         duration = self.duration_spin.value()
         self.range_label.setText(f"1001 – {1001 + duration - 1}" if duration else "1001 – …")
         self.duration_spin.setEnabled(not sources or self.override_check.isChecked())
@@ -187,7 +187,7 @@ class CgAssetDialog(QDialog):
     def _create(self):
         try:
             name = helpers.validate_asset_name(self.name_edit.text())
-            destination = helpers.asset_destination(self.job_assets, name)
+            destination = helpers.asset_destination(self.cg_root, name)
             helpers.validate_new_destination(destination)
             sources = self.selected_sources()
             if sources and (not self._prepared or helpers.source_signature(sources) != self._signature):
@@ -279,7 +279,7 @@ class CgAssetDialog(QDialog):
                 if not self.override_check.isChecked():
                     self.duration_spin.setValue(self._auto_duration or 0)
             else:
-                self.project_path = helpers.publish_scene(self._output_path, self.job_assets, self._publish_name)
+                self.project_path = helpers.publish_scene(self._output_path, self.cg_root, self._publish_name)
                 super().accept()
                 return
         except Exception as exc:
@@ -308,11 +308,11 @@ class CgAssetDialog(QDialog):
 
 
 @app_cache.temporary_cache_task
-def show_create_dialog(job_assets, sources, configured="", parent=None):
+def show_create_dialog(cg_root, sources, configured="", parent=None, *, context_title=""):
     with app_cache.temporary_cache_lease(), tempfile.TemporaryDirectory(
         prefix="houdini-cg-", dir=app_cache.cache_directory("temp")
     ) as directory:
-        dialog = CgAssetDialog(job_assets, sources, configured, Path(directory), parent)
+        dialog = CgAssetDialog(cg_root, sources, configured, Path(directory), parent, context_title=context_title)
         try:
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 return dialog.project_path

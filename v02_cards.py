@@ -112,6 +112,7 @@ def arrange_shot_actions(card):
     folders = row(card.btn_open_assets, card.btn_open_matchmove, card.btn_open_precomp)
     folders.addStretch()
     actions.addLayout(folders)
+    actions.addWidget(card.shot_cg_assets)
 
 
 def set_shot_presentation(card, enabled):

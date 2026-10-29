@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QSpacerItem, QVBoxLayout
 )
 from presentation_widgets import FlexibleButton, FlexibleLabel
+from cg_asset_actions import ShotCgAssetRow
 
 
 def setup_shot_card_ui(widget):
@@ -309,6 +310,9 @@ def setup_shot_card_ui(widget):
     widget.btn_open_matchmove.setText("3DE")
     widget.btn_open_matchmove.hide()
     widget.horizontalLayout_3.addWidget(widget.btn_open_matchmove)
+
+    widget.shot_cg_assets = ShotCgAssetRow(widget.shot_btns)
+    widget.horizontalLayout_3.addWidget(widget.shot_cg_assets)
 
     widget.btn_open_precomp = QToolButton(widget.shot_btns)
     widget.btn_open_precomp.setObjectName("btn_open_precomp")

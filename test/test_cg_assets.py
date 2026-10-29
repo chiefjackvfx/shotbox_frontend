@@ -27,15 +27,15 @@ def test_publish_legacy_path_lazy_creation_and_exclusive_name(tmp_path):
     prepared = tmp_path / "prepared.hip"
     prepared.write_bytes(b"saved Houdini scene")
     assert not (assets / "cg").exists()
-    project = helpers.publish_scene(prepared, assets, "Oak")
+    project = helpers.publish_scene(prepared, helpers.resolve_cg_root(assets.parent, "job_assets"), "Oak")
     assert project == legacy / "cg" / "Oak" / "Oak_v001.hip"
     assert project.read_bytes() == prepared.read_bytes()
     assert (project.parent / "geo").is_dir()
     assert (project.parent / "assets").is_dir()
     with pytest.raises(FileExistsError):
-        helpers.publish_scene(prepared, assets, "Oak")
+        helpers.publish_scene(prepared, helpers.resolve_cg_root(assets.parent, "job_assets"), "Oak")
     with pytest.raises(FileExistsError):
-        helpers.publish_scene(prepared, assets, "oak")
+        helpers.publish_scene(prepared, helpers.resolve_cg_root(assets.parent, "job_assets"), "oak")
     assert project.read_bytes() == b"saved Houdini scene"
     assert not (tmp_path / "job_assets").exists()
 
@@ -54,11 +54,11 @@ def test_publish_failure_only_removes_owned_content(tmp_path):
 
     with mock.patch.object(helpers.shutil, "copyfileobj", side_effect=fail_copy):
         with pytest.raises(OSError, match="disk full"):
-            helpers.publish_scene(prepared, assets, "Oak")
+            helpers.publish_scene(prepared, helpers.resolve_cg_root(assets.parent, "job_assets"), "Oak")
     assert unrelated.read_text() == "keep"
     assert not (assets / "cg").exists()
     with pytest.raises(RuntimeError):
-        helpers.publish_scene(tmp_path / "missing.hip", assets, "Oak")
+        helpers.publish_scene(tmp_path / "missing.hip", helpers.resolve_cg_root(assets.parent, "job_assets"), "Oak")
     assert not (assets / "cg").exists()
 
 
@@ -74,7 +74,7 @@ def test_publish_preserves_concurrent_unowned_files(tmp_path):
 
     with mock.patch.object(helpers.shutil, "copyfileobj", side_effect=fail_copy):
         with pytest.raises(OSError):
-            helpers.publish_scene(prepared, assets, "Oak")
+            helpers.publish_scene(prepared, helpers.resolve_cg_root(assets.parent, "job_assets"), "Oak")
     assert unowned.read_text() == "someone else's work"
     assert not (unowned.parent / "Oak_v001.hip").exists()
 
@@ -85,7 +85,7 @@ def test_project_versions_use_numeric_order_and_one_button_per_asset(tmp_path):
     folder.mkdir(parents=True)
     for name in ("Oak_v001.hip", "Oak_v010.hip", "Oak_v9.hip", "Oak_v099.hiplc", "other_v999.hip"):
         (folder / name).touch()
-    assert helpers.list_cg_projects(assets) == [folder / "Oak_v010.hip"]
+    assert helpers.list_cg_projects(helpers.resolve_cg_root(assets.parent, "job_assets")) == [folder / "Oak_v010.hip"]
 
 
 def test_existing_legacy_cg_is_reused_when_lowercase_root_also_exists(tmp_path):
@@ -95,8 +95,30 @@ def test_existing_legacy_cg_is_reused_when_lowercase_root_also_exists(tmp_path):
     project = legacy_cg / "Oak" / "Oak_v001.hip"
     project.parent.mkdir(parents=True)
     project.touch()
-    assert helpers.asset_destination(canonical, "Birch") == legacy_cg / "Birch"
-    assert helpers.list_cg_projects(canonical) == [project]
+    assert helpers.asset_destination(helpers.resolve_cg_root(canonical.parent, "job_assets"), "Birch") == legacy_cg / "Birch"
+    assert helpers.list_cg_projects(helpers.resolve_cg_root(canonical.parent, "job_assets")) == [project]
+
+
+@pytest.mark.parametrize("assets_kind,legacy", [("job_assets", "Job_Assets"), ("shot_assets", "Shot_Assets")])
+def test_cg_root_reuses_legacy_for_each_scope(tmp_path, assets_kind, legacy):
+    parent = tmp_path / "Project Space" / "scope"
+    (parent / assets_kind).mkdir(parents=True)
+    cg_root = parent / legacy / "cg"
+    cg_root.mkdir(parents=True)
+    assert helpers.resolve_cg_root(parent, assets_kind) == cg_root
+
+
+def test_identical_asset_names_stay_separate_between_jobs_and_shots(tmp_path):
+    scene = tmp_path / "prepared.hip"
+    scene.write_bytes(b"hip")
+    roots = [helpers.resolve_cg_root(tmp_path / "VFX", "job_assets"),
+             helpers.resolve_cg_root(tmp_path / "VFX" / "timeline" / "shot010", "shot_assets"),
+             helpers.resolve_cg_root(tmp_path / "VFX" / "timeline" / "shot020", "shot_assets")]
+    for root in roots:
+        project = helpers.publish_scene(scene, root, "Oak")
+        assert project == root / "Oak" / "Oak_v001.hip"
+        assert helpers.list_cg_projects(root) == [project]
+    assert all(not (root.parent / "matchmove").exists() for root in roots)
 
 
 def test_camera_discovery_uses_configured_and_legacy_paths_without_execution(tmp_path):

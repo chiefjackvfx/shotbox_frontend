@@ -226,7 +226,8 @@ QPushButton:disabled {
 QToolButton#btn_open_timeline_assets,
 QToolButton#btn_open_job_assets,
 QToolButton#btn_open_job_matchmove,
-QToolButton#btn_open_job_cg {
+QToolButton#btn_open_job_cg,
+QPushButton#btn_open_shot_cg {
     background-color: #2F3542;
     color: #D4D4D4;
     border: 2px solid #404754;
@@ -239,7 +240,8 @@ QToolButton#btn_open_job_cg {
 QToolButton#btn_open_timeline_assets:hover,
 QToolButton#btn_open_job_assets:hover,
 QToolButton#btn_open_job_matchmove:hover,
-QToolButton#btn_open_job_cg:hover {
+QToolButton#btn_open_job_cg:hover,
+QPushButton#btn_open_shot_cg:hover {
     background-color: #FF6B35;
     border-color: #FF6B35;
     color: #FFFFFF;
@@ -248,7 +250,8 @@ QToolButton#btn_open_job_cg:hover {
 QToolButton#btn_open_timeline_assets:pressed,
 QToolButton#btn_open_job_assets:pressed,
 QToolButton#btn_open_job_matchmove:pressed,
-QToolButton#btn_open_job_cg:pressed {
+QToolButton#btn_open_job_cg:pressed,
+QPushButton#btn_open_shot_cg:pressed {
     background-color: #D85A28;
     border-color: #D85A28;
 }
@@ -256,7 +259,8 @@ QToolButton#btn_open_job_cg:pressed {
 QToolButton#btn_open_timeline_assets:disabled,
 QToolButton#btn_open_job_assets:disabled,
 QToolButton#btn_open_job_matchmove:disabled,
-QToolButton#btn_open_job_cg:disabled {
+QToolButton#btn_open_job_cg:disabled,
+QPushButton#btn_open_shot_cg:disabled {
     background-color: #252931;
     border-color: #2F3542;
     color: #6B7280;
@@ -270,7 +274,8 @@ QToolButton#btn_open_job_assets::menu-indicator {
 }
 
 QToolButton#btn_open_job_matchmove,
-QToolButton#btn_open_job_cg { padding: 6px 12px; }
+QToolButton#btn_open_job_cg,
+QPushButton#btn_open_shot_cg { padding: 6px 12px; }
 
 /* Flat Buttons */
 QPushButton[flat="true"] {
@@ -886,6 +891,7 @@ QPushButton#btn_edit_shot_notes:hover {
 QPushButton#btn_open_nuke,
 QToolButton#btn_open_assets,
 QPushButton#btn_open_matchmove,
+QPushButton#btn_open_shot_cg,
 QToolButton#btn_open_precomp,
 QPushButton#btn_latest_render {
     background-color: #2F3542;
@@ -909,9 +915,15 @@ QPushButton#btn_latest_render:hover {
     border-color: #FF6B35;
 }
 
-QPushButton#btn_open_matchmove {
+QPushButton#btn_open_matchmove,
+QPushButton#btn_open_shot_cg {
     text-transform: none;
     letter-spacing: 0px;
+}
+
+QFrame#shot_cg_assets {
+    background-color: transparent;
+    border: none;
 }
 
 /* 3DE project identity: muted purple, on ShotBox charcoal.
@@ -956,7 +968,8 @@ QToolButton#btn_open_timeline_assets[has_matchmove="true"]:disabled {
 }
 
 /* Houdini project identity: the same asset-button treatment in orange. */
-QToolButton#btn_open_job_cg {
+QToolButton#btn_open_job_cg,
+QPushButton#btn_open_shot_cg {
     background-color: #3D2C24;
     border-color: #B45B24;
     border-left-color: #FF6600;
@@ -964,23 +977,27 @@ QToolButton#btn_open_job_cg {
     color: #FFE0C4;
 }
 
-QToolButton#btn_open_job_cg:hover {
+QToolButton#btn_open_job_cg:hover,
+QPushButton#btn_open_shot_cg:hover {
     background-color: #503525;
     border-color: #FF8A3D;
     color: #FFF0E3;
 }
 
-QToolButton#btn_open_job_cg:focus {
+QToolButton#btn_open_job_cg:focus,
+QPushButton#btn_open_shot_cg:focus {
     border-color: #FFBA80;
 }
 
-QToolButton#btn_open_job_cg:pressed {
+QToolButton#btn_open_job_cg:pressed,
+QPushButton#btn_open_shot_cg:pressed {
     background-color: #61402A;
     border-color: #FF9B59;
     color: #FFFFFF;
 }
 
-QToolButton#btn_open_job_cg:disabled {
+QToolButton#btn_open_job_cg:disabled,
+QPushButton#btn_open_shot_cg:disabled {
     background-color: #252931;
     border-color: #404754;
     color: #818793;
@@ -1900,6 +1917,7 @@ QPushButton#btn_latest_render[compact="true"],
 QPushButton#bnt_addTask[compact="true"],
 QToolButton#btn_open_assets[compact="true"],
 QPushButton#btn_open_matchmove[compact="true"],
+QPushButton#btn_open_shot_cg[compact="true"],
 QToolButton#btn_open_precomp[compact="true"] {
     padding: 4px 6px;
     font-size: 10px;
@@ -1992,6 +2010,7 @@ QPushButton#btn_open_nuke[v02="true"],
 QPushButton#btn_latest_render[v02="true"],
 QToolButton#btn_open_assets[v02="true"],
 QPushButton#btn_open_matchmove[v02="true"],
+QPushButton#btn_open_shot_cg[v02="true"],
 QToolButton#btn_open_precomp[v02="true"] {
     min-height: 20px;
     padding: 3px 5px;
@@ -2068,6 +2087,8 @@ QFrame#frame_7[v02="true"] QPushButton#bnt_addTask {
 QLabel#label_shot[v02="true"][compact="true"] {
     font-size: 14px;
 }
+
+QPushButton#btn_open_shot_cg { border-left-width: 3px; }
 
 /* Project accent survives the grid card's narrower standard borders. */
 QPushButton#btn_open_matchmove[has_matchmove="true"],

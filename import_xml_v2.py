@@ -182,8 +182,6 @@ def shot_note_lines(shot):
         if timing.get('single_shot'):
             prefix = '' if clip.track == 1 else f'V{clip.track} '
             lines.append(f"{prefix}Source frames: {timing['source_first']}-{timing['source_last']} at {timing['fps']:g} fps")
-            if timing.get('input_colourspace'):
-                lines.append(f"{prefix}Input transform: {timing['input_colourspace']}")
     return lines + shot.notes.splitlines()
 
 

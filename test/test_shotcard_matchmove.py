@@ -223,7 +223,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 card._populate_assets_menu(menu)
 
             self.assertEqual(menu.actions[0].text, "Open Assets in File Browser")
-            self.assertEqual(menu.separator_count, 1)
+            self.assertEqual(menu.separator_count, 2)
             menu.actions[0].triggered.fire()
             self.assertEqual(fake_folders.opened_locations[-1], shot_root / "shot_assets")
 
@@ -361,10 +361,10 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             menu = FakeMenu()
             card._populate_assets_menu(menu)
             self.assertEqual([action.text for action in menu.actions],
-                             ["Open Assets in File Browser", "No renders/precomp folder found"])
-            self.assertFalse(menu.actions[1].enabled)
+                             ["Open Assets in File Browser", "Create CG Asset", "No renders/precomp folder found"])
+            self.assertFalse(menu.actions[2].enabled)
             self.assertEqual(menu.submenus, [])
-            self.assertEqual(menu.separator_count, 1)
+            self.assertEqual(menu.separator_count, 2)
             self.assertEqual(card.btn_open_assets.text(), "Assets")
             self.assertIsNone(card.btn_open_assets.property("has_matchmove"))
             self.assertNotIn("3DE", card.btn_open_assets.toolTip())
@@ -470,7 +470,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 shown = card._show_assets_matchmove_menu(QPoint(3, 4))
 
             self.assertTrue(shown)
-            self.assertEqual(FakeMenu.instances[0].actions[1].text, "No valid EXR precomp folders found")
+            self.assertEqual(FakeMenu.instances[0].actions[2].text, "No valid EXR precomp folders found")
 
     def test_assets_menu_scans_converted_windows_project_path(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -740,7 +740,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             (work / "solve.3de").touch()
             card, _ = self._make_card(tmpdir)
             for _ in range(2):
-                self.assertEqual([card.horizontalLayout_3.itemAt(i).widget() for i in (1, 2, 3)],
+                self.assertEqual([card.horizontalLayout_3.itemAt(i).widget() for i in (1, 2, 4)],
                                  [card.btn_open_assets, card.btn_open_matchmove, card.btn_open_precomp])
                 card.set_v02_grid(True)
                 arrange_shot_actions(card)

@@ -67,6 +67,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Import the UI setup functions (replaces uic.loadUi)
 from shot_card import setup_shot_card_ui
+import cg_asset_actions
 from task_card import setup_task_widget_ui
 
 BASE_URL = "http://192.168.10.207:8000"
@@ -1663,7 +1664,7 @@ class ShotCard(QWidget):
         self._update_matchmove_button_visibility()
         _set_dynamic_property(self.btn_open_matchmove, "has_matchmove", "true" if projects else "false")
         self.btn_open_assets.setText("Assets")
-        self.btn_open_assets.setToolTip("Open assets folder · Right-click to create matchmove")
+        self.btn_open_assets.setToolTip("Open assets folder · Right-click to create matchmove or CG assets")
         if projects:
             suffix = f" (+{len(projects) - 1})" if len(projects) > 1 else ""
             label = re.sub(r"_matchmove", "", projects[0].name, flags=re.IGNORECASE)
@@ -1729,6 +1730,7 @@ class ShotCard(QWidget):
             except Exception:
                 pass
         self._set_matchmove_project_state(projects)
+        cg_asset_actions.refresh_shot_buttons(self)
         return projects[0] if projects else None
 
     def _populate_assets_menu(self, menu: QMenu) -> bool:
@@ -1738,6 +1740,9 @@ class ShotCard(QWidget):
         menu.clear()
         open_assets = menu.addAction("Open Assets in File Browser")
         open_assets.triggered.connect(self._open_shot_assets)
+        menu.addSeparator()
+        create_cg = menu.addAction("Create CG Asset")
+        create_cg.triggered.connect(lambda checked=False: cg_asset_actions.create_for_shot(self))
         try:
             try:
                 _load_matchmove_helpers()
@@ -2558,6 +2563,7 @@ class ShotCard(QWidget):
             self.btn_open_precomp.setVisible(not self._compact_mode)
 
         self._update_matchmove_button_visibility()
+        cg_asset_actions.update_shot_visibility(self)
         self._set_hide_button_label()
         self._set_nuke_button_label()
         self._set_render_button_text()
@@ -2570,6 +2576,7 @@ class ShotCard(QWidget):
         # Store the latest data
         data = data or {}
         self.data = data
+        self.shot_dir = data.get("base_path", self.shot_dir)
 
         self.label_shot.setText(data.get("title", "") or "")
         self.label_notes.setText(data.get("notes", "") or "")

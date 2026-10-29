@@ -18,7 +18,7 @@ import cg_asset_helpers as helpers
 
 
 @app_cache.temporary_cache_task
-def validate(configured, exports):
+def validate(configured, exports, scope="job"):
     _, hython = helpers.resolve_houdini(configured)
     with app_cache.temporary_cache_lease(), tempfile.TemporaryDirectory(
         prefix="houdini-cg-acceptance-", dir=app_cache.cache_directory("temp")
@@ -63,10 +63,13 @@ for node in [scene, cam]:
         duration = helpers.longest_duration(summaries)
         if duration is None:
             raise RuntimeError("The selected exports have no detectable animation duration.")
-        assets = work / "job_assets"
-        destination = helpers.asset_destination(assets, "Acceptance")
+        parent = work / "VFX"
+        if scope == "shot":
+            parent = parent / "timeline" / "shot010"
+        cg_root = helpers.resolve_cg_root(parent, f"{scope}_assets")
+        destination = helpers.asset_destination(cg_root, "Acceptance")
         saved = run("save", prepared=prepared["output"], duration=duration, destination=destination.as_posix())
-        project = helpers.publish_scene(Path(saved["output"]), assets, "Acceptance")
+        project = helpers.publish_scene(Path(saved["output"]), cg_root, "Acceptance")
         probe = work / "probe.py"
         report = work / "probe.json"
         probe.write_text('''import hou, json, sys
@@ -109,9 +112,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--houdini", default="", help="Houdini executable (matching hython required)")
     parser.add_argument("--export", action="append", default=[], help="Real 3DE .py export; repeat for multiple cameras")
+    parser.add_argument("--scope", choices=("job", "shot"), default="job", help="Asset destination to validate")
     args = parser.parse_args()
     try:
-        validate(args.houdini, args.export)
+        validate(args.houdini, args.export, args.scope)
     except Exception as exc:
         print(f"Houdini acceptance failed: {exc}", file=sys.stderr)
         sys.exit(1)

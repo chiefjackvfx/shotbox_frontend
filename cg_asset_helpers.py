@@ -1,4 +1,4 @@
-"""Filesystem and executable helpers for job-level Houdini assets."""
+"""Filesystem and executable helpers for job and shot Houdini assets."""
 from __future__ import annotations
 
 import os
@@ -27,8 +27,13 @@ def validate_asset_name(value: str) -> str:
     return name
 
 
-def asset_destination(job_assets: Path, name: str) -> Path:
-    return asset_path(Path(job_assets).parent, "job_assets", "cg") / validate_asset_name(name)
+def resolve_cg_root(parent: Path, assets_kind: str) -> Path:
+    """Resolve a job/shot CG directory, including the legacy folder spelling."""
+    return asset_path(parent, assets_kind, "cg")
+
+
+def asset_destination(cg_root: Path, name: str) -> Path:
+    return Path(cg_root) / validate_asset_name(name)
 
 
 def validate_new_destination(destination: Path) -> None:
@@ -115,6 +120,11 @@ def discover_camera_exports(job: dict, job_assets: Path, convert_path=lambda pat
                 roots.append(Path(convert_path(shot["matchmove_path"])))
             elif shot.get("base_path"):
                 roots.append(asset_path(Path(convert_path(shot["base_path"])), "shot_assets", "matchmove"))
+    return discover_exports_in_matchmove(roots)
+
+
+def discover_exports_in_matchmove(roots: list[Path]) -> list[Path]:
+    """List exports only in explicitly supplied matchmove folders."""
     exports = {}
     for root in roots:
         directory = root / "export"
@@ -136,8 +146,8 @@ def longest_duration(summaries: list[dict]) -> int | None:
     return max(int(summary["duration"]) for summary in summaries)
 
 
-def list_cg_projects(job_assets: Path) -> list[Path]:
-    directory = asset_path(job_assets.parent, "job_assets", "cg")
+def list_cg_projects(cg_root: Path) -> list[Path]:
+    directory = Path(cg_root)
     if not directory.is_dir():
         return []
     projects = []
@@ -153,9 +163,9 @@ def list_cg_projects(job_assets: Path) -> list[Path]:
 
 
 @app_cache.temporary_cache_task
-def publish_scene(prepared: Path, job_assets: Path, name: str) -> Path:
+def publish_scene(prepared: Path, cg_root: Path, name: str) -> Path:
     """Publish a saved hip exclusively, rolling back only our own files/directories."""
-    destination = asset_destination(job_assets, name)
+    destination = asset_destination(cg_root, name)
     validate_new_destination(destination)
     if not prepared.is_file() or prepared.stat().st_size == 0:
         raise RuntimeError("Houdini did not write a nonempty scene file.")

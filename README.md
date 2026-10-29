@@ -72,7 +72,7 @@ the change, with identical decoded frames. See
 [batch preview verification](docs/PREVIEW_BATCH_VERIFICATION.md) for measurements,
 test commands, and the limits of this comparison.
 
-## Houdini job assets
+## Houdini job and shot assets
 
 In NukeDash, open the **Job Assets** menu (left-click or right-click) and choose
 **Create CG Asset**. Enter a new asset name, select camera exports, then use
@@ -93,6 +93,20 @@ and `assets/`, sets `$JOB` to the asset folder, and launches Houdini. Existing
 assets in Houdini. Filename buttons beside Job Assets open each asset's latest
 numeric `.hip` version; right-click a button to open its folder in Explorer.
 
+For shot assets, right-click **Assets** on the shot card and choose **Create CG
+Asset**. The same dialog shows the shot name and discovers only that shot's
+matchmove camera exports, including its configured matchmove path. Browse can
+add other exports. The destination is
+`<shot>/shot_assets/cg/<name>/<name>_v001.hip`, with `geo/` and `assets/` beside
+the scene. Existing `Shot_Assets` folders are reused. CG creation does not
+create a matchmove folder. Names are unique within each shot, so another shot
+or job can use the same asset name.
+
+Orange filename buttons on the shot card open the latest asset versions;
+right-click opens their folders in Explorer. Buttons wrap in narrow cards,
+shorten long filenames visually, and follow the 3DE controls' compact-mode
+visibility. Full filenames and paths remain available in their tooltips.
+
 Set **Houdini Executable** in Settings if Houdini is not available through `HFS`
 or `PATH`. Its matching `hython` is required, together with an available
 commercial licence. Workers use factory Houdini paths and isolated preferences;
@@ -107,6 +121,7 @@ venv/bin/python test/houdini_cg_acceptance.py --houdini /path/to/houdini
 
 Add `--export /path/to/camera_hou.py` once per real camera export to validate
 those files. Without exports, the check generates two representative cameras.
+Add `--scope shot` to validate the shot destination instead of job assets.
 The check creates all scenes under the protected application cache and removes
 them afterward. Interactive opening and the absence of a competing startup
 dialog should also be checked in the desktop application.
