@@ -6,9 +6,13 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-29 03:27:17 PM +00:00] Test 3DE launch paths and preserve startup failure diagnostics.
+
 ### Changed
 
 ### Fixed
+
+- [2026-10-29 03:27:17 PM +00:00] Fix 3DE headless launches from Windows paths containing spaces.
 
 ## 5.4.0 - 2026-10-29
 

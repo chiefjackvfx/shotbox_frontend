@@ -797,15 +797,20 @@ def run_headless_3de(
         three_de_path,
         "-no_gui",
         "-run_script",
-        runtime_script_path,
+        # 3DE's Windows argument parser can reject script paths with spaces.
+        # Keep paths inside CONFIG absolute, but pass a plain filename here.
+        os.path.basename(runtime_script_path),
     ]
-    log_callback(f"Launching 3DE headless: {shlex.join(command)}")
+    command_text = subprocess.list2cmdline(command) if os.name == "nt" else shlex.join(command)
+    log_callback(f"Launching 3DE headless: {command_text}")
+    log_callback(f"Working directory: {temp_dir}")
 
     completed = subprocess.run(
         command,
         capture_output=True,
         text=True,
         check=False,
+        cwd=temp_dir,
     )
 
     if completed.stdout.strip():
@@ -825,7 +830,10 @@ def run_headless_3de(
         or not status_payload.get("success")
         or not os.path.isfile(request.project_path)
     ):
-        status_error = status_payload.get("error") or "Unknown 3DE headless error."
+        status_error = status_payload.get("error") or (
+            "3DE did not write a status result. Startup or the automation script failed before reporting back."
+            if not status_payload else "3DE did not create the expected project file."
+        )
         status_traceback = status_payload.get("traceback", "").strip()
         stdout_text = completed.stdout.strip()
         stderr_text = completed.stderr.strip()
@@ -833,6 +841,7 @@ def run_headless_3de(
             f"Return code: {completed.returncode}",
             f"Runtime script: {runtime_script_path}",
             f"Status file: {status_path}",
+            f"Working directory: {temp_dir}",
         ]
         if stdout_text:
             extra_parts.append(f"Stdout:\n{stdout_text}")
