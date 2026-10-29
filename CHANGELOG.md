@@ -6,131 +6,86 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-10-29 12:11:48 PM +00:00] Create job CG assets with cameras and Houdini launchers.
-- [2026-10-29 12:11:48 PM +00:00] Test Houdini asset timing, cancellation, saving, and dashboard integration.
-
-- [2026-10-29 11:37:46 AM +00:00] Open job matchmove projects through a separate filename button.
-
-- [2026-10-28 03:49:30 PM +00:00] Test Deadline cache cleanup, recovery, and active-worker protection.
-
-- [2026-10-28 03:22:37 PM +00:00] Mark latest renders green when matching their last conform.
-
-- [2026-10-28 03:19:29 PM +00:00] Show/hide shot tasks from filters row; remember visibility preference.
-
-- [2026-10-28 03:06:40 PM +00:00] Preview matchmove precomp sequences before creating 3DE projects.
-
-- [2026-10-28 02:57:11 PM +00:00] Test additional matchmove creation and preserve existing project versions.
-
-- [2026-10-28 02:50:09 PM +00:00] Test folder opening, filename updates, and styled narrow-grid layouts.
-
-- [2026-10-28 02:44:07 PM +00:00] Open existing shot matchmove projects through dedicated 3DE buttons.
-- [2026-10-28 02:44:07 PM +00:00] Test 3DE visibility, project selection, errors, and layout switching.
-
-- [2026-10-28 01:34:15 PM +00:00] Create job matchmove projects across timelines with labelled sequences.
-- [2026-10-28 01:34:15 PM +00:00] Test matchmove menus, job persistence, and legacy project compatibility.
-
-- [2026-10-28T13:09:44+00:00] Support qualified Windows/Linux Deadline denoise workers and path preflight.
-
-- [2026-10-28 12:16:25 PM +00:00] Detect single-shot durations; support EXRs, metadata, and editable notes.
-- [2026-10-28 12:16:25 PM +00:00] Support sixteen single-shot layers with scrollable media review.
-
-- [2026-10-28 11:34:27 AM +00:00] Set up multiple denoised plates with connected Stamps branches.
-
-- [2026-10-27 09:04:49 PM +00:00] Configure Deadline chunks and concurrent tasks per worker.
-
-
-- [2026-10-27 09:01:17 PM +00:00] Submit denoise profiles to Deadline with persistent job receipts.
-- [2026-10-27 09:01:17 PM +00:00] Render local projects through the verified local Linux worker.
-
-
-- [2026-10-27 08:28:03 PM +00:00] Allow editing timeline names in import settings.
-
-- [2026-10-27 08:22:40 PM +00:00] Import Resolve DRT timelines with constant-speed retimes and validation.
-
-- [2026-10-27 08:15:48 PM +00:00] Show additional original clip counts beside shot source filenames.
-
-- [2026-10-27 08:14:23 PM +00:00] Test clip menus, timeline scoping, deduplication, and plate identity.
-
 ### Changed
-
-- [2026-10-29 12:20:57 PM +00:00] Add humorous Houdini licence errors suggesting checking with Jack.
-
-- [2026-10-29 11:42:56 AM +00:00] Show separate job 3DE buttons; wrap projects across rows.
-- [2026-10-29 11:42:56 AM +00:00] Document and test multiple projects, version refreshes, and removal.
-
-- [2026-10-29 11:40:36 AM +00:00] Style 3DE buttons with purple accents and charcoal backgrounds.
-- [2026-10-29 11:40:36 AM +00:00] Document purple styling; verify text-only buttons across interaction states.
-
-- [2026-10-29 11:37:46 AM +00:00] Keep project creation in Job Assets; move existing-project access.
-- [2026-10-29 11:37:46 AM +00:00] Document and test job filename buttons, refreshes, and folders.
-
-- [2026-10-28 03:53:19 PM +00:00] Stop creating timeline import sidecars; preserve existing legacy files.
-- [2026-10-28 03:53:19 PM +00:00] Document and test imports, thumbnails, and denoise without sidecars.
-
-- [2026-10-28 03:49:30 PM +00:00] Keep Deadline submission files in cache; delete resolved artifacts.
-- [2026-10-28 03:49:30 PM +00:00] Document temporary Deadline receipts and legacy reconciliation.
-
-- [2026-10-28 03:22:37 PM +00:00] Document and test render conform indicators across views and refreshes.
-
-- [2026-10-28 03:19:29 PM +00:00] Document and test task visibility across layouts and reloads.
-
-- [2026-10-28 03:06:40 PM +00:00] Test preview lifecycle and clean up closed matchmove menus.
-
-- [2026-10-28 02:57:11 PM +00:00] Allow additional matchmove creation from Assets using existing paths.
-
-- [2026-10-28 02:54:00 PM +00:00] Shorten matchmove labels; add work/export folder actions and tests.
-
-- [2026-10-28 02:50:09 PM +00:00] Show 3DE filenames and document right-click folder access.
-
-- [2026-10-28 02:44:07 PM +00:00] Document dedicated 3DE buttons and simplify Assets menus.
-
-- [2026-10-28 01:49:16 PM +00:00] Rename folder controls label to Assets.
-
-- [2026-10-28 01:34:15 PM +00:00] Stop creating timeline assets; preserve access to legacy folders.
-- [2026-10-28 01:34:15 PM +00:00] Document matchmove workflows and backend migration deployment order.
-
-- [2026-10-28T13:09:44+00:00] Verify mixed-farm renders, chunk boundaries, and dashboard submissions.
-- [2026-10-28T13:09:44+00:00] Enable Nuke path mapping with documented configuration rollback.
-
-- [2026-10-28 12:16:25 PM +00:00] Test movie durations, EXR thumbnails, notes, and Nuke playback.
-
-- [2026-10-28 11:58:43 AM +00:00] Use dated 12-hour timestamps for pending changelog notes.
-
-- [2026-10-28 11:53:23 AM +00:00] Use plain denoise Retimes starting at 1001; increase spacing.
-
-- [2026-10-27 08:35:06 PM +00:00] Extend timeline import and shot linking to sixteen video layers.
-
-- [2026-10-27 08:34:11 PM +00:00] Parallelize Linux denoise batches without changing image settings.
-
-
-- [2026-10-27 08:31:54 PM +00:00] Move project path button left of the destination path.
-
-- [2026-10-27 08:14:23 PM +00:00] Move denoise into each original clip's context menu.
-- [2026-10-27 08:14:23 PM +00:00] Limit batch denoise to the selected timeline's original clips.
-- [2026-10-27 08:14:23 PM +00:00] Document source denoise scope and single/batch output naming.
 
 ### Fixed
 
-- [2026-10-28 03:19:29 PM +00:00] Clear stale file polling targets before reloading shot cards.
+## 5.4.0 - 2026-10-29
 
-- [2026-10-28 02:50:09 PM +00:00] Keep filename buttons aligned with other grid action controls.
+### Added
 
-- [2026-10-28 01:47:24 PM +00:00] Only show Timeline Assets when its folder already exists.
+- Create job CG assets with cameras and Houdini launchers.
+- Test Houdini asset timing, cancellation, saving, and dashboard integration.
+- Open job matchmove projects through a separate filename button.
+- Test Deadline cache cleanup, recovery, and active-worker protection.
+- Mark latest renders green when matching their last conform.
+- Show/hide shot tasks from filters row; remember visibility preference.
+- Preview matchmove precomp sequences before creating 3DE projects.
+- Test additional matchmove creation and preserve existing project versions.
+- Test folder opening, filename updates, and styled narrow-grid layouts.
+- Open existing shot matchmove projects through dedicated 3DE buttons.
+- Test 3DE visibility, project selection, errors, and layout switching.
+- Create job matchmove projects across timelines with labelled sequences.
+- Test matchmove menus, job persistence, and legacy project compatibility.
+- Support qualified Windows/Linux Deadline denoise workers and path preflight.
+- Detect single-shot durations; support EXRs, metadata, and editable notes.
+- Support sixteen single-shot layers with scrollable media review.
+- Set up multiple denoised plates with connected Stamps branches.
+- Configure Deadline chunks and concurrent tasks per worker.
+- Submit denoise profiles to Deadline with persistent job receipts.
+- Render local projects through the verified local Linux worker.
+- Allow editing timeline names in import settings.
+- Import Resolve DRT timelines with constant-speed retimes and validation.
+- Show additional original clip counts beside shot source filenames.
+- Test clip menus, timeline scoping, deduplication, and plate identity.
 
-- [2026-10-28 01:46:13 PM +00:00] Match Job Assets styling to timeline assets controls.
+### Changed
 
-- [2026-10-28 01:34:15 PM +00:00] Show latest 3DE version per project across asset menus.
+- Add humorous Houdini licence errors suggesting checking with Jack.
+- Show separate job 3DE buttons; wrap projects across rows.
+- Document and test multiple projects, version refreshes, and removal.
+- Style 3DE buttons with purple accents and charcoal backgrounds.
+- Document purple styling; verify text-only buttons across interaction states.
+- Keep project creation in Job Assets; move existing-project access.
+- Document and test job filename buttons, refreshes, and folders.
+- Stop creating timeline import sidecars; preserve existing legacy files.
+- Document and test imports, thumbnails, and denoise without sidecars.
+- Keep Deadline submission files in cache; delete resolved artifacts.
+- Document temporary Deadline receipts and legacy reconciliation.
+- Document and test render conform indicators across views and refreshes.
+- Document and test task visibility across layouts and reloads.
+- Test preview lifecycle and clean up closed matchmove menus.
+- Allow additional matchmove creation from Assets using existing paths.
+- Shorten matchmove labels; add work/export folder actions and tests.
+- Show 3DE filenames and document right-click folder access.
+- Document dedicated 3DE buttons and simplify Assets menus.
+- Rename folder controls label to Assets.
+- Stop creating timeline assets; preserve access to legacy folders.
+- Document matchmove workflows and backend migration deployment order.
+- Verify mixed-farm renders, chunk boundaries, and dashboard submissions.
+- Enable Nuke path mapping with documented configuration rollback.
+- Test movie durations, EXR thumbnails, notes, and Nuke playback.
+- Use dated 12-hour timestamps for pending changelog notes.
+- Use plain denoise Retimes starting at 1001; increase spacing.
+- Extend timeline import and shot linking to sixteen video layers.
+- Parallelize Linux denoise batches without changing image settings.
+- Move project path button left of the destination path.
+- Move denoise into each original clip's context menu.
+- Limit batch denoise to the selected timeline's original clips.
+- Document source denoise scope and single/batch output naming.
 
-- [2026-10-28 12:19:44 PM +00:00] Set every denoised Read input transform to ACEScg.
+### Fixed
 
-- [2026-10-28 12:19:10 PM +00:00] Preserve aspect ratios; only downscale sources wider than 4096.
-
-- [2026-10-28 12:16:25 PM +00:00] Copy complete EXR sequences and preserve native source frame ranges.
-
-- [2026-10-27 09:01:17 PM +00:00] Recover configured project shares when Deadline roots are empty.
-
-
-- [2026-10-27 08:14:23 PM +00:00] Preserve selected plate outputs and ignore unrelated missing clips.
+- Clear stale file polling targets before reloading shot cards.
+- Keep filename buttons aligned with other grid action controls.
+- Only show Timeline Assets when its folder already exists.
+- Match Job Assets styling to timeline assets controls.
+- Show latest 3DE version per project across asset menus.
+- Set every denoised Read input transform to ACEScg.
+- Preserve aspect ratios; only downscale sources wider than 4096.
+- Copy complete EXR sequences and preserve native source frame ranges.
+- Recover configured project shares when Deadline roots are empty.
+- Preserve selected plate outputs and ignore unrelated missing clips.
 
 ## 5.3.0 - 2026-10-27
 
