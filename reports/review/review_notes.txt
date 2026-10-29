@@ -1,0 +1,42 @@
+Blinds Direct report: three visual review and revision passes
+
+Baseline inspected: cover, contributor page, dense shot page, short timeline.
+Findings: 13 pages, sparse short timelines, small thumbnails, cover hardware
+close-up, raw task lists, missing continuation headings.
+
+Pass 1 — layout (Blinds_Direct_Pass_1.pdf, 10 pages)
+Enlarged thumbnails, chose the first visible shot with task context for the
+cover, simplified the cover title, used restrained serif display typography,
+and replaced fixed timeline batches with complete cards flowing across pages.
+Fixed singular elapsed-day wording. Inspected cover, first shot page and both
+ending pages. Short timelines now share pages; no shots were omitted.
+
+Pass 2 — content (Blinds_Direct_Pass_2.pdf, 10 pages)
+Added current task status summaries and historical approval milestones.
+Replaced event-type bars with the five shots with most production changes.
+Cleaned timeline labels in the donut chart and distinguished current task
+status from repeated approval events. Inspected chart, contributor, middle
+shot and final pages. Remaining issues: small task text and no running
+section context on continued pages.
+
+Pass 3 — polish (Blinds_Direct_Pass_3.pdf, 11 pages)
+Increased secondary text size, added aligned task/artist/status tables,
+quoted scope summaries, and named the outstanding matchmove approval.
+Added running timeline headers and PDF outline bookmarks. Allowed additional
+space for dense cards instead of shrinking type. Inspected all 11 rendered
+pages and the densest shot page at larger scale.
+
+Final verification
+25 distinct shot-card headings; all 3 timelines retained.
+230 total activity records; 136 production events.
+21 current tasks approved; 1 waiting for approval (blinds_160, hidden shot).
+23 historical transitions into Approved/Done, including repeated/deleted tasks.
+206 total events lack an author; production-only chart correctly shows 126.
+No budget figures; elapsed days are not represented as worked hours.
+PDF text bounding boxes remain within page margins; bookmarks are present.
+Final main PDF is byte-identical to inspected pass 3 (871,992 bytes).
+
+Limitations
+This remains an internal frontend script prototype, without an app button.
+Task descriptions are faithful to recorded titles/notes, not inferred prose.
+Unattributed history and missing task descriptions cannot be reconstructed.

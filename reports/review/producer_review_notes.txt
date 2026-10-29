@@ -1,0 +1,20 @@
+Producer-style revision
+
+Reference: /job/110/producer-overview/ requires login. Inspected the local
+job_producer_overview.html template and JobProducerOverviewView grouping logic.
+Adapted its summary cards, artist columns, active/completed groups and thumbnail
+shot groups for print. Kept all hidden items in scope as in the previous PDF;
+labelled the difference from the default web view. Budget values omitted.
+
+Visually inspected all newly added/changed content pages, 2 through 7.
+Producer overview and workboards retain readable margins and aligned columns.
+Charts use the established muted palette; activity calendar, event-mix donut
+and cumulative approval graph add distinct views rather than duplicate totals.
+
+Verified: 15 pages, 9 charts, all 25 full shot cards, all 22 current tasks
+represented once in artist ownership groups, 136 production events,
+23 historical approval/completion events, current 21 approved / 1 waiting.
+All extracted text is inside page margins; bookmarks remain present.
+No budget values, no estimated working hours. Final PDF below 1 MB.
+Both Blinds_Direct_Producer_Report.pdf and the main Production_Report.pdf
+now contain the producer-style edition. Earlier three-pass PDFs are preserved.

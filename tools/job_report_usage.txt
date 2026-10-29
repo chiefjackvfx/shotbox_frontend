@@ -1,0 +1,55 @@
+Shotbox PDF report prototype
+
+From the workspace root:
+  .venv/bin/pip install -r shotbox_frontend/tools/report-requirements.txt
+  .venv/bin/python shotbox_frontend/tools/job_report.py --db shotbox_backend/db.sqlite3 --media shotbox_backend/media --job "Blinds Direct" --output shotbox_frontend/reports/Blinds_Direct_Production_Report.pdf
+
+--job accepts an ID, exact title, or unique title fragment.
+--db selects a SQLite database (required, opened read-only).
+--media selects the thumbnail media directory (required).
+--output selects the PDF destination; an existing PDF there is replaced.
+
+The source database is opened read-only in a consistent transaction.
+All timelines, hidden shots and hidden tasks are included and labelled.
+Charts count task creation/deletion, assignment, status, conform and render
+updates. Metadata edits are excluded from production charts. Shot activity
+spans include all recorded event types. Elapsed days are not working hours.
+Budget values are never used. Text comes from current tasks and notes,
+without an LLM. Missing authors remain unattributed. Task assignment is
+not evidence of who performed an action. Conform references are not
+verified deliveries. Historical events with a job ID survive deleted tasks;
+events without a resolvable shot still contribute job-level totals.
+
+PDFs use A4 portrait, vector charts, compressed thumbnails and typically
+three or four shot cards per page. Complete cards move to the next page
+when space runs out. Timeline sections share pages where possible.
+Running timeline headers and PDF bookmarks provide navigation.
+Shot summaries quote recorded scope; task tables preserve notes, assignees
+and status. Approval milestones count historical transitions separately
+from current approved tasks. This is
+an internal prototype: it includes task notes and names, has no application
+button yet, and does not certify a job as complete.
+
+Ownership: this is a frontend utility; PDF layout and generation run locally.
+The explicit database/media inputs are a test adapter, not a dependency on
+a sibling backend installation. Use any accessible snapshot/media directory.
+App integration should supply complete history through the existing API;
+the current job activity endpoint caps results at 200 and is not sufficient
+for complete reports without an API pagination/export change.
+
+Producer-style edition
+The report opens with producer status tiles and a two-column artist workboard.
+Tasks group by their current artist, active/completed state, then shot.
+Approved/Done tasks are completed; all other current states remain active.
+Hidden shots/tasks remain included and labelled, unlike the web overview's
+initial hidden-items-off view. Unassigned is separate from unknown event author.
+
+Nine charts: completed/active tasks by artist, current status donut, weekly
+production activity, timeline activity donut, busiest shots, daily activity
+calendar, cumulative approval/completion events, event-type donut, and activity
+by recorded author. These measure events or current task counts, never hours.
+The cumulative approval graph includes repeated approvals and deleted tasks;
+it is deliberately separate from current completed-task counts.
+
+The producer reference URL requires authentication. Its local Django template
+and grouping logic were inspected; no changes were made to that web page.

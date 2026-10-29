@@ -6,14 +6,22 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-29 04:49:29 PM +00:00] Add producer workboards and nine charts to PDF reports.
+
+- [2026-10-29 04:36:20 PM +00:00] Add frontend PDF report prototype with activity charts and thumbnails.
+
 - [2026-10-29 04:19:40 PM +00:00] Create shot Houdini assets with cameras and orange launch buttons.
 - [2026-10-29 04:19:40 PM +00:00] Test shot CG scope isolation, cancellation, paths, and layouts.
 
 ### Changed
 
+- [2026-10-29 04:44:35 PM +00:00] Refine PDF pagination, shot summaries, approval details, and navigation.
+
 - [2026-10-29 03:55:00 PM +00:00] Omit input transforms from generated shot notes.
 
 ### Fixed
+
+- [2026-10-29 04:51:48 PM +00:00] Prevent PDF chart legend overlap on larger jobs.
 
 ## 5.4.2 - 2026-10-29
 
