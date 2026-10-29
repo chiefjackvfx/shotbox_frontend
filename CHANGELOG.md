@@ -6,6 +6,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-10-29 11:37:46 AM +00:00] Open job matchmove projects through a separate filename button.
+
 - [2026-10-28 03:49:30 PM +00:00] Test Deadline cache cleanup, recovery, and active-worker protection.
 
 - [2026-10-28 03:22:37 PM +00:00] Mark latest renders green when matching their last conform.
@@ -47,6 +49,15 @@ All notable frontend publish changes should be documented in this file.
 - [2026-10-27 08:14:23 PM +00:00] Test clip menus, timeline scoping, deduplication, and plate identity.
 
 ### Changed
+
+- [2026-10-29 11:42:56 AM +00:00] Show separate job 3DE buttons; wrap projects across rows.
+- [2026-10-29 11:42:56 AM +00:00] Document and test multiple projects, version refreshes, and removal.
+
+- [2026-10-29 11:40:36 AM +00:00] Style 3DE buttons with purple accents and charcoal backgrounds.
+- [2026-10-29 11:40:36 AM +00:00] Document purple styling; verify text-only buttons across interaction states.
+
+- [2026-10-29 11:37:46 AM +00:00] Keep project creation in Job Assets; move existing-project access.
+- [2026-10-29 11:37:46 AM +00:00] Document and test job filename buttons, refreshes, and folders.
 
 - [2026-10-28 03:53:19 PM +00:00] Stop creating timeline import sidecars; preserve existing legacy files.
 - [2026-10-28 03:53:19 PM +00:00] Document and test imports, thumbnails, and denoise without sidecars.

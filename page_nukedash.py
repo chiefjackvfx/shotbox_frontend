@@ -5,13 +5,14 @@ from __future__ import annotations
 ShotBox NukeDash Page
 """
 import os
+import re
 import json
 import hashlib
 import time
 import sys
 from pathlib import Path
 
-from PyQt6 import QtWidgets, uic
+from PyQt6 import QtWidgets, uic, sip
 from PyQt6.QtCore import QEvent, QObject, QThread, QThreadPool, QTimer, pyqtSignal, pyqtSlot, Qt
 from PyQt6.QtGui import QImage, QStandardItemModel, QStandardItem
 from PyQt6.QtWidgets import (
@@ -832,6 +833,9 @@ class page_nukedash(QMainWindow):
         )
         if callable(timeline_matchmove_refresher):
             timeline_matchmove_refresher()
+        job_refresher = getattr(self, "_refresh_job_matchmove_state", None)
+        if callable(job_refresher):
+            job_refresher()
         self._reset_shot_file_poll_targets()
         targets = getattr(self, "_shot_file_poll_targets", [])
         if not hasattr(self, "_preview_updates_pending"):
@@ -1503,6 +1507,29 @@ class page_nukedash(QMainWindow):
         )
 
     def _setup_assets_menus(self) -> None:
+        row = getattr(self, "assets_actions_row", None)
+        if row is not None and not isinstance(row.layout(), FlowLayout):
+            old_layout = row.layout()
+            controls = []
+            while old_layout.count():
+                item = old_layout.takeAt(0)
+                if item.widget() is not None:
+                    controls.append(item.widget())
+            sip.delete(old_layout)
+            self.horizontalLayout_assets_actions = FlowLayout(row, h_spacing=6, v_spacing=6)
+            for control in controls:
+                self.horizontalLayout_assets_actions.addWidget(control)
+            row.setMaximumHeight(16777215)
+            row.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        button = getattr(self, "btn_open_job_matchmove", None)
+        self._job_matchmove_buttons = [button] if button is not None else []
+        if button is not None:
+            button.hide()
+            button.clicked.connect(lambda checked=False, button=button: self._on_open_job_matchmove_clicked(button))
+            button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            button.customContextMenuRequested.connect(
+                lambda pos, button=button: self._on_job_matchmove_context_menu(pos, button)
+            )
         if hasattr(self, "btn_open_timeline_assets") and self.btn_open_timeline_assets:
             self._timeline_assets_menu = QMenu(self)
             self._timeline_assets_menu.aboutToShow.connect(
@@ -1573,20 +1600,93 @@ class page_nukedash(QMainWindow):
             job.update({key: value for key, value in payload.items() if key != "timelines"})
 
     def _set_job_matchmove_state(self, projects, matchmove_dir) -> None:
-        button = getattr(self, "btn_open_job_assets", None)
-        if button is None:
+        assets = getattr(self, "btn_open_job_assets", None)
+        if assets is not None:
+            assets.setText("Job Assets")
+            widgets._set_dynamic_property(assets, "has_matchmove", "false")
+        buttons = getattr(self, "_job_matchmove_buttons", [])
+        if not buttons:
             return
-        widgets._set_dynamic_property(button, "has_matchmove", "true" if projects else "false")
-        button.setText("Job Assets · 3DE" if projects else "Job Assets")
-        if projects:
-            label = "project" if len(projects) == 1 else "projects"
-            button.setToolTip(
-                f"{len(projects)} job matchmove {label}\n{matchmove_dir}\n"
-                "Click or right-click for asset options"
+        layout = getattr(self, "horizontalLayout_assets_actions", None)
+        while len(buttons) < len(projects):
+            button = QToolButton(buttons[0].parentWidget())
+            button.setObjectName("btn_open_job_matchmove")
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            button.clicked.connect(
+                lambda checked=False, button=button: self._on_open_job_matchmove_clicked(button)
             )
-        elif button.isEnabled():
-            folder = str(button.property("folder_path") or "")
-            button.setToolTip(f"Open job assets and matchmove options\n{folder}")
+            button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+            button.customContextMenuRequested.connect(
+                lambda pos, button=button: self._on_job_matchmove_context_menu(pos, button)
+            )
+            if layout is not None:
+                layout.insertWidget(layout.indexOf(buttons[0]) + len(buttons), button)
+            buttons.append(button)
+        while len(buttons) > max(1, len(projects)):
+            button = buttons.pop()
+            button.hide()
+            if layout is not None:
+                layout.removeWidget(button)
+            button.deleteLater()
+        helpers = widgets._load_matchmove_helpers() if projects else None
+        for index, button in enumerate(buttons):
+            project = projects[index] if index < len(projects) else None
+            button.setVisible(project is not None)
+            widgets._set_dynamic_property(button, "has_matchmove", "true" if project else "false")
+            if project is None:
+                button.setText("3DE")
+                button.setToolTip("")
+                button.setProperty("project_path", "")
+                button.setProperty("project_key", "")
+                continue
+            match = helpers.GENERIC_PROJECT_FILENAME_RE.match(project.name)
+            key = ("versioned:" + match.group("base") if match else "standalone:" + project.name).casefold()
+            button.setProperty("project_key", key)
+            button.setProperty("project_path", str(project))
+            button.setText(re.sub(r"_matchmove", "", project.name, flags=re.IGNORECASE))
+            button.setToolTip(f"Open 3DE project\n{project}\nRight-click to open work or export folders")
+        if layout is not None:
+            layout.invalidate()
+
+    def _on_open_job_matchmove_clicked(self, button=None) -> None:
+        button = button or self.btn_open_job_matchmove
+        key = button.property("project_key")
+        self._refresh_job_matchmove_state()
+        project = next((candidate.property("project_path")
+                        for candidate in self._job_matchmove_buttons
+                        if key and candidate.property("project_key") == key), None)
+        if not project or not Path(project).is_file():
+            QMessageBox.warning(self, "Open Matchmove",
+                                "This 3DE project is unavailable. The file may have moved or been deleted.")
+            return
+        self._open_timeline_matchmove_project(project)
+
+    def _on_job_matchmove_context_menu(self, pos, button=None) -> None:
+        button = button or self.btn_open_job_matchmove
+        menu = QMenu(self)
+        try:
+            for folder in ("work", "export"):
+                action = menu.addAction(f"Open {folder.title()} in Explorer")
+                action.triggered.connect(
+                    lambda checked=False, folder=folder: self._open_job_matchmove_folder(folder)
+                )
+            menu.exec(button.mapToGlobal(pos))
+        finally:
+            menu.deleteLater()
+
+    def _open_job_matchmove_folder(self, folder: str) -> None:
+        try:
+            root = self._resolved_job_matchmove_dir()
+            if root is None:
+                raise FileNotFoundError("No job matchmove folder could be resolved")
+            helpers = widgets._load_matchmove_helpers()
+            builder = {"work": helpers.build_work_directory, "export": helpers.build_export_directory}[folder]
+            directory = Path(builder(str(root)))
+            if not directory.is_dir():
+                raise FileNotFoundError(f"The 3DE {folder} folder is unavailable:\n{directory}")
+            self.filesIO.openFileLocation(str(directory))
+        except Exception as exc:
+            QMessageBox.warning(self, "Open Matchmove Folder", f"Could not open the {folder} folder.\n\n{exc}")
 
     def _refresh_job_matchmove_state(self):
         directory = None
@@ -1611,13 +1711,6 @@ class page_nukedash(QMainWindow):
             projects = widgets.list_matchmove_projects(str(directory)) if directory else []
             self._set_job_matchmove_state(projects, directory)
             matchmove_menu = menu.addMenu("Matchmove")
-            for project in projects:
-                action = matchmove_menu.addAction(f"Open {project.name}")
-                action.triggered.connect(
-                    lambda checked=False, path=str(project): self._open_timeline_matchmove_project(path)
-                )
-            if projects:
-                matchmove_menu.addSeparator()
             # Scan only when the menu is opened, never on every dashboard refresh.
             candidates = self._discover_job_matchmove_candidates() if directory else []
             create = matchmove_menu.addAction("Create New 3DE Project")

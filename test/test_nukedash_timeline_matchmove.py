@@ -16,7 +16,7 @@ if str(FRONTEND_DIR) not in sys.path:
     sys.path.insert(0, str(FRONTEND_DIR))
 
 from PyQt6.QtCore import QPoint
-from PyQt6.QtWidgets import QApplication, QComboBox, QMainWindow, QTabWidget, QToolButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QMainWindow, QTabWidget, QToolButton, QVBoxLayout, QWidget
 
 import matchmove_helpers
 import page_nukedash
@@ -112,6 +112,9 @@ class FakeMenu:
     def exec(self, pos):
         self.exec_pos = pos
 
+    def deleteLater(self):
+        pass
+
 
 class TimelineWidget(QWidget):
     def __init__(self, timeline_data: dict, parent=None):
@@ -133,6 +136,9 @@ class FakeApi:
 
 
 class TimelineMatchmoveHarness(QMainWindow):
+    _on_open_job_matchmove_clicked = page_nukedash.page_nukedash._on_open_job_matchmove_clicked
+    _on_job_matchmove_context_menu = page_nukedash.page_nukedash._on_job_matchmove_context_menu
+    _open_job_matchmove_folder = page_nukedash.page_nukedash._open_job_matchmove_folder
     _legacy_timeline_assets_dir = page_nukedash.page_nukedash._legacy_timeline_assets_dir
     _resolved_job_matchmove_dir = page_nukedash.page_nukedash._resolved_job_matchmove_dir
     _set_job_matchmove_state = page_nukedash.page_nukedash._set_job_matchmove_state
@@ -178,10 +184,16 @@ class TimelineMatchmoveHarness(QMainWindow):
         self.btn_open_timeline_assets.setText("Timeline Assets")
         self.btn_open_job_assets = QToolButton(central)
         self.btn_open_job_assets.setText("Job Assets")
+        self.btn_open_job_matchmove = QToolButton(central)
+        self.btn_open_job_matchmove.setObjectName("btn_open_job_matchmove")
         self.timelines_tabs = QTabWidget(central)
 
         layout.addWidget(self.comboBox_jobs)
-        layout.addWidget(self.btn_open_timeline_assets)
+        self.assets_actions_row = QWidget(central)
+        assets_layout = QHBoxLayout(self.assets_actions_row)
+        for button in (self.btn_open_timeline_assets, self.btn_open_job_assets, self.btn_open_job_matchmove):
+            assets_layout.addWidget(button)
+        layout.addWidget(self.assets_actions_row)
         layout.addWidget(self.timelines_tabs)
 
         self.filesIO = FakeFolders()
@@ -471,7 +483,7 @@ class TimelineMatchmoveTests(unittest.TestCase):
             information.assert_called_once()
             self.assertEqual(
                 harness.btn_open_job_assets.text(),
-                "Job Assets · 3DE",
+                "Job Assets",
             )
             self.assertIsNone(harness._jobs_by_id[1]["timelines"][0]["matchmove_path"])
 
@@ -552,12 +564,19 @@ class TimelineMatchmoveTests(unittest.TestCase):
             menu = FakeMenu()
             self.assertTrue(harness._populate_job_assets_menu(menu))
             submenu = menu.submenus[0][1]
-            self.assertEqual([action.text for action in submenu.actions[:2]],
-                             ["Open A_matchmove_v002.3de", "Open B.3DE"])
-            self.assertEqual(submenu.actions[2].text, "Create New 3DE Project")
-            self.assertFalse(submenu.actions[2].enabled)
-            self.assertIn("No valid EXR", submenu.actions[3].text)
-            self.assertEqual(harness.btn_open_job_assets.text(), "Job Assets · 3DE")
+            self.assertEqual(submenu.actions[0].text, "Create New 3DE Project")
+            self.assertFalse(submenu.actions[0].enabled)
+            self.assertIn("No valid EXR", submenu.actions[1].text)
+            self.assertFalse(any(action.text.startswith("Open ") for action in submenu.actions))
+            self.assertEqual([button.text() for button in harness._job_matchmove_buttons],
+                             ["A_v002.3de", "B.3DE"])
+            self.assertTrue(all(not button.isHidden() for button in harness._job_matchmove_buttons))
+            with mock.patch.object(harness, "_open_timeline_matchmove_project") as open_project:
+                harness._job_matchmove_buttons[0].click()
+                harness._job_matchmove_buttons[1].click()
+                self.assertEqual(open_project.call_args_list,
+                                 [mock.call(str(work / "A_matchmove_v002.3de")), mock.call(str(work / "B.3DE"))])
+            self.assertEqual(harness.btn_open_job_assets.text(), "Job Assets")
 
     def test_job_menu_creation_available_with_valid_precomps_and_right_click(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -624,17 +643,130 @@ class TimelineMatchmoveTests(unittest.TestCase):
             harness = TimelineMatchmoveHarness(job)
             harness._update_assets_action_buttons()
             self.assertEqual(harness._resolved_job_matchmove_dir(), custom)
-            self.assertEqual(harness.btn_open_job_assets.text(), "Job Assets · 3DE")
+            self.assertEqual(harness.btn_open_job_matchmove.text(), "solve.3de")
+            self.assertFalse(harness.btn_open_job_matchmove.isHidden())
+            self.assertEqual(harness.btn_open_job_assets.text(), "Job Assets")
             other = {"id": 2, "title": "Other", "timelines": [],
                      "matchmove_path": str(Path(tmpdir) / "new_custom")}
             harness._jobs_by_id[2] = other
             harness._active_job_id = 2
             harness._update_assets_action_buttons()
+            self.assertTrue(harness.btn_open_job_matchmove.isHidden())
             self.assertEqual(harness._resolved_job_matchmove_dir(), Path(other["matchmove_path"]))
             self.assertEqual(harness.btn_open_job_assets.text(), "Job Assets")
             self.assertTrue(harness.btn_open_job_assets.isEnabled())
             harness._apply_job_payload({"id": 1, "matchmove_path": str(custom / "changed")})
             self.assertEqual(other["matchmove_path"], str(Path(tmpdir) / "new_custom"))
+
+    def test_job_file_button_refresh_open_context_and_missing_files(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            custom = Path(tmpdir) / "custom"
+            work = custom / "work"
+            work.mkdir(parents=True)
+            export = custom / "export"
+            export.mkdir()
+            job = self._make_job_data([])
+            job["matchmove_path"] = str(custom)
+            harness = TimelineMatchmoveHarness(job)
+            harness._refresh_job_matchmove_state()
+            self.assertTrue(harness.btn_open_job_matchmove.isHidden())
+            project = work / "Job_matchmove_v010.3DE"
+            project.touch()
+            older = work / "Job_matchmove_v009.3de"
+            older.touch()
+            harness._refresh_job_matchmove_state()
+            self.assertEqual(harness.btn_open_job_matchmove.text(), "Job_v010.3DE")
+            self.assertFalse(harness.btn_open_job_matchmove.isHidden())
+            self.assertIn(str(project), harness.btn_open_job_matchmove.toolTip())
+            with mock.patch.object(widgets, "open_3de_project") as launch:
+                harness.btn_open_job_matchmove.click()
+                launch.assert_called_once_with(str(project))
+            with mock.patch.object(page_nukedash, "QMenu", FakeMenu):
+                harness._on_job_matchmove_context_menu(QPoint(1, 2))
+                menu = FakeMenu.instances[-1]
+                self.assertEqual([action.text for action in menu.actions],
+                                 ["Open Work in Explorer", "Open Export in Explorer"])
+                for action in menu.actions:
+                    action.triggered.fire()
+            self.assertEqual(harness.filesIO.opened_paths, [work, export])
+            with mock.patch.object(widgets, "open_3de_project", side_effect=RuntimeError("launch failed")), \
+                    mock.patch.object(page_nukedash.QMessageBox, "warning") as warning:
+                harness._on_open_job_matchmove_clicked()
+                self.assertIn("launch failed", warning.call_args.args[2])
+            harness._update_assets_action_buttons(loading=True)
+            self.assertTrue(harness.btn_open_job_matchmove.isHidden())
+            project.unlink()
+            older.unlink()
+            with mock.patch.object(page_nukedash.QMessageBox, "warning") as warning:
+                harness._on_open_job_matchmove_clicked()
+                warning.assert_called_once()
+            self.assertTrue(harness.btn_open_job_matchmove.isHidden())
+            export.rmdir()
+            with mock.patch.object(page_nukedash.QMessageBox, "warning") as warning:
+                harness._open_job_matchmove_folder("export")
+                warning.assert_called_once()
+            self.assertFalse(export.exists())
+
+    def test_file_poll_refreshes_job_matchmove_without_shot_cards(self):
+        owner = SimpleNamespace(
+            _refresh_timeline_matchmove_state=mock.Mock(),
+            _refresh_job_matchmove_state=mock.Mock(),
+            _reset_shot_file_poll_targets=mock.Mock(),
+            _shot_file_poll_targets=[],
+            _retry_preview_updates=mock.Mock(),
+        )
+        page_nukedash.page_nukedash._poll_visible_shot_card_file_state_batch(owner)
+        owner._refresh_job_matchmove_state.assert_called_once_with()
+        owner._retry_preview_updates.assert_called_once_with()
+
+    def test_many_job_buttons_wrap_refresh_and_keep_project_identity(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            work = root / "work"
+            work.mkdir()
+            projects = [work / f"solve_{index:02d}_matchmove_v001.3de" for index in range(12)]
+            for project in projects:
+                project.touch()
+            job = self._make_job_data([])
+            job["matchmove_path"] = str(root)
+            harness = TimelineMatchmoveHarness(job)
+            harness.setStyleSheet((FRONTEND_DIR / "ui" / "dark_v01.qss").read_text())
+            harness._refresh_job_matchmove_state()
+            buttons = list(harness._job_matchmove_buttons)
+            self.assertEqual(len(buttons), 12)
+            flow = harness.horizontalLayout_assets_actions
+            self.assertGreater(flow.heightForWidth(450), flow.heightForWidth(1800))
+            for button, project in zip(buttons, projects):
+                self.assertEqual(button.text(), project.name.replace("_matchmove", ""))
+                self.assertTrue(button.icon().isNull())
+                self.assertEqual(button.palette().button().color().name(), "#302b40")
+            harness._refresh_job_matchmove_state()
+            self.assertEqual(harness._job_matchmove_buttons, buttons)
+            newest = work / "solve_06_matchmove_v010.3DE"
+            newest.touch()
+            # Recheck before opening: launch the new latest version for this project.
+            with mock.patch.object(harness, "_open_timeline_matchmove_project") as launch:
+                buttons[6].click()
+                launch.assert_called_once_with(str(newest))
+            self.assertEqual(buttons[6].text(), "solve_06_v010.3DE")
+            with mock.patch.object(page_nukedash, "QMenu", FakeMenu):
+                buttons[6].customContextMenuRequested.emit(QPoint(2, 3))
+                self.assertEqual(FakeMenu.instances[-1].exec_pos, buttons[6].mapToGlobal(QPoint(2, 3)))
+                FakeMenu.instances[-1].actions[0].triggered.fire()
+                self.assertEqual(harness.filesIO.opened_paths[-1], work)
+            # Removing an earlier name must never launch another project's file.
+            projects[0].unlink()
+            with mock.patch.object(harness, "_open_timeline_matchmove_project") as launch, \
+                    mock.patch.object(page_nukedash.QMessageBox, "warning") as warning:
+                buttons[0].click()
+                launch.assert_not_called()
+                warning.assert_called_once()
+            self.assertEqual(len(harness._job_matchmove_buttons), 11)
+            harness._jobs_by_id[2] = {"id": 2, "title": "Empty", "timelines": []}
+            harness._active_job_id = 2
+            harness._update_assets_action_buttons()
+            self.assertEqual(len(harness._job_matchmove_buttons), 1)
+            self.assertTrue(harness.btn_open_job_matchmove.isHidden())
 
     def test_job_menu_reports_unresolvable_directory(self):
         harness = TimelineMatchmoveHarness(self._make_job_data([]))

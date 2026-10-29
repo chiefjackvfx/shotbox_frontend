@@ -224,7 +224,8 @@ QPushButton:disabled {
 }
 
 QToolButton#btn_open_timeline_assets,
-QToolButton#btn_open_job_assets {
+QToolButton#btn_open_job_assets,
+QToolButton#btn_open_job_matchmove {
     background-color: #2F3542;
     color: #D4D4D4;
     border: 2px solid #404754;
@@ -235,38 +236,26 @@ QToolButton#btn_open_job_assets {
 }
 
 QToolButton#btn_open_timeline_assets:hover,
-QToolButton#btn_open_job_assets:hover {
+QToolButton#btn_open_job_assets:hover,
+QToolButton#btn_open_job_matchmove:hover {
     background-color: #FF6B35;
     border-color: #FF6B35;
     color: #FFFFFF;
 }
 
 QToolButton#btn_open_timeline_assets:pressed,
-QToolButton#btn_open_job_assets:pressed {
+QToolButton#btn_open_job_assets:pressed,
+QToolButton#btn_open_job_matchmove:pressed {
     background-color: #D85A28;
     border-color: #D85A28;
 }
 
 QToolButton#btn_open_timeline_assets:disabled,
-QToolButton#btn_open_job_assets:disabled {
+QToolButton#btn_open_job_assets:disabled,
+QToolButton#btn_open_job_matchmove:disabled {
     background-color: #252931;
     border-color: #2F3542;
     color: #6B7280;
-}
-
-QToolButton#btn_open_timeline_assets[has_matchmove="true"],
-QToolButton#btn_open_job_assets[has_matchmove="true"] {
-    background-color: #2F4237;
-    border-color: #678542;
-    color: #DDF1CB;
-}
-
-QToolButton#btn_open_timeline_assets[has_matchmove="true"]:hover,
-QToolButton#btn_open_job_assets[has_matchmove="true"]:hover,
-QToolButton#btn_open_timeline_assets[has_matchmove="true"]:pressed,
-QToolButton#btn_open_job_assets[has_matchmove="true"]:pressed {
-    background-color: #3A5243;
-    border-color: #8FB267;
 }
 
 QToolButton#btn_open_timeline_assets::menu-indicator,
@@ -275,6 +264,8 @@ QToolButton#btn_open_job_assets::menu-indicator {
     subcontrol-position: right center;
     right: 6px;
 }
+
+QToolButton#btn_open_job_matchmove { padding: 6px 12px; }
 
 /* Flat Buttons */
 QPushButton[flat="true"] {
@@ -918,16 +909,45 @@ QPushButton#btn_open_matchmove {
     letter-spacing: 0px;
 }
 
-QPushButton#btn_open_matchmove[has_matchmove="true"] {
-    background-color: #2F4237;
-    border-color: #678542;
-    color: #DDF1CB;
+/* 3DE project identity: muted purple, on ShotBox charcoal.
+   Share colour states across job, shot and legacy timeline access. */
+QPushButton#btn_open_matchmove[has_matchmove="true"],
+QToolButton#btn_open_job_matchmove[has_matchmove="true"],
+QToolButton#btn_open_timeline_assets[has_matchmove="true"] {
+    background-color: #302B40;
+    border-color: #786294;
+    border-left-color: #AB87E3;
+    color: #E5D8FA;
 }
 
 QPushButton#btn_open_matchmove[has_matchmove="true"]:hover,
-QPushButton#btn_open_matchmove[has_matchmove="true"]:pressed {
-    background-color: #3A5243;
-    border-color: #8FB267;
+QToolButton#btn_open_job_matchmove[has_matchmove="true"]:hover,
+QToolButton#btn_open_timeline_assets[has_matchmove="true"]:hover {
+    background-color: #403451;
+    border-color: #AB87E3;
+    color: #F5EEFF;
+}
+
+QPushButton#btn_open_matchmove[has_matchmove="true"]:focus,
+QToolButton#btn_open_job_matchmove[has_matchmove="true"]:focus,
+QToolButton#btn_open_timeline_assets[has_matchmove="true"]:focus {
+    border-color: #D5B9FF;
+}
+
+QPushButton#btn_open_matchmove[has_matchmove="true"]:pressed,
+QToolButton#btn_open_job_matchmove[has_matchmove="true"]:pressed,
+QToolButton#btn_open_timeline_assets[has_matchmove="true"]:pressed {
+    background-color: #4C3963;
+    border-color: #C6A0FA;
+    color: #FFFFFF;
+}
+
+QPushButton#btn_open_matchmove[has_matchmove="true"]:disabled,
+QToolButton#btn_open_job_matchmove[has_matchmove="true"]:disabled,
+QToolButton#btn_open_timeline_assets[has_matchmove="true"]:disabled {
+    background-color: #252931;
+    border-color: #404754;
+    color: #818793;
 }
 
 QPushButton#btn_latest_render[is_conformed="true"] {
@@ -2011,4 +2031,11 @@ QFrame#frame_7[v02="true"] QPushButton#bnt_addTask {
 }
 QLabel#label_shot[v02="true"][compact="true"] {
     font-size: 14px;
+}
+
+/* Project accent survives the grid card's narrower standard borders. */
+QPushButton#btn_open_matchmove[has_matchmove="true"],
+QToolButton#btn_open_job_matchmove[has_matchmove="true"],
+QToolButton#btn_open_timeline_assets[has_matchmove="true"] {
+    border-left-width: 3px;
 }

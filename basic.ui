@@ -436,6 +436,12 @@
               </widget>
              </item>
              <item>
+              <widget class="QToolButton" name="btn_open_job_matchmove">
+               <property name="text"><string>3DE</string></property>
+               <property name="visible"><bool>false</bool></property>
+              </widget>
+             </item>
+             <item>
               <spacer name="horizontalSpacer_assets_actions">
                <property name="orientation">
                 <enum>Qt::Orientation::Horizontal</enum>

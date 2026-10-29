@@ -1,9 +1,24 @@
 # Matchmove assets
 
-Job Assets → Matchmove offers the latest numbered version of each 3DE project
-and Create New 3DE Project. Both click and right-click open the assets menu.
-Creation offers valid EXR precomp sequences from every timeline in the job,
-labelled by timeline and shot. The project name defaults to the job title.
+Job Assets → Matchmove offers Create New 3DE Project. Both click and
+right-click open the assets menu. Creation offers valid EXR precomp sequences
+from every timeline in the job, labelled by timeline and shot. The project name
+defaults to the job title.
+
+Each job matchmove project name gets its own filename button beside Job Assets,
+showing its latest numbered version. There is no project-count limit or chooser;
+buttons wrap onto more rows when needed. Each opens its project directly and
+omits `_matchmove` from its label. Right-click any project button for Open Work
+in Explorer and Open Export in Explorer. Buttons refresh with filesystem
+checks, job changes and project creation, and disappear when their projects no
+longer exist. Existing projects are not listed in the Job Assets menu.
+
+3DE project buttons use purple charcoal, pale lavender text, and a purple left edge
+with distinct hover, keyboard-focus, pressed, and disabled states. This
+text-only treatment shares ShotBox's typography and sizing across job and shot
+buttons, including grid cards, and legacy timeline matchmove access. It uses
+no icons or emoji. Purple distinguishes project buttons from the green render
+conform indicators and ShotBox’s orange general actions.
 
 New job projects use `VFX/job_assets/matchmove/work` and
 `VFX/job_assets/matchmove/export`, or the job’s saved `matchmove_path`.
@@ -29,7 +44,7 @@ numbered version in the shot’s resolved matchmove directory, including a saved
 custom path. Existing projects
 are opened through the filename button rather than the Assets menu.
 
-The shot 3DE chooser and job/timeline matchmove menus show one highest numbered
+The shot/job filename choosers and legacy timeline menu show one highest numbered
 version per project name and keep standalone `.3de` files visible. Earlier
 versions remain on disk and count toward the next version number.
 
