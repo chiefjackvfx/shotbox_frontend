@@ -10,6 +10,12 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
+## 5.4.4 - 2026-11-02
+
+### Fixed
+
+- 3de v fix
+
 ## 5.4.3 - 2026-11-02
 
 ### Added
