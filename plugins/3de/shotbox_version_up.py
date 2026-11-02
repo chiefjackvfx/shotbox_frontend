@@ -1,5 +1,5 @@
-# 3DE4.script.name:    Version Up Safe v1.2
-# 3DE4.script.version: v1.2
+# 3DE4.script.name:    Version Up Safe
+# 3DE4.script.version: v1.3
 # 3DE4.script.gui:     Main Window::ShotBox
 # 3DE4.script.comment: Save current project, copy it to the next available version, and open it.
 
