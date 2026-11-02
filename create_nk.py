@@ -416,6 +416,9 @@ class _TemplateEditor:
                   and node.input(0) is anchor]
         if not stamps:
             raise RuntimeError("Template denoise anchor needs a connected wired Stamps prototype.")
+        # allNodes() order is not stable. Prefer the spare denoise stamp over
+        # a stamp feeding the Regrain graph or another template branch.
+        stamps.sort(key=lambda node: bool(node.dependent(self.nuke.INPUTS)))
         for node in (anchor, stamps[0]):
             missing = {"title", "prev_title", "knobChanged"} - node.knobs().keys()
             if missing:
@@ -502,7 +505,8 @@ class _TemplateEditor:
             if offset == 0:
                 anchor.setInput(0, output)
                 self._set_knob(anchor["ypos"], anchor_y)
-                self._set_knob(stamp["ypos"], stamp_y)
+                if not stamp.dependent(self.nuke.INPUTS):
+                    self._set_knob(stamp["ypos"], stamp_y)
             else:
                 title = "degrain_" + plate["plate"]
                 new_anchor = self._clone_stamp(anchor, f"Anchor_DN{index}", title,

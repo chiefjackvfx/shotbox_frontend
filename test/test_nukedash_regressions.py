@@ -715,7 +715,7 @@ class NukeDashRegressionTests(unittest.TestCase):
         generator.generate_preview.side_effect = cancel
         with mock.patch.object(nuke_headless_tasks, 'PreviewGenerator', return_value=generator), \
                 mock.patch.object(nuke_headless_tasks, 'preview_input_exists', return_value=True), \
-                mock.patch.object(dash.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
+                mock.patch('preview_batch_ui.choose_preview_batch', side_effect=lambda parent, tasks, **kwargs: {'tasks': tasks, 'deadline': None}), \
                 mock.patch.object(dash.QMessageBox, 'information') as info, \
                 mock.patch.object(page, '_request_api_refresh'):
             page._on_make_all_previews_clicked()
@@ -723,6 +723,28 @@ class NukeDashRegressionTests(unittest.TestCase):
         self.assertNotIn('previews', page._refresh_pause_reasons)
         generator.begin_preview_batch.assert_called_once_with()
         generator.end_preview_batch.assert_called_once_with()
+
+    def test_mp4_selection_routes_only_checked_clips_to_deadline(self):
+        page = self.page(jobs_data())
+        tasks = [{'shot': {'title': 'SH010'}, 'source_path': '/one.mov'},
+                 {'shot': {'title': 'SH020'}, 'source_path': '/two.mov'}]
+        generator = mock.Mock(nuke_available=True)
+        with mock.patch.object(nuke_headless_tasks, 'PreviewGenerator', return_value=generator), \
+                mock.patch.object(page, '_collect_preview_tasks', return_value=tasks), \
+                mock.patch('preview_batch_ui.choose_preview_batch', return_value={'tasks': tasks[1:], 'deadline': {'pool': 'farm'}, 'overwrite': True}), \
+                mock.patch('preview_deadline.submit_batch') as submit:
+            page._on_make_all_previews_clicked()
+        self.assertEqual(submit.call_args.args[1], tasks[1:])
+        self.assertTrue(submit.call_args.kwargs['overwrite'])
+        generator.begin_preview_batch.assert_not_called()
+        generator.generate_preview.assert_not_called()
+        with mock.patch.object(nuke_headless_tasks, 'PreviewGenerator', return_value=generator), \
+                mock.patch.object(page, '_collect_preview_tasks', return_value=tasks), \
+                mock.patch('preview_batch_ui.choose_preview_batch', return_value=None), \
+                mock.patch('preview_deadline.submit_batch') as submit:
+            page._on_make_all_previews_clicked()
+        submit.assert_not_called()
+        generator.begin_preview_batch.assert_not_called()
 
     def test_preview_button_uses_overwrite_generator_for_existing_output(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -739,7 +761,7 @@ class NukeDashRegressionTests(unittest.TestCase):
             generator.generate_preview_with_overwrite.return_value = result
             with mock.patch.object(nuke_headless_tasks, 'PreviewGenerator', return_value=generator), \
                     mock.patch.object(nuke_headless_tasks, 'preview_input_exists', return_value=True), \
-                    mock.patch.object(dash.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
+                    mock.patch('preview_batch_ui.choose_preview_batch', side_effect=lambda parent, tasks, **kwargs: {'tasks': tasks, 'deadline': None}), \
                     mock.patch.object(dash.QMessageBox, 'information'), \
                     mock.patch.object(page, '_request_api_refresh'):
                 page._on_make_all_previews_clicked()
@@ -757,7 +779,7 @@ class NukeDashRegressionTests(unittest.TestCase):
             generator.generate_preview.return_value = result
             with mock.patch.object(nuke_headless_tasks, 'PreviewGenerator', return_value=generator), \
                     mock.patch.object(nuke_headless_tasks, 'preview_input_exists', return_value=True), \
-                    mock.patch.object(dash.QMessageBox, 'question', return_value=QMessageBox.StandardButton.Yes), \
+                    mock.patch('preview_batch_ui.choose_preview_batch', side_effect=lambda parent, tasks, **kwargs: {'tasks': tasks, 'deadline': None}), \
                     mock.patch.object(dash.QMessageBox, 'information') as info, \
                     mock.patch.object(page, '_request_api_refresh'):
                 page._on_make_all_previews_clicked()
@@ -767,7 +789,8 @@ class NukeDashRegressionTests(unittest.TestCase):
             generator.begin_preview_batch.assert_called_once_with()
             generator.end_preview_batch.assert_called_once_with()
 
-    def test_denoise_button_queues_selected_timeline_sources_including_hidden_shots(self):
+    @mock.patch("denoise_controller.choose_batch_shots", side_effect=lambda parent, tasks, **kwargs: tasks)
+    def test_denoise_button_queues_selected_timeline_sources_including_hidden_shots(self, select_shots):
         with tempfile.TemporaryDirectory(dir=app_cache.cache_directory("temp")) as directory:
             root = Path(directory)
             source = root / "source.mov"
@@ -806,6 +829,19 @@ class NukeDashRegressionTests(unittest.TestCase):
             self.assertEqual(single[0]["media"]["mode"], "new")
             self.assertEqual(single[0]["media"]["plate"], "plate_02")
             self.assertEqual(single[0]["media"]["source"], str(secondary))
+            select_shots.side_effect = lambda parent, tasks, **kwargs: [t for t in tasks if t['shot']['id'] == 2]
+            with mock.patch.object(page, "_ensure_denoise_controller", return_value=controller), \
+                    mock.patch("denoise_controller.choose_output_mode", return_value='overwrite') as selected_choice:
+                page.btn_denoise.click()
+            self.assertEqual([t['shot']['id'] for t in controller.start_batch.call_args.args[0]], [2])
+            selected_choice.assert_called_once_with(page, 1, 1, timeline_name='One', include_destination=True)
+            controller.start_batch.reset_mock()
+            select_shots.side_effect = lambda *args, **kwargs: None
+            with mock.patch("denoise_controller.choose_output_mode") as cancelled_choice:
+                page.btn_denoise.click()
+            cancelled_choice.assert_not_called()
+            controller.start_batch.assert_not_called()
+            select_shots.side_effect = lambda parent, tasks, **kwargs: tasks
             page.timelines_tabs.setCurrentIndex(1)
             with mock.patch.object(page, "_ensure_denoise_controller", return_value=controller), \
                     mock.patch("denoise_controller.choose_output_mode", return_value='overwrite') as choice:
@@ -833,7 +869,8 @@ class NukeDashRegressionTests(unittest.TestCase):
         controller.assert_not_called()
         self.assertEqual(information.call_count, 2)
 
-    def test_denoise_button_decline_or_missing_sources_does_not_launch(self):
+    @mock.patch("denoise_controller.choose_batch_shots", side_effect=lambda parent, tasks, **kwargs: tasks)
+    def test_denoise_button_decline_or_missing_sources_does_not_launch(self, select_shots):
         page = self.page(jobs_data())
         with mock.patch.object(page, "_ensure_denoise_controller") as controller, \
                 mock.patch.object(dash.QMessageBox, "information") as information, \

@@ -6,6 +6,31 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from presentation_widgets import FlexibleButton
 
 
+def _add_frame_reference_badge(widget):
+    badge = QLabel(widget.task_frame)
+    badge.setObjectName("task_frame_reference")
+    badge.setTextFormat(Qt.TextFormat.PlainText)
+    badge.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+    badge.setStyleSheet("QLabel#task_frame_reference { color: #ffbb98; background-color: rgba(255, 135, 88, 18); border: none; border-radius: 4px; padding: 3px 6px; font-family: monospace; font-size: 10px; }")
+    badge.hide()
+    widget.frame_reference_badge = badge
+    return badge
+
+
+def update_frame_reference_badge(widget, reference):
+    """Keep whole-shot tasks quiet; label inclusive ranges and single frames."""
+    integer = lambda value: isinstance(value, int) and not isinstance(value, bool)
+    if integer(reference):
+        text = f"Frame {reference}"
+    elif isinstance(reference, (list, tuple)) and len(reference) == 2 and all(integer(value) for value in reference) and reference[0] <= reference[1]:
+        text = f"Frames {reference[0]}–{reference[1]}"
+    else:
+        text = ""
+    widget.frame_reference_badge.setText(text)
+    widget.frame_reference_badge.setToolTip(f"Shot frame reference: {text}" + (" (inclusive)" if text.startswith("Frames ") else "") if text else "")
+    widget.frame_reference_badge.setVisible(bool(text))
+
+
 class TaskProgressButton(QPushButton):
     increment_requested = pyqtSignal()
     decrement_requested = pyqtSignal()
@@ -134,6 +159,7 @@ def _setup_task_card_ui(widget):
     top_row.addWidget(widget.btn_delete_task)
 
     layout.addLayout(top_row)
+    layout.addWidget(_add_frame_reference_badge(widget), alignment=Qt.AlignmentFlag.AlignLeft)
 
     # === MIDDLE ROW: Status + Assigned ===
     middle_row = QHBoxLayout()
@@ -236,6 +262,7 @@ def _setup_task_checklist_ui(widget):
     widget.title_stack.addWidget(widget.edit_title_inline)
 
     layout.addWidget(widget.title_stack, 1)
+    layout.addWidget(_add_frame_reference_badge(widget))
 
     widget.edit_notes_inline = QLineEdit(widget.task_frame)
     widget.edit_notes_inline.setObjectName("edit_task_notes_inline")

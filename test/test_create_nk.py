@@ -393,18 +393,22 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(restored.denoise_plates, request.denoise_plates)
             fake = _FakeNuke()
             anchor = _FakeNode('ExistingAnchor')
-            stamp = _FakeNode('ExistingStamp')
-            for node, identifier in ((anchor, 'anchor'), (stamp, 'wired')):
+            stamp = _FakeNode('ExistingStamp', xpos=180, ypos=1282)
+            regrain_stamp = _FakeNode('RegrainStamp', xpos=70, ypos=2219)
+            # Reproduce Nuke returning the output stamp before the spare stamp.
+            for node, identifier in ((anchor, 'anchor'), (regrain_stamp, 'wired'), (stamp, 'wired')):
                 node._nuke = fake
                 node._knobs['identifier'] = _FakeKnob('identifier', identifier, node)
                 for key in ('title', 'prev_title', 'knobChanged'):
                     node._knobs[key] = _FakeKnob(key, '', node)
                 fake.top_nodes.append(node)
             stamp._knobs['anchor'] = _FakeKnob('anchor', anchor.name(), stamp)
+            regrain_stamp._knobs['anchor'] = _FakeKnob('anchor', anchor.name(), regrain_stamp)
             anchor.setInput(0, fake.toNode('ReadDN1'))
             stamp.setInput(0, anchor)
+            regrain_stamp.setInput(0, anchor)
             downstream = fake.toNode('WriteCompEXR')
-            downstream.setInput(0, stamp)
+            downstream.setInput(0, regrain_stamp)
             editor = module._TemplateEditor(fake)
             def clone(prototype, name, title, xpos, ypos, input_node, anchor=None):
                 node = editor._create_node('NoOp', name, xpos=xpos, ypos=ypos, inputs=[input_node])
@@ -414,7 +418,9 @@ class CreateNkTests(unittest.TestCase):
                 return node
             with mock.patch.object(editor, '_clone_stamp', side_effect=clone):
                 editor.edit(restored)
-            self.assertIs(downstream.input(0), stamp)
+            self.assertIs(downstream.input(0), regrain_stamp)
+            self.assertIs(regrain_stamp.input(0), anchor)
+            self.assertEqual((regrain_stamp['xpos'].value(), regrain_stamp['ypos'].value()), (70, 2219))
             self.assertIs(stamp.input(0), anchor)
             self.assertIs(anchor.input(0), fake.toNode('RetimeDN1'))
             for index in (1, 2, 3):
@@ -438,6 +444,16 @@ class CreateNkTests(unittest.TestCase):
             self.assertIs(fake.toNode('Stamp_DN2').input(0), fake.toNode('Anchor_DN2'))
             self.assertEqual(fake.toNode('Stamp_DN2').dependent(fake.INPUTS), [])
             self.assertEqual(fake.toNode('WriteDN1')['file'].value(), request.dn_exr_file)
+
+            # Custom templates may only have a stamp feeding the output graph.
+            fake.top_nodes.remove(stamp)
+            request.denoise_plates = request.denoise_plates[:1]
+            editor = module._TemplateEditor(fake)
+            editor.request = request
+            anchor.setInput(0, fake.toNode('ReadDN1'))
+            editor._update_denoised_plates()
+            self.assertEqual((regrain_stamp['xpos'].value(), regrain_stamp['ypos'].value()), (70, 2219))
+            self.assertIs(downstream.input(0), regrain_stamp)
 
     def test_denoise_missing_stamps_prototypes_fails_before_save(self):
         with tempfile.TemporaryDirectory() as directory:

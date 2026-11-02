@@ -2344,10 +2344,14 @@ class page_nukedash(QMainWindow):
         return collect_tasks(active_job, files_io, source_path=source_path)
 
     def _start_template_denoise(self, tasks, skipped, *, timeline_name=None):
-        from denoise_controller import choose_output_mode
+        from denoise_controller import choose_batch_shots, choose_output_mode
         if not tasks:
             QMessageBox.information(self, "Denoise", f"No source media found.\n\nSkipped: {skipped}")
             return
+        if timeline_name is not None:
+            tasks = choose_batch_shots(self, tasks, timeline_name=timeline_name)
+            if not tasks:
+                return
         mode = choose_output_mode(self, len(tasks), skipped, timeline_name=timeline_name, include_destination=True)
         if mode is None:
             return
@@ -3418,38 +3422,29 @@ class page_nukedash(QMainWindow):
         
         # Collect all shots that need previews
         files_io = filesIO.Folders()
-        preview_tasks = self._collect_preview_tasks(active_job, files_io, overwrite=overwrite_enabled)
+        preview_tasks = self._collect_preview_tasks(active_job, files_io, overwrite=True)
         
         if not preview_tasks:
             QMessageBox.information(
                 self, "Make All Previews",
-                "All shots already have up-to-date previews."
+                "No source clips or renders were found for this job."
             )
             return
         
-        # Confirm with user
-        msg = f"Generate {len(preview_tasks)} preview(s)?\n\n"
-        
-        # Count by type
-        v01_count = sum(1 for t in preview_tasks if t["source_type"] == "original_clip")
-        render_count = sum(1 for t in preview_tasks if t["source_type"] == "render")
-        
-        if v01_count:
-            msg += f"• {v01_count} from original clips (v001)\n"
-        if render_count:
-            msg += f"• {render_count} from renders\n"
-        
-        msg += "\nThis may take a while."
-        
-        reply = QMessageBox.question(
-            self, "Make All Previews", msg,
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if reply != QMessageBox.StandardButton.Yes:
+        from preview_batch_ui import choose_preview_batch
+        selection = choose_preview_batch(self, preview_tasks, overwrite=overwrite_enabled)
+        if not selection:
             return
-        
+        preview_tasks = selection['tasks']
+        overwrite_enabled = selection.get('overwrite', overwrite_enabled)
+        if not preview_tasks:
+            return
+        if selection.get('deadline') is not None:
+            from preview_deadline import submit_batch
+            submit_batch(self, preview_tasks, generator, selection['deadline'], files_io,
+                         quality=preview_quality, overwrite=overwrite_enabled)
+            return
+
         # Create progress dialog
         _, batch_progress_maximum = _batch_preview_progress_value(
             0,

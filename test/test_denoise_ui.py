@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import sys
 import unittest
+import tempfile
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -21,6 +22,69 @@ import widgets
 
 
 class DenoiseUiTests(unittest.TestCase):
+    def test_batch_shot_checkboxes_group_sources_and_filter_tasks(self):
+        tasks = [
+            {"shot": {"id": 1, "title": "<SH010>"}, "media": {"source": "/one.mov"}},
+            {"shot": {"id": 1, "title": "<SH010>"}, "media": {"source": "/two.mov"}},
+            {"shot": {"id": 2, "title": "SH020"}, "media": {"source": "/three.mov"}},
+        ]
+        def execute(dialog):
+            shots = dialog.findChild(ui.QListWidget)
+            self.assertEqual(shots.count(), 2)
+            self.assertEqual(shots.item(0).text(), "<SH010> (2 clip(s))")
+            self.assertTrue(all(shots.item(i).checkState() == ui.Qt.CheckState.Checked for i in range(2)))
+            proceed = dialog.findChild(ui.QDialogButtonBox).button(ui.QDialogButtonBox.StandardButton.Ok)
+            next(b for b in dialog.findChildren(QPushButton) if b.text() == 'Select none').click()
+            self.assertFalse(proceed.isEnabled())
+            next(b for b in dialog.findChildren(QPushButton) if b.text() == 'Select all').click()
+            self.assertTrue(proceed.isEnabled())
+            shots.item(1).setCheckState(ui.Qt.CheckState.Unchecked)
+            self.assertTrue(any('1 of 2 shots · 2 source clip(s)' in label.text() for label in dialog.findChildren(QLabel)))
+            return QDialog.DialogCode.Accepted
+        with mock.patch.object(QDialog, 'exec', execute):
+            self.assertEqual(ui.choose_batch_shots(self.window, tasks, timeline_name='Timeline'), tasks[:2])
+        with mock.patch.object(QDialog, 'exec', return_value=QDialog.DialogCode.Rejected):
+            self.assertIsNone(ui.choose_batch_shots(self.window, tasks, timeline_name='Timeline'))
+
+    def test_batch_preselects_missing_dn_precomps_per_plate_and_ignores_empty_folders(self):
+        from denoise_paths import output_stem
+        with tempfile.TemporaryDirectory(dir=app_cache.cache_directory('temp')) as directory:
+            root = Path(directory)
+            tasks = []
+            for shot_id, plates in ((1, [None]), (2, [None]), (3, [None]),
+                                    (4, [None]), (5, ['plate_01', 'plate_02']),
+                                    (6, ['plate_01', 'plate_02'])):
+                title = f'SH{shot_id:03d}'
+                shot_dir = root / title
+                for plate in plates:
+                    tasks.append({'shot': {'id': shot_id, 'title': title, 'base_path': str(shot_dir), 'hidden': shot_id == 3},
+                                  'media': {'source': f'/source{shot_id}-{plate}.mov',
+                                            'shot_dir': str(shot_dir), 'shot_name': title, 'plate': plate}})
+                    stem = output_stem(title, plate) + '_v003'
+                    if shot_id in (2, 3, 5, 6):
+                        folder = shot_dir / 'renders/precomp' / stem
+                        folder.mkdir(parents=True)
+                        if shot_id in (2, 6) or (shot_id == 5 and plate == 'plate_01'):
+                            (folder / f'{stem}_1001.exr').touch()
+                    if shot_id == 4:
+                        folder = shot_dir / 'renders/precomp/OTHER_DN_v001'
+                        folder.mkdir(parents=True)
+                        (folder / 'OTHER_DN_v001_1001.exr').touch()
+            def execute(dialog):
+                shots = dialog.findChild(ui.QListWidget)
+                checked = [shots.item(i).checkState() == ui.Qt.CheckState.Checked for i in range(shots.count())]
+                self.assertEqual(checked, [True, False, False, True, True, False])
+                self.assertIn("Hidden", shots.item(2).text())
+                # A hidden shot can still be deliberately included.
+                shots.item(2).setCheckState(ui.Qt.CheckState.Checked)
+                self.assertIn('1 of 2 clips have DN precomps', shots.item(4).toolTip())
+                # Existing precomps remain selectable for a deliberate rerun.
+                shots.item(1).setCheckState(ui.Qt.CheckState.Checked)
+                return QDialog.DialogCode.Accepted
+            with mock.patch.object(QDialog, 'exec', execute):
+                selected = ui.choose_batch_shots(self.window, tasks, timeline_name='Timeline')
+            self.assertEqual([t['shot']['id'] for t in selected], [1, 2, 3, 4, 5, 5])
+
     def test_batch_confirmation_identifies_timeline_and_clip_count_as_plain_text(self):
         def execute(dialog):
             labels = dialog.findChildren(QLabel)
@@ -44,7 +108,20 @@ class DenoiseUiTests(unittest.TestCase):
             with mock.patch.object(QDialog, "exec", execute):
                 self.assertEqual(ui.choose_output_mode(self.window, 2, 1), expected)
 
-    def test_deadline_choice_forces_new_versions_and_allows_local_linux_projects(self):
+    def test_deadline_version_up_remains_available(self):
+        def execute(dialog):
+            overwrite, new = dialog.findChildren(QRadioButton)
+            new.setChecked(True)
+            destination = next(c for c in dialog.findChildren(ui.QComboBox) if c.accessibleName() == "Denoise destination")
+            destination.setCurrentText('Deadline')
+            self.assertTrue(new.isChecked())
+            self.assertTrue(overwrite.isEnabled())
+            return QDialog.DialogCode.Accepted
+        with mock.patch.object(QDialog, 'exec', execute):
+            result = ui.choose_output_mode(self.window, 1, include_destination=True)
+        self.assertEqual(result['mode'], 'new')
+
+    def test_deadline_choice_preserves_overwrite_and_allows_local_linux_projects(self):
         settings = mock.Mock()
         values = {"deadline_pool": "linux", "deadline_group": "none", "deadline_priority": 50,
                   "deadline_shared_roots": ["/Volumes/projects/PROJECTS"]}
@@ -55,14 +132,14 @@ class DenoiseUiTests(unittest.TestCase):
             self.assertEqual(destination.currentText(), "Local")
             destination.setCurrentText("Deadline")
             overwrite, new = dialog.findChildren(QRadioButton)
-            self.assertFalse(overwrite.isEnabled())
-            self.assertTrue(new.isChecked())
+            self.assertTrue(overwrite.isEnabled())
+            self.assertTrue(overwrite.isChecked())
             return QDialog.DialogCode.Accepted
 
         with mock.patch("deadline_ui.get_settings_manager", return_value=settings), \
                 mock.patch.object(ui.sys, "platform", "linux"), mock.patch.object(QDialog, "exec", execute):
             result = ui.choose_output_mode(self.window, 4, include_destination=True)
-        self.assertEqual(result["mode"], "new")
+        self.assertEqual(result["mode"], "overwrite")
         self.assertTrue(result["deadline"]["allow_local"])
         self.assertEqual(result["deadline"]["pool"], "linux")
         self.assertEqual(result["deadline"]["shared_roots"], values["deadline_shared_roots"])
@@ -339,12 +416,21 @@ class DenoiseUiTests(unittest.TestCase):
             summary.assert_called_once()
             warning.assert_not_called()
 
-    def test_local_deadline_start_reserves_new_version_and_uses_submission_worker(self):
+    def test_local_deadline_start_preserves_mode_and_uses_submission_worker(self):
         media = dict(self.media, mode="overwrite", deadline={"allow_local": True, "shared_roots": [],
                                                            "pool": "linux", "group": "none", "batch_name": "test"})
-        with mock.patch("deadline_client.discover_client", return_value="/client"):
-            self.assertTrue(self.controller.start({"title": "local"}, media))
-        request = json.loads(self.controller.request_path.read_text())
+        with tempfile.TemporaryDirectory(dir=app_cache.cache_directory('temp')) as directory:
+            media['shot_dir'] = directory
+            existing = Path(directory) / 'renders/precomp/SH010_DN_v007'
+            existing.mkdir(parents=True)
+            frame = existing / 'SH010_DN_v007_1001.exr'
+            frame.write_bytes(b'existing frame')
+            with mock.patch("deadline_client.discover_client", return_value="/client"):
+                self.assertTrue(self.controller.start({"title": "local"}, media))
+            request = json.loads(self.controller.request_path.read_text())
+            self.assertEqual(Path(request['output_pattern']).parent, existing)
+            self.assertEqual(frame.read_bytes(), b'existing frame')
+            self.assertFalse((existing.parent / 'SH010_DN_v008').exists())
         self.assertTrue(request["deadline"]["allow_local"])
         self.assertEqual(len(request["deadline"]["submission_id"]), 32)
         self.assertTrue(self.fake_process.start.call_args.args[1][0].endswith("deadline_denoise.py"))

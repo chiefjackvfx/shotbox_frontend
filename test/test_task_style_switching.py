@@ -77,6 +77,9 @@ class MinimalStyleShotCard(widgets.ShotCard):
         self._set_render_button_text = lambda: None
         self._apply_compact_tooltips = lambda: None
         self._apply_thumb_scale = lambda: None
+        self._update_matchmove_button_visibility = lambda: None
+        self.shot_cg_assets = mock.Mock()
+        self.shot_btns = mock.Mock()
 
         outer_layout = QVBoxLayout(self)
         self.frame_tasks = QFrame(self)
@@ -98,6 +101,57 @@ class TaskStyleSwitchingTests(unittest.TestCase):
     def _wait_for_single_click(self) -> None:
         QTest.qWait(self.app.doubleClickInterval() + 30)
         self.app.processEvents()
+
+    def test_responsive_frame_reference_badge_never_overlaps_task_controls(self):
+        data = make_task(901, title='Meanwhile logo', status='assigned')
+        data.update(notes='Add note...', frame_reference=[1141, 1189])
+        widget = widgets.TaskWidget(data, presentation='checklist')
+        try:
+            for width in (1000, 600, 350):
+                for reference in ([1141, 1189], None, 1141):
+                    with self.subTest(width=width, reference=reference):
+                        widget.update_from_data(dict(data, frame_reference=reference))
+                        widget.set_v02_grid(True, width)
+                        widget.setFixedWidth(width)
+                        widget.show()
+                        widget.adjustSize()
+                        self.app.processEvents()
+                        badge = widget.frame_reference_badge
+                        self.assertEqual(badge.isHidden(), reference is None)
+                        if reference is not None:
+                            self.assertGreater(badge.width(), 0)
+                            for control in (widget.title_stack, widget.check_done_task, widget.edit_notes_inline):
+                                self.assertFalse(badge.geometry().intersects(control.geometry()),
+                                                 f'{badge.geometry()} overlaps {control.objectName()} {control.geometry()}')
+            widget.set_v02_grid(False)
+            widget.adjustSize()
+            self.app.processEvents()
+            self.assertFalse(widget.frame_reference_badge.geometry().intersects(widget.title_stack.geometry()))
+        finally:
+            widget.deleteLater()
+
+    def test_frame_reference_badge_handles_null_single_range_and_refresh(self):
+        for presentation in ('card', 'checklist'):
+            with self.subTest(presentation=presentation):
+                data = make_task(900, title='Paint reflection', status='assigned')
+                data['notes'] = 'Keep the original edge.'
+                widget = widgets.TaskWidget(data, presentation=presentation)
+                try:
+                    badge = widget.frame_reference_badge
+                    self.assertTrue(badge.isHidden())
+                    for reference, expected in ((1141, 'Frame 1141'), ([1141, 1189], 'Frames 1141–1189')):
+                        widget.update_from_data(dict(data, frame_reference=reference))
+                        self.assertEqual(badge.text(), expected)
+                        self.assertFalse(badge.isHidden())
+                        widget.set_compact_mode(True)
+                        self.assertFalse(badge.isHidden())
+                        widget.set_compact_mode(False)
+                        self.assertEqual(widget._data['notes'], data['notes'])
+                    widget.update_from_data(dict(data, frame_reference=None))
+                    self.assertTrue(badge.isHidden())
+                    self.assertEqual(badge.text(), '')
+                finally:
+                    widget.deleteLater()
 
     def test_checklist_style_rebuilds_loaded_widgets_and_moves_completed_last(self):
         card = MinimalStyleShotCard(

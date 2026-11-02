@@ -357,6 +357,10 @@ Settings. Other Nuke 17 minor versions remain supported by the launcher but do
 not count toward 17.1v2 qualification. Unknown dialogs and controls stop the job
 before rendering with an unverified profile.
 
+Linux batch denoise recognises the Neat Video 6.1.2 small-area warning and
+clicks **Use the small area** after matching its text and button. Profiling must
+still finish before Apply is clicked. Other confirmation dialogs stop the job.
+
 Linux uses a private authenticated Xvfb display and Openbox:
 
 ```bash
@@ -443,3 +447,33 @@ All test outputs and worker logs, captures and recovery copies live under
 them. Completed diagnostics can be cleared. `SHOTBOX_DENOISE_XVFB` and
 `SHOTBOX_DENOISE_OPENBOX` override Linux display executables for testing.
 See [denoise verification](docs/DENOISE_VERIFICATION.md) for evidence and commands.
+
+
+### Batch MP4 selection and Deadline
+
+Make All Previews lists original clips and latest render previews for the current
+job. Clips missing a matching preview file start checked; existing previews start
+unchecked, matching each plate and version, including legacy preview filenames.
+Tick individual entries or use Select all / Select none, then choose Render
+locally or Add to Deadline. The **Overwrite existing MP4s** checkbox starts from
+the Preview overwrite setting and can be changed for this batch on either destination.
+
+Deadline uses the configured queues, qualified workers, and project path checks.
+Nuke prepares the preview scene locally; each complete MP4 is submitted as one
+Deadline task, preserving the local preview template, slate, colourspace, and
+quality settings. Submission reports queued job IDs, not completed renders.
+Manage or cancel submitted jobs in Deadline Monitor. If submission is uncertain,
+check its reported submission reference in Monitor before retrying. Queued jobs
+do not update the shot's preview field before rendering.
+
+
+Batch denoise preselects visible shots missing matching DN EXR precomps under
+`renders/precomp`. Empty DN folders count as missing. For shots with multiple
+source plates, the shot is selected if any plate lacks a matching DN precomp;
+checking a shot includes all its source clips. Hidden shots and existing DN shots start unchecked and remain available
+for manual selection. Hover over a shot to see each clip's DN status.
+
+Denoise **Overwrite** and **Version up** are available for both Local and Deadline.
+Overwrite targets the latest matching DN version; Version up creates a new one.
+Existing outputs remain untouched during preparation and are replaced when the
+render runs. Shots with existing outputs still start unchecked.

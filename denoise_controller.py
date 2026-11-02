@@ -12,7 +12,7 @@ import uuid
 
 from PyQt6.QtCore import QObject, QProcess, QTimer, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QVBoxLayout
+from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QVBoxLayout
 
 import app_cache
 from nuke_denoise import create_request, parse_event
@@ -28,6 +28,94 @@ def batch_worker_limit():
             or psutil.virtual_memory().available < 32 * 1024**3):
         return 1
     return 1 if os.environ.get("SHOTBOX_DENOISE_BATCH_WORKERS") == "1" else 2
+
+
+def choose_batch_shots(parent, tasks, *, timeline_name):
+    """Preselect shots missing DN precomps; keep manual selection available."""
+    from denoise_paths import resolve_output
+    dialog = QDialog(parent)
+    dialog.setWindowTitle("Batch denoise — Select shots")
+    dialog.resize(520, 480)
+    layout = QVBoxLayout(dialog)
+    scope = QLabel(f"Timeline: {timeline_name}", dialog)
+    scope.setTextFormat(Qt.TextFormat.PlainText)
+    scope.setWordWrap(True)
+    layout.addWidget(scope)
+    instruction = QLabel("Visible shots missing DN precomps are selected automatically.\nChange the ticks to choose which shots to add.", dialog)
+    instruction.setWordWrap(True)
+    layout.addWidget(instruction)
+    shots = QListWidget(dialog)
+    shots.setAccessibleName("Shots to denoise")
+    groups = {}
+    keys = []
+    for task in tasks:
+        shot = task["shot"]
+        key = (shot.get("id"), shot.get("base_path") or task["media"].get("shot_dir"))
+        keys.append(key)
+        groups.setdefault(key, []).append(task)
+    for key, group in groups.items():
+        title = group[0]["shot"].get("title") or Path(group[0]["media"]["source"]).stem
+        hidden = bool(group[0]["shot"].get("hidden", False))
+        item = QListWidgetItem(f"{title} ({len(group)} clip(s))" + (" · Hidden" if hidden else ""), shots)
+        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+        existing = 0
+        details = []
+        for task in group:
+            media = task["media"]
+            shot_dir = media.get("shot_dir")
+            found = False
+            try:
+                if shot_dir:
+                    _, first, _ = resolve_output(shot_dir, media.get("shot_name") or title, media.get("plate"))
+                    found = first is not None
+                status = "DN precomp exists" if found else "Missing DN precomp"
+            except OSError:
+                status = "Could not check DN precomp; review before selecting"
+            existing += int(found)
+            details.append(f"{media['source']} — {status}")
+        item.setCheckState(Qt.CheckState.Unchecked if hidden or existing == len(group) else Qt.CheckState.Checked)
+        item.setData(Qt.ItemDataRole.UserRole, key)
+        item.setToolTip(f"{existing} of {len(group)} clips have DN precomps.\n" + "\n".join(details))
+    layout.addWidget(shots)
+    controls = QHBoxLayout()
+    def set_all(state):
+        for i in range(shots.count()):
+            shots.item(i).setCheckState(state)
+
+    for title, state in (("Select all", Qt.CheckState.Checked), ("Select none", Qt.CheckState.Unchecked)):
+        button = QPushButton(title, dialog)
+        button.clicked.connect(lambda checked=False, state=state: set_all(state))
+        controls.addWidget(button)
+    controls.addStretch()
+    layout.addLayout(controls)
+    summary = QLabel(dialog)
+    layout.addWidget(summary)
+    buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, parent=dialog)
+    proceed = buttons.button(QDialogButtonBox.StandardButton.Ok)
+    proceed.setText("Continue")
+    buttons.accepted.connect(dialog.accept)
+    buttons.rejected.connect(dialog.reject)
+    layout.addWidget(buttons)
+
+    def selected_keys():
+        return {tuple(shots.item(i).data(Qt.ItemDataRole.UserRole)) for i in range(shots.count())
+                if shots.item(i).checkState() == Qt.CheckState.Checked}
+
+    def update_summary():
+        selected = selected_keys()
+        count = sum(len(groups[key]) for key in selected)
+        summary.setText(f"Selected: {len(selected)} of {len(groups)} shots · {count} source clip(s)")
+        proceed.setEnabled(bool(selected))
+
+    shots.itemChanged.connect(update_summary)
+    update_summary()
+    try:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return None
+        selected = selected_keys()
+        return [task for task, key in zip(tasks, keys) if key in selected]
+    finally:
+        dialog.deleteLater()
 
 
 def choose_output_mode(parent, count, skipped=0, *, timeline_name=None, include_destination=False):
@@ -63,9 +151,6 @@ def choose_output_mode(parent, count, skipped=0, *, timeline_name=None, include_
 
         def changed(index):
             deadline_options.setVisible(index == 1)
-            overwrite.setEnabled(index == 0)
-            if index == 1:
-                new.setChecked(True)
 
         destination.currentIndexChanged.connect(changed)
     layout.addWidget(QLabel("Overwrite replaces the latest matching denoise version.\nVersion up creates the next unused version.", dialog))
@@ -80,7 +165,7 @@ def choose_output_mode(parent, count, skipped=0, *, timeline_name=None, include_
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return None
         if destination is not None and destination.currentIndex() == 1:
-            return {"mode": "new", "deadline": deadline_options.options()}
+            return {"mode": "overwrite" if overwrite.isChecked() else "new", "deadline": deadline_options.options()}
         return "overwrite" if overwrite.isChecked() else "new"
     finally:
         if deadline_options is not None:
@@ -348,7 +433,6 @@ class DenoiseController(QObject):
                 for shared_path in (source, media["shot_dir"]):
                     if not options.get("allow_local", False) and not any(within(str(Path(shared_path).resolve()), root) for root in options.get("shared_roots", [])):
                         raise RuntimeError(f"Configure a shared project root in Settings → Deadline Denoise for: {shared_path}")
-                media = dict(media, mode="new")
             discover_tools()
             if sys.platform == "linux" and importlib.util.find_spec("Xlib") is None:
                 raise RuntimeError("Python Xlib is missing. Run Shotbox's runtime setup to install its dependencies.")

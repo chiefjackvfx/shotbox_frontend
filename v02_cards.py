@@ -1,5 +1,6 @@
 """Reversible arrangement of existing shot and task controls."""
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QBoxLayout, QHBoxLayout, QLayout, QPushButton, QSizePolicy
 
 from presentation_widgets import FlexibleButton, FlexibleLabel
@@ -275,7 +276,8 @@ def set_task_presentation(task, enabled, width=600):
     title_width = max(100, task.btn_task_title.fontMetrics().horizontalAdvance("Cleanup task"))
     notes_width = max(80, task.edit_notes_inline.fontMetrics().horizontalAdvance("Add note...") + 16)
     fixed_width = sum(QPushButton.sizeHint(control).width() for control in (task.btn_priority, task.btn_budget_hours))
-    single_line = width >= 20 + 48 + fixed_width + 2 * column_width + title_width + notes_width + 8 * 4 + 16
+    badge_width = 0 if task.frame_reference_badge.isHidden() else task.frame_reference_badge.sizeHint().width() + 4
+    single_line = width >= 20 + 48 + fixed_width + 2 * column_width + title_width + notes_width + badge_width + 8 * 4 + 16
     narrow = width < max(420, 20 + title_width + 2 * column_width + 3 * 6 + 16)
     arrangement = (narrow, single_line)
     if changed or arrangement != getattr(task, "_v02_task_arrangement", None):
@@ -284,11 +286,11 @@ def set_task_presentation(task, enabled, width=600):
         task.task_layout.setDirection(QBoxLayout.Direction.LeftToRight if single_line else QBoxLayout.Direction.TopToBottom)
         task.task_layout.setSpacing(4 if single_line else 2)
         if single_line:
-            for control in (task.check_done_task, task.title_stack, task.edit_notes_inline, task.btn_status,
+            for control in (task.check_done_task, task.title_stack, task.frame_reference_badge, task.edit_notes_inline, task.btn_status,
                             task.btn_assigned, task.btn_priority, task.btn_budget_hours, task.btn_hide_task, task.btn_delete_task):
                 task.task_layout.addWidget(control)
             task.task_layout.setStretch(1, 1)
-            task.task_layout.setStretch(2, 1)
+            task.task_layout.setStretch(3, 1)
         else:
             arrange_task_lines(task, narrow)
     task.task_layout.setContentsMargins(6, 4, 6, 4)
@@ -319,6 +321,7 @@ def arrange_task_lines(task, narrow):
         first.addWidget(task.btn_status)
         first.addWidget(task.btn_assigned)
     task.task_layout.addLayout(first)
+    task.task_layout.addWidget(task.frame_reference_badge, alignment=Qt.AlignmentFlag.AlignLeft)
     if narrow:
         task.task_layout.addLayout(row(task.btn_status, task.btn_assigned))
         task.task_layout.addWidget(task.edit_notes_inline)

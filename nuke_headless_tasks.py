@@ -610,6 +610,7 @@ class _PreviewTemplateEditor:
         colourspace: str,
         fps: float,
         quality: str,
+        prepare_scene: Optional[str] = None,
     ) -> Tuple[int, int]:
         self.nuke.scriptOpen(_normalize_nuke_path(template_path))
         self._validate_template()
@@ -685,6 +686,10 @@ class _PreviewTemplateEditor:
             self._set_optional_knob(readtime, "tc1", _duration_timecode(duration, fps))
         finally:
             slate_group.end()
+
+        if prepare_scene is not None:
+            self.nuke.scriptSaveAs(str(prepare_scene), overwrite=True)
+            return vfx_first, vfx_last
 
         total_frames = vfx_last - vfx_first + 1
 

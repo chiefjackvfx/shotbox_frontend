@@ -51,7 +51,7 @@ class DeadlineOptions(QWidget):
         self.refresh = QPushButton("Refresh Deadline queues")
         self.refresh.clicked.connect(self.load_queues)
         layout.addRow(self.refresh)
-        self.status = QLabel("Profiles are prepared locally. Qualified Windows/Linux workers render new versions.\n"
+        self.status = QLabel("Profiles are prepared locally. Qualified Windows/Linux workers render the selected output version.\n"
                              "Manage submitted jobs in Deadline Monitor.")
         self.status.setWordWrap(True)
         layout.addRow(self.status)
@@ -116,7 +116,7 @@ class DeadlineOptions(QWidget):
             self.process.kill()
             self.process.waitForFinished(1000)
 
-    def options(self):
+    def options(self, *, persist_chunking=True):
         settings = get_settings_manager()
         values = {"pool": self.pool.currentText().strip(), "group": self.group.currentText().strip(),
                   "priority": self.priority.value(), "client": settings.get("deadline_client", ""),
@@ -126,5 +126,6 @@ class DeadlineOptions(QWidget):
                   "chunked": self.chunked.isChecked(), "chunk_size": self.chunk_size.value(),
                   "concurrent_tasks": self.concurrent_tasks.value()}
         for key in ("pool", "group", "priority", "chunked", "chunk_size", "concurrent_tasks"):
-            settings.set("deadline_" + key, values[key])
+            if persist_chunking or key not in {"chunked", "chunk_size"}:
+                settings.set("deadline_" + key, values[key])
         return values

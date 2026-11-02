@@ -462,6 +462,18 @@ class PreviewPathLogicTests(unittest.TestCase):
 
 
 class PreviewTemplateEditorTests(unittest.TestCase):
+    def test_prepare_scene_saves_without_rendering(self):
+        nuke = _FakeNuke({"/tmp/clip.mov": (1, 24)})
+        nuke.scriptSaveAs = mock.Mock()
+        first, last = module._PreviewTemplateEditor(nuke).render(
+            template_path=str(module.get_preview_template_path()), input_path="/tmp/clip.mov",
+            output_path="/tmp/sho010_v001.mp4", shot_name="sho010", project="ProjectA",
+            artist="ShotBox", colourspace="sRGB", fps=24, quality="medium",
+            prepare_scene="/tmp/sho010_v001.nk")
+        self.assertEqual((first, last), (1001, 1024))
+        nuke.scriptSaveAs.assert_called_once_with("/tmp/sho010_v001.nk", overwrite=True)
+        self.assertIsNone(nuke.executed)
+
     def test_template_editor_emits_progress_after_each_rendered_frame(self):
         template = module.get_preview_template_path()
         nuke = _ProgressFakeNuke({"/tmp/clip.mov": (1, 3)})

@@ -6,6 +6,12 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-02 02:29:09 PM +00:00] Show compact frame-reference badges between task titles and notes.
+
+- [2026-11-02 11:23:57 AM +00:00] Select batch MP4 clips for local or Deadline rendering.
+
+- [2026-11-02 11:17:27 AM +00:00] Add shot checkboxes before starting batch denoise.
+
 - [2026-10-29 04:49:29 PM +00:00] Add producer workboards and nine charts to PDF reports.
 
 - [2026-10-29 04:36:20 PM +00:00] Add frontend PDF report prototype with activity charts and thumbnails.
@@ -15,11 +21,31 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-02 11:52:15 AM +00:00] Leave hidden shots unchecked in batch denoise selection.
+
+- [2026-11-02 11:37:16 AM +00:00] Allow Deadline denoise overwrite and per-batch MP4 overwrite selection.
+
+- [2026-11-02 11:27:07 AM +00:00] Preselect batch MP4 clips missing matching preview files.
+
+- [2026-11-02 11:25:57 AM +00:00] Preselect batch denoise shots missing matching DN precomps.
+
 - [2026-10-29 04:44:35 PM +00:00] Refine PDF pagination, shot summaries, approval details, and navigation.
 
 - [2026-10-29 03:55:00 PM +00:00] Omit input transforms from generated shot notes.
 
 ### Fixed
+
+- [2026-11-02 02:53:57 PM +00:00] Fix 3DE version selection and prevent destination overwrites.
+- [2026-11-02 02:53:57 PM +00:00] Test 3DE versioning, save failures, collisions, and copy cleanup.
+
+- [2026-11-02 02:36:46 PM +00:00] Keep frame-reference badges within responsive task layouts without overlap.
+
+- [2026-11-02 02:30:07 PM +00:00] Repair task-style fixtures for current shot action controls.
+
+- [2026-11-02 11:14:07 AM +00:00] Accept verified Neat small-area confirmations during Linux batch denoise.
+
+- [2026-11-02 10:11:17 AM +00:00] Preserve connected degrain stamp positions during Nuke file creation.
+- [2026-11-02 10:11:17 AM +00:00] Test degrain placement across stamp ordering and custom templates.
 
 - [2026-10-29 04:51:48 PM +00:00] Prevent PDF chart legend overlap on larger jobs.
 

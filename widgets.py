@@ -68,7 +68,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Import the UI setup functions (replaces uic.loadUi)
 from shot_card import setup_shot_card_ui
 import cg_asset_actions
-from task_card import setup_task_widget_ui
+from task_card import setup_task_widget_ui, update_frame_reference_badge
 
 BASE_URL = "http://192.168.10.207:8000"
 THUMBNAILS_ENABLED = True
@@ -1121,6 +1121,7 @@ class TaskWidget(QWidget):
         budget_hours_value = task_data.get("budget_hours", 0)
         task_data["progress"] = progress_value
         self._data = task_data
+        update_frame_reference_badge(self, task_data.get("frame_reference"))
 
         if hasattr(self, "btn_task_title") and self.btn_task_title:
             self.btn_task_title.setText(title)

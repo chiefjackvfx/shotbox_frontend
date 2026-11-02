@@ -227,6 +227,10 @@ class PrivateDisplay:
         offset = max(0, pixels.shape[0] - 70) if name == "apply" else 0
         pixels = pixels[offset:] if name == "apply" else pixels[:130]
         variants = [self.templates[name]]
+        if name == "build_profile" and getattr(self, "small_area_acknowledged", None):
+            variant = self.templates.get("build_profile_small_area")
+            if variant is not None:
+                variants.append(variant)
         if name == "apply":
             # Neat's advanced layouts render different Apply label sizes.
             for key in ("apply_hover", "apply_large", "apply_advanced_small"):
@@ -357,8 +361,48 @@ class PrivateDisplay:
     def _dialog_details(self, window):
         return ""
 
+    def _small_area_button(self, pixels):
+        """Match both the qualified warning text and its affirmative button."""
+        import cv2
+        points = {}
+        for name in ("small_area_warning", "use_small_area"):
+            template = self.templates.get(name)
+            if template is None or any(a < b for a, b in zip(pixels.shape[:2], template.shape[:2])):
+                return None
+            score, _, point, _ = cv2.minMaxLoc(cv2.matchTemplate(pixels, template, cv2.TM_SQDIFF_NORMED))
+            if score > .003:
+                return None
+            points[name] = (point[0] + template.shape[1] // 2,
+                            point[1] + template.shape[0] // 2)
+        if points["use_small_area"][1] <= points["small_area_warning"][1]:
+            return None
+        return points["use_small_area"]
+
     def _prepare_dialog(self, window, title):
-        return True
+        if title != "Confirm" or not self.clicked_auto:
+            return True
+        owner = window.get_wm_transient_for()
+        owner_title = owner.get_wm_name() if owner is not None else ""
+        if not any((owner_title or "").startswith(f"Neat Video {version} ")
+                   for version in self.supported_neat_versions):
+            return True
+        acknowledged = getattr(self, "small_area_acknowledged", None)
+        if acknowledged is not None:
+            if acknowledged[0] == window.id and time.monotonic() - acknowledged[1] < 2:
+                return False
+            return True
+        pixels = self.screenshot(window)
+        point = self._small_area_button(pixels)
+        if point is None:
+            return True
+        import cv2
+        self._check()
+        cv2.imwrite(str(self.directory / "small-area-confirmation.png"), pixels)
+        self._click(window, point)
+        self.small_area_acknowledged = (window.id, time.monotonic())
+        self.notify({"stage": "auto_profiling",
+                     "message": "Selected area is small; clicked Use the small area."})
+        return False
 
     def _dialog_screenshot(self, window):
         return self.screenshot(self.connection.screen().root)
