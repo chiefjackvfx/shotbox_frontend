@@ -84,6 +84,10 @@ class TaskCreateDialog(QDialog):
 
         self._build_ui()
         self._populate_artists()
+        # Apply inherited styling before measuring the form. An explicit size
+        # prevents Qt's automatic dialog sizing from shrinking the scroll area.
+        self.ensurePolished()
+        self.resize(self.sizeHint())
         # Keep Enter assigned to Create when a preset or Cancel has focus.
         for button in self.findChildren(QPushButton):
             button.setAutoDefault(False)

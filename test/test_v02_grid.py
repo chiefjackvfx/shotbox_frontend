@@ -10,7 +10,7 @@ from unittest import mock
 
 from PyQt6.QtCore import QEvent, QObject, QRect, QSize, Qt, QTimer
 from PyQt6.QtGui import QPalette, QPixmap
-from PyQt6.QtWidgets import QApplication, QBoxLayout, QScrollArea, QWidget
+from PyQt6.QtWidgets import QApplication, QBoxLayout, QPushButton, QScrollArea, QWidget
 
 from flow_layout import FlowLayout
 from masonry_layout import MasonryLayout
@@ -592,7 +592,7 @@ class V02CardTests(unittest.TestCase):
         self.assertTrue(self.api.writes)
         self.assertEqual(self.api.writes[-1][0], task._task_id)
 
-    def test_nuke_fits_text_and_render_fills_remaining_single_line(self):
+    def test_nuke_fits_text_and_render_moves_below_when_needed(self):
         original_style = self.app.styleSheet()
         self.addCleanup(self.app.setStyleSheet, original_style)
         self.app.setStyleSheet((Path(__file__).resolve().parents[1] / "ui" / "dark_v01.qss").read_text())
@@ -615,14 +615,41 @@ class V02CardTests(unittest.TestCase):
                     self.assertEqual(button.height(), button.sizeHint().height())
                     self.assertEqual(button.elide_mode, Qt.TextElideMode.ElideMiddle)
                     self.assertLessEqual(button.mapTo(card, button.rect().bottomRight()).x(), card.width())
-                self.assertEqual(card.btn_open_nuke.width(), card.btn_open_nuke.sizeHint().width())
-                self.assertEqual(card.btn_latest_render.y(), card.btn_open_nuke.y())
-                self.assertEqual(card.btn_open_nuke.width() + card.btn_latest_render.width() + 6, card.shot_btns.contentsRect().width())
-                self.assertGreaterEqual(card.btn_latest_render.width(), card.btn_open_nuke.width())
+                if card._v02_files_row.direction() == QBoxLayout.Direction.TopToBottom:
+                    self.assertGreater(card.btn_latest_render.y(), card.btn_open_nuke.geometry().bottom())
+                    self.assertEqual(card.btn_open_nuke.width(), card.shot_btns.contentsRect().width())
+                else:
+                    self.assertEqual(card.btn_open_nuke.width(), card.btn_open_nuke.sizeHint().width())
+                    self.assertEqual(card.btn_latest_render.y(), card.btn_open_nuke.y())
+                    self.assertEqual(card.btn_open_nuke.width() + card.btn_latest_render.width() + 6, card.shot_btns.contentsRect().width())
+                self.assertGreaterEqual(card.btn_latest_render.width(), 80)
                 self.assertEqual(card.btn_latest_render.text(), filename)
                 self.assertIn(filename, card.btn_latest_render.toolTip())
         self.timeline.set_layout_mode("list", 8)
         self.assertFalse(card.btn_latest_render.hasHeightForWidth())
+
+    def test_nuke_filename_and_lock_owner_take_space_from_render(self):
+        original_style = self.app.styleSheet()
+        self.addCleanup(self.app.setStyleSheet, original_style)
+        self.app.setStyleSheet((Path(__file__).resolve().parents[1] / "ui" / "dark_v01.qss").read_text())
+        self.layout_v02(850)
+        card = self.cards[0]
+        card.set_thumbnail_width(240)
+        script = "etv010_v002.nk"
+        card._set_nuke_file_state(file_path="/tmp/" + script, file_name=script, file_mtime=None)
+        card.set_lock_state("foreign_active", owner_machine="dylan", script_name=script)
+        for _ in range(4):
+            self.app.processEvents()
+        self.timeline.shots_layout.setGeometry(QRect(0, 0, 850, 5000))
+        card.layout().activate()
+        self.assertEqual(card.btn_open_nuke.text(), "etv010_v002.nk @ dylan")
+        self.assertEqual(card.btn_open_nuke.width(), QPushButton.sizeHint(card.btn_open_nuke).width())
+        self.assertGreaterEqual(card.btn_latest_render.width(), 80)
+        painted = []
+        with mock.patch("presentation_widgets.QStylePainter") as painter:
+            painter.return_value.drawControl.side_effect = lambda control, option: painted.append(option.text)
+            card.btn_open_nuke.paintEvent(None)
+        self.assertEqual(painted, ["etv010_v002.nk @ dylan"])
 
     def test_long_notes_and_filenames_change_height_without_widening_cards(self):
         card = self.cards[0]

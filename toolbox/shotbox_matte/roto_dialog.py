@@ -2,25 +2,44 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from PyQt6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Qt, QUrl, QSize, pyqtSignal
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QFrame,
+    QApplication, QCheckBox, QComboBox, QDialog, QDoubleSpinBox, QFormLayout, QFrame,
     QHBoxLayout, QLabel, QLineEdit, QProgressBar, QPushButton, QScrollArea,
     QSpinBox, QTextEdit, QToolButton, QVBoxLayout, QWidget,
 )
 
 from flow_layout import FlowLayout
 from app_cache import temporary_cache_task
+from input_behaviour import install_input_wheel_guard
 
 from .shotbox_matte.core import JobOptions, plan_job
-from .shotbox_matte.gui import _generation_size_for_height, parse_worker_line, temporal_summary
+from .shotbox_matte.gui import parse_worker_line, temporal_summary
 from .shotbox_matte.models import DEFAULT_MODEL_ROOT, MODEL_FILES, discover_models
 from .shotbox_matte.runtime import configured_model_preferences
 from .shotbox_matte.sequences import discover_sequences
 from .shotbox_matte.worker import MatteWorker
+
+
+def _generation_presets(width: int, height: int) -> list[tuple[int, int]]:
+    """Five source-relative sizes, aligned to the model's 32-pixel grid."""
+    scale = min(1.0, 1920 / width, 1088 / height)
+    # Tiny previews still need five distinct choices on the model's grid.
+    scale = max(scale, 160 / max(width, height))
+    longest = max(width, height)
+    steps = max(5, math.floor(longest * scale / 32))
+    sizes = []
+    for level in range(1, 6):
+        size = max(1, round(steps * level / 5)) * 32
+        sizes.append((
+            min(1920, max(32, round(width / longest * size / 32) * 32)),
+            min(1088, max(32, round(height / longest * size / 32) * 32)),
+        ))
+    return sizes
 
 
 class _Signals(QObject):
@@ -44,6 +63,7 @@ class _Task(QRunnable):
 class RotoDialog(QDialog):
     def __init__(self, parent, source_frame, *, settings, runtime):
         super().__init__(parent)
+        install_input_wheel_guard(QApplication.instance())
         self.setObjectName("roto_dialog")
         self.setWindowTitle("Generate Roto")
         self.setModal(False)
@@ -141,16 +161,11 @@ class RotoDialog(QDialog):
         self.temporal_mode_hint = self._label(
             "Long ranges use overlapping segments with blended joins; short ranges run in one pass.")
         form.addRow("", self.temporal_mode_hint)
-        size_row = QHBoxLayout()
-        self.generation_width = self._spin(32, 1920, 32)
-        self.generation_height = self._spin(32, 1088, 32)
-        size_row.addWidget(self.generation_width)
-        size_row.addWidget(QLabel("×"))
-        size_row.addWidget(self.generation_height)
-        form.addRow("Generation bounds", size_row)
+        self.generation_size = QComboBox()
+        form.addRow("Generation size", self.generation_size)
         form.addRow("", self._label(
-            "Change height to fit the source aspect ratio. Model padding is automatic.\n"
-            "1088 px is the maximum height and gives the best quality, but takes longer to generate."
+            "Sizes follow the clip's aspect ratio, rounded to multiples of 32.\n"
+            "Smaller sizes use less GPU memory."
         ))
         self.seed = self._spin(0, 2147483647)
         form.addRow("Seed", self.seed)
@@ -225,10 +240,9 @@ class RotoDialog(QDialog):
         outer.addLayout(footer)
         for button in self.findChildren(QPushButton):
             button.setAutoDefault(False)
-        for spin in (self.fps, self.source_start, self.source_end,
-                     self.generation_width, self.generation_height, self.seed):
+        for spin in (self.fps, self.source_start, self.source_end, self.seed):
             spin.valueChanged.connect(self._schedule_plan)
-        self.generation_height.valueChanged.connect(self._sync_generation_width)
+        self.generation_size.currentIndexChanged.connect(self._schedule_plan)
         self.color.currentIndexChanged.connect(self._schedule_plan)
         self.temporal_mode.currentIndexChanged.connect(self._temporal_mode_changed)
         self.existing.currentIndexChanged.connect(self._schedule_plan)
@@ -276,8 +290,7 @@ class RotoDialog(QDialog):
         self.range_enabled.setChecked(False)
         self.source_start.setEnabled(False)
         self.source_end.setEnabled(False)
-        self.generation_width.setValue(960)
-        self.generation_height.setValue(544)
+        self.generation_size.clear()
         self.seed.setValue(42)
         self.existing.setCurrentIndex(0)
         self.suffix.setText("_roto")
@@ -317,7 +330,7 @@ class RotoDialog(QDialog):
                                      f"{sequence.count:,} frames · {sequence.source_start}–{sequence.source_end}")
             self.source_start.setValue(sequence.source_start)
             self.source_end.setValue(sequence.source_end)
-            self._sync_generation_width()
+            self._populate_generation_sizes()
             missing = [key.replace("_", " ") for key in MODEL_FILES
                        if not Path(self._models.get(key) or "").is_file()]
             if missing and not self._model_error:
@@ -346,24 +359,28 @@ class RotoDialog(QDialog):
                 "Long ranges use overlapping segments with blended joins; short ranges run in one pass.")
         self._schedule_plan()
 
-    def _sync_generation_width(self, *_):
+    def _populate_generation_sizes(self):
         if self._source is None:
             return
-        width, height = _generation_size_for_height(
-            self._source.width, self._source.height, self.generation_height.value())
-        blocked = self.generation_height.blockSignals(True)
-        self.generation_height.setValue(height)
-        self.generation_height.blockSignals(blocked)
-        self.generation_width.setValue(width)
+        sizes = _generation_presets(self._source.width, self._source.height)
+        blocked = self.generation_size.blockSignals(True)
+        self.generation_size.clear()
+        for label, (width, height) in zip(
+                ("Smallest", "Small", "Medium", "Large", "Largest"), sizes):
+            self.generation_size.addItem(f"{label} · {width} × {height}", (width, height))
+        self.generation_size.setCurrentIndex(min(
+            range(5), key=lambda index: abs(sizes[index][1] - 544)))
+        self.generation_size.blockSignals(blocked)
 
     def options(self):
+        width, height = self.generation_size.currentData()
         return JobOptions(
             input_path=self.source_frame, sequence=self._source.id if self._source else None,
             fps=self.fps.value(), source_color=self.color.currentData(),
             temporal_mode=self.temporal_mode.currentData(),
             source_start=self.source_start.value() if self.range_enabled.isChecked() else None,
             source_end=self.source_end.value() if self.range_enabled.isChecked() else None,
-            generation_width=self.generation_width.value(), generation_height=self.generation_height.value(),
+            generation_width=width, generation_height=height,
             seed=self.seed.value(), existing=self.existing.currentData(), suffix=self.suffix.text(), models=dict(self._models),
         )
 

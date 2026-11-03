@@ -109,6 +109,7 @@ def arrange_shot_actions(card):
     actions.setDirection(QBoxLayout.Direction.TopToBottom)
     files = row(card.btn_open_nuke, card.btn_latest_render)
     files.setStretch(1, 1)
+    card._v02_files_row = files
     actions.addLayout(files)
     folders = row(card.btn_open_assets, card.btn_open_matchmove, card.btn_open_precomp)
     folders.addStretch()
@@ -217,8 +218,10 @@ def apply_shot_width(card, width):
     details_width = width - 36
     if not narrow and card._thumbnails_enabled:
         details_width -= card._current_thumb_target_width() + 10
-    # Long script names must still leave room for the render label.
-    nuke_width_limit = max(1, (details_width - 6) // 2)
+    # Give Nuke the whole details width when necessary. Move Render below
+    # rather than shortening a script name just to keep both on one line.
+    render_width = max(80, card.btn_latest_render.fontMetrics().horizontalAdvance("Render") + 24)
+    nuke_width_limit = max(1, details_width)
     if card.btn_open_nuke.preferred_width_limit != nuke_width_limit:
         card.btn_open_nuke.preferred_width_limit = nuke_width_limit
         card.btn_open_nuke.updateGeometry()
@@ -228,6 +231,11 @@ def apply_shot_width(card, width):
         card.btn_open_matchmove.preferred_width_limit = matchmove_width_limit
         card.btn_open_matchmove.updateGeometry()
     arrange_shot_actions(card)
+    stacked_files = card.btn_open_nuke.sizeHint().width() + 6 + render_width > details_width
+    card._v02_files_row.setDirection(
+        QBoxLayout.Direction.TopToBottom if stacked_files else QBoxLayout.Direction.LeftToRight
+    )
+    card._v02_files_row.setStretch(1, 0 if stacked_files else 1)
     card.label_last_conform.setToolTip(card.label_last_conform.text())
     for task in getattr(card, "_task_widgets_by_id", {}).values():
         set_task_presentation(task, True, max(1, width - 36))

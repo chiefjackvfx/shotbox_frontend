@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PyQt6.QtCore import QPoint, Qt
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDialog, QPushButton, QScrollArea
+from PyQt6.QtWidgets import QApplication, QDialog, QPushButton, QScrollArea, QWidget
 
 from task_create_dialog import TaskCreateDialog
 
@@ -59,6 +59,25 @@ class TaskCreateDialogTests(unittest.TestCase):
                     self.assertEqual(dialog.result(), QDialog.DialogCode.Accepted)
                     self.assertEqual(accepted, [values])
                     dialog.close()
+
+    def test_dialog_opens_at_preferred_size_from_small_shot_card(self):
+        parent = QWidget()
+        self.addCleanup(parent.close)
+        theme = Path(__file__).resolve().parents[1] / "ui" / "dark_v01.qss"
+        parent.setStyleSheet(theme.read_text(encoding="utf-8"))
+        parent.resize(200, 140)
+        parent.show()
+        dialog = TaskCreateDialog(parent, api=FakeApi())
+        self.addCleanup(dialog.close)
+        preferred = dialog.sizeHint()
+        dialog.show()
+        self.app.processEvents()
+
+        self.assertEqual(dialog.size(), preferred)
+        self.assertGreater(dialog.width(), parent.width())
+        self.assertGreater(dialog.height(), parent.height())
+        scroll = dialog.findChild(QScrollArea)
+        self.assertGreater(scroll.viewport().height(), 200)
 
     def test_enter_commits_pending_budget_and_priority_edits(self):
         for field, text, expected in (("budget_spin", "2.75", 2.75), ("priority_spin", "8", 8)):

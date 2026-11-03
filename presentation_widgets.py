@@ -147,7 +147,9 @@ class FlexibleButton(QPushButton):
         suffix = self.elide_suffix
         suffix_width = option.fontMetrics.horizontalAdvance(suffix)
         # Keep the version and lock owner intact when shortening a filename.
-        if suffix and option.text.endswith(suffix) and suffix_width + option.fontMetrics.horizontalAdvance("…") < available:
+        if option.fontMetrics.horizontalAdvance(option.text) <= available:
+            pass
+        elif suffix and option.text.endswith(suffix) and suffix_width + option.fontMetrics.horizontalAdvance("…") < available:
             filename = option.text[:-len(suffix)]
             option.text = option.fontMetrics.elidedText(filename, self.elide_mode, available - suffix_width) + suffix
         else:

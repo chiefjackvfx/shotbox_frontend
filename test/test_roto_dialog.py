@@ -108,6 +108,40 @@ def test_defaults_exact_preview_sequence_and_no_settings_writes(app, context, tm
         wait(app, lambda: not window.is_busy())
 
 
+def test_generation_presets_update_job_and_ignore_wheel(app, dialog):
+    from test.test_input_behaviour import wheel
+
+    combo = dialog.generation_size
+    assert not combo.isEditable()
+    assert combo.count() == 5
+    sizes = [combo.itemData(index) for index in range(5)]
+    assert len(set(sizes)) == 5
+    for index, (width, height) in enumerate(sizes):
+        combo.setCurrentIndex(index)
+        wait(app, lambda: dialog._plan is not None)
+        assert (dialog.options().generation_width, dialog.options().generation_height) == (width, height)
+    combo.setFocus()
+    wheel(combo)
+    assert combo.currentIndex() == 4
+
+
+@pytest.mark.parametrize("width,height", [
+    (4096, 2850), (1920, 1080), (1080, 1920), (2048, 2048), (3840, 1080), (32, 18),
+])
+def test_generation_presets_fit_source_and_model_grid(width, height):
+    sizes = roto_dialog._generation_presets(width, height)
+    assert len(set(sizes)) == 5
+    assert sizes == sorted(sizes, key=lambda size: size[0] * size[1])
+    for preset_width, preset_height in sizes:
+        assert 32 <= preset_width <= 1920 and preset_width % 32 == 0
+        assert 32 <= preset_height <= 1088 and preset_height % 32 == 0
+        # Quantizing the shorter edge introduces up to half a grid cell error.
+        if width >= height:
+            assert abs(preset_height - preset_width * height / width) <= 32
+        else:
+            assert abs(preset_width - preset_height * width / height) <= 32
+
+
 def test_ranges_limits_sizing_and_invalid_suffix(app, dialog, tmp_path):
     dialog.range_enabled.setChecked(True)
     dialog.source_start.setValue(1005)
@@ -121,11 +155,12 @@ def test_ranges_limits_sizing_and_invalid_suffix(app, dialog, tmp_path):
     dialog.source_start.setValue(999)
     wait(app, lambda: "outside" in dialog.validation_info.text())
     dialog.range_enabled.setChecked(False)
-    dialog.generation_height.setValue(1088)
+    dialog.generation_size.setCurrentIndex(4)
     wait(app, lambda: dialog._plan is not None)
-    assert dialog.generation_width.value() <= 1920
-    assert dialog.generation_height.value() <= 1088
-    assert abs(dialog.generation_width.value() / dialog.generation_height.value() - 32 / 18) < .05
+    width, height = dialog.generation_size.currentData()
+    assert dialog.options().generation_width == width <= 1920
+    assert dialog.options().generation_height == height <= 1088
+    assert abs(width - height * 32 / 18) <= 32
     dialog.suffix.setText("../bad")
     wait(app, lambda: dialog._plan is None and "suffix" in dialog.validation_info.text().lower())
     frame = source(tmp_path / "long_v001", count=278)
