@@ -748,8 +748,8 @@ class NukeScriptGenerator:
         }
 
     def _relative_to_script_path(self, script_path: str, target_path: Path) -> str:
-        """Return a normalized path relative to the script directory."""
-        return str(os.path.relpath(target_path, Path(script_path).parent)).replace("\\", "/")
+        """Use a relative path where possible, or absolute across volumes."""
+        return path_mapping.script_relative_path(target_path, script_path)
 
     def _get_video_format(self, filepath: str) -> tuple[int, int]:
         """Get video format/resolution."""

@@ -8,10 +8,13 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-03 10:41:29 AM +00:00] Make Quick View movable without popup screenshot input grabs.
 - [2026-11-02 05:14:38 PM +00:00] Replace Roto dimensions with five clip-aware size presets.
 
 ### Fixed
 
+- [2026-11-03 02:24:17 PM +00:00] Fix Windows mount mismatches during shot and Nuke generation.
+- [2026-11-03 10:46:33 AM +00:00] Restore configured Quick View size using a floating dialog.
 - [2026-11-02 04:23:10 PM +00:00] Prevent unnecessary ellipses in fitting Nuke button labels.
 - [2026-11-02 04:20:34 PM +00:00] Widen Nuke buttons; move Render below when space runs out.
 - [2026-11-02 03:33:28 PM +00:00] Fix Create Task opening size and verify dialog layout.

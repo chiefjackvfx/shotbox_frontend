@@ -373,7 +373,7 @@ class CenterResizeGrip(QSizeGrip):
 
 
 class QuickViewPopup(QWidget):
-    """Frameless, modeless media popup with lightweight playback controls."""
+    """Movable, modeless media window with lightweight playback controls."""
 
     dismissed = pyqtSignal()
     navigation_requested = pyqtSignal(int)
@@ -384,8 +384,9 @@ class QuickViewPopup(QWidget):
     def __init__(self, parent=None, screen_percentage: int = 70):
         super().__init__(
             parent,
-            Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint,
+            Qt.WindowType.Dialog,
         )
+        self.setWindowTitle("Quick View")
         self.setObjectName("quick_view_popup")
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, False)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
@@ -805,6 +806,7 @@ class QuickViewPopup(QWidget):
         self._version_position_ms = max(0, int(position_ms))
         self._version_playing = True
         self.title_label.setText(media.title or "Untitled Shot")
+        self.setWindowTitle(f"Quick View — {media.title or 'Untitled Shot'}")
 
         requested_video = str(media.video_path or "")
         initial_index = 0
@@ -993,6 +995,7 @@ class QuickViewPopup(QWidget):
             screen = QApplication.primaryScreen()
         if screen is None:
             return
+        self.setWindowState(Qt.WindowState.WindowNoState)
         available = screen.availableGeometry()
         scale = self._screen_percentage / 100.0
         width = min(

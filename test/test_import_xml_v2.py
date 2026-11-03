@@ -22,6 +22,19 @@ from colourspace_defaults import COLOURSPACE_LIST, DEFAULT_COLOURSPACE
 
 
 class ImportXmlV2GeneratorTests(unittest.TestCase):
+    def test_denoise_and_render_paths_accept_windows_mount_aliases(self):
+        generator = module.NukeScriptGenerator()
+        with mock.patch.object(module.path_mapping.platform, "system", return_value="Windows"), \
+                mock.patch.object(module.path_mapping, "_windows_network_root", return_value="//192.168.10.20/projects"):
+            self.assertEqual(generator._relative_to_script_path(
+                "Z:/Job/shot/scripts/A.nk",
+                Path("//192.168.10.20/projects/Job/shot/renders/precomp/A_DN_v001/A_DN_v001_####.exr")),
+                "../renders/precomp/A_DN_v001/A_DN_v001_####.exr")
+            outputs = generator._build_nuke_output_files(
+                "//192.168.10.20/projects/Job/shot", "Z:/Job/shot/scripts/A.nk", "A")
+            self.assertEqual(len(outputs), 4)
+            self.assertTrue(all(value.startswith("../renders/") for value in outputs.values()))
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])

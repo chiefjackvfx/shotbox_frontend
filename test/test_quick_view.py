@@ -423,6 +423,32 @@ class QuickViewTests(unittest.TestCase):
         popup.set_screen_percentage(120)
         self.assertEqual(popup._screen_percentage, 100)
 
+    def test_popup_opens_at_seventy_percent_after_being_maximized(self):
+        class FakeScreen:
+            @staticmethod
+            def availableGeometry():
+                return QRect(100, 50, 2000, 1000)
+
+        with mock.patch.object(quick_view, "HAS_MULTIMEDIA", False):
+            popup = quick_view.QuickViewPopup()
+        self.addCleanup(popup.close)
+        pixmap = QPixmap(64, 36)
+        pixmap.fill(Qt.GlobalColor.blue)
+        media = quick_view.QuickViewMedia("sho010", "thumb.jpg", thumbnail=pixmap)
+
+        popup.showMaximized()
+        self.app.processEvents()
+        popup.hide()
+        popup.show_media(media, screen=FakeScreen())
+        self.app.processEvents()
+
+        self.assertEqual(popup.windowType(), Qt.WindowType.Dialog)
+        self.assertFalse(popup.isModal())
+        self.assertFalse(popup.isMaximized())
+        self.assertFalse(popup.isFullScreen())
+        self.assertEqual(popup.width(), 1400)
+        self.assertEqual(popup.height(), 700)
+
     def test_shot_card_registers_hover_for_still_quick_view(self):
         card = widgets.ShotCard.__new__(widgets.ShotCard)
         QWidget.__init__(card)

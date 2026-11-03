@@ -83,6 +83,39 @@ def _windows_network_root(drive: str) -> str | None:
     return None
 
 
+def script_relative_path(target_path, script_path, system: str | None = None) -> str:
+    """Return a Nuke file path, keeping cross-volume references absolute.
+
+    Windows resolve() can turn mapped drives into UNC paths. Expand both
+    operands using the current session's drive mappings before relativizing;
+    never infer share aliases from their names or use comparison-only keys.
+    """
+    target_system = system or platform.system()
+    paths = _normalizer_for(target_system)
+    target = paths.abspath(os.fspath(target_path))
+    script = paths.abspath(os.fspath(script_path))
+
+    def network_path(value):
+        value = value.replace("\\", "/")
+        if value.casefold().startswith("//?/unc/"):
+            value = "//" + value[8:]
+        elif value.startswith("//?/"):
+            value = value[4:]
+        drive, suffix = ntpath.splitdrive(value)
+        root = _windows_network_root(drive)
+        return root.rstrip("/") + suffix if root else value
+
+    if target_system == "Windows":
+        target = network_path(target)
+        script = network_path(script)
+    try:
+        result = paths.relpath(target, paths.dirname(script))
+    except ValueError:
+        # Separate drives/shares (including unavailable drive mappings).
+        result = target
+    return result.replace("\\", "/")
+
+
 def comparison_path(file_path: str, system: str | None = None) -> str:
     """Compare project paths across drive letters and supported mount aliases.
 

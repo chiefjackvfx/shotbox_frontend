@@ -307,6 +307,19 @@ class _FakeNuke:
 
 
 class CreateNkTests(unittest.TestCase):
+    def test_file_knob_and_info_paths_accept_unc_plates_with_mapped_script(self):
+        import path_mapping
+        editor = module._TemplateEditor(_FakeNuke())
+        editor.request = module.GenerateNkRequest(script_path="Z:/Job/scripts/A.nk")
+        target = "//server/projects/Job/plates/A.mov"
+        with mock.patch.object(path_mapping.platform, "system", return_value="Windows"), \
+                mock.patch.object(path_mapping, "_windows_network_root", return_value="//server/projects"):
+            knob = _FakeKnob("file")
+            editor._set_file_knob(knob, target)
+            self.assertEqual(knob.value(), "../plates/A.mov")
+            self.assertEqual(knob.user_text, target)
+            self.assertEqual(editor._relative_to_script(target), "../plates/A.mov")
+
     def test_lens_metadata_roundtrips_and_appears_literally_in_info_backdrop(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             request = self._request(Path(tmpdir))

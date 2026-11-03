@@ -14,6 +14,39 @@ import path_mapping
 
 
 class PathMappingTests(unittest.TestCase):
+    def test_script_paths_handle_windows_mount_combinations(self):
+        cases = [
+            ("Z:/Job/plates/A.####.exr", "z:/Job/scripts/A.nk", "../plates/A.####.exr"),
+            ("//192.168.10.20/projects/Job/plates/A.%04d.exr", "Z:/Job/scripts/A.nk", "../plates/A.%04d.exr"),
+            ("Z:/Job/plates/A.mov", "//192.168.10.20/projects/Job/scripts/A.nk", "../plates/A.mov"),
+            ("Y:/Job/plates/A.mov", "Z:/Job/scripts/A.nk", "../plates/A.mov"),
+            ("//?/UNC/192.168.10.20/projects/Job/plates/A.mov", "//?/Z:/Job/scripts/A.nk", "../plates/A.mov"),
+            ("X:/Job/A.mov", "Z:/Job/scripts/A.nk", "X:/Job/A.mov"),
+            ("//other/share/A.mov", "Z:/Job/scripts/A.nk", "//other/share/A.mov"),
+            ("//192.168.10.20/projects-old/A.mov", "Z:/Job/scripts/A.nk", "//192.168.10.20/projects-old/A.mov"),
+            ("C:/Job/plates/A.mov", "c:/Job/scripts/A.nk", "../plates/A.mov"),
+        ]
+        with mock.patch.object(path_mapping, "_windows_network_root", side_effect=lambda drive:
+                               "//192.168.10.20/projects" if drive.upper() in ("Z:", "Y:") else None):
+            for target, script, expected in cases:
+                with self.subTest(target=target, script=script):
+                    self.assertEqual(path_mapping.script_relative_path(target, script, "Windows"), expected)
+
+    def test_script_paths_keep_absolute_target_when_mapping_is_unavailable(self):
+        with mock.patch.object(path_mapping, "_windows_network_root", return_value=None):
+            self.assertEqual(path_mapping.script_relative_path(
+                "//server/share/Plate.mov", "Z:/Job/scripts/A.nk", "Windows"),
+                "//server/share/Plate.mov")
+            self.assertEqual(path_mapping.script_relative_path(
+                "Z:/Job/Plate.mov", "//server/share/scripts/A.nk", "Windows"),
+                "Z:/Job/Plate.mov")
+
+    def test_script_paths_preserve_posix_case_and_sequence_tokens(self):
+        for system in ("Linux", "Darwin"):
+            self.assertEqual(path_mapping.script_relative_path(
+                "/projects/Job/Plates/A.####.exr", "/projects/Job/scripts/A.nk", system),
+                "../Plates/A.####.exr")
+
     def test_comparison_handles_windows_drive_case_quotes_and_extended_paths(self):
         paths = (
             r'"z:\projects\C2255_Bamboo_HR\VFX\BAMBOO_HR\bam050\scripts\bam050.nk"',

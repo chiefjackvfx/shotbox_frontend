@@ -27,6 +27,7 @@ from html import escape
 
 from nuke_headless_tasks import find_nuke_executable, map_input_colorspace
 from app_cache import cache_directory, temporary_cache_task
+from path_mapping import script_relative_path
 
 
 READ_NODE_LABEL = "Fr. range: [value first] - [value last]\nRes: [value width] * [value height]"
@@ -807,8 +808,7 @@ class _TemplateEditor:
         return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
 
     def _relative_to_script(self, target_path: str) -> str:
-        script_dir = Path(self.request.script_path).parent
-        return _normalize_path(os.path.relpath(target_path, script_dir))
+        return script_relative_path(target_path, self.request.script_path)
 
     def _set_file_knob(self, knob, absolute_path: str):
         if Path(absolute_path).suffix.lower() == '.exr':
