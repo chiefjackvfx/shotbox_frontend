@@ -80,7 +80,7 @@ class ReviewPresentationWindow(QDialog):
     closing = pyqtSignal()
 
     def __init__(self, parent=None):
-        super().__init__(parent, Qt.WindowType.Window)
+        super().__init__(parent, Qt.WindowType.Dialog)
         self.setObjectName("review_page")
         self.setWindowTitle("Shotbox — Review")
         layout = QVBoxLayout(self)

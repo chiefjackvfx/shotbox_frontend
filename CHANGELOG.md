@@ -8,6 +8,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-03 04:30:32 PM +00:00] Standardize loading, creation, and Review as movable dialog windows.
+
 ### Fixed
 
 ## 5.5.0 - 2026-11-03

@@ -74,12 +74,8 @@ class LoadingDialog(QDialog):
         self.setFixedSize(350, 120)
         self._parent_ref = None
         
-        # Make it a tool window that floats above parent
-        self.setWindowFlags(
-            Qt.WindowType.Dialog |
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint
-        )
+        # Use a decorated dialog so it can be dragged between monitors.
+        self.setWindowFlags(Qt.WindowType.Dialog)
         self.setModal(True)
         
         # Set object name for QSS styling

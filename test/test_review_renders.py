@@ -859,7 +859,8 @@ class ReviewSessionTests(ReviewTestCase):
         QTest.keyClick(page.center_widget, Qt.Key.Key_F11)
         self.app.processEvents()
         self.assertIsNotNone(page._presentation_window)
-        self.assertTrue(page._presentation_window.isFullScreen())
+        self.assertFalse(page._presentation_window.isFullScreen())
+        self.assertEqual(page._presentation_window.windowType(), Qt.WindowType.Dialog)
         page._presentation_window.resize(1440, 900)
         self.app.processEvents()
         next_button = page.shot_navigation.button_next_shot

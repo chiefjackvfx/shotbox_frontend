@@ -1126,7 +1126,7 @@ class ExrClipSlot(QWidget):
 
 class Create3DEProjectWindow(QWidget):
     def __init__(self):
-        super().__init__()
+        super().__init__(None, Qt.WindowType.Dialog)
         self.clip_slots: list[ExrClipSlot] = []
         self._last_auto_shot_name = ""
 

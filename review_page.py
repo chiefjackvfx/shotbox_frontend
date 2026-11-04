@@ -3126,7 +3126,13 @@ class ReviewPage(QWidget):
         self.session_bar.button_tools.setChecked(False)
         self.session_bar.button_present.setText("Exit Present")
         window.closing.connect(self._finish_presentation)
-        window.showFullScreen()
+        available = self.screen().availableGeometry()
+        window.resize(round(available.width() * 0.7), round(available.height() * 0.7))
+        window.move(
+            available.x() + (available.width() - window.width()) // 2,
+            available.y() + (available.height() - window.height()) // 2,
+        )
+        window.show()
         self.center_widget.show()
         self.center_widget.setFocus()
         QTimer.singleShot(0, self._reposition_navigation_overlay)

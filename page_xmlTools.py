@@ -555,7 +555,7 @@ class ShotSetupDrop(QWidget, ConfigureMixin):
     """Drag and drop widget for setting up single shots."""
     
     def __init__(self):
-        QWidget.__init__(self)
+        QWidget.__init__(self, None, Qt.WindowType.Dialog)
         ConfigureMixin.__init__(self)
         
         self.setWindowTitle("Set up a single shot for Nuke")
