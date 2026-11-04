@@ -862,6 +862,13 @@ class page_nukedash(QMainWindow):
             preview_before = str((shot_card.data or {}).get("preview_video") or "").strip()
             render_button = getattr(shot_card, "btn_latest_render", None)
             render_before = render_button.property("render_display") if render_button else None
+            from render_detection import report_loaded_shot
+            shot_id = getattr(shot_card, "_shot_id", None)
+            if shot_id is not None:
+                report_loaded_shot(
+                    self._shot_card_api.base_url, shot_id,
+                    Path(self.filesIO.convert_path(shot_dir)) / "renders" / "comp",
+                )
             snapshot = self.filesIO.scan_shot_file_state(shot_dir)
             preview_relative = None
             if hasattr(shot_card, "apply_file_state_snapshot"):

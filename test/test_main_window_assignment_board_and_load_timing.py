@@ -1194,6 +1194,11 @@ class NukeDashFilePollTests(unittest.TestCase):
         harness.filesIO.scan_shot_file_state.side_effect = (
             lambda shot_dir: filesIO.ShotFileStateSnapshot(shot_dir=shot_dir)
         )
+        harness.filesIO.convert_path.side_effect = lambda path: path
+        harness._shot_card_api.base_url = "http://backend/api/"
+        reporter_patch = mock.patch("render_detection.report_loaded_shot")
+        report = reporter_patch.start()
+        self.addCleanup(reporter_patch.stop)
         try:
             harness._poll_visible_shot_card_file_state_batch()
             harness._poll_visible_shot_card_file_state_batch()
@@ -1204,6 +1209,9 @@ class NukeDashFilePollTests(unittest.TestCase):
             ]
             self.assertEqual(scanned_dirs[:3], ["/tmp/shot001", "/tmp/shot002", "/tmp/shot003"])
             self.assertNotIn("/tmp/shot004", scanned_dirs)
+            self.assertEqual([call.args[1] for call in report.call_args_list], [1, 2, 3])
+            self.assertEqual(report.call_args_list[0].args,
+                             ("http://backend/api/", 1, Path("/tmp/shot001/renders/comp")))
         finally:
             harness.close()
             harness.deleteLater()

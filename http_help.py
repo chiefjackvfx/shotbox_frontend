@@ -420,6 +420,10 @@ class DjangoAPI:
         self._request('DELETE', url, operation="delete_task")
         return True
     
+    def report_render_detected(self, shot_id: int, **payload):
+        url = f"{self.base_url}shots/{shot_id}/render-detected"
+        return self._request('POST', url, json=payload, operation="report_render_detected").json()
+
     def update_shot(self, shot_id: int, **fields):
         url = f"{self.base_url}shots/{shot_id}"
         r = self._request('PATCH', url, json=fields, operation="update_shot")
