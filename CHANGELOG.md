@@ -6,13 +6,19 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-11-04 12:18:47 PM +00:00] Detect new render outputs asynchronously with retryable activity reporting.
+### Changed
+
+### Fixed
+
+## 5.6.0 - 2026-11-04
+
+### Added
+
+- Detect new render outputs asynchronously with retryable activity reporting.
 
 ### Changed
 
-- [2026-11-03 04:30:32 PM +00:00] Standardize loading, creation, and Review as movable dialog windows.
-
-### Fixed
+- Standardize loading, creation, and Review as movable dialog windows.
 
 ## 5.5.0 - 2026-11-03
 
