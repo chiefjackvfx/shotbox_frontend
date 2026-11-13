@@ -6,43 +6,15 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-11-13 03:28:51 PM +00:00] Emit schema-2 active spans with conservative clock handling.
-- [2026-11-13 03:28:51 PM +00:00] Persist authenticated uploads with durable queues and acknowledged replay.
-- [2026-11-13 03:28:51 PM +00:00] Automatically enroll Nuke reporting and install managed startup.
-- [2026-11-13 03:28:51 PM +00:00] Resolve verified shot context across launches and script versions.
-- [2026-11-13 03:28:51 PM +00:00] Verify isolated Nuke collection through API and webpage reporting.
-
-- [2026-11-13 01:47:06 PM +00:00] Record session hostname in activity logs; verify retry stability.
-
-- [2026-11-13 01:10:13 PM +00:00] Add automatic local test logging and top-level shotbox menu.
-- [2026-11-13 01:10:13 PM +00:00] Verify menu startup, saving and teardown in Nuke GUI.
-
-- [2026-11-13 01:04:56 PM +00:00] Add stripped nuke_time_calc collector with 32 passing tests.
-- [2026-11-13 01:04:56 PM +00:00] Verify collector callbacks and teardown in Nuke 17.1v2.
-- [2026-11-13 12:41:31 PM +00:00] Document nuke_time_calc development and Shotbox integration plan.
-
-- [2026-11-06 04:10:20 PM +00:00] Add Houdini version browser, incremental save, merge tools, and icons.
-- [2026-11-06 04:02:03 PM +00:00] Add floating scene viewer to Houdini shelf and installer.
-
 ### Changed
-
-- [2026-11-13T17:05:42+00:00] Check Nuke activity every 30 seconds; retain minute checkpoints.
-- [2026-11-13T16:27:55+00:00] Enable automatic Nuke reporting; remove manual setup controls.
-- [2026-11-13T16:55:02+00:00] Store private Nuke state inside protected Shotbox cache.
-
-- [2026-11-13 01:47:06 PM +00:00] Move nuke_time_calc into plugins/nuke; update local startup paths.
-- [2026-11-13 01:21:50 PM +00:00] Remove nuke_time_calc LICENSE file and update documentation references.
 
 ### Fixed
 
-- [2026-11-13T16:55:02+00:00] Retry Nuke bootstrap automatically while Shotbox setup completes.
-- [2026-11-13T16:55:02+00:00] Bind launch mappings to their server and artist snapshot.
-- [2026-11-13T16:55:02+00:00] Show visible Nuke status without manual tracking toggles.
+## 5.7.0 - 2026-11-13
 
-- [2026-11-13 03:39:54 PM +00:00] Handle uploader stopping and retry failed Nuke callback cleanup.
-- [2026-11-13 03:39:54 PM +00:00] Rollback partial Qt setup; retain failed cleanup ownership.
-- [2026-11-13 03:33:44 PM +00:00] Invalidate stale shot mappings before verified folder reassignment.
-- [2026-11-13 03:33:44 PM +00:00] Bind queued uploads to their expected authenticated artist/device.
+### Added
+
+- nuke time calc system
 
 ## 5.6.0 - 2026-11-04
 
