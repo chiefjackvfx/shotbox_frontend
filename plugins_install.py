@@ -113,7 +113,17 @@ def resolve_houdini_preferences(folder: str) -> Path:
 def install_houdini_plugin(folder: str) -> InstallResult:
     destination = resolve_houdini_preferences(folder)
     source = Path(__file__).resolve().parent / "plugins" / "houdini"
-    runtime = ("python/shotbox_3de_import.py", "toolbar/shotbox_3de_import.shelf")
+    runtime = (
+        "python/shotbox_3de_import.py",
+        "python/houdini_floating_scene_viewer.py",
+        "python/browser_version.py",
+        "icons/version_browser.svg",
+        "python/incremental_save.py",
+        "icons/incremental_save.svg",
+        "python/hip_merge_organiser_with_builder.py",
+        "icons/hip_merge_builder.svg",
+        "toolbar/shotbox_3de_import.shelf",
+    )
     package = source / "shotbox_3de_import.json"
     for path in [source / name for name in runtime] + [package]:
         if not path.is_file():

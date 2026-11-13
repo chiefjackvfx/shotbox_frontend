@@ -2,11 +2,39 @@
 <shelfDocument>
   <toolshelf name="shotbox_3de_import" label="ShotBox">
     <memberTool name="shotbox_import_3de"/>
+    <memberTool name="shotbox_floating_scene_viewer"/>
+    <memberTool name="shotbox_version_browser"/>
+    <memberTool name="shotbox_incremental_save"/>
+    <memberTool name="shotbox_hip_merge_builder"/>
   </toolshelf>
   <tool name="shotbox_import_3de" label="3DE Import" icon="OBJ_camera">
     <script scriptType="python"><![CDATA[
 import shotbox_3de_import
 shotbox_3de_import.show_import_menu()
+]]></script>
+  </tool>
+  <tool name="shotbox_floating_scene_viewer" label="Floating Scene Viewer" icon="COP2_frontface">
+    <script scriptType="python"><![CDATA[
+import houdini_floating_scene_viewer
+houdini_floating_scene_viewer.open_floating_scene_viewer()
+]]></script>
+  </tool>
+  <tool name="shotbox_version_browser" label="Version Browser" icon="$HOUDINI_USER_PREF_DIR/shotbox_3de_import/icons/version_browser.svg">
+    <script scriptType="python"><![CDATA[
+import browser_version
+browser_version.show_version_browser()
+]]></script>
+  </tool>
+  <tool name="shotbox_incremental_save" label="Incremental Save" icon="$HOUDINI_USER_PREF_DIR/shotbox_3de_import/icons/incremental_save.svg">
+    <script scriptType="python"><![CDATA[
+import incremental_save
+incremental_save.incremental_save()
+]]></script>
+  </tool>
+  <tool name="shotbox_hip_merge_builder" label="HIP Merge Builder" icon="$HOUDINI_USER_PREF_DIR/shotbox_3de_import/icons/hip_merge_builder.svg">
+    <script scriptType="python"><![CDATA[
+import hip_merge_organiser_with_builder
+hip_merge_organiser_with_builder.show_hip_object_merge_tool()
 ]]></script>
   </tool>
 </shelfDocument>

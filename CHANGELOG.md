@@ -6,6 +6,9 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-06 04:10:20 PM +00:00] Add Houdini version browser, incremental save, merge tools, and icons.
+- [2026-11-06 04:02:03 PM +00:00] Add floating scene viewer to Houdini shelf and installer.
+
 ### Changed
 
 ### Fixed

@@ -38,12 +38,12 @@ class PluginInstallTests(unittest.TestCase):
         preferences.mkdir()
         (preferences / "houdini.env").write_text("keep")
         first = plugins_install.install_houdini_plugin(str(preferences))
-        self.assertEqual(len(first.installed), 3)
+        self.assertEqual(len(first.installed), 10)
         self.assertFalse(first.failures)
         package = preferences / "packages" / "shotbox_3de_import.json"
         self.assertIn("$HOUDINI_USER_PREF_DIR/shotbox_3de_import", package.read_text())
         second = plugins_install.install_houdini_plugin(str(preferences))
-        self.assertEqual(len(second.unchanged), 3)
+        self.assertEqual(len(second.unchanged), 10)
         runtime = preferences / "shotbox_3de_import/python/shotbox_3de_import.py"
         runtime.write_text("old")
         third = plugins_install.install_houdini_plugin(str(preferences))
@@ -56,7 +56,7 @@ class PluginInstallTests(unittest.TestCase):
         self.patch.stop()
         with mock.patch.object(plugins_install.os, "replace", side_effect=PermissionError("denied")):
             result = plugins_install.install_houdini_plugin(str(self.root))
-        self.assertEqual(len(result.failures), 2)
+        self.assertEqual(len(result.failures), 9)
         self.assertFalse((self.root / "packages/shotbox_3de_import.json").exists())
         self.assertFalse(list(self.root.rglob(".shotbox-*")))
         for folder in ("", str(self.root / "missing")):

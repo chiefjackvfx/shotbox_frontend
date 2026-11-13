@@ -10,12 +10,17 @@ script determines transforms, scale, camera parameters, and animation timing.
 In Settings → Plugins, select your Houdini **user preferences** folder (for
 example `~/houdini22.0`, or your Windows Documents `houdini22.0` folder).
 Click **Install / Update Houdini Plugin**, restart Houdini, then use the shelf
-menu to enable **ShotBox**. Click **3DE Import**.
+menu to enable **ShotBox**. The shelf includes **3DE Import**, **Floating Scene Viewer**,
+**Version Browser**, **Incremental Save**, and **HIP Merge Builder**.
+
+The Floating Scene Viewer tool targets Houdini 22 with PySide6. It clones the
+docked Scene Viewer and lets you choose where the native playbar appears.
+Closing the floating viewer restores the playbar to the original viewer.
 
 ## Manual installation
 
 1. Create `shotbox_3de_import` inside `$HOUDINI_USER_PREF_DIR`.
-2. Copy this directory's `python` and `toolbar` folders into it.
+2. Copy this directory's `python`, `toolbar`, and `icons` folders into it.
 3. Copy `shotbox_3de_import.json` into `$HOUDINI_USER_PREF_DIR/packages`.
 4. Restart Houdini and enable the ShotBox shelf.
 
@@ -37,3 +42,14 @@ Houdini. No extra confirmation is added for each import.
 
 Windows paths have automated coverage; actual Windows GUI validation requires a
 Windows Houdini session.
+
+## Additional shelf tools
+
+The three additional tools use PySide6 and target Houdini 22.
+
+- **Version Browser** browses and opens HIP versions in the current directory.
+- **Incremental Save** saves the next HIP version while preserving cache paths.
+- **HIP Merge Builder** scans HIP files and merges selected contexts.
+
+Their SVG icons are installed with the plugin. Run **Install / Update Houdini
+Plugin** again and restart Houdini to pick up new tools and icons.
