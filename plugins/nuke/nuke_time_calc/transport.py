@@ -31,7 +31,6 @@ import json
 import math
 import os
 import re
-import stat
 import time
 import threading
 from email.utils import parsedate_to_datetime
@@ -39,6 +38,7 @@ import ssl
 import sqlite3
 
 from .outbox import CorruptOutbox
+from . import storage
 import urllib.error
 from urllib.parse import urlsplit
 from pathlib import Path
@@ -162,20 +162,7 @@ class Uploader:
             return response.code, dict(response.headers), response.read(1048577)
 
     def _load_token(self):
-        # Open the exact file without following its final symlink; fstat the fd,
-        # not a separate path, so rotation cannot race the permission check.
-        flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0)
-        if self.token_file.is_symlink():
-            raise ValueError('credential_error')
-        fd = os.open(str(self.token_file), flags)
-        with os.fdopen(fd, 'rb') as stream:
-            info = os.fstat(stream.fileno())
-            if (not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077
-                    or (hasattr(os, 'getuid') and info.st_uid != os.getuid())):
-                raise ValueError('credential_error')
-            raw = stream.read(4097)
-        if len(raw) > 4096:
-            raise ValueError('credential_error')
+        raw = storage.private_read(self.token_file, max_bytes=4096)
         token = raw.decode('ascii').rstrip('\r\n')
         if not re.fullmatch(r'[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+', token):
             raise ValueError('credential_error')

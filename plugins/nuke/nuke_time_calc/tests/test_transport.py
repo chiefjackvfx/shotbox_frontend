@@ -83,6 +83,17 @@ class TransportTests(unittest.TestCase):
         from nuke_time_calc.outbox import Outbox
         return Outbox(self.root / 'state', server=origin or self.origin, artist_id='artist-1', device_id='device-1')
 
+    def test_hardlinked_token_cannot_send_or_acknowledge(self):
+        from nuke_time_calc.transport import Uploader
+        q = self.queue()
+        q.put(batch())
+        os.link(self.token, self.root / 'token-alias')
+        worker = Uploader(q, token_file=self.token, allow_loopback_http=True)
+        self.assertFalse(worker.run_once())
+        self.assertEqual(worker.status()['code'], 'credential_error')
+        self.assertEqual(self.received, [])
+        self.assertEqual(q.pending(), [batch()])
+
     def test_default_post_sends_outbox_binding_after_credential_file_changes(self):
         from nuke_time_calc.transport import Uploader
         q = self.queue()

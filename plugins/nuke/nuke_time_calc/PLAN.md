@@ -312,7 +312,9 @@ Resolve the documented historical job-attribution limitation before relying on p
 
 **Gate:** pilot passes the same end-to-end checks with no duplicate/misattributed records, acceptable coverage and bounded overhead. Expand to other workstations only after review. Operational rollback disables ingestion/collection and preserves queued and accepted observations; do not reverse a data-bearing migration or delete unacknowledged records.
 
-### Windows automatic installation and rollout — planned, not implemented
+### Windows automatic installation and rollout — implementation added, native acceptance pending
+
+Windows storage and automatic-install integration are now implemented. Parent verification ran 198 collector tests successfully, with eight native-Windows tests skipped on Linux; 49 focused frontend/setup/cache tests and 20 subtests also passed. No Windows workstation has run this code yet, and no Windows user's real startup was changed. The selected pilot is the other network workstation, GRADING-SUITE (`192.168.10.207`, user `clarke`), not Giger. SSH setup is in progress; do not submit the previously discussed Giger Deadline job. The checklist below remains an acceptance checklist until native Windows evidence confirms each gate.
 
 **Confirmed requirement:** Shotbox automatically installs and maintains the Nuke time plugin on supported Windows workstations. Artists do not copy plugin files, edit `menu.py`, choose credential paths, click an Install button or enable tracking. This extends the existing automatic Linux workflow; it is not a separate manual Windows installer.
 

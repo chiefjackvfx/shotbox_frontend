@@ -292,9 +292,74 @@ print(result['status'])
         self.assertEqual(shared.stat().st_mode & 0o777, 0o755)
         self.assertEqual(config.parent.stat().st_mode & 0o777, 0o700)
 
-    def test_windows_is_explicitly_unsupported_before_state_writes(self):
+    def test_storage_validation_failure_never_requests_or_installs(self):
         module = importlib.import_module('nuke_time_auto_setup')
-        with mock.patch.object(module.os, 'name', 'nt'):
+        with mock.patch.object(module.storage, 'private_directory',
+                               side_effect=ValueError('unsupported filesystem or unsafe ACL')):
+            result = self.ensure()
+        self.assertEqual(result, dict(status='error', code='private_state_error'))
+        self.assertEqual(self.calls, [])
+        self.assertFalse(self.config.exists())
+        self.assertFalse((self.nuke / 'menu.py').exists())
+
+    def test_unsafe_startup_path_fails_before_enrollment_or_activation(self):
+        target = self.root / 'other-startup'
+        target.mkdir()
+        try:
+            self.nuke.symlink_to(target, target_is_directory=True)
+        except OSError as exc:
+            if os.name == 'nt' and getattr(exc, 'winerror', None) == 1314:
+                self.skipTest('Windows symlink creation requires Developer Mode or privilege')
+            raise
+        result = self.ensure()
+        self.assertEqual(result['status'], 'error')
+        self.assertEqual(self.calls, [])
+        self.assertFalse(self.config.exists())
+        self.assertEqual(list(target.iterdir()), [])
+
+    def test_backend_approved_platform_runs_setup_and_replays_lost_ack(self):
+        # Isolate the caller's platform guard, not pathlib or the storage backend.
+        # Native ACL behavior is covered by the storage tests on Windows.
+        from types import SimpleNamespace
+        from plugins.nuke.nuke_time_calc import outbox, storage
+        module = importlib.import_module('nuke_time_auto_setup')
+        with mock.patch.object(module, 'os', SimpleNamespace(name='nt')), \
+                mock.patch.object(outbox, 'os', SimpleNamespace(name='nt')), \
+                mock.patch.object(storage, 'supported_platform', return_value=True):
+            def lost(url, body, timeout):
+                self.calls.append((url, json.loads(body), timeout))
+                raise OSError('lost acknowledgement')
+            self.assertEqual(self.ensure(request=lost)['status'], 'retry')
+            self.assertFalse((self.nuke / 'menu.py').exists())
+            self.assertEqual(self.ensure()['status'], 'ready')
+            self.assertEqual(self.calls[0][1], self.calls[1][1])
+            config = managed_setup.load_config(self.config)
+            queue = outbox.Outbox(config['outbox_dir'], server=config['server'],
+                artist_id=config['artist_id'], device_id=config['device_id'])
+            from plugins.nuke.nuke_time_calc.tests.test_outbox import batch
+            queue.put(batch())
+            self.assertEqual(self.ensure()['status'], 'ready')
+            self.assertEqual(queue.pending(), [batch()])
+            from plugins.nuke.nuke_time_calc.transport import Uploader
+            sent = []
+            def upload(url, body, token, timeout):
+                sent.append((json.loads(body), token))
+                item = json.loads(body)['batches'][0]
+                return 200, {}, json.dumps(dict(results=[dict(session_id=item['session_id'],
+                    sequence=item['sequence'], status='duplicate')])).encode()
+            worker = Uploader(queue, token_file=config['token_file'], transport=upload)
+            self.assertTrue(worker.run_once())
+            self.assertEqual(sent[0][0]['batches'], [batch()])
+            self.assertEqual(sent[0][1], self.calls[0][1]['token'])
+            self.assertEqual(queue.pending(), [])
+            from plugins.nuke.nuke_time_calc.outbox import BatchConflict
+            changed = dict(batch(), reason='changed')
+            with self.assertRaises(BatchConflict):
+                queue.put(changed)
+
+    def test_unsupported_backend_is_rejected_before_state_writes(self):
+        module = importlib.import_module('nuke_time_auto_setup')
+        with mock.patch.object(module.storage, 'supported_platform', return_value=False):
             result = self.ensure()
         self.assertEqual(result['status'], 'error')
         self.assertEqual(result['code'], 'unsupported_platform')

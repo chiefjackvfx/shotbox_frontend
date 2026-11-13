@@ -13,13 +13,12 @@ import os
 from pathlib import Path
 import secrets
 import socket
-import stat
 import re
 import uuid
 import time
 from datetime import datetime
 
-from plugins.nuke.nuke_time_calc import managed_setup, setup_defaults
+from plugins.nuke.nuke_time_calc import managed_setup, setup_defaults, storage
 from plugins.nuke.nuke_time_calc.outbox import Outbox, _sync_directory
 from plugins.nuke.nuke_time_calc.transport import _unique_object, _validate_origin
 
@@ -49,38 +48,16 @@ def _expiry(value):
 
 
 def _private_read(path):
-    managed_setup._safe_path(path)
-    fd = os.open(str(path), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    with os.fdopen(fd, 'rb') as stream:
-        info = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
-                or info.st_mode & 0o077 or info.st_uid != os.getuid()):
-            raise ValueError('unsafe_private_file')
-        raw = stream.read(65537)
-    if len(raw) > 65536:
-        raise ValueError('oversize_private_file')
-    return raw
+    return storage.private_read(path)
 
 
 def _private_directory(path):
-    managed_setup._safe_path(path)
-    if not path.exists():
-        missing = []
-        current = path
-        while not current.exists():
-            missing.append(current)
-            current = current.parent
-        for directory in reversed(missing):
-            directory.mkdir(mode=0o700)
-            _sync_directory(directory.parent)
-    info = path.stat()
-    if not stat.S_ISDIR(info.st_mode) or info.st_mode & 0o077 or info.st_uid != os.getuid():
-        raise ValueError('unsafe_private_directory')
+    return storage.private_directory(path)
 
 
 def ensure_setup(*, server_url, artist_id, users=None, config_path=None,
                  nuke_dir=None, request=None, clock=time.time):
-    if os.name != 'posix':
+    if not storage.supported_platform():
         return dict(status='error', code='unsupported_platform')
     try:
         return _ensure_setup(server_url=server_url, artist_id=artist_id, users=users,
@@ -94,6 +71,8 @@ def _ensure_setup(*, server_url, artist_id, users, config_path, nuke_dir, reques
     path = Path(config_path if config_path is not None else managed_setup.default_config_path())
     proposed = setup_defaults.suggest(server_url=server_url, artist_id=artist_id, users=users)
     managed_setup._config_path(path)
+    # Validate the per-user startup destination before credentials or enrollment.
+    managed_setup._menu_path(nuke_dir)
     if path.parent.exists():
         _private_directory(path.parent)
     if path.exists():

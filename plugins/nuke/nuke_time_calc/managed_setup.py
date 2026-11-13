@@ -2,21 +2,14 @@
 import json
 import os
 from pathlib import Path
-import tempfile
 
 
-from .state_paths import default_config_path
+from .state_paths import default_config_path, default_nuke_directory
+from . import storage
 
 
 def _safe_path(path):
-    path = Path(path)
-    if '\x00' in str(path):
-        raise ValueError('NUL is not allowed in a local path')
-    if not path.is_absolute() or any(part == '..' for part in path.parts):
-        raise ValueError('expected an absolute, non-traversing local path')
-    if any(part.is_symlink() for part in (path, *path.parents)):
-        raise ValueError('symlink setup targets are not allowed')
-    return path
+    return storage.safe_path(path)
 
 
 def _config_path(path):
@@ -58,19 +51,8 @@ def _validate_config(config):
     return result
 
 
-def _atomic_write(path, data, mode=0o600):
-    path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
-    fd, name = tempfile.mkstemp(prefix='.' + path.name + '-', dir=str(path.parent))
-    try:
-        os.chmod(name, mode)
-        with os.fdopen(fd, 'wb') as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(name, path)
-    finally:
-        if os.path.exists(name):
-            os.unlink(name)
+def _atomic_write(path, data, mode=0o600, *, private=True):
+    return storage.atomic_write(path, data, mode=mode, private=private)
 
 
 def load_config(path=None):
@@ -78,9 +60,7 @@ def load_config(path=None):
     path = _config_path(path)
     if not path.exists():
         return dict(enabled=False, mappings=[], allow_lan_http=False)
-    if os.name != 'nt' and path.stat().st_mode & 0o077:
-        raise ValueError('configuration permissions must be private')
-    return _validate_config(json.loads(path.read_text(encoding='utf-8')))
+    return _validate_config(json.loads(storage.private_read(path).decode('utf-8')))
 
 
 def save_config(config, path=None):
@@ -94,7 +74,7 @@ _END = b'# <<< SHOTBOX NUKE TIME CALC MANAGED v1 <<<'
 
 
 def _menu_path(nuke_dir):
-    return _safe_path((Path(nuke_dir) if nuke_dir is not None else Path.home() / '.nuke') / 'menu.py')
+    return _safe_path((Path(nuke_dir) if nuke_dir is not None else default_nuke_directory()) / 'menu.py')
 
 
 def _without_block(data):
@@ -216,7 +196,7 @@ def install(*, nuke_dir=None, config_path=None):
     if not config_path.exists():
         save_config(config, config_path)
     if old != new:
-        _atomic_write(menu, new, mode=(menu.stat().st_mode & 0o777) if menu.exists() else 0o600)
+        _atomic_write(menu, new, mode=(menu.stat().st_mode & 0o777) if menu.exists() else 0o600, private=False)
     return menu
 
 
@@ -228,7 +208,7 @@ def uninstall(*, nuke_dir=None, config_path=None, remove_config=False):
         old = menu.read_bytes()
         new = _without_block(old)
         if new != old:
-            _atomic_write(menu, new, mode=menu.stat().st_mode & 0o777)
+            _atomic_write(menu, new, mode=menu.stat().st_mode & 0o777, private=False)
     if remove_config and config_path.exists():
         config_path.unlink()
     return menu

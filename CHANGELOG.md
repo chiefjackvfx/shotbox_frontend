@@ -6,6 +6,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-13T17:35:56+00:00] Add Windows private storage and automatic Nuke startup support.
+
 ### Changed
 
 ### Fixed

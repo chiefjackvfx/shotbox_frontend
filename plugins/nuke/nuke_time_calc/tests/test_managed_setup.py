@@ -16,6 +16,55 @@ class SetupTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         self.config = self.root / 'state' / 'config.json'
 
+    def test_windows_startup_discovery_uses_foundry_home_then_userprofile(self):
+        from nuke_time_calc import managed_setup, state_paths
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        home = self.root / 'Home ü with spaces'
+        profile = self.root / 'Profile other'
+        env = dict(HOME=str(home), USERPROFILE=str(profile),
+                   NUKE_USER_PATH=str(self.root / 'not-a-documented-home'),
+                   NUKE_PATH=str(self.root / 'all-users-must-not-be-written'))
+        with patch.object(state_paths, 'os', SimpleNamespace(name='nt', environ=env)):
+            self.assertEqual(managed_setup._menu_path(None), home / '.nuke' / 'menu.py')
+            del env['HOME']
+            self.assertEqual(managed_setup._menu_path(None), profile / '.nuke' / 'menu.py')
+            env['HOME'] = 'relative/unsafe'
+            with self.assertRaises(ValueError):
+                managed_setup._menu_path(None)
+            del env['HOME']
+            del env['USERPROFILE']
+            with self.assertRaises(ValueError):
+                managed_setup._menu_path(None)
+
+    def test_startup_uses_public_atomic_write_and_config_uses_private_storage(self):
+        from nuke_time_calc import managed_setup, storage
+        from unittest.mock import patch
+        nuke_dir = self.root / 'Studio startup ü'
+        nuke_dir.mkdir()
+        menu = nuke_dir / 'menu.py'
+        original = b'# unrelated studio setup\n'
+        menu.write_bytes(original)
+        if os.name == 'posix':
+            menu.chmod(0o640)
+        with patch.object(storage, 'atomic_write', wraps=storage.atomic_write) as write:
+            managed_setup.install(nuke_dir=nuke_dir, config_path=self.config)
+            self.assertTrue(any(call.args[0] == menu and call.kwargs.get('private') is False
+                                for call in write.call_args_list))
+            self.assertTrue(any(call.args[0] == self.config and call.kwargs.get('private') is True
+                                for call in write.call_args_list))
+            managed_setup.uninstall(nuke_dir=nuke_dir, config_path=self.config)
+        self.assertEqual(menu.read_bytes(), original)
+        if os.name == 'posix':
+            self.assertEqual(menu.stat().st_mode & 0o777, 0o640)
+
+    def test_hardlinked_config_is_not_trusted(self):
+        from nuke_time_calc.managed_setup import save_config, load_config
+        save_config(dict(enabled=False), self.config)
+        os.link(self.config, self.root / 'config-copy')
+        with self.assertRaises(ValueError):
+            load_config(self.config)
+
     def test_invalid_configuration_cannot_enable_or_overwrite(self):
         from nuke_time_calc.managed_setup import save_config, load_config
         import uuid
@@ -40,7 +89,7 @@ class SetupTests(unittest.TestCase):
         from nuke_time_calc.managed_setup import save_config, load_config
         target = self.root / 'unrelated.txt'
         target.write_text('preserve')
-        self.config.parent.mkdir()
+        self.config.parent.mkdir(mode=0o700)
         self.config.symlink_to(target)
         with self.assertRaises(ValueError):
             save_config(dict(enabled=False), self.config)
@@ -237,7 +286,7 @@ class SetupTests(unittest.TestCase):
         from unittest.mock import patch
         from types import ModuleType
         # Quotes in a state directory must stay data, never become startup code.
-        config = self.root / "state' quoted" / 'config.json'
+        config = self.root / "state' quoted ü" / 'config.json'
         menu = install(nuke_dir=self.root / 'nuke', config_path=config)
         runtime = ModuleType('nuke_time_calc.runtime')
         calls = []

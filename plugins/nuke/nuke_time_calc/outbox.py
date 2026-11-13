@@ -1,8 +1,8 @@
 """Explicitly configured durable state; never starts threads or selects a live path.
 
 SQLite EXTRA synchronous transactions provide atomic crash recovery and process
-locking on a local POSIX filesystem. The caller chooses a persistent, private
-root outside project/cache directories; no live location is selected here.
+locking on a local filesystem validated by the private-storage backend. The
+caller chooses a persistent, private root; no live location is selected here.
 
 Defaults: 10,000 pending records; 16 MiB database including immutable digest
 tombstones (minimum cap 16 KiB). The rollback journal can temporarily consume
@@ -13,8 +13,9 @@ until an operator reviews capacity. No unacknowledged data is evicted.
 Sink success means committed locally, not delivered. Disk/lock errors propagate
 (the SQLite busy timeout is 50 ms). The producer must retain/retry on exceptions.
 Durability starts at successful put; unsealed producer intervals remain outside
-this guarantee. Physical power-cut, Windows ACL and network-filesystem behavior
-have not been certified; unsupported non-POSIX platforms fail before writes.
+this guarantee. Physical power-cut behavior is not certified. Windows requires
+validated private ACLs on a local ACL-capable volume; unsupported backends fail
+before writes. POSIX directory fsync does not imply Windows directory durability.
 """
 from contextlib import contextmanager
 import hashlib
@@ -22,8 +23,9 @@ import json
 import os
 from pathlib import Path
 import sqlite3
-import stat
 import uuid
+
+from . import storage
 
 
 def _encode(value):
@@ -32,32 +34,11 @@ def _encode(value):
 
 
 def _sync_directory(path):
-    # POSIX directory entries require their own fsync in addition to SQLite's.
-    # Windows ACL/directory durability needs a separate platform acceptance gate.
-    if os.name != 'posix':
-        raise OSError('private durable outbox currently requires POSIX')
-    fd = os.open(str(path), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        os.fsync(fd)
-    finally:
-        os.close(fd)
+    return storage.sync_directory(path)
 
 
 def _private_directory(path):
-    path = path.absolute()
-    if any(part.is_symlink() for part in (path,) + tuple(path.parents)):
-        raise ValueError('symlink state directories are forbidden')
-    missing = []
-    current = path
-    while not current.exists():
-        missing.append(current)
-        current = current.parent
-    for directory in reversed(missing):
-        directory.mkdir(mode=0o700, exist_ok=True)
-        _sync_directory(directory.parent)
-    if path.stat().st_mode & 0o077:
-        raise ValueError('outbox directory must be private')
-    return path
+    return storage.private_directory(path.absolute())
 
 
 class CorruptOutbox(RuntimeError):
@@ -84,8 +65,8 @@ class Outbox:
 
     def __init__(self, root, *, server, artist_id, device_id, max_records=10000,
                  max_bytes=16 * 1024 * 1024):
-        if os.name != 'posix':
-            raise OSError('private durable outbox currently requires POSIX')
+        if not storage.supported_platform():
+            raise OSError('private storage backend is unavailable')
         if artist_id is None or device_id is None:
             raise ValueError('explicit binding required')
         self._binding = (server, str(artist_id), str(device_id))
@@ -103,13 +84,7 @@ class Outbox:
         self._initialized = initialized
         if initialized.exists() and (not self.path.exists() or self.path.stat().st_size == 0):
             raise CorruptOutbox('initialized outbox database is missing or truncated')
-        try:
-            fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        except FileExistsError:
-            pass
-        else:
-            os.close(fd)
-            _sync_directory(directory)
+        storage.create_private_file(self.path)
         self._check_database()
         with self._connect() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -117,26 +92,14 @@ class Outbox:
             if not db.execute('SELECT fingerprint FROM binding').fetchone():
                 db.execute('INSERT INTO binding VALUES (?)', (self._fingerprint,))
             db.execute('CREATE TABLE IF NOT EXISTS batches (session TEXT, sequence INTEGER, payload TEXT, digest TEXT, pending INTEGER NOT NULL, PRIMARY KEY(session, sequence))')
-        try:
-            fd = os.open(str(initialized), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        except FileExistsError:
-            pass
-        else:
-            try:
-                os.fsync(fd)
-            finally:
-                os.close(fd)
-            _sync_directory(directory)
+        storage.create_private_file(initialized)
 
     @property
     def binding(self):
         return self._binding
 
     def _check_database(self):
-        info = self.path.lstat()
-        if (not stat.S_ISREG(info.st_mode) or info.st_mode & 0o077
-                or info.st_nlink != 1 or info.st_uid != os.getuid()):
-            raise ValueError('outbox database must be private, owned and unlinked')
+        storage.check_private_file(self.path)
 
     @contextmanager
     def _connect(self):

@@ -207,7 +207,7 @@ os._exit(23)
 
     def test_unsupported_platform_fails_before_creating_state(self):
         from unittest.mock import patch
-        with patch('os.name', 'nt'):
+        with patch('nuke_time_calc.storage.supported_platform', return_value=False):
             with self.assertRaises(OSError):
                 self.make()
         self.assertFalse(self.root.exists())
