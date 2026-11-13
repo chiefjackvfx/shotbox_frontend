@@ -272,8 +272,30 @@ def _batch_preview_progress_value(
     return min(maximum, value), maximum
 
 
+def _nuke_time_identity(server, artist_id):
+    """Compare independently captured desktop bindings, never infer identity."""
+    if type(artist_id) is not int or artist_id <= 0:
+        return None
+    from plugins.nuke.nuke_time_calc.transport import _validate_origin
+    try:
+        if isinstance(server, str) and server.endswith('/api/'):
+            server = server[:-5]
+        origin = _validate_origin(server, allow_lan_http=True)
+    except (ValueError, TypeError):
+        return None
+    return origin.scheme, origin.netloc, artist_id
+
+
+class _NukeJobsSnapshot(list):
+    """A list-compatible API result retaining its request-time provenance."""
+    def __init__(self, jobs, context, generation):
+        super().__init__(jobs)
+        self.source_context = context
+        self.source_generation = generation
+
+
 class ApiWorker(QObject):
-    data_ready = pyqtSignal(list)
+    data_ready = pyqtSignal(object)
     users_ready = pyqtSignal(list)
     error = pyqtSignal(str)
 
@@ -288,9 +310,16 @@ class ApiWorker(QObject):
         if QThread.currentThread().isInterruptionRequested():
             return
         try:
+            binding = getattr(self, '_time_reporting_binding', (None, 0))
+            context, generation = binding
+            source = _nuke_time_identity(self.api.base_url, context[2]) if context else None
             data = self.api.getAPI()
             if not isinstance(data, list):
                 raise ValueError("API did not return a list")
+            if (source != context or binding != getattr(self, '_time_reporting_binding', (None, 0))
+                    or (context and _nuke_time_identity(self.api.base_url, context[2]) != source)):
+                context = None
+            data = _NukeJobsSnapshot(data, context, generation)
             if (self._users_loaded_at is None or self._users_base_url != self.api.base_url
                     or time.monotonic() - self._users_loaded_at >= 60):
                 try:
@@ -2224,6 +2253,24 @@ class page_nukedash(QMainWindow):
             f"{msg}\n\nShot: {shot_title}\nLocked by: {owner}",
         )
 
+    def set_time_reporting_context(self, server_url, artist_id):
+        """Bind desktop provenance; call at startup and on server/artist changes.
+
+        This never configures reporting or changes API/ordinary launch behavior.
+        Existing API clients must actually fetch from this origin before their
+        snapshots can be used. An account switch invalidates in-flight results
+        and pending handoffs, including an A -> B -> A round trip.
+        """
+        context = _nuke_time_identity(server_url, artist_id)
+        previous, generation = getattr(self, '_time_reporting_binding', (None, 0))
+        if context != previous:
+            generation += 1
+            self._jobs_source_context = None
+            self._jobs_source_generation = None
+        binding = (context, generation)
+        self._time_reporting_binding = binding
+        self._worker._time_reporting_binding = binding
+
     def _handle_nuke_open_request(self, shot_card: widgets.ShotCard, nk_path: str):
         shot_data = shot_card.data or {}
         shot_id = shot_data.get("id")
@@ -2231,6 +2278,20 @@ class page_nukedash(QMainWindow):
         if shot_id is None or not nk_path or int(shot_id) in self._pending_nuke_opens:
             return
 
+        from copy import deepcopy
+        binding = getattr(self, '_time_reporting_binding', (None, 0))
+        time_context, time_generation = binding
+        time_jobs = []
+        try:
+            source = _nuke_time_identity(
+                getattr(self._lock_read_api, 'base_url', None), time_context[2]) if time_context else None
+            if (time_context != source or time_context != getattr(self, '_jobs_source_context', None)
+                    or time_generation != getattr(self, '_jobs_source_generation', None)):
+                time_context = None
+            if time_context:
+                time_jobs = deepcopy(list(getattr(self, '_jobs_by_id', {}).values()))
+        except Exception:
+            time_context = None
         try:
             fresh_shot = self._lock_read_api.get_shot(int(shot_id))
         except Exception as exc:
@@ -2282,8 +2343,17 @@ class page_nukedash(QMainWindow):
                     return
                 force_take = True
 
+        try:
+            if (binding != getattr(self, '_time_reporting_binding', (None, 0))
+                    or (time_context and _nuke_time_identity(
+                        getattr(self._lock_read_api, 'base_url', None), time_context[2]) != time_context)):
+                time_context = None
+        except Exception:
+            time_context = None
         self._pending_nuke_opens[int(shot_id)] = {
             "files_io": shot_card.filesIO, "shot_title": shot_title,
+            "time_shot": deepcopy(fresh_shot),
+            "time_context": time_context, "time_jobs": time_jobs, "time_generation": time_generation,
         }
         self.lock_claim_requested.emit({
             "shot_id": int(shot_id), "script_path": str(nk_path),
@@ -2306,6 +2376,21 @@ class page_nukedash(QMainWindow):
             else:
                 QMessageBox.warning(self, "Open Nuke", result.get("detail") or "Could not claim Nuke lock.")
             return
+        # Optional, offline identity handoff; never replace the OS file association.
+        try:
+            from plugins.nuke.nuke_time_calc.managed_setup import record_launch_context
+            current, generation = getattr(self, '_time_reporting_binding', (None, 0))
+            context = pending.get('time_context')
+            if (context is not None and context == current
+                    and pending.get('time_generation') == generation):
+                record_launch_context(
+                    pending.get('time_jobs', ()), pending.get('time_shot'), request['script_path'],
+                    source_server=context[0] + '://' + context[1], source_artist_id=context[2],
+                )
+        except Exception:
+            # Context failure must not change existing lock/launch behaviour or leak config.
+            import logging
+            logging.getLogger(__name__).warning("Nuke time context handoff unavailable")
         try:
             pending["files_io"].open_file(request["script_path"])
         except Exception as exc:
@@ -3755,7 +3840,7 @@ class page_nukedash(QMainWindow):
 
         QMessageBox.information(self, "Export Excel", f"Exported timeline summary:\n{output_path}")
 
-    @pyqtSlot(list)
+    @pyqtSlot(object)
     def _on_data(self, jobs):
         self._fetch_in_flight = False
         if getattr(self, "_shutting_down", False):
@@ -3848,6 +3933,8 @@ class page_nukedash(QMainWindow):
             if job.get("id") is not None and not bool(job.get("hidden", False))
         }
         self._jobs_by_id = by_id
+        self._jobs_source_context = getattr(jobs, 'source_context', None)
+        self._jobs_source_generation = getattr(jobs, 'source_generation', None)
         if not combo_jobs:
             self._initial_load = False
             self._session_restored = True

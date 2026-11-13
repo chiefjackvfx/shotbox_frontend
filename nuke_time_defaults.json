@@ -1,0 +1,4 @@
+{
+  "server": "http://192.168.10.88:8000",
+  "allow_lan_http": true
+}

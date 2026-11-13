@@ -93,7 +93,7 @@ DEFAULT_SETTINGS = {
     "django_username": None,  # Linked Django user ID
     
     # Server/API settings
-    "server_url": "http://192.168.10.207:8000",
+    "server_url": "http://192.168.10.88:8000",
     
     # Polling settings (stored in seconds for user convenience)
     "polling_interval": 5,  # seconds
@@ -385,6 +385,7 @@ class SettingsPage(QWidget):
         
         # Cache for Django users
         self._django_users = []
+        self._django_users_loaded = False
         self._autosave_pending = False
         self._unsaved_setting_keys = set()
         self._automatic_save = False
@@ -464,7 +465,7 @@ class SettingsPage(QWidget):
         server_layout = QFormLayout(server_group)
         
         self.server_url_edit = QLineEdit()
-        self.server_url_edit.setPlaceholderText("http://192.168.10.207:8000")
+        self.server_url_edit.setPlaceholderText("http://192.168.10.88:8000")
         server_layout.addRow("Server URL:", self.server_url_edit)
         
         # Connection test button
@@ -473,6 +474,7 @@ class SettingsPage(QWidget):
         server_layout.addRow("", self.test_connection_btn)
         
         container_layout.addWidget(server_group)
+
         
         # === Polling Section ===
         polling_group = self._create_group_box("Polling && Refresh")
@@ -1114,12 +1116,14 @@ class SettingsPage(QWidget):
                 api.base_url = saved_url.rstrip('/') + '/api/'
             
             self._django_users = api.get_users()
+            self._django_users_loaded = True
         except Exception as e:
             print(f"[Settings] Could not load Django users: {e}")
             self._django_users = []
+            self._django_users_loaded = False
         
         self._populate_user_combo()
-    
+
     def _populate_user_combo(self):
         """Populate Django user dropdown."""
         blocker = QSignalBlocker(self.django_user_combo)

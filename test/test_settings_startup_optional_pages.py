@@ -70,6 +70,66 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
                 settings_manager=InMemorySettingsManager()
             )
 
+    def test_settings_page_has_no_manual_nuke_time_panel_or_private_state_access(self):
+        from plugins.nuke.nuke_time_calc import managed_setup
+        from PyQt6.QtWidgets import QGroupBox
+        manager = InMemorySettingsManager()
+        manager.set('server_url', 'http://192.168.10.88:8000/api/')
+        manager.set('django_username', 7)
+        with (
+            mock.patch.object(managed_setup, 'load_config') as load_config,
+            mock.patch.object(managed_setup, 'save_config') as save_config,
+            mock.patch.object(managed_setup, 'install') as install,
+            mock.patch.object(settings.SettingsPage, '_load_django_users'),
+            mock.patch.object(settings.SettingsPage, '_refresh_update_panel'),
+        ):
+            page = settings.SettingsPage(settings_manager=manager)
+            self.addCleanup(page.close)
+            self.assertFalse(hasattr(page, 'nuke_time_widget'))
+            self.assertFalse(hasattr(settings, 'NukeTimeSettingsWidget'))
+            self.assertFalse(hasattr(page, '_update_nuke_time_context'))
+            self.assertFalse(any('nuke time' in group.title().lower()
+                                 for group in page.findChildren(QGroupBox)))
+            self.assertEqual(page.server_url_edit.text(), 'http://192.168.10.88:8000/api/')
+            self.assertEqual(manager.get('django_username'), 7)
+            load_config.assert_not_called()
+            save_config.assert_not_called()
+            install.assert_not_called()
+
+    def test_saved_server_and_artist_signals_expose_complete_normal_settings_snapshot(self):
+        for automatic in (False, True):
+            with self.subTest(automatic=automatic):
+                page = self._make_settings_page()
+                self.addCleanup(page.close)
+                events = []
+                page.server_url_changed.connect(lambda value, page=page: events.append(
+                    ('server_url', value, page._settings.get('django_username'))))
+                page.settings_changed.connect(lambda key, value, page=page: events.append(
+                    (key, value, page._settings.get('server_url'))))
+                page.server_url_edit.setText('  http://192.168.10.88:8000/api/  ')
+                page.django_user_combo.addItem('Artist 8', 8)
+                page.django_user_combo.setCurrentIndex(page.django_user_combo.findData(8))
+                with mock.patch.object(settings.QMessageBox, 'information'):
+                    page._save_all_settings(automatic=automatic)
+                self.assertIn(('server_url', 'http://192.168.10.88:8000/api/', 8), events)
+                self.assertIn(('django_username', 8, 'http://192.168.10.88:8000/api/'), events)
+                self.assertFalse(hasattr(page, 'nuke_time_widget'))
+                self.assertFalse(page._autosave_timer.isActive())
+
+    def test_failed_save_does_not_emit_server_or_artist_signals(self):
+        page = self._make_settings_page()
+        self.addCleanup(page.close)
+        events = []
+        page.server_url_changed.connect(lambda value: events.append(('server_url', value)))
+        page.settings_changed.connect(lambda key, value: events.append((key, value)))
+        page.server_url_edit.setText('https://changed.example/api/')
+        page.django_user_combo.addItem('Artist 8', 8)
+        page.django_user_combo.setCurrentIndex(page.django_user_combo.findData(8))
+        with mock.patch.object(page._settings, 'save', return_value=False):
+            page._save_all_settings(automatic=True)
+        self.assertEqual(events, [])
+        self.assertIn('Save failed', page.save_status_label.text())
+
     def test_houdini_executable_browse_and_settings_persistence(self):
         page = self._make_settings_page()
         self.addCleanup(page.close)

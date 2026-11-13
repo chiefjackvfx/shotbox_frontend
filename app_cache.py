@@ -1,4 +1,4 @@
-"""Frontend-local disposable files shared by desktop tools."""
+"""Frontend-local cache storage, including reserved durable tool state."""
 
 from functools import wraps
 from contextlib import contextmanager
@@ -102,12 +102,14 @@ def temporary_cache_task(function):
 
 
 def clear_cache_files():
-    """Remove disposable contents; keep active tasks' temporary files."""
+    """Remove disposable contents; retain durable Nuke state and active temp files."""
     result = {"removed": 0, "active_temp": False, "errors": []}
     with _lock, _cache_process_lock():
         root = cache_directory()
         for path in root.iterdir():
-            if path.name == ".lease.lock":
+            # Credentials and unacknowledged uploads remain durable even when
+            # no frontend or Nuke process is running. This is not a temp lease.
+            if path.name in {".lease.lock", "nuke-time"}:
                 continue
             if path.name == "temp" and (_active_temp_tasks or _external_temp_tasks()):
                 result["active_temp"] = True

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 from pathlib import Path
 import tempfile
@@ -37,6 +38,30 @@ class AppCacheTests(unittest.TestCase):
         self.assertEqual(result["errors"], [])
         self.assertEqual([path for path in self.root.iterdir() if path.name != ".lease.lock"], [])
         self.assertEqual(outside.read_text(encoding="utf-8"), "settings")
+
+    def test_clear_preserves_dormant_nuke_credentials_config_and_pending_uploads(self):
+        state = app_cache.cache_directory("nuke-time") / "artist-workstation"
+        state.mkdir()
+        contents = {
+            "config.json": b'{"enabled": true}',
+            "device.token": b"private-test-token",
+            "outbox/pending.sqlite3": b"unacknowledged-test-record",
+        }
+        for name, data in contents.items():
+            path = state / name
+            path.parent.mkdir(exist_ok=True)
+            path.write_bytes(data)
+        preview = app_cache.cache_directory("exr-previews-v1") / "frame.jpg"
+        preview.touch()
+        with mock.patch.object(app_cache, "_active_temp_tasks", 0), \
+             mock.patch.object(app_cache, "_external_temp_tasks", return_value=False):
+            result = app_cache.clear_cache_files()
+        self.assertFalse(result["active_temp"])
+        self.assertEqual(result["errors"], [])
+        self.assertEqual(result["removed"], 1)
+        self.assertFalse(preview.exists())
+        for name, data in contents.items():
+            self.assertEqual((state / name).read_bytes(), data)
 
     def test_clear_does_not_follow_symlinks_outside_cache(self):
         outside = Path(self.temporary.name) / "project"
@@ -94,6 +119,60 @@ class AppCacheTests(unittest.TestCase):
             result = app_cache.clear_cache_files()
         self.assertTrue(category.exists())
         self.assertIn("locked", result["errors"][0])
+
+
+class NukeStatePathTests(unittest.TestCase):
+    def test_nuke_only_plugin_parent_import_needs_neither_frontend_nor_qt(self):
+        frontend = Path(__file__).resolve().parents[1]
+        script = f"""
+import sys
+sys.path.insert(0, {str(frontend / 'plugins' / 'nuke')!r})
+class BlockFrontendImports:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname.split('.')[0] in ('app_cache', 'PyQt6', 'PySide2', 'PySide6', 'nuke'):
+            raise AssertionError('unexpected frontend/Qt import: ' + fullname)
+sys.meta_path.insert(0, BlockFrontendImports())
+from nuke_time_calc.managed_setup import default_config_path
+path = default_config_path()
+assert str(path.parent.parent) == {str(frontend / '.cache' / 'nuke-time')!r}, path
+assert 'app_cache' not in sys.modules
+"""
+        result = subprocess.run([sys.executable, "-I", "-c", script],
+                                capture_output=True, text=True, timeout=10,
+                                cwd=tempfile.gettempdir())
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_namespace_is_stable_safe_and_distinguishes_users_and_workstations(self):
+        from plugins.nuke.nuke_time_calc.managed_setup import default_config_path
+
+        def selected(user, host):
+            with mock.patch("getpass.getuser", return_value=user), \
+                 mock.patch("socket.gethostname", return_value=host):
+                return default_config_path()
+
+        path = selected("../../artist/../unsafe\\name", "studio/../host")
+        self.assertEqual(path, selected("../../artist/../unsafe\\name", "studio/../host"))
+        self.assertRegex(path.parent.name, r"^[a-zA-Z0-9_-]+$")
+        self.assertNotIn("..", path.parts)
+        self.assertEqual(path.parent.parent.name, "nuke-time")
+        # Sanitizing labels alone must not merge different user/host identities.
+        self.assertNotEqual(selected("artist/a", "host"), selected("artist?a", "host"))
+        self.assertNotEqual(selected("artist", "host/a"), selected("artist", "host?a"))
+        self.assertNotEqual(selected("artist-host", "box"), selected("artist", "host-box"))
+
+    def test_default_config_is_install_cache_without_creating_files(self):
+        from plugins.nuke.nuke_time_calc.managed_setup import default_config_path
+
+        frontend = Path(__file__).resolve().parents[1]
+        with mock.patch("pathlib.Path.mkdir", side_effect=AssertionError("must not create state")), \
+             mock.patch("pathlib.Path.stat", side_effect=AssertionError("must not inspect state")), \
+             mock.patch("pathlib.Path.resolve", side_effect=AssertionError("must not resolve on disk")), \
+             mock.patch("pathlib.Path.open", side_effect=AssertionError("must not open state")), \
+             mock.patch("builtins.open", side_effect=AssertionError("must not read state")):
+            path = default_config_path()
+        self.assertEqual(path.parent.parent, frontend / ".cache" / "nuke-time")
+        self.assertEqual(path.name, "config.json")
+        self.assertTrue(path.is_absolute())
 
 
 class ImageCacheTests(unittest.TestCase):

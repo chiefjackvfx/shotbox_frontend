@@ -283,6 +283,24 @@ class MainWindow(QMainWindow):
         self._automatic_update_check_finished = False
         self._automatic_update_process = None
         self._automatic_update_initial_status = None
+        self._start_automatic_nuke_time()
+
+    def _start_automatic_nuke_time(self):
+        from nuke_time_setup_controller import AutomaticNukeTimeSetup
+        self._nuke_time_setup = AutomaticNukeTimeSetup(self)
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self._nuke_time_setup.close)
+        self._sync_automatic_nuke_time()
+
+    def _sync_automatic_nuke_time(self):
+        controller = getattr(self, '_nuke_time_setup', None)
+        if controller is None:
+            return
+        server = self._settings_manager.get('server_url', '')
+        artist = self._settings_manager.get('django_username')
+        self.page_nukedash.set_time_reporting_context(server, artist)
+        controller.set_context(server_url=server, artist_id=artist)
 
     def _relax_minimum_sizes(self):
         """Allow the main window to shrink below child size hints."""
@@ -829,6 +847,7 @@ class MainWindow(QMainWindow):
         """Handle settings changes that need immediate action."""
         if key == "django_username":
             http_help.DjangoAPI.set_current_user_by_id(value)
+            self._sync_automatic_nuke_time()
 
         elif key == "always_on_top":
             # Toggle always on top - works immediately without restart
@@ -958,6 +977,7 @@ class MainWindow(QMainWindow):
         http_help.DjangoAPI.set_current_user_by_id(
             self._settings_manager.get("django_username")
         )
+        self._sync_automatic_nuke_time()
 
     def _start_automatic_update_check(self) -> None:
         """Fetch origin/main asynchronously once during this app launch."""
