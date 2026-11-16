@@ -6,27 +6,15 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-11-16 03:13:14 PM +00:00] Show hours remaining until 6 PM beside application version.
-- [2026-11-16 03:07:18 PM +00:00] Add Christmas theme, December activation, and party countdown.
-- [2026-11-16 02:55:45 PM +00:00] Schedule one-time GTA VI Special Event with automatic catch-up.
-- [2026-11-16 02:42:30 PM +00:00] Add optional Vice Operations console header and skyline artwork.
-- [2026-11-16 02:36:26 PM +00:00] Add Toolbox button opening reusable Time Block Planner window.
-- [2026-11-16 02:32:25 PM +00:00] Add selectable Vice Sunset theme with persistent live switching.
-- [2026-11-16 11:45:28 AM +00:00] Add saved setting to show and select hidden jobs.
-
 ### Changed
-
-- [2026-11-16 03:10:44 PM +00:00] Move party countdown into small right-aligned header text.
-- [2026-11-16 03:07:18 PM +00:00] Handle overdue seasonal events without replaying earlier themes.
-- [2026-11-16 02:55:45 PM +00:00] Preserve Special Event completion across preference resets.
-- [2026-11-16 02:42:30 PM +00:00] Redesign Vice Sunset typography, navigation, cards, inputs, and panels.
-- [2026-11-16 02:32:25 PM +00:00] Make local widget styling follow reversible theme palette changes.
-- [2026-11-16 12:45:40 PM +00:00] Restore Nuke time collector ticks to one second.
 
 ### Fixed
 
-- [2026-11-16 03:09:08 PM +00:00] Remove scheduled-event announcements from Settings.
-- [2026-11-16 02:43:58 PM +00:00] Restore original font styling when disabling Vice Sunset.
+## 5.7.5 - 2026-11-16
+
+### Added
+
+- Show hours remaining until 6 PM beside application version.
 
 ## 5.7.4 - 2026-11-16
 
