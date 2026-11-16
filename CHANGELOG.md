@@ -6,43 +6,46 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-11-16 05:37:31 PM +00:00] Discover matching offline references by filename and export date.
-
-- [2026-11-16 05:30:26 PM +00:00] Add collapsible import timeline and aligned reference video preview.
-
-- [2026-11-16 05:13:38 PM +00:00] Add online reference selection and handle-aligned Nuke retimes.
-- [2026-11-16 05:12:30 PM +00:00] Highlight selected review cards and navigate by clicking cards.
-- [2026-11-16 04:30:54 PM +00:00] Add JKL timeline playback shortcuts with bidirectional double speed.
-- [2026-11-16 03:45:15 PM +00:00] Verify timeline timing, playback, drafts, and existing API integration.
-- [2026-11-16 03:45:15 PM +00:00] Add independent Timeline Review tab, tasks, versions, and annotations.
-- [2026-11-16 03:44:35 PM +00:00] Relink raw extensions using unique stems and validated timecodes.
-- [2026-11-16 03:32:48 PM +00:00] Add separate raw media folder drop zone and matching.
-- [2026-11-16 03:27:14 PM +00:00] Load dropped XML timelines without scanning surrounding media.
-
 ### Changed
-
-- [2026-11-16 05:39:47 PM +00:00] Extract reference offset calculation; verify varied lead-ins and rates.
-
-- [2026-11-16 05:22:08 PM +00:00] Move reference picker into its own numbered import card.
-
-- [2026-11-16 05:12:30 PM +00:00] Match review colours and interaction states to web styles.
-- [2026-11-16 05:06:19 PM +00:00] Move advanced review task fields into left details panel.
-- [2026-11-16 05:06:19 PM +00:00] Match Timeline Review sidebar and compact composer to web.
-- [2026-11-16 05:04:25 PM +00:00] Open single-shot creation at full-form height within screen bounds.
-- [2026-11-16 05:03:11 PM +00:00] Make timeline review column resize dividers easier to see.
-- [2026-11-16 04:32:34 PM +00:00] Default task creation off for timeline and single-shot imports.
-- [2026-11-16 04:30:54 PM +00:00] Allow further picture and timeline zooming out during review.
-- [2026-11-16 04:26:36 PM +00:00] Verify ten-frame proxy handles and bounded Nuke retime ranges.
-- [2026-11-16 03:45:15 PM +00:00] Document desktop timeline review controls and media requirements.
-- [2026-11-16 03:44:35 PM +00:00] Probe only timeline candidates when scanning raw media folders.
-- [2026-11-16 03:39:28 PM +00:00] Show current scan folder beside timeline import progress.
 
 ### Fixed
 
-- [2026-11-16 05:23:29 PM +00:00] Align trimmed reference edits to matching editorial frame spans.
+## 5.8.0 - 2026-11-16
 
-- [2026-11-16 05:01:48 PM +00:00] Decode unsupported MXF thumbnails through Nuke with reviewed IDTs.
-- [2026-11-16 04:39:56 PM +00:00] Quarantine unavailable-shot uploads without blocking subsequent Nuke time delivery.
+### Added
+
+- Discover matching offline references by filename and export date.
+- Add collapsible import timeline and aligned reference video preview.
+- Add online reference selection and handle-aligned Nuke retimes.
+- Highlight selected review cards and navigate by clicking cards.
+- Add JKL timeline playback shortcuts with bidirectional double speed.
+- Verify timeline timing, playback, drafts, and existing API integration.
+- Add independent Timeline Review tab, tasks, versions, and annotations.
+- Relink raw extensions using unique stems and validated timecodes.
+- Add separate raw media folder drop zone and matching.
+- Load dropped XML timelines without scanning surrounding media.
+
+### Changed
+
+- Extract reference offset calculation; verify varied lead-ins and rates.
+- Move reference picker into its own numbered import card.
+- Match review colours and interaction states to web styles.
+- Move advanced review task fields into left details panel.
+- Match Timeline Review sidebar and compact composer to web.
+- Open single-shot creation at full-form height within screen bounds.
+- Make timeline review column resize dividers easier to see.
+- Default task creation off for timeline and single-shot imports.
+- Allow further picture and timeline zooming out during review.
+- Verify ten-frame proxy handles and bounded Nuke retime ranges.
+- Document desktop timeline review controls and media requirements.
+- Probe only timeline candidates when scanning raw media folders.
+- Show current scan folder beside timeline import progress.
+
+### Fixed
+
+- Align trimmed reference edits to matching editorial frame spans.
+- Decode unsupported MXF thumbnails through Nuke with reviewed IDTs.
+- Quarantine unavailable-shot uploads without blocking subsequent Nuke time delivery.
 
 ## 5.7.5 - 2026-11-16
 
