@@ -10,8 +10,12 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
-- [2026-11-16 10:58:55 AM +00:00] Support long Windows paths in Nuke time reporting storage.
-- [2026-11-16 10:50:03 AM +00:00] Nuke installation now registers and updates the time plugin.
+## 5.7.2 - 2026-11-16
+
+### Fixed
+
+- fix win
+- Nuke installation now registers and updates the time plugin.
 
 ## 5.7.1 - 2026-11-13
 
