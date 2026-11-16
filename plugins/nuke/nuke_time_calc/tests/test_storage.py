@@ -7,6 +7,33 @@ import unittest
 
 
 class StorageTests(unittest.TestCase):
+    def test_windows_api_paths_extend_long_local_names_without_accepting_devices(self):
+        from nuke_time_calc import storage
+        from pathlib import PureWindowsPath
+        path = PureWindowsPath('C:/Users/Artist/Desktop/shotbox_frontend')
+        path = path.joinpath(*(['nested folder-' + 'a' * 60] * 5), 'outbox.sqlite3')
+        self.assertGreater(len(str(path)), 260)
+        self.assertEqual(storage._windows_api_path(path), '\\\\?\\' + str(path))
+        self.assertEqual(storage._windows_api_path('D:/safe folder/file'), r'\\?\D:\safe folder\file')
+        for unsafe in [r'\\?\C:\state\file', r'\\server\share\file',
+                       r'C:\state\..\file', r'C:\state\file:stream', 'relative']:
+            with self.subTest(unsafe=unsafe), self.assertRaises(ValueError):
+                storage._windows_api_path(unsafe)
+
+    def test_native_handle_uses_extended_path_and_closes_handle(self):
+        from nuke_time_calc import storage
+        from unittest.mock import Mock
+        from pathlib import PureWindowsPath
+        backend = object.__new__(storage._Windows)
+        backend.invalid_handle = -1
+        backend.CreateFileW = Mock(return_value=123)
+        backend.CloseHandle = Mock()
+        path = PureWindowsPath('C:/state') / ('a' * 120) / ('b' * 120) / 'queue'
+        with backend.handle(path) as handle:
+            self.assertEqual(handle, 123)
+        self.assertEqual(backend.CreateFileW.call_args.args[0], '\\\\?\\' + str(path))
+        backend.CloseHandle.assert_called_once_with(123)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ.get('TMPDIR'))
         self.addCleanup(self.temp.cleanup)

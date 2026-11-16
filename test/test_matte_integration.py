@@ -27,6 +27,7 @@ def app():
 
 @pytest.fixture
 def isolated(tmp_path, monkeypatch):
+    monkeypatch.setattr(plugins_install.nuke_time_setup, "default_config_path", lambda: tmp_path / "time-state" / "config.json")
     monkeypatch.setattr(app_cache, "CACHE_ROOT", tmp_path / ".cache")
     monkeypatch.setattr(configuration, "preferences_path", lambda: tmp_path / ".nuke" / "shotbox_preferences.json")
     monkeypatch.setattr(QStandardPaths, "writableLocation", lambda *_: str(tmp_path / "state"))
@@ -147,9 +148,16 @@ def test_nuke_install_is_repeatable_and_preserves_unrelated_startup(isolated):
     home.mkdir()
     original = "import nuke\nnuke.pluginAddPath('/studio/other')\nSTUDIO_SETTING = 42\n"
     (home / "init.py").write_text(original)
+    menu_original = "STUDIO_MENU_SETTING = 42\n"
+    (home / "menu.py").write_text(menu_original)
     values = {"interpreter": "/runtime/python", "model_root": "/models", "model_config": "", "cache_root": ""}
     first = plugins_install.install_nuke_plugin(home, values)
     assert not first.failures
+    menu_installed = (home / "menu.py").read_bytes()
+    assert menu_installed.startswith(menu_original.encode())
+    assert b"import nuke_time_calc.runtime" in menu_installed
+    assert "menu.py" in first.updated
+    assert plugins_install.nuke_time_setup.load_config()["enabled"] is False
     installed = (home / "init.py").read_text()
     assert original.strip() in installed
     assert installed.count(plugins_install.NUKE_BLOCK_START) == 1
@@ -158,8 +166,29 @@ def test_nuke_install_is_repeatable_and_preserves_unrelated_startup(isolated):
     assert not second.failures
     assert not second.installed and not second.updated
     assert (home / "init.py").read_text() == installed
+    assert (home / "menu.py").read_bytes() == menu_installed
     assert json.loads((home / "shotbox_preferences.json").read_text())["model_root"] == "/models"
     assert "registered" in plugins_install.nuke_plugin_status(home)
+
+
+def test_nuke_install_preserves_time_configuration_and_reports_failure(isolated):
+    home = isolated / ".nuke"
+    time_setup = plugins_install.nuke_time_setup
+    config = dict(enabled=False, mappings=[], allow_lan_http=False, artist_id=42)
+    time_setup.save_config(config)
+    config_path = time_setup.default_config_path()
+    saved = config_path.read_bytes()
+    first = plugins_install.install_nuke_plugin(home, {})
+    assert not first.failures
+    assert "menu.py" in first.installed
+    assert config_path.read_bytes() == saved
+    (home / "menu.py").write_text("# >>> SHOTBOX NUKE TIME CALC MANAGED v1 >>>\n")
+    broken = (home / "menu.py").read_bytes()
+    result = plugins_install.install_nuke_plugin(home, {})
+    assert "menu.py" in result.failures
+    assert (home / "menu.py").read_bytes() == broken
+    assert config_path.read_bytes() == saved
+    assert "Time plugin not registered" in plugins_install.nuke_plugin_status(home)
 
 
 def test_nuke_legacy_registration_migrates_and_custom_registration_is_rejected():

@@ -8,6 +8,7 @@ import shutil
 import tempfile
 
 from app_cache import temporary_cache_task
+from plugins.nuke.nuke_time_calc import managed_setup as nuke_time_setup
 
 
 @dataclass
@@ -178,7 +179,7 @@ def nuke_startup_text(original, source):
 
 
 def nuke_plugin_status(nuke_home=None):
-    destination = Path(nuke_home) if nuke_home else Path.home() / ".nuke"
+    destination = Path(nuke_home) if nuke_home else nuke_time_setup.default_nuke_directory()
     path = destination / "init.py"
     if not path.exists():
         return "Not installed. Install the integration, then restart Nuke."
@@ -186,6 +187,9 @@ def nuke_plugin_status(nuke_home=None):
     source = Path(__file__).resolve().parent / "plugins" / "nuke"
     expected = "nuke.pluginAddPath(" + repr(str(source)) + ")"
     if NUKE_BLOCK_START in text and expected in text:
+        menu = destination / "menu.py"
+        if not menu.exists() or nuke_time_setup._registration(nuke_time_setup.default_config_path()) not in menu.read_bytes():
+            return "Time plugin not registered for this frontend. Install / Update to register it."
         return "Managed integration registered. Restart Nuke after plugin updates."
     return "Not registered for this frontend. Install / Update to register it."
 
@@ -199,7 +203,7 @@ def install_nuke_plugin(nuke_home=None, configuration=None):
     for relative in ("init.py", "menu.py", "shotbox_nuke/__init__.py"):
         if not (source / relative).is_file():
             raise FileNotFoundError(f"Bundled Nuke integration is missing: {source / relative}")
-    destination = Path(nuke_home) if nuke_home else Path.home() / ".nuke"
+    destination = Path(nuke_home) if nuke_home else nuke_time_setup.default_nuke_directory()
     startup = destination / "init.py"
     original = startup.read_bytes() if startup.exists() else b""
     updated = nuke_startup_text(original.decode("utf-8-sig"), source)
@@ -225,4 +229,17 @@ def install_nuke_plugin(nuke_home=None, configuration=None):
             _install_files([(preferences_source, preferences)], result)
         if not result.failures:
             _install_files([(startup_source, startup)], result)
+    if not result.failures:
+        menu = destination / "menu.py"
+        try:
+            previous = menu.read_bytes() if menu.exists() else None
+            nuke_time_setup.install(nuke_dir=destination)
+            if previous is None:
+                result.installed.append("menu.py")
+            elif menu.read_bytes() == previous:
+                result.unchanged.append("menu.py")
+            else:
+                result.updated.append("menu.py")
+        except (OSError, ValueError) as exc:
+            result.failures["menu.py"] = str(exc)
     return result

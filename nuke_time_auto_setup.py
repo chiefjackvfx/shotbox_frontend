@@ -73,9 +73,9 @@ def _ensure_setup(*, server_url, artist_id, users, config_path, nuke_dir, reques
     managed_setup._config_path(path)
     # Validate the per-user startup destination before credentials or enrollment.
     managed_setup._menu_path(nuke_dir)
-    if path.parent.exists():
+    if storage.filesystem_path(path.parent).exists():
         _private_directory(path.parent)
-    if path.exists():
+    if storage.filesystem_path(path).exists():
         _private_read(path)
     previous = managed_setup.load_config(path)
     same = (previous.get('server'), previous.get('artist_id')) == (proposed.get('server'), proposed.get('artist_id'))
@@ -93,7 +93,7 @@ def _ensure_setup(*, server_url, artist_id, users, config_path, nuke_dir, reques
     binding = hashlib.sha256(json.dumps([proposed['server'], proposed['artist_id']]).encode()).hexdigest()
     root = path.parent / 'bindings' / binding
     _private_directory(root.parent)
-    existed = root.exists()
+    existed = storage.filesystem_path(root).exists()
     if not existed and previous.get('token_file') == str(root / 'credential.token'):
         raise ValueError('missing_current_binding')
     _private_directory(root)

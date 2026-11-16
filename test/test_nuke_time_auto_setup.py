@@ -318,13 +318,13 @@ print(result['status'])
         self.assertEqual(list(target.iterdir()), [])
 
     def test_backend_approved_platform_runs_setup_and_replays_lost_ack(self):
-        # Isolate the caller's platform guard, not pathlib or the storage backend.
+        # Isolate the caller's platform guard, not pathlib, SQLite's native VFS,
+        # or the storage backend.
         # Native ACL behavior is covered by the storage tests on Windows.
         from types import SimpleNamespace
         from plugins.nuke.nuke_time_calc import outbox, storage
         module = importlib.import_module('nuke_time_auto_setup')
         with mock.patch.object(module, 'os', SimpleNamespace(name='nt')), \
-                mock.patch.object(outbox, 'os', SimpleNamespace(name='nt')), \
                 mock.patch.object(storage, 'supported_platform', return_value=True):
             def lost(url, body, timeout):
                 self.calls.append((url, json.loads(body), timeout))

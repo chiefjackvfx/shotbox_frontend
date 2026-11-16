@@ -140,7 +140,9 @@ Set-Acl -LiteralPath $p -AclObject $a
             result = original_directory(path, attributes)
             if result:
                 self.assertIsNotNone(attributes)
-                backend.inspect(Path(path), directory=True)
+                # The native API receives an extended path; inspect accepts
+                # the ordinary validated local path used by the public API.
+                backend.inspect(Path(path[4:]), directory=True)
                 observed.append('directory')
             return result
 
@@ -197,6 +199,27 @@ Set-Acl -LiteralPath $p -AclObject $a
             with self.assertRaises(OSError):
                 storage.atomic_write(target, b'fixture-only')
         self.assertEqual(list(directory.iterdir()), [])
+
+    def test_long_paths_support_private_state_and_reopening_outbox(self):
+        import shutil
+        from nuke_time_calc.outbox import Outbox
+        from test_outbox import batch
+        storage = self.storage
+        self.addCleanup(shutil.rmtree, str(storage.filesystem_path(self.root)))
+        root = self.root.joinpath(*(['nested folder-' + 'a' * 60] * 5))
+        self.assertGreater(len(str(root)), 260)
+        directory = storage.private_directory(root)
+        token = directory / 'token'
+        storage.atomic_write(token, b'fixture-first')
+        storage.atomic_write(token, b'fixture-second')
+        self.assertEqual(storage.private_read(token), b'fixture-second')
+        binding = dict(server='https://shotbox.test', artist_id=1, device_id='test-device')
+        outbox = Outbox(directory / 'queue', **binding)
+        outbox.put(batch())
+        reopened = Outbox(directory / 'queue', **binding)
+        self.assertEqual(reopened.pending(), [batch()])
+        self.assertEqual(reopened.status(), outbox.status())
+        self.assertTrue(storage.filesystem_path(outbox.path).is_file())
 
 
 if __name__ == '__main__':

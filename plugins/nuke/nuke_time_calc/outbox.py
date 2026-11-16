@@ -82,7 +82,8 @@ class Outbox:
         self.path = directory / 'outbox.sqlite3'
         initialized = directory / 'initialized-v1'
         self._initialized = initialized
-        if initialized.exists() and (not self.path.exists() or self.path.stat().st_size == 0):
+        database_file = storage.filesystem_path(self.path)
+        if storage.filesystem_path(initialized).exists() and (not database_file.exists() or database_file.stat().st_size == 0):
             raise CorruptOutbox('initialized outbox database is missing or truncated')
         storage.create_private_file(self.path)
         self._check_database()
@@ -104,7 +105,10 @@ class Outbox:
     @contextmanager
     def _connect(self):
         self._check_database()
-        db = sqlite3.connect(self.path.as_uri() + '?mode=rw', uri=True, timeout=0.05)
+        # The longpath VFS retains normal Windows locking and supports deep
+        # installation folders; never select a "-none" (no locking) VFS.
+        options = '?mode=rw' + ('&vfs=win32-longpath' if os.name == 'nt' else '')
+        db = sqlite3.connect(self.path.as_uri() + options, uri=True, timeout=0.05)
         try:
             db.execute('PRAGMA synchronous=EXTRA')
             pages = max(3, self.max_bytes // db.execute('PRAGMA page_size').fetchone()[0])
@@ -113,7 +117,7 @@ class Outbox:
                 rows = db.execute('SELECT fingerprint FROM binding').fetchall()
                 if rows != [(self._fingerprint,)]:
                     raise CorruptOutbox('outbox binding mismatch')
-            elif self._initialized.exists():
+            elif storage.filesystem_path(self._initialized).exists():
                 raise CorruptOutbox('outbox binding metadata missing')
             with db:
                 yield db

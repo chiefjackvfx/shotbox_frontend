@@ -76,7 +76,7 @@ class MatteSettingsWidget(QWidget):
             if result.failures:
                 self.status.setText("Installation incomplete: " + "; ".join(f"{key}: {value}" for key, value in result.failures.items()))
             else:
-                self.status.setText("Nuke integration installed. Restart Nuke. "
+                self.status.setText("Nuke integration and nuke_time_calc installed. Restart Nuke. "
                                     f"{len(result.installed)} installed, {len(result.updated)} updated, "
                                     f"{len(result.unchanged)} unchanged.")
         except (OSError, ValueError) as exc:

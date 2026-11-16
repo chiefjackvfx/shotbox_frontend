@@ -58,7 +58,7 @@ def _atomic_write(path, data, mode=0o600, *, private=True):
 def load_config(path=None):
     """Read private state; a missing file is explicitly disabled."""
     path = _config_path(path)
-    if not path.exists():
+    if not storage.filesystem_path(path).exists():
         return dict(enabled=False, mappings=[], allow_lan_http=False)
     return _validate_config(json.loads(storage.private_read(path).decode('utf-8')))
 
@@ -190,13 +190,14 @@ def install(*, nuke_dir=None, config_path=None):
     """Explicitly install only a managed menu.py block; never enables reporting."""
     menu = _menu_path(nuke_dir)
     config_path = _config_path(config_path)
-    old = menu.read_bytes() if menu.exists() else b''
+    menu_file = storage.filesystem_path(menu)
+    old = menu_file.read_bytes() if menu_file.exists() else b''
     new = _without_block(old) + _registration(config_path)
     config = load_config(config_path)
-    if not config_path.exists():
+    if not storage.filesystem_path(config_path).exists():
         save_config(config, config_path)
     if old != new:
-        _atomic_write(menu, new, mode=(menu.stat().st_mode & 0o777) if menu.exists() else 0o600, private=False)
+        _atomic_write(menu, new, mode=(menu_file.stat().st_mode & 0o777) if menu_file.exists() else 0o600, private=False)
     return menu
 
 
@@ -204,12 +205,13 @@ def uninstall(*, nuke_dir=None, config_path=None, remove_config=False):
     """Remove only our block; retain tokens/outbox and mappings by default."""
     menu = _menu_path(nuke_dir)
     config_path = _config_path(config_path)
-    if menu.exists():
-        old = menu.read_bytes()
+    menu_file = storage.filesystem_path(menu)
+    if menu_file.exists():
+        old = menu_file.read_bytes()
         new = _without_block(old)
         if new != old:
-            _atomic_write(menu, new, mode=menu.stat().st_mode & 0o777, private=False)
-    if remove_config and config_path.exists():
-        config_path.unlink()
+            _atomic_write(menu, new, mode=menu_file.stat().st_mode & 0o777, private=False)
+    if remove_config and storage.filesystem_path(config_path).exists():
+        storage.filesystem_path(config_path).unlink()
     return menu
 

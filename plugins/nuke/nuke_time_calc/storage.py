@@ -182,7 +182,7 @@ class _Windows:
     def handle(self, path, access=None, creation=OPEN_EXISTING, attributes=None):
         if access is None:
             access = self.READ_CONTROL | self.FILE_READ_ATTRIBUTES
-        handle = self.CreateFileW(str(path), access, 1 | 2 | 4, attributes, creation,
+        handle = self.CreateFileW(_windows_api_path(path), access, 1 | 2 | 4, attributes, creation,
                                   self.OPEN_FLAGS, None)
         if handle == self.invalid_handle:
             raise self.c.WinError(self.c.get_last_error())
@@ -254,7 +254,7 @@ class _Windows:
     def mkdir(self, path):
         self.local_volume(path)
         with self.security(directory=True) as attributes:
-            if not self.CreateDirectoryW(str(path), attributes):
+            if not self.CreateDirectoryW(_windows_api_path(path), attributes):
                 error = self.c.get_last_error()
                 if error != 183:  # ERROR_ALREADY_EXISTS
                     raise self.c.WinError(error)
@@ -289,7 +289,7 @@ class _Windows:
         import msvcrt
         self.local_volume(path)
         access = self.GENERIC_WRITE if write else self.GENERIC_READ
-        handle = self.CreateFileW(str(path), access | self.READ_CONTROL, 1 | 2 | 4,
+        handle = self.CreateFileW(_windows_api_path(path), access | self.READ_CONTROL, 1 | 2 | 4,
                                   None, self.OPEN_EXISTING, self.OPEN_FLAGS, None)
         if handle == self.invalid_handle:
             raise self.c.WinError(self.c.get_last_error())
@@ -305,11 +305,11 @@ class _Windows:
         return fd
 
     def replace(self, source, target, private):
-        if not private and target.exists():
+        if not private and filesystem_path(target).exists():
             # ReplaceFile preserves the existing startup DACL. Neither of the
             # IGNORE_* flags is safe: an ACL-merge failure must fail closed.
             # REPLACEFILE_WRITE_THROUGH is explicitly unsupported by Microsoft.
-            self.ok(self.ReplaceFileW(str(target), str(source), None, 0, None, None))
+            self.ok(self.ReplaceFileW(_windows_api_path(target), _windows_api_path(source), None, 0, None, None))
         else:
             # Sibling path, no COPY_ALLOWED: cannot degrade to copy/delete.
             # WRITE_THROUGH's documented flush guarantee is for copy/delete;
@@ -317,7 +317,7 @@ class _Windows:
             # For new nonprivate files do not overwrite a concurrent creator:
             # doing so would discard that creator's unrelated startup ACL.
             flags = 0x8 | (0x1 if private else 0)
-            self.ok(self.MoveFileExW(str(source), str(target), flags))
+            self.ok(self.MoveFileExW(_windows_api_path(source), _windows_api_path(target), flags))
 
 
 def supported_platform():
@@ -355,7 +355,7 @@ def safe_path(path):
         raise ValueError('expected an absolute non-traversing path')
     for part in (path,) + tuple(path.parents):
         try:
-            info = part.lstat()
+            info = filesystem_path(part).lstat()
         except FileNotFoundError:
             continue
         if stat.S_ISLNK(info.st_mode):
@@ -365,6 +365,24 @@ def safe_path(path):
             with backend.handle(part, access=backend.FILE_READ_ATTRIBUTES) as handle:
                 backend.information(handle)
     return path
+
+
+def _windows_api_path(path):
+    """Extend validated local paths at the I/O boundary, never in saved config.
+
+    Nuke need not opt into long paths through its executable manifest or the
+    workstation registry. Validate before adding the prefix, since it disables
+    Win32 normalization. Caller-supplied device/UNC namespaces remain rejected.
+    """
+    from pathlib import PureWindowsPath
+    raw = os.fspath(path)
+    _windows_path_syntax(raw)
+    return '\\\\?\\' + str(PureWindowsPath(raw))
+
+
+def filesystem_path(path):
+    """Path for Python filesystem I/O without the Windows MAX_PATH limit."""
+    return Path(_windows_api_path(path)) if os.name == 'nt' else Path(path)
 
 
 def sync_directory(path):
@@ -396,7 +414,7 @@ def private_directory(path):
     path = safe_path(path)
     missing = []
     current = path
-    while not current.exists():
+    while not filesystem_path(current).exists():
         missing.append(current)
         current = current.parent
     for directory in reversed(missing):
@@ -483,10 +501,10 @@ def atomic_write(path, data, mode=0o600, private=True):
     if private:
         private_directory(path.parent)
     else:
-        path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+        filesystem_path(path.parent).mkdir(parents=True, mode=0o700, exist_ok=True)
         safe_path(path.parent)
     try:
-        info = path.lstat()
+        info = filesystem_path(path).lstat()
     except FileNotFoundError:
         info = None
     if info is not None:
@@ -528,6 +546,6 @@ def atomic_write(path, data, mode=0o600, private=True):
     finally:
         if created:
             try:
-                name.unlink()
+                filesystem_path(name).unlink()
             except FileNotFoundError:
                 pass
