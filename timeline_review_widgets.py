@@ -307,7 +307,7 @@ class TimelineStrip(QWidget):
             if cut.shot.get("hidden"):
                 label += " · Hidden"
             version = cut.media.get("version")
-            detail = f"v{version:03}" if version is not None else "No preview"
+            detail = cut.media.get("label") or (f"v{version:03}" if version is not None else "No preview")
             p.drawText(rect.adjusted(7, 5, -5, -5), Qt.AlignmentFlag.AlignTop, label + "\n" + detail)
             p.restore()
             if self.show_tasks:

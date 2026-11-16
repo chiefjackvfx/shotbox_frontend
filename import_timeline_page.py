@@ -13,7 +13,8 @@ from PyQt6.QtWidgets import (
 
 from import_xml_v2 import XMLImportPage
 from colourspace_defaults import COLOURSPACE_LIST
-from timeline_import import Cancelled, Discovery, RAW_RELINK_HANDLES, candidate_media_paths, discover, prepare_import, probe_media, read_timeline
+from timeline_import import Cancelled, Discovery, RAW_RELINK_HANDLES, MEDIA_EXTENSIONS, candidate_media_paths, discover, fingerprint, prepare_import, probe_media, read_timeline
+from timeline_reference_finder import calculate_reference_start, offline_roots, find_references
 
 
 class ReadWorker(QThread):
@@ -55,6 +56,7 @@ class ImportTimelinePage(XMLImportPage):
         self._refreshing = False
         self._raw_media_root = ''
         self._managed_handle_settings = None
+        self._online_reference_info = None
         super().__init__(parent)
         self.create_tasks = False
         self.checkBoxCreateTasks.setChecked(False)
@@ -155,6 +157,32 @@ class ImportTimelinePage(XMLImportPage):
         self.raw_media_status.setWordWrap(True)
         self.raw_folder_button.clicked.connect(self._select_raw_folder)
         self.raw_folder_edit.returnPressed.connect(self._select_raw_folder)
+        self.online_reference_widget = QWidget()
+        self.online_reference_widget.setAcceptDrops(True)
+        self.online_reference_edit = QLineEdit()
+        self.online_reference_edit.setPlaceholderText('Optional full reference edit — drop a video here')
+        self.online_reference_button = QPushButton('Browse Reference')
+        self.online_reference_clear = QPushButton('Clear')
+        self.online_reference_find = QPushButton('Find Reference')
+        self.online_reference_find.setToolTip('Find the matching edit in Exports/Offline, preferring the XML date folder.')
+        self.online_reference_find.clicked.connect(self._find_reference)
+        self.online_reference_matches = QComboBox()
+        self.online_reference_matches.setMinimumWidth(0)
+        self.online_reference_matches.hide()
+        self.online_reference_matches.activated.connect(self._choose_found_reference)
+        self.online_reference_start = QSpinBox()
+        self._reference_start_manual = False
+        self.online_reference_start.setRange(-100000000, 100000000)
+        self.online_reference_start.setToolTip(
+            'Timeline frame corresponding to the first frame of the reference movie. '
+            'Use 0 for a full edit; a negative value accounts for a leading slate.')
+        self.online_reference_status = QLabel('Reference cut points follow the timeline; handles align at frame 1001.')
+        self.online_reference_status.setWordWrap(True)
+        self.online_reference_button.clicked.connect(self._select_online_reference)
+        self.online_reference_edit.returnPressed.connect(self._select_online_reference)
+        self.online_reference_edit.textEdited.connect(self._reference_path_edited)
+        self.online_reference_clear.clicked.connect(self._clear_online_reference)
+        self.online_reference_start.valueChanged.connect(self._reference_start_changed)
         from timeline_import_ui import arrange_timeline_page
         arrange_timeline_page(self)
 
@@ -173,9 +201,12 @@ class ImportTimelinePage(XMLImportPage):
             urls = event.mimeData().urls()
             folder = urls[0].toLocalFile() if len(urls) == 1 and urls[0].isLocalFile() else ''
             raw_drop = watched is self.raw_media_card or self.raw_media_card.isAncestorOf(watched)
+            reference_drop = watched is self.online_reference_widget or self.online_reference_widget.isAncestorOf(watched)
             try:
                 valid = bool(folder) and (Path(folder).is_dir() or
                     (Path(folder).is_file() and Path(folder).suffix.lower() == '.xml'))
+                if reference_drop:
+                    valid = bool(folder) and Path(folder).is_file() and Path(folder).suffix.lower() in MEDIA_EXTENSIONS
             except (OSError, ValueError):
                 valid = False
             if not self.isEnabled() or self._busy or not valid:
@@ -184,7 +215,9 @@ class ImportTimelinePage(XMLImportPage):
             event.setDropAction(Qt.DropAction.CopyAction)
             event.accept()
             if event.type() == QEvent.Type.Drop:
-                if Path(folder).is_file():
+                if reference_drop:
+                    self._load_online_reference(folder)
+                elif Path(folder).is_file():
                     self._load_xml_file(folder)
                 elif raw_drop:
                     self._load_raw_folder(folder)
@@ -239,7 +272,8 @@ class ImportTimelinePage(XMLImportPage):
     def _set_read_controls(self, enabled):
         for widget in (self.btnSelectXML, self.folder_edit, self.timeline_combo, self.timeline_name_edit,
                        self.updateBtn, self.accept_handles_button, self.tableWidgetTemp,
-                       self.detect_colourspace_check, self.raw_folder_edit, self.raw_folder_button):
+                       self.detect_colourspace_check, self.raw_folder_edit, self.raw_folder_button,
+                       self.online_reference_widget):
             widget.setEnabled(enabled)
         self.colourspaceComboBox.setEnabled(enabled and not self.detect_colourspace_check.isChecked())
         self.cancel_scan_button.setEnabled(not enabled)
@@ -310,6 +344,86 @@ class ImportTimelinePage(XMLImportPage):
         self.timeline_combo.setCurrentIndex(0)
         self.timeline_combo.blockSignals(False)
         self._timeline_changed()
+
+    def _reference_path_edited(self):
+        self._online_reference_info = None
+        self._refresh_preview()
+
+    def _choose_found_reference(self, index):
+        path = self.online_reference_matches.itemData(index)
+        if path:
+            self._load_online_reference(path)
+
+    def _reference_search_result(self, result):
+        paths, info = result
+        self.online_reference_matches.clear()
+        self.online_reference_matches.hide()
+        if info is not None:
+            self.online_reference_edit.setText(info.path)
+            self._online_reference_info = info
+            self.online_reference_status.setText(info.error or f'Found matching reference: {Path(info.path).name}')
+        elif paths:
+            self.online_reference_matches.addItem('Multiple matching exports — choose a reference', None)
+            for path in paths:
+                self.online_reference_matches.addItem(str(Path(path).parent.name + '/' + Path(path).name), path)
+                self.online_reference_matches.setItemData(self.online_reference_matches.count() - 1, path, Qt.ItemDataRole.ToolTipRole)
+            self.online_reference_matches.show()
+            self.online_reference_status.setText('Multiple matching reference exports found. Choose one below.')
+        else:
+            self.online_reference_status.setText('No exact filename match found. Use Browse Reference to choose an edit.')
+
+    @staticmethod
+    def _search_reference(path, roots, cancel):
+        paths = find_references(path, roots, cancel)
+        return paths, probe_media(paths[0], cancel) if len(paths) == 1 else None
+
+    def _find_reference(self):
+        if self._busy or self.document is None:
+            return
+        path = self.document.path
+        roots = offline_roots(path, self.parser.project_root)
+        if not roots:
+            root = QFileDialog.getExistingDirectory(self, 'Choose Offline reference export folder')
+            if not root:
+                return
+            roots = [root]
+        def loaded(result):
+            self._reference_search_result(result)
+            self._refresh_preview()
+        self._start_read(lambda cancel: self._search_reference(path, roots, cancel), loaded,
+                         'Finding reference edit…',
+                         on_failure=lambda error: self.online_reference_status.setText(error))
+
+    def _reference_start_changed(self):
+        self._reference_start_manual = True
+        self._refresh_preview()
+
+    def _clear_online_reference(self):
+        self.online_reference_edit.clear()
+        self._online_reference_info = None
+        self.online_reference_status.setText('No online reference selected')
+        self._refresh_preview()
+
+    def _select_online_reference(self):
+        path = self.online_reference_edit.text().strip()
+        if self.sender() is self.online_reference_button or not path:
+            path, _ = QFileDialog.getOpenFileName(self, 'Select online reference edit', path,
+                                                  'Video (*.mov *.mp4 *.mxf *.avi *.mkv);;All files (*)')
+        if path:
+            self._load_online_reference(path)
+
+    def _load_online_reference(self, path):
+        if self._busy:
+            return
+        path = str(Path(path).resolve())
+        self.online_reference_edit.setText(path)
+        self._online_reference_info = None
+        def loaded(info):
+            self._online_reference_info = info
+            self.online_reference_status.setText(info.error or f'{info.frames} frames · {info.fps:g} fps')
+            self._refresh_preview()
+        self._start_read(lambda cancel: probe_media(path, cancel), loaded, 'Reading online reference…',
+                         on_failure=lambda error: self.online_reference_status.setText(error))
 
     def _select_raw_folder(self):
         folder = self.raw_folder_edit.text().strip()
@@ -424,12 +538,17 @@ class ImportTimelinePage(XMLImportPage):
         self.prepared = None
         message = f'Parsing {Path(path).suffix[1:].upper()} timeline: {Path(path).name}'
         raw_root = self._raw_media_root
+        reference_roots = (offline_roots(path, self.parser.project_root)
+                           if not self.online_reference_edit.text().strip() else [])
         def work(cancel):
             document = read_timeline(path)
             scanned = self._scan_media_folder(raw_root, cancel, include_timelines=False, document=document) if raw_root else None
-            return document, scanned
+            reference = self._search_reference(path, reference_roots, cancel) if reference_roots else None
+            return document, scanned, reference
         def loaded(value):
-            document, scanned = value
+            document, scanned, reference = value
+            if reference is not None:
+                self._reference_search_result(reference)
             if scanned is not None:
                 found, self.media = scanned
                 self.raw_media_status.setText(
@@ -540,8 +659,42 @@ class ImportTimelinePage(XMLImportPage):
                 self.prepared.errors.append(str(exc))
             self.shots = self.prepared.shots
             self._apply_generated_shot_names()
+            reference = self.online_reference_edit.text().strip()
+            if reference:
+                info = self._online_reference_info
+                if info is None:
+                    self.prepared.errors.append('Load the online reference with Enter or Browse Reference.')
+                elif info.error:
+                    self.prepared.errors.append('Online reference: ' + info.error)
+                elif abs(info.fps - self.document.fps) > 0.000001:
+                    self.prepared.errors.append('Online reference frame rate differs from timeline.')
+                else:
+                    if not self._reference_start_manual:
+                        inferred_start = calculate_reference_start(self.document, info.frames)
+                        self.online_reference_start.blockSignals(True)
+                        self.online_reference_start.setValue(inferred_start)
+                        self.online_reference_start.blockSignals(False)
+                        self.online_reference_status.setText(
+                            f'{info.frames} frames · {info.fps:g} fps · '
+                            f'Auto-aligned to timeline frame {inferred_start}'
+                            if inferred_start else f'{info.frames} frames · {info.fps:g} fps')
+                    start = self.online_reference_start.value()
+                    if self._reference_start_manual:
+                        self.online_reference_status.setText(
+                            f'{info.frames} frames · {info.fps:g} fps · Manual timeline start: {start}')
+                    for shot in self.shots:
+                        if shot.edit_inpoint < start or shot.edit_outpoint > start + info.frames:
+                            self.prepared.errors.append(
+                                f'{shot.name}: online reference does not cover the cut '
+                                f'({shot.edit_inpoint}–{shot.edit_outpoint}); reference covers '
+                                f'{start}–{start + info.frames}. Check Reference starts at timeline frame.')
+                        shot.online_reference = info.path
+                        shot.online_reference_timing = dict(frames=info.frames, timeline_start=start)
             self._show_colourspace_detection()
             self._populate_review()
+            self.timeline_preview.set_timeline(
+                self.document, self.shots, self._online_reference_info,
+                self.online_reference_start.value())
             warnings = list(self.discovery.warnings if self.discovery else []) + self.document.warnings
             self.review_summary_label.setText(
                 f'{len(self.shots)} shots · {len(self.prepared.rows)} clips · {Path(self.document.path).suffix[1:].upper()}')
@@ -768,6 +921,10 @@ class ImportTimelinePage(XMLImportPage):
 
     def _preflight(self):
         self.prepared.revalidate()
+        if self._online_reference_info is not None and self.online_reference_edit.text().strip():
+            info = self._online_reference_info
+            if fingerprint(info.path) != info.signature:
+                raise ValueError('Online reference changed since review. Load it again.')
         # A pre-existing script may describe different plates or timing. Do not
         # let the legacy skip-existing behavior silently accept a stale script.
         for shot in self.shots:
@@ -792,6 +949,7 @@ class ImportTimelinePage(XMLImportPage):
         super().closeEvent(event)
 
     def _shutdown_workers(self):
+        self.timeline_preview.shutdown()
         if self._read_worker and self._read_worker.isRunning():
             self._read_worker.requestInterruption()
             self._read_worker.wait()

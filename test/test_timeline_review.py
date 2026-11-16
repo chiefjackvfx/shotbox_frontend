@@ -186,7 +186,7 @@ class NativeReviewTests(unittest.TestCase):
     def test_drawing_pauses_blocks_play_and_clear_unlocks(self):
         image = QImage(320, 180, QImage.Format.Format_RGB888)
         image.fill(Qt.GlobalColor.black)
-        self.page.tool.setCurrentIndex(1)
+        QTest.mouseClick(self.page.draw_buttons['pen'], Qt.MouseButton.LeftButton)
         self.page.picture.set_image(image)
         target = self.page.picture.target().center().toPoint()
         QTest.mousePress(self.page.picture, Qt.MouseButton.LeftButton, pos=target)
@@ -339,6 +339,27 @@ class NativeReviewTests(unittest.TestCase):
         self.wait(lambda: not self.page._polling)
         self.assertEqual(self.page.task_status.currentData(), "approved")
         self.assertEqual(self.page.artist.currentData(), 5)
+
+    def test_card_body_seeks_highlights_and_preserves_note_selection(self):
+        from PyQt6.QtWidgets import QLabel
+        from timeline_review_sidebar import CommentCard
+        task = {"id": 40, "title": "Paint", "notes": "Paint out marker", "frame_reference": 1007,
+                "status": "unassigned", "artist": None}
+        self.page.edit.cuts[0].shot["tasks"] = [task]
+        self.page._render_comments()
+        self.app.processEvents()
+        card = self.page.comments.widget().findChild(CommentCard)
+        self.assertFalse(card.property("selected"))
+        self.assertIsNone(card.findChild(QLabel, "review_comment_title"))
+        QTest.mouseClick(card, Qt.MouseButton.LeftButton, pos=card.rect().bottomRight() - QPoint(4, 4))
+        self.assertEqual(self.page.frame, 104)
+        card = self.page.comments.widget().findChild(CommentCard)
+        self.assertTrue(card.property("selected"))
+        notes = card.findChild(QLabel, "review_comment_notes")
+        notes.setSelection(0, 5)
+        self.page.seek(100)
+        QTest.mouseClick(card, Qt.MouseButton.LeftButton, pos=card.rect().bottomRight() - QPoint(4, 4))
+        self.assertEqual(self.page.frame, 100)
 
     def test_stale_poll_cannot_replace_a_newly_saved_task(self):
         captured = []

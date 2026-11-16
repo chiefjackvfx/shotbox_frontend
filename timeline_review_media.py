@@ -60,6 +60,8 @@ class MovieDecoder:
             container = av.open(path)
             try:
                 stream = container.streams.video[0]
+                if stream.codec_context is None:
+                    raise ValueError('This video codec is unavailable for playback; choose a MOV or MP4 reference.')
                 stream.thread_type = "AUTO"
             except Exception:
                 container.close()

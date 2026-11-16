@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
-    QAbstractItemView, QFrame, QGridLayout, QHBoxLayout, QLabel, QSizePolicy,
+    QAbstractItemView, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QSizePolicy,
     QScrollArea, QSplitter, QStackedWidget, QStyle, QVBoxLayout, QWidget,
 )
 
@@ -115,6 +115,30 @@ def arrange_timeline_page(page):
     page.timeline_combo.setMinimumWidth(0)
     page.timeline_combo.setPlaceholderText('Drop an XML file or select a folder first')
     source_layout.addLayout(timelines)
+    reference_card, reference_card_layout, _ = _card('02', 'Choose offline reference')
+    reference_card.setObjectName('timeline_reference_card')
+    reference_layout = QVBoxLayout(page.online_reference_widget)
+    reference_layout.setContentsMargins(0, 0, 0, 0)
+    reference_layout.addWidget(_label('Optional: drop or browse to a reference video edit.'))
+    reference_row = QHBoxLayout()
+    reference_row.addWidget(page.online_reference_edit, 1)
+    reference_row.addWidget(page.online_reference_button)
+    reference_row.addWidget(page.online_reference_clear)
+    reference_layout.addLayout(reference_row)
+    reference_actions = QHBoxLayout()
+    reference_actions.addWidget(page.online_reference_find)
+    reference_actions.addStretch()
+    reference_layout.addLayout(reference_actions)
+    reference_layout.addWidget(page.online_reference_matches)
+    reference_offset = QHBoxLayout()
+    reference_offset.addWidget(_label('Reference starts at timeline frame', 'fieldLabel'))
+    reference_offset.addWidget(page.online_reference_start)
+    reference_offset.addStretch()
+    reference_layout.addLayout(reference_offset)
+    page.online_reference_status.setProperty('role', 'muted')
+    reference_layout.addWidget(page.online_reference_status)
+    reference_layout.addStretch()
+    reference_card_layout.addWidget(page.online_reference_widget)
     loading = QHBoxLayout()
     page.loading_label.setProperty('role', 'loading')
     loading.addWidget(page.loading_label)
@@ -129,7 +153,8 @@ def arrange_timeline_page(page):
     source_layout.addLayout(loading)
     source_row = QHBoxLayout()
     source_row.addWidget(source, 1)
-    page.raw_media_card, raw_layout, _ = _card('02', 'Choose raw media')
+    source_row.addWidget(reference_card, 1)
+    page.raw_media_card, raw_layout, _ = _card('03', 'Choose raw media')
     page.raw_media_card.setObjectName('timeline_raw_media_card')
     page.raw_media_card.setAcceptDrops(True)
     raw_layout.addWidget(_label('Drop a raw media folder here to relink the timeline. Subfolders are included.'))
@@ -144,7 +169,7 @@ def arrange_timeline_page(page):
     source_row.addWidget(page.raw_media_card, 1)
     setup.addLayout(source_row)
 
-    settings, settings_layout, settings_heading = _card('03', 'Import settings')
+    settings, settings_layout, settings_heading = _card('04', 'Import settings')
     settings_heading.addWidget(page.updateBtn)
     page.updateBtn.setText('Apply settings')
     settings_layout.addLayout(_field('Timeline name', page.timeline_name_edit))
@@ -196,7 +221,7 @@ def arrange_timeline_page(page):
     settings_layout.addLayout(options)
     setup.addWidget(settings)
 
-    review, review_layout, review_heading = _card('04', 'Review matches')
+    review, review_layout, review_heading = _card('05', 'Review matches')
     review.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
     review.setMinimumHeight(270)
     page.review_summary_label = _label('No timeline loaded', 'muted')
@@ -237,6 +262,8 @@ def arrange_timeline_page(page):
     table.horizontalHeader().setMinimumSectionSize(55)
     # Keep the match and validation columns together; detailed timing follows.
     header = table.horizontalHeader()
+    header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+    header.setToolTip('Drag a column divider to resize. Double-click it to fit the contents.')
     for position, column in enumerate((0, 1, 3, 4, 12, 13, 5, 2, 6, 7, 8, 9, 10, 11)):
         header.moveSection(header.visualIndex(column), position)
     page.review_stack.addWidget(table)
@@ -256,6 +283,10 @@ def arrange_timeline_page(page):
     content_splitter.setStretchFactor(0, 0)
     content_splitter.setStretchFactor(1, 1)
     content_splitter.setSizes([450, 350])
+
+    from timeline_import_preview import ImportTimelinePreview
+    page.timeline_preview = ImportTimelinePreview(page)
+    root.addWidget(page.timeline_preview)
 
     footer = QHBoxLayout()
     page.import_status_label = _label('Drop an XML file or choose a folder to begin', 'importStatus')

@@ -137,6 +137,8 @@ class ParsedShot:
     notes: str = ""
     detected_head_handles: Optional[int] = None
     detected_tail_handles: Optional[int] = None
+    online_reference: str = ''
+    online_reference_timing: dict = field(default_factory=dict)
 
     @property
     def cut_first(self) -> int:
@@ -720,6 +722,8 @@ class NukeScriptGenerator:
             cut_duration=shot.cut_duration,
             head_handles=shot.head_handles,
             tail_handles=shot.tail_handles,
+            online_reference=shot.online_reference,
+            online_reference_timing=shot.online_reference_timing,
             denoise_plates=denoise_plates,
             dn_exr_file=output_files["dn_exr_file"],
             comp_mov_file=output_files["comp_mov_file"],
@@ -936,6 +940,7 @@ class DjangoImporter:
         self._log_callback = log_callback or print
         self._job_cache: Dict[str, int] = {}  # title -> id
         self._timeline_cache: Dict[str, int] = {}  # "job_id:title" -> id
+        self._online_reference_cache: Dict[int, str] = {}
 
     def _log(self, message: str):
         if callable(self._log_callback):
@@ -955,6 +960,9 @@ class DjangoImporter:
             
             # Get or create timeline
             timeline_id = self._get_or_create_timeline(job_id, timeline_title)
+            if shot.online_reference and self._online_reference_cache.get(timeline_id) != shot.online_reference:
+                self.api.update_timeline(timeline_id, online_reference=shot.online_reference)
+                self._online_reference_cache[timeline_id] = shot.online_reference
             
             # Get or create shot with all metadata
             shot_data, created = self.api.get_or_create_shot(
@@ -2092,6 +2100,7 @@ class SingleShotCreationDialog(QDialog):
         super().__init__(parent)
 
         self.setWindowTitle("Create Single Shot")
+        self._initial_size_applied = False
         self.setMinimumWidth(1050)
         self.setMinimumHeight(400)
         self.setAcceptDrops(True)
@@ -2115,6 +2124,7 @@ class SingleShotCreationDialog(QDialog):
         main_layout = QVBoxLayout(form)
         main_layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetMinimumSize)
         form_scroll = QtWidgets.QScrollArea()
+        self.form_scroll = form_scroll
         form_scroll.setWidgetResizable(True)
         form_scroll.setWidget(form)
         outer_layout.addWidget(form_scroll)
@@ -2301,6 +2311,24 @@ class SingleShotCreationDialog(QDialog):
         self.auto_colourspace_checkbox.toggled.connect(self._queue_media_review)
         self.colourspace_combo_box.currentTextChanged.connect(self._queue_media_review)
         self.fps_spinbox.valueChanged.connect(self._queue_media_review)
+
+    def showEvent(self, event):
+        if not self._initial_size_applied:
+            self._initial_size_applied = True
+            screen = self.parentWidget().screen() if self.parentWidget() else self.screen()
+            available = screen.availableGeometry()
+            # A scroll area's size hint otherwise collapses this long form to
+            # a short dialog. Start with room for the form and fixed buttons.
+            content_height = self.form_scroll.widget().sizeHint().height()
+            width = min(1050, max(1, available.width() - 40))
+            height = min(max(940, content_height + 80), max(1, available.height() - 80))
+            self.setMinimumWidth(min(1050, width))
+            self.setMinimumHeight(min(400, height))
+            self.resize(width, height)
+            center = self.parentWidget().window().frameGeometry().center() if self.parentWidget() else available.center()
+            self.move(max(available.left(), min(center.x() - width // 2, available.right() - width + 1)),
+                      max(available.top() + 30, min(center.y() - height // 2, available.bottom() - height - 20)))
+        super().showEvent(event)
 
     def _queue_media_review(self, *_args):
         if not hasattr(self, '_review_timer'):

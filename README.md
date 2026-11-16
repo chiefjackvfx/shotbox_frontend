@@ -7,6 +7,44 @@ beside the version number, for example `2h 30m left today`. It refreshes while
 ShotBox runs and when returning to the app, shows zero after 6 PM, and resets
 for the next day.
 
+## Online reference edits
+
+Import Timeline accepts an optional online reference movie by dropping it onto
+the reference field or choosing **Browse Reference**. Its first frame corresponds
+to timeline frame 0 by default. Adjust **Reference starts at timeline frame** for
+a trimmed export or leading slate (negative values). Reference frame rates must
+match the timeline, and every included cut must be covered.
+
+When no reference is selected, loading an XML automatically looks in the sibling
+`Exports/Offline` directory (or the selected project's `Exports/Offline` for XMLs
+loaded from elsewhere). Matching ignores a trailing `_XML` and filename case,
+preserves versions and `_ALT`, and prefers the XML's dated folder. A unique match
+loads automatically; multiple matches require a choice. **Find Reference** repeats
+the search and lets you choose an Offline folder when no project folder can be
+inferred. An existing reference selection is preserved during automatic discovery.
+Discovery only reads directory entries and probes matching media.
+
+Expand **Timeline and reference preview** at the bottom of Import Timeline to
+see the editorial cuts alongside the reference video. Click or drag the timeline
+to scrub, use Play/Pause or step one frame at a time, and use Fit picture to reset
+the picture zoom. Playback follows the reference start offset, including automatic
+alignment for exports whose length exactly matches the editorial shot span.
+The panel reuses Timeline Review's picture, timeline, and decoder components;
+playback is silent and pauses when the panel collapses or the tab is hidden.
+Frames are cached only in memory; source media is opened read-only.
+
+Each generated Nuke script includes `OnlineReference` and
+`OnlineReferenceRetime`, connected to a free Viewer input. Editorial in/out points
+align with the shot's cut inside its handles, starting the working range at 1001.
+Handles outside the reference movie are black. The reference uses the movie
+reader's colour-space default, independently of the camera plate IDT.
+
+When **Add to ShotBox DB** is enabled, the selected path is saved on
+`Timeline.online_reference`. Apply backend migration
+`0042_timeline_online_reference` before using this with database imports. The
+reference remains at its selected location; importing or deleting a timeline
+does not copy or delete it.
+
 ## Themes
 
 Choose **Settings → Appearance → Theme (QSS)** to switch between **Dark —
@@ -198,8 +236,10 @@ dialog should also be checked in the desktop application.
 
 Runtime caches and disposable working files live in `.cache` beside `main.py`,
 including on Windows and macOS. EXR preview proxies use `.cache/exr-previews-v1`;
-thumbnail uploads, exports, and Nuke/3DE requests use `.cache/temp`. Runtime
-setup downloads and disposable installation files also use `.cache/temp`,
+thumbnail uploads, exports, and Nuke/3DE requests use `.cache/temp`.
+ARRIRAW thumbnail decoding uses Nuke when PyAV has no decoder, with temporary
+frames and Nuke caches in `.cache/temp/thumbnail-nuke-*`, removed after decoding.
+Runtime setup downloads and disposable installation files also use `.cache/temp`,
 protected while setup runs. Persistent Python, setup tools and environment
 backups live under `.runtime` and are not deleted by Clear Cache.
 Houdini CG preparation uses `.cache/temp/houdini-cg-*`, protected until its

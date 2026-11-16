@@ -481,3 +481,111 @@ def test_raw_workflow_defaults_to_ten_handles_and_preserves_user_edits(page, tmp
         wait_read(page, app)
     assert page.spinboxHandles.value() == 5
     assert page.prepared.shots[0].duration == 30
+
+
+def test_online_reference_drop_keeps_timeline_and_validates_coverage(page, tmp_path, app):
+    load(page, tmp_path)
+    timeline = page.document
+    path, info = media_file(tmp_path, name='online.mov', frames=100, start=0)
+    with mock.patch('import_timeline_page.probe_media', return_value=info):
+        assert drop_urls(page.online_reference_edit, [QUrl.fromLocalFile(path)]) == (True, True)
+        wait_read(page, app)
+    assert page.document is timeline
+    shot = page.prepared.shots[0]
+    assert shot.online_reference == path
+    assert shot.online_reference_timing == {'frames': 100, 'timeline_start': 0}
+    page.online_reference_start.setValue(10)
+    assert any('does not cover the cut' in e for e in page.prepared.errors)
+    page._clear_online_reference()
+    assert page.prepared.shots[0].online_reference == ''
+
+
+def test_reference_export_without_leader_aligns_to_editorial_span(page, tmp_path, app):
+    load(page, tmp_path)
+    page.document.clips[0].timeline_start = 250
+    path, info = media_file(tmp_path, name='trimmed.mov', frames=20, start=0)
+    with mock.patch('import_timeline_page.probe_media', return_value=info):
+        page._load_online_reference(path)
+        wait_read(page, app)
+    assert page.online_reference_start.value() == 250
+    assert page.prepared.shots[0].online_reference_timing == {'frames': 20, 'timeline_start': 250}
+    assert not any('does not cover the cut' in e for e in page.prepared.errors)
+    page.online_reference_start.setValue(0)
+    page._refresh_preview()
+    assert page.online_reference_start.value() == 0
+    assert any('250–270' in e and '0–20' in e for e in page.prepared.errors)
+    assert not any(e.startswith(':') for e in page.prepared.errors)
+
+
+def test_online_reference_rejects_wrong_rate_and_unloaded_path(page, tmp_path, app):
+    load(page, tmp_path)
+    path, info = media_file(tmp_path, name='online.mov', fps=24)
+    with mock.patch('import_timeline_page.probe_media', return_value=info):
+        page._load_online_reference(path)
+        wait_read(page, app)
+    assert any('frame rate differs' in e for e in page.prepared.errors)
+    page._reference_path_edited()
+    assert any('Load the online reference' in e for e in page.prepared.errors)
+
+
+def test_collapsible_reference_preview_maps_scrubbing_and_stops_when_hidden(page, tmp_path, app):
+    from PyQt6.QtGui import QImage
+    from timeline_review_media import MovieDecoder
+    load(page, tmp_path)
+    page.document.clips[0].timeline_start = 250
+    path, info = media_file(tmp_path, name='reference.mov', frames=20, start=0)
+    page._online_reference_info = info
+    page.online_reference_edit.setText(path)
+    page._refresh_preview()
+    preview = page.timeline_preview
+    assert preview.body.isHidden()
+    assert preview.edit.start == 250
+    assert preview.reference_start == 250
+    image = QImage(16, 16, QImage.Format.Format_RGB888)
+    image.fill(Qt.GlobalColor.red)
+    with mock.patch.object(MovieDecoder, 'read', return_value=image) as read:
+        page.show()
+        preview.toggle.setChecked(True)
+        preview.seek(260)
+        timer = QElapsedTimer()
+        timer.start()
+        while preview._work is not None:
+            app.processEvents()
+            QTest.qWait(5)
+            assert timer.elapsed() < 3000
+        assert preview._displayed == (path, info.signature, 10)
+        assert not preview.picture.image.isNull()
+        assert read.call_args.args[1] == 10
+        preview.play_pause()
+        assert preview.timer.isActive()
+        preview.toggle.setChecked(False)
+        assert not preview.timer.isActive()
+        assert preview._wanted is None
+        preview.toggle.setChecked(True)
+        preview.play_pause()
+        page.hide()
+        assert not preview.timer.isActive()
+    page._clear_online_reference()
+    assert preview.reference is None
+    assert preview.picture.image.isNull()
+
+
+def test_find_reference_loads_unique_match_and_leaves_ambiguous_choices(page, tmp_path, app):
+    load(page, tmp_path)
+    root = tmp_path / 'destination/Exports/Offline/2026-11-16'
+    path, info = media_file(root, name='edit.mp4', frames=20, start=0)
+    with mock.patch('import_timeline_page.probe_media', return_value=info):
+        page._find_reference()
+        wait_read(page, app)
+    assert page.online_reference_edit.text() == path
+    assert page._online_reference_info is info
+    page._clear_online_reference()
+    other, _ = media_file(root, name='edit.mov', frames=20, start=0)
+    with mock.patch('import_timeline_page.probe_media') as probe:
+        page._find_reference()
+        wait_read(page, app)
+    probe.assert_not_called()
+    assert page.online_reference_edit.text() == ''
+    assert page.online_reference_matches.count() == 3
+    assert not page.online_reference_matches.isHidden()
+    assert {page.online_reference_matches.itemData(i) for i in (1, 2)} == {path, other}

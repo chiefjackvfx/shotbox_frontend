@@ -66,6 +66,14 @@ scope. Title, notes, budget and priority presets are available. Task card status
 and artist menus save immediately. The editor requires Create Task/Save changes.
 Deletion asks for confirmation. Referenced versions can be loaded from the card.
 
+The right sidebar follows the web view: compact cards with avatars, local dates,
+small frame/version buttons, edit/delete icons and side-by-side status/artist
+menus. Its composer stays beneath the comments with scope, title, notes and
+compact drawing controls. Open **Task / shot details** for presets, budget,
+priority and explicit frame-range fields; these live in the left **Task details**
+tab. Editing a task, finishing a drawing or choosing Custom frame range opens
+those details. Clear and Create Task remain at the bottom of the composer.
+
 Whole-shot references save as null, single frames as integers, and inclusive
 ranges as `[start, end]`. Current-frame-to-end and explicit ranges are supported.
 Imported custom working-frame origins are retained when editing imported tasks.
@@ -85,7 +93,7 @@ the draft drawing; restoring drawings pauses playback again. Drawings use the
 existing version-1 normalized annotation schema and remain aligned under picture
 zoom, pan and resizing. Saved drawings display within their frame/version scope.
 
-The left panel shows shot metadata, editable notes/colour and hide/show controls.
+The left Shot details tab shows metadata, editable notes/colour and hide/show controls.
 Both side panels can collapse. Inputs follow the application's wheel guard:
 scrolling an input scrolls the page without changing its value.
 

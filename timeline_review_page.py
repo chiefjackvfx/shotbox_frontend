@@ -10,19 +10,20 @@ from urllib.parse import urljoin
 from PyQt6.QtCore import Qt, QTimer, QThreadPool
 from PyQt6.QtGui import QImage, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QComboBox, QLineEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox,
-    QScrollArea, QSplitter, QSlider, QCheckBox, QFrame, QMessageBox, QColorDialog,
+    QScrollArea, QSplitter, QSlider, QCheckBox, QMessageBox, QColorDialog,
     QDialog,
 )
 
 import http_help
 from input_behaviour import install_input_wheel_guard
 from image_loader import ImageLoader
-from task_create_dialog import TITLE_PRESETS, NOTES_PRESETS, BUDGET_PRESETS, PRIORITY_PRESETS, STATUS_COLORS
+from task_create_dialog import STATUS_COLORS
 from timeline_review_model import Edit, prepare_timeline, timecode, parse_timecode
 from timeline_review_widgets import ReviewPicture, TimelineStrip
 from timeline_review_media import MovieDecoder, Work
+from timeline_review_sidebar import build_sidebar, sync_drawing_controls, task_card
 
 
 STATUSES = [(key, key.replace("_", " ").capitalize()) for key in STATUS_COLORS]
@@ -209,114 +210,7 @@ class TimelineReviewPage(QWidget):
         self.timeline_scroll.setWidget(self.strip)
         middle.addWidget(self.timeline_scroll)
         self.splitter.addWidget(self.center)
-        self.right = QSplitter(Qt.Orientation.Vertical)
-        self.right.setMinimumWidth(240)
-        comments = QWidget()
-        comments_layout = QVBoxLayout(comments)
-        self.comment_filter = QComboBox()
-        self.comment_filter.addItems(["Current shot", "All shots"])
-        comments_layout.addWidget(self.comment_filter)
-        self.comment_count = QLabel("0 tasks")
-        comments_layout.addWidget(self.comment_count)
-        self.comments = QScrollArea()
-        self.comments.setWidgetResizable(True)
-        comments_layout.addWidget(self.comments)
-        self.right.addWidget(comments)
-        self.form_scroll = QScrollArea()
-        self.form_scroll.setWidgetResizable(True)
-        form_widget = QWidget()
-        form = QVBoxLayout(form_widget)
-        self.draft_label = QLabel("New task")
-        self.draft_label.setWordWrap(True)
-        form.addWidget(self.draft_label)
-        self._button("Return to draft shot", self.return_to_draft, form)
-        self.title = QLineEdit()
-        self.title.setMaxLength(50)
-        self.title.setPlaceholderText("Add a comment or task…")
-        form.addWidget(self.title)
-        self.title_preset = QComboBox()
-        self.title_preset.addItems(["Task presets…"] + TITLE_PRESETS)
-        self.title_preset.activated.connect(lambda i: self.title.setText(self.title_preset.itemText(i)) if i else None)
-        form.addWidget(self.title_preset)
-        self.notes = QPlainTextEdit()
-        self.notes.setPlaceholderText("Notes (optional)")
-        self.notes.setMaximumHeight(90)
-        form.addWidget(self.notes)
-        self._button("Notes: idk", lambda: self.notes.setPlainText(NOTES_PRESETS[0]), form)
-        self.scope = QComboBox()
-        self.scope.addItems(["Whole shot", "Current frame", "From current frame to shot end", "Custom frame range"])
-        form.addWidget(self.scope)
-        ranges = QHBoxLayout()
-        self.range_start, self.range_end = QSpinBox(), QSpinBox()
-        for control in (self.range_start, self.range_end):
-            control.setRange(-2147483647, 2147483647)
-            ranges.addWidget(control)
-        form.addLayout(ranges)
-        range_buttons = QHBoxLayout()
-        self._button("Set start here", lambda: self.set_range_here(False), range_buttons)
-        self._button("Set end here", lambda: self.set_range_here(True), range_buttons)
-        form.addLayout(range_buttons)
-        drawing = QHBoxLayout()
-        self.tool = QComboBox()
-        for label, value in (("Drawing off", None), ("Pen", "pen"), ("Arrow", "arrow"), ("Line", "line"), ("Rectangle", "rect")):
-            self.tool.addItem(label, value)
-        drawing.addWidget(self.tool)
-        self._button("Colour", self.choose_colour, drawing)
-        self.stroke_size = QComboBox()
-        for name, size in (("Thin", 2), ("Medium", 3), ("Thick", 6)):
-            self.stroke_size.addItem(name, size)
-        self.stroke_size.setCurrentIndex(1)
-        drawing.addWidget(self.stroke_size)
-        form.addLayout(drawing)
-        swatches = QHBoxLayout()
-        for label, color in (("Pink", "#f553e6"), ("Yellow", "#ffd400"), ("Green", "#00ca88"), ("Orange", "#ff6b35")):
-            self._button(label, partial(self.set_colour, color), swatches)
-        form.addLayout(swatches)
-        history = QHBoxLayout()
-        self._button("Undo", self.picture.undo, history)
-        self._button("Redo", self.redo_drawing, history)
-        self._button("Clear drawings", self.clear_drawing, history)
-        form.addLayout(history)
-        self.done_button = self._button("Done drawing", self.done_drawing, form)
-        details = QFormLayout()
-        self.task_status = QComboBox()
-        for value, label in STATUSES:
-            self.task_status.addItem(label, value)
-        details.addRow("Status", self.task_status)
-        self.artist = QComboBox()
-        self.artist.addItem("Unassigned", None)
-        details.addRow("Artist", self.artist)
-        self.budget = QDoubleSpinBox()
-        self.budget.setRange(0, 999.99)
-        self.budget.setDecimals(2)
-        details.addRow("Budget hours", self.budget)
-        self.budget_preset = QComboBox()
-        self.budget_preset.addItem("Budget presets…")
-        for value in BUDGET_PRESETS:
-            self.budget_preset.addItem(str(value), value)
-        self.budget_preset.activated.connect(lambda i: self.budget.setValue(self.budget_preset.itemData(i)) if i else None)
-        details.addRow(self.budget_preset)
-        self.priority = QSpinBox()
-        self.priority.setRange(1, 10)
-        self.priority.setValue(5)
-        details.addRow("Priority", self.priority)
-        self.priority_preset = QComboBox()
-        self.priority_preset.addItem("Priority presets…")
-        for value in PRIORITY_PRESETS:
-            self.priority_preset.addItem(str(value), value)
-        self.priority_preset.activated.connect(lambda i: self.priority.setValue(self.priority_preset.itemData(i)) if i else None)
-        details.addRow(self.priority_preset)
-        form.addLayout(details)
-        actions = QHBoxLayout()
-        self.clear_button = self._button("Clear / Cancel", self.cancel_task, actions)
-        self.save_button = self._button("Create Task", self.save_task, actions)
-        form.addLayout(actions)
-        self.form_scroll.setWidget(form_widget)
-        self.right.addWidget(self.form_scroll)
-        self.splitter.addWidget(self.right)
-        self.splitter.setSizes([220, 900, 350])
-        self.splitter.setStretchFactor(1, 1)
-        self.right.setSizes([350, 450])
+        build_sidebar(self, STATUSES)
         self.job_combo.currentIndexChanged.connect(self._job_changed)
         self.timeline_combo.currentIndexChanged.connect(self._timeline_changed)
         self.version_combo.activated.connect(self._version_selected)
@@ -881,6 +775,7 @@ class TimelineReviewPage(QWidget):
                 self.scope.setCurrentIndex(1)
         self.picture.tool = value
         self.save_button.setEnabled(not value and not self._saving)
+        sync_drawing_controls(self)
 
     def _begin_drawing(self):
         self.pause()
@@ -894,6 +789,7 @@ class TimelineReviewPage(QWidget):
                 and cut.media.get("version") == self.draft["version"]):
             self.draft["annotations"] = self.picture.annotation()
         self.save_button.setEnabled(not self.picture.tool and not self._saving)
+        sync_drawing_controls(self)
 
     def choose_colour(self):
         from PyQt6.QtGui import QColor
@@ -903,6 +799,7 @@ class TimelineReviewPage(QWidget):
 
     def set_colour(self, color):
         self.picture.color = color
+        sync_drawing_controls(self)
 
     def clear_drawing(self):
         self.picture.clear_drawing()
@@ -917,6 +814,8 @@ class TimelineReviewPage(QWidget):
     def done_drawing(self):
         self.tool.setCurrentIndex(0)
         self.right.show()
+        self.left.setCurrentIndex(0)
+        self.left.show()
         self.form_scroll.ensureWidgetVisible(self.title)
         self.title.setFocus()
 
@@ -957,6 +856,7 @@ class TimelineReviewPage(QWidget):
                     and not (self.draft and (self.draft.get("task") or {}).get("id") == task["id"])):
                 self.picture.saved_shapes = deepcopy((task.get("annotations") or {}).get("shapes", []))
         self.picture.update()
+        sync_drawing_controls(self)
 
     def return_to_draft(self):
         if not self.draft:
@@ -1045,6 +945,8 @@ class TimelineReviewPage(QWidget):
                             "budget": task.get("budget_hours"), "priority": task.get("priority", 5)})
         self.return_to_draft()
         self.right.show()
+        self.left.setCurrentIndex(0)
+        self.left.show()
 
     def save_task(self):
         if self._saving or self.picture.tool:
@@ -1068,10 +970,12 @@ class TimelineReviewPage(QWidget):
         self._saving = True
         self._revision += 1
         self.form_scroll.widget().setEnabled(False)
+        self.task_details.setEnabled(False)
         self.status.setText("Saving task…")
         def done(saved):
             self._saving = False
             self.form_scroll.widget().setEnabled(True)
+            self.task_details.setEnabled(True)
             self._put_task(draft["cut"].shot["id"], saved)
             restore = self.suspended_draft
             self.suspended_draft = None
@@ -1080,6 +984,7 @@ class TimelineReviewPage(QWidget):
         def failed(message):
             self._saving = False
             self.form_scroll.widget().setEnabled(True)
+            self.task_details.setEnabled(True)
             self.status.setText(f"Task was not saved: {message}. Your draft is retained.")
         task = draft.get("task")
         self._submit(lambda: api.update_task(task["id"], **payload) if task else
@@ -1135,7 +1040,10 @@ class TimelineReviewPage(QWidget):
     def _render_comments(self, *_args):
         scroll = self.comments.verticalScrollBar().value()
         content = QWidget()
+        content.setObjectName("review_comment_content")
         layout = QVBoxLayout(content)
+        layout.setContentsMargins(12, 14, 12, 14)
+        layout.setSpacing(12)
         active = self.edit.at(self.frame)
         count = 0
         for cut in self.edit.cuts:
@@ -1145,61 +1053,14 @@ class TimelineReviewPage(QWidget):
                 if task.get("hidden"):
                     continue
                 count += 1
-                card = QFrame()
-                card.setFrameShape(QFrame.Shape.StyledPanel)
-                box = QVBoxLayout(card)
-                metadata = task.get("frameio_metadata") or {}
-                comment = metadata.get("comment") or {}
-                author = (comment.get("author") or {}).get("name") or "Shotbox task"
-                text = QLabel(f"{author} · {comment.get('inserted_at') or task.get('created', '')}")
-                text.setWordWrap(True)
-                box.addWidget(text)
-                self._button(f"{cut.shot['title']} · {task.get('frame_reference') or 'Whole shot'}",
-                             partial(self.select_task, cut, task), box)
-                title = QLabel(task["title"])
-                title.setWordWrap(True)
-                title.setTextFormat(Qt.TextFormat.PlainText)
-                box.addWidget(title)
-                if task.get("notes"):
-                    notes = QLabel(task["notes"])
-                    notes.setTextFormat(Qt.TextFormat.PlainText)
-                    notes.setWordWrap(True)
-                    notes.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-                    box.addWidget(notes)
-                version = task.get("reviewed_version")
-                if version is not None:
-                    box.addWidget(QLabel(f"Reviewed on v{version:03}"))
-                    if version != cut.media.get("version"):
-                        self._button(f"Load reviewed v{version:03}", partial(self.load_task_version, cut, task), box)
-                for field, options in (("status", STATUSES), ("artist", [(self.artist.itemData(i), self.artist.itemText(i)) for i in range(self.artist.count())])):
-                    combo = QComboBox()
-                    for value, label in options:
-                        combo.addItem(label, value)
-                    value = task.get(field)
-                    if combo.findData(value) < 0:
-                        combo.addItem(str(value), value)
-                    combo.setCurrentIndex(max(0, combo.findData(value)))
-                    combo.setEnabled(task["id"] not in self._pending_tasks)
-                    combo.activated.connect(partial(self._quick_field, cut.shot["id"], task, field, combo))
-                    box.addWidget(combo)
-                buttons = QHBoxLayout()
-                self._button("Edit", partial(self.edit_task, cut, task), buttons).setEnabled(task["id"] not in self._pending_tasks)
-                self._button("Delete", partial(self.delete_task, cut, task), buttons).setEnabled(task["id"] not in self._pending_tasks)
-                box.addLayout(buttons)
-                for reply in metadata.get("replies") or []:
-                    if isinstance(reply, dict):
-                        label = QLabel(f"{(reply.get('author') or {}).get('name', 'Reviewer')}: {reply.get('text', '')}")
-                        label.setWordWrap(True)
-                        label.setTextFormat(Qt.TextFormat.PlainText)
-                        box.addWidget(label)
-                layout.addWidget(card)
+                layout.addWidget(task_card(self, cut, task, STATUSES))
         layout.addStretch()
         old = self.comments.takeWidget()
         self.comments.setWidget(content)
         if old:
             old.deleteLater()
         self.comments.verticalScrollBar().setValue(scroll)
-        self.comment_count.setText(f"{count} task{'s' if count != 1 else ''}")
+        self.comment_count.setText(str(count))
 
     def _quick_field(self, shot_id, task, field, combo, _index):
         if task["id"] in self._pending_tasks:
@@ -1342,6 +1203,7 @@ class TimelineReviewPage(QWidget):
         self._polling = self._saving = False
         self._pending_tasks.clear()
         self.form_scroll.widget().setEnabled(True)
+        self.task_details.setEnabled(True)
         self.suspended_draft = None
         self._restore_form({})
         self.selected_task = None

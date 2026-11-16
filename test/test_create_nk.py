@@ -411,6 +411,38 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(retime['speed'].value(), 1)
             self.assertEqual(fake.toNode('Viewer1')['frame_range'].value(), '1011-1281')
 
+    def test_online_reference_aligns_editorial_cut_with_handles(self):
+        with tempfile.TemporaryDirectory() as directory:
+            request = self._request(Path(directory))
+            request.duration, request.cut_duration = 291, 271
+            request.head_handles = request.tail_handles = 10
+            request.frame_first, request.frame_last = 1001, 1291
+            request.edit_inpoint, request.edit_outpoint = 250, 521
+            request.online_reference = '/reference/online.mov'
+            request.online_reference_timing = dict(frames=750, timeline_start=0)
+            request = module.GenerateNkRequest.from_dict(request.to_dict())
+            fake = _FakeNuke()
+            module._TemplateEditor(fake).edit(request)
+            read = fake.toNode('OnlineReference')
+            retime = fake.toNode('OnlineReferenceRetime')
+            self.assertEqual((Path(request.script_path).parent / read['file'].value()).resolve(),
+                             Path(request.online_reference))
+            self.assertEqual(read['last'].value(), 750)
+            self.assertEqual(retime['input.first'].value(), 241)
+            self.assertEqual(retime['input.last'].value(), 531)
+            self.assertEqual(retime['output.first'].value(), 1001)
+            self.assertEqual(retime['output.last'].value(), 1291)
+            self.assertIs(retime.input(0), read)
+            self.assertTrue(any(fake.toNode('Viewer1').input(i) is retime for i in range(10)))
+            request.online_reference_timing = dict(frames=271, timeline_start=250)
+            fake = _FakeNuke()
+            module._TemplateEditor(fake).edit(request)
+            self.assertEqual(fake.toNode('OnlineReferenceRetime')['input.first'].value(), -9)
+            self.assertEqual(fake.toNode('OnlineReference')['before'].value(), 'black')
+            request.online_reference_timing['frames'] = 270
+            with self.assertRaisesRegex(ValueError, 'does not cover'):
+                module._TemplateEditor(_FakeNuke()).edit(request)
+
     def test_denoise_branches_use_plain_retimes_and_vertical_spacing(self):
         with tempfile.TemporaryDirectory() as directory:
             request = self._request(Path(directory))

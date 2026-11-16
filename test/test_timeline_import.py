@@ -579,3 +579,25 @@ def test_proxy_relink_defaults_to_ten_handles_on_long_raw(tmp_path):
     assert (shot.head_handles, shot.tail_handles) == (10, 10)
     assert (shot.duration, shot.cut_first, shot.cut_last) == (291, 1011, 1281)
     assert shot.primary_clip.media_timing['cut_start'] == 192
+
+
+def test_online_reference_persists_on_timeline_and_reaches_nuke_request(tmp_path):
+    from import_xml_v2 import DjangoImporter, NukeScriptGenerator
+    path, info = media_file(tmp_path)
+    shot = module.prepare_import(document(tmp_path), {path: info}, handles=10).shots[0]
+    reference = tmp_path / 'online.mov'
+    reference.touch()
+    shot.online_reference = str(reference)
+    shot.online_reference_timing = dict(frames=200, timeline_start=-5)
+    generator = NukeScriptGenerator()
+    folder = generator.create_shot_folder(shot, str(tmp_path / 'output'), 'edit')
+    api = mock.Mock()
+    api.get_or_create_job.return_value = ({'id': 1}, True)
+    api.get_or_create_timeline.return_value = ({'id': 2}, True)
+    api.get_or_create_shot.return_value = ({'id': 3}, True)
+    DjangoImporter(api).import_shot(shot, 'Job', 'edit', 'ARRI LogC3 (EI800)', 10)
+    api.update_timeline.assert_called_once_with(2, online_reference=str(reference))
+    with mock.patch.object(generator, '_get_video_format', return_value=(1920, 1080)):
+        request = generator._build_create_nk_request(shot, folder, str(Path(folder, 'scripts', 'test.nk')), 'Job')
+    assert request.online_reference == str(reference)
+    assert request.online_reference_timing == shot.online_reference_timing

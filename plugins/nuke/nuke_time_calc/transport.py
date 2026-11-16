@@ -251,6 +251,20 @@ class Uploader:
             return self._failure('network_error')
         if 300 <= status < 400:
             return self._failure('redirect_rejected', permanent=True)
+        if status == 400 and len(raw) <= 1048576:
+            try:
+                rejected = json.loads(raw, object_pairs_hook=_unique_object)
+                unavailable = rejected.get('code') == 'invalid_shot'
+            except (ValueError, TypeError, AttributeError, UnicodeError, RecursionError):
+                unavailable = False
+            if unavailable:
+                # Each request contains exactly one batch. Preserve its payload
+                # for inspection while allowing other shots to keep uploading.
+                self.outbox.quarantine(batch['session_id'], batch['sequence'])
+                self._failures = 0
+                self._next_attempt = 0.0
+                self._status = dict(code='invalid_shot_quarantined', failures=0, next_attempt=0.0)
+                return True
         if status != 200:
             code = {400: 'validation_error', 401: 'authentication_error',
                     403: 'permission_error', 409: 'batch_conflict', 413: 'body_too_large',

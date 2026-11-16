@@ -122,3 +122,47 @@ def test_dashboard_thumbnail_without_sidecar_uses_primary_reference_and_media_id
     assert extract.call_args.kwargs['input_colourspace'] == 'ARRI LogC4'
     assert 'frame_index' not in extract.call_args.kwargs
     assert not list(tmp_path.rglob('timeline_import.json'))
+
+
+def test_unsupported_camera_codec_uses_nuke_without_attempting_pyav_decode():
+    container = mock.Mock()
+    container.streams.video = [SimpleNamespace(codec_context=None)]
+    image = QImage(64, 32, QImage.Format.Format_RGB888)
+    cancelled = mock.Mock(return_value=False)
+    with mock.patch.object(av, 'open') as open_video, \
+            mock.patch('nuke_thumbnail.extract_nuke_thumbnail', return_value=image) as fallback:
+        open_video.return_value.__enter__.return_value = container
+        result = thumbnail_updates.extract_preview_thumbnail(
+            'camera.mxf', frame_index=192, input_colourspace='ARRI LogC3 (EI800)', check_cancelled=cancelled)
+    assert result is image
+    fallback.assert_called_once_with('camera.mxf', 192, 'ARRI LogC3 (EI800)', cancelled)
+    container.decode.assert_not_called()
+
+
+def test_nuke_camera_decode_preserves_logc_for_single_reviewed_idt(monkeypatch):
+    import sys
+    import nuke_thumbnail
+
+    knobs = {name: mock.Mock() for name in ('localizationPolicy', 'raw', 'arri_colorspace', 'first', 'last')}
+    knobs['arri_colorspace'].values.return_value = ['AWG3 / D65 / LogC3', 'ACES AP0 / ~D60 / linear']
+    read = mock.MagicMock()
+    read.__getitem__.side_effect = knobs.__getitem__
+    read.knob.return_value = knobs['arri_colorspace']
+    read.firstFrame.return_value = 1
+    read.lastFrame.return_value = 421
+    read.width.return_value = 4448
+    read.height.return_value = 3096
+    write = mock.MagicMock()
+    nuke = mock.Mock()
+    nuke.nodes.Read.return_value = read
+    nuke.nodes.Write.return_value = write
+    monkeypatch.setitem(sys.modules, 'nuke', nuke)
+    nuke_thumbnail.render_frame(dict(source='camera.mxf', output='frame.exr', frame_index=192,
+                                     input_colourspace='ARRI LogC3 (EI800)'))
+    knobs['raw'].setValue.assert_called_once_with(True)
+    knobs['arri_colorspace'].setValue.assert_called_once_with('AWG3 / D65 / LogC3')
+    write['raw'].setValue.assert_called_with(True)
+    nuke.execute.assert_called_once_with(write, 193, 193)
+    with pytest.raises(ValueError, match='does not offer LogC4'):
+        nuke_thumbnail.render_frame(dict(source='camera.mxf', output='frame.exr', frame_index=192,
+                                         input_colourspace='ARRI LogC4'))

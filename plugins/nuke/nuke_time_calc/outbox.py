@@ -193,11 +193,18 @@ class Outbox:
             db.execute('UPDATE batches SET pending=0, payload=NULL WHERE session=? AND sequence=?',
                        (session_id, sequence))
 
+    def quarantine(self, session_id, sequence):
+        """Keep rejected payloads locally, outside the delivery queue."""
+        with self._connect() as db:
+            db.execute('UPDATE batches SET pending=-1 WHERE session=? AND sequence=? AND pending=1',
+                       (session_id, sequence))
+
     def status(self):
         with self._connect() as db:
             count = db.execute('SELECT COUNT(*) FROM batches WHERE pending=1').fetchone()[0]
+            rejected = db.execute('SELECT COUNT(*) FROM batches WHERE pending=-1').fetchone()[0]
             size = db.execute('PRAGMA page_count').fetchone()[0] * db.execute('PRAGMA page_size').fetchone()[0]
-            return dict(pending_records=count, storage_bytes=size, max_records=self.max_count, max_bytes=self.max_bytes)
+            return dict(pending_records=count, quarantined_records=rejected, storage_bytes=size, max_records=self.max_count, max_bytes=self.max_bytes)
 
     def pending(self):
         with self._connect() as db:

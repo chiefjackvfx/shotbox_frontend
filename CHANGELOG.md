@@ -6,6 +6,12 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-16 05:37:31 PM +00:00] Discover matching offline references by filename and export date.
+
+- [2026-11-16 05:30:26 PM +00:00] Add collapsible import timeline and aligned reference video preview.
+
+- [2026-11-16 05:13:38 PM +00:00] Add online reference selection and handle-aligned Nuke retimes.
+- [2026-11-16 05:12:30 PM +00:00] Highlight selected review cards and navigate by clicking cards.
 - [2026-11-16 04:30:54 PM +00:00] Add JKL timeline playback shortcuts with bidirectional double speed.
 - [2026-11-16 03:45:15 PM +00:00] Verify timeline timing, playback, drafts, and existing API integration.
 - [2026-11-16 03:45:15 PM +00:00] Add independent Timeline Review tab, tasks, versions, and annotations.
@@ -15,6 +21,15 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-16 05:39:47 PM +00:00] Extract reference offset calculation; verify varied lead-ins and rates.
+
+- [2026-11-16 05:22:08 PM +00:00] Move reference picker into its own numbered import card.
+
+- [2026-11-16 05:12:30 PM +00:00] Match review colours and interaction states to web styles.
+- [2026-11-16 05:06:19 PM +00:00] Move advanced review task fields into left details panel.
+- [2026-11-16 05:06:19 PM +00:00] Match Timeline Review sidebar and compact composer to web.
+- [2026-11-16 05:04:25 PM +00:00] Open single-shot creation at full-form height within screen bounds.
+- [2026-11-16 05:03:11 PM +00:00] Make timeline review column resize dividers easier to see.
 - [2026-11-16 04:32:34 PM +00:00] Default task creation off for timeline and single-shot imports.
 - [2026-11-16 04:30:54 PM +00:00] Allow further picture and timeline zooming out during review.
 - [2026-11-16 04:26:36 PM +00:00] Verify ten-frame proxy handles and bounded Nuke retime ranges.
@@ -23,6 +38,11 @@ All notable frontend publish changes should be documented in this file.
 - [2026-11-16 03:39:28 PM +00:00] Show current scan folder beside timeline import progress.
 
 ### Fixed
+
+- [2026-11-16 05:23:29 PM +00:00] Align trimmed reference edits to matching editorial frame spans.
+
+- [2026-11-16 05:01:48 PM +00:00] Decode unsupported MXF thumbnails through Nuke with reviewed IDTs.
+- [2026-11-16 04:39:56 PM +00:00] Quarantine unavailable-shot uploads without blocking subsequent Nuke time delivery.
 
 ## 5.7.5 - 2026-11-16
 

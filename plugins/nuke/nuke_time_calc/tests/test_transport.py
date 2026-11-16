@@ -83,6 +83,29 @@ class TransportTests(unittest.TestCase):
         from nuke_time_calc.outbox import Outbox
         return Outbox(self.root / 'state', server=origin or self.origin, artist_id='artist-1', device_id='device-1')
 
+    def test_unavailable_shot_is_preserved_without_blocking_next_upload(self):
+        from nuke_time_calc.transport import Uploader
+        q = self.queue()
+        q.put(batch())
+        q.put(batch(2))
+        replies = [(400, {}, b'{"code":"invalid_shot"}'),
+                   (200, {}, json.dumps({'results': [dict(session_id=batch(2)['session_id'],
+                       sequence=2, status='accepted')]}).encode())]
+        worker = Uploader(q, token_file=self.token, allow_loopback_http=True,
+                          transport=lambda *args: replies.pop(0))
+        self.assertTrue(worker.run_once())
+        self.assertEqual(worker.status()['code'], 'invalid_shot_quarantined')
+        self.assertEqual(q.status()['quarantined_records'], 1)
+        self.assertEqual(q.pending(), [batch(2)])
+        self.assertTrue(worker.run_once())
+        self.assertEqual(q.pending(), [])
+        restarted = self.queue()
+        self.assertEqual(restarted.status()['quarantined_records'], 1)
+        with restarted._connect() as db:
+            payload, pending = db.execute('SELECT payload, pending FROM batches WHERE sequence=1').fetchone()
+        self.assertEqual(json.loads(payload), batch())
+        self.assertEqual(pending, -1)
+
     def test_hardlinked_token_cannot_send_or_acknowledge(self):
         from nuke_time_calc.transport import Uploader
         q = self.queue()

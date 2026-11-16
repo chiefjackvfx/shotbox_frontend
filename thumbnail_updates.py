@@ -44,6 +44,9 @@ def extract_preview_thumbnail(video_path: str, *, check_cancelled=lambda: False,
         stream = next(iter(container.streams.video), None)
         if stream is None:
             raise ValueError("No video stream found in the preview.")
+        if getattr(stream, 'codec_context', True) is None:
+            from nuke_thumbnail import extract_nuke_thumbnail
+            return extract_nuke_thumbnail(video_path, frame_index, input_colourspace, check_cancelled)
         start = stream.start_time or 0
         duration = stream.duration
         if duration is None and container.duration is not None and stream.time_base:

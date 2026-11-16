@@ -57,6 +57,8 @@ class GenerateNkRequest:
     extra_plate_paths: list[str] = field(default_factory=list)
     # Optional timeline-only mapping. Legacy requests leave this empty.
     plate_timings: list[dict] = field(default_factory=list)
+    online_reference: str = ''
+    online_reference_timing: dict = field(default_factory=dict)
     cut_duration: Optional[int] = None
     head_handles: Optional[int] = None
     tail_handles: Optional[int] = None
@@ -101,6 +103,8 @@ class GenerateNkRequest:
             primary_plate_path=str(data.get("primary_plate_path", "")),
             extra_plate_paths=[str(path) for path in data.get("extra_plate_paths", [])],
             plate_timings=list(data.get("plate_timings", [])),
+            online_reference=str(data.get('online_reference', '')),
+            online_reference_timing=dict(data.get('online_reference_timing', {})),
             cut_duration=data.get("cut_duration"),
             head_handles=data.get("head_handles"),
             tail_handles=data.get("tail_handles"),
@@ -224,6 +228,8 @@ def generate_from_template(
         )
 
     required_files = [request.primary_plate_path, *request.extra_plate_paths]
+    if request.online_reference:
+        required_files.append(request.online_reference)
     missing_file = next((path for path in required_files if not path or not os.path.exists(path)), None)
     if missing_file:
         return GenerateNkResult(
@@ -362,6 +368,7 @@ class _TemplateEditor:
         self._update_primary_plate()
         self._update_extra_plates()
         self._update_timeline_plate_timing()
+        self._update_online_reference()
         self._update_edit_cut_range()
         self._update_reformats()
         self._update_outputs()
@@ -373,6 +380,52 @@ class _TemplateEditor:
         Path(request.script_path).parent.mkdir(parents=True, exist_ok=True)
         self.nuke.scriptSaveAs(script_path, overwrite=1)
         return request.script_path
+
+    def _update_online_reference(self):
+        request = self.request
+        if not request.online_reference:
+            return
+        timing = request.online_reference_timing
+        frames = int(timing['frames'])
+        cut_start = request.edit_inpoint - int(timing.get('timeline_start', 0))
+        cut_duration = request.cut_duration or request.duration
+        if frames <= 0 or cut_start < 0 or cut_start + cut_duration > frames:
+            raise ValueError('Online reference does not cover the editorial cut')
+        primary = self._required_node('Read1')
+        x = self._node_position(primary, 'xpos', 0) - EXTRA_PLATE_SPACING
+        y = self._node_position(primary, 'ypos', 0)
+        read = self._create_node('Read', 'OnlineReference', xpos=x, ypos=y)
+        self._set_file_knob(read['file'], request.online_reference)
+        for key, value in (('first', 1), ('last', frames), ('origfirst', 1),
+                           ('origlast', frames), ('origset', True),
+                           ('before', 'black'), ('after', 'black'),
+                           ('label', 'Online reference edit')):
+            self._set_knob(read[key], value)
+        # Keep the movie reader's display-referred default, independent of
+        # the raw plate IDT. The reference already contains the editorial grade.
+        retime = self._create_node('Retime', 'OnlineReferenceRetime', xpos=x, ypos=y + 120)
+        retime.setInput(0, read)
+        source_first = cut_start + 1 - (request.head_handles or 0)
+        source_last = source_first + request.frame_last - request.frame_first
+        for key, value in (('input.first', source_first), ('input.first_lock', True),
+                           ('input.last', source_last), ('input.last_lock', True),
+                           ('output.first', request.frame_first), ('output.first_lock', True),
+                           ('output.last', request.frame_last), ('output.last_lock', False),
+                           ('speed', 1.0), ('reverse', False), ('before', 'continue'),
+                           ('after', 'continue'), ('filter', 'none'), ('shutter', 0.0),
+                           ('label', 'Online reference aligned to cut + handles')):
+            self._set_knob(retime[key], value)
+        viewer = self.nuke.toNode('Viewer1')
+        if viewer is None:
+            viewers = self.nuke.allNodes('Viewer')
+            viewer = viewers[0] if viewers else self._create_node(
+                'Viewer', 'Viewer1', xpos=x, ypos=y + 240,
+                inputs=[self._required_node('Retime1')])
+        if viewer is not None:
+            for index in range(10):
+                if viewer.input(index) is None:
+                    viewer.setInput(index, retime)
+                    break
 
     def _open_template(self):
         template_path = _resolve_template_path(self.request)
