@@ -15,6 +15,23 @@ def batch(sequence=1):
 
 
 class OutboxTests(unittest.TestCase):
+    def test_windows_database_uri_preserves_extended_prefix_and_special_characters(self):
+        from nuke_time_calc import outbox
+        from pathlib import PureWindowsPath
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from urllib.parse import urlsplit, unquote, parse_qs
+        path = PureWindowsPath('C:/Studio café #1/shotbox_frontend')
+        path = path.joinpath(*(['nested-' + 'a' * 60] * 5), 'outbox.sqlite3')
+        with patch.object(outbox, 'os', SimpleNamespace(name='nt')):
+            uri = outbox._database_uri(path)
+        parsed = urlsplit(uri)
+        self.assertEqual(parsed.scheme, 'file')
+        self.assertEqual(parsed.netloc, '')
+        self.assertEqual(parsed.fragment, '')
+        self.assertEqual(unquote(parsed.path), '\\\\?\\' + str(path))
+        self.assertEqual(parse_qs(parsed.query), {'mode': ['rw'], 'vfs': ['win32-longpath']})
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=os.environ['TMPDIR'])
         self.addCleanup(self.temp.cleanup)

@@ -10,6 +10,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
+- [2026-11-16 11:06:13 AM +00:00] Pass extended Windows paths through SQLite queue connections.
+
 ## 5.7.2 - 2026-11-16
 
 ### Fixed

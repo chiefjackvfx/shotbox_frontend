@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 import sqlite3
 import uuid
+from urllib.parse import quote
 
 from . import storage
 
@@ -39,6 +40,16 @@ def _sync_directory(path):
 
 def _private_directory(path):
     return storage.private_directory(path.absolute())
+
+
+def _database_uri(path):
+    if os.name == 'nt':
+        # win32-longpath increases SQLite's pathname buffer but does not add
+        # the Win32 extended-path prefix. Supply it explicitly, escaping the
+        # question mark so SQLite cannot mistake it for URI query options.
+        return ('file:' + quote(storage._windows_api_path(path), safe='')
+                + '?mode=rw&vfs=win32-longpath')
+    return path.as_uri() + '?mode=rw'
 
 
 class CorruptOutbox(RuntimeError):
@@ -107,8 +118,7 @@ class Outbox:
         self._check_database()
         # The longpath VFS retains normal Windows locking and supports deep
         # installation folders; never select a "-none" (no locking) VFS.
-        options = '?mode=rw' + ('&vfs=win32-longpath' if os.name == 'nt' else '')
-        db = sqlite3.connect(self.path.as_uri() + options, uri=True, timeout=0.05)
+        db = sqlite3.connect(_database_uri(self.path), uri=True, timeout=0.05)
         try:
             db.execute('PRAGMA synchronous=EXTRA')
             pages = max(3, self.max_bytes // db.execute('PRAGMA page_size').fetchone()[0])
