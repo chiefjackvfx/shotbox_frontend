@@ -849,6 +849,9 @@ class MainWindow(QMainWindow):
             http_help.DjangoAPI.set_current_user_by_id(value)
             self._sync_automatic_nuke_time()
 
+        elif key == "show_hidden_jobs":
+            self.page_nukedash.set_show_hidden_jobs(bool(value))
+
         elif key == "always_on_top":
             # Toggle always on top - works immediately without restart
             was_visible = self.isVisible()

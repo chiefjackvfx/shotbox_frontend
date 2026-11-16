@@ -6,7 +6,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-16 11:45:28 AM +00:00] Add saved setting to show and select hidden jobs.
+
 ### Changed
+
+- [2026-11-16 12:45:40 PM +00:00] Restore Nuke time collector ticks to one second.
 
 ### Fixed
 

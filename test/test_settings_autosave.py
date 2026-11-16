@@ -43,6 +43,17 @@ class SettingsAutosaveTests(unittest.TestCase):
     def read_saved(self, key):
         return settings.SettingsManager(str(self.path)).get(key)
 
+    def test_show_hidden_jobs_is_saved_and_emitted(self):
+        changes = []
+        self.page.settings_changed.connect(lambda key, value: changes.append((key, value)))
+        self.assertFalse(self.page.show_hidden_jobs_check.isChecked())
+        self.page.show_hidden_jobs_check.setChecked(True)
+        self.page._flush_autosave()
+        self.assertTrue(self.read_saved('show_hidden_jobs'))
+        self.assertIn(('show_hidden_jobs', True), changes)
+        self.page._load_current_values()
+        self.assertTrue(self.page.show_hidden_jobs_check.isChecked())
+
     def test_deadline_qualified_workers_are_deduplicated_and_persisted(self):
         self.page.deadline_workers_edit.setText("linux-worker, windows-worker, linux-worker, ")
         QTest.qWait(650)

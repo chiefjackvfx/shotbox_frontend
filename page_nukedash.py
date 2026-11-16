@@ -352,12 +352,12 @@ def _normalize_task_style(style: str) -> str:
     return "checklist" if str(style).lower() == "checklist" else "card"
 
 
-def _nukedash_combo_jobs(jobs: list[dict], active_job_id=None) -> list[dict]:
-    """Return visible jobs plus a hidden job that is already active."""
+def _nukedash_combo_jobs(jobs: list[dict], active_job_id=None, show_hidden=False) -> list[dict]:
+    """Filter hidden jobs unless opted in, retaining the active job."""
     return [
         job
         for job in jobs
-        if not bool(job.get("hidden", False)) or job.get("id") == active_job_id
+        if show_hidden or not bool(job.get("hidden", False)) or job.get("id") == active_job_id
     ]
 
 
@@ -554,6 +554,7 @@ class page_nukedash(QMainWindow):
         
         # --- Session Restore Setup ---
         self._settings_manager = get_settings_manager()
+        self._show_hidden_jobs = bool(self._settings_manager.get("show_hidden_jobs", False))
         saved_layout_mode = self._settings_manager.get("shots_layout_mode", "list")
         self._shots_layout_mode = widgets._normalize_layout_mode(saved_layout_mode)
         self._task_style = _normalize_task_style(
@@ -3840,6 +3841,57 @@ class page_nukedash(QMainWindow):
 
         QMessageBox.information(self, "Export Excel", f"Exported timeline summary:\n{output_path}")
 
+    def set_show_hidden_jobs(self, enabled):
+        self._show_hidden_jobs = bool(enabled)
+        self._populate_job_selector(list(getattr(self, '_jobs_by_id', {}).values()))
+        if self._active_job_id is None and self.comboBox_jobs.count():
+            self._on_job_selected(self.comboBox_jobs.currentIndex())
+
+    def _populate_job_selector(self, jobs):
+        # --- populate comboBox_jobs ---
+        combo_jobs = _nukedash_combo_jobs(jobs, self._active_job_id, getattr(self, '_show_hidden_jobs', False))
+
+        # Save the currently selected job ID before clearing
+        previously_selected_job_id = self.comboBox_jobs.currentData()
+
+        self.comboBox_jobs.blockSignals(True)  # avoid triggering anything while updating
+        self.comboBox_jobs.clear()
+
+        hidden_combo_indexes = []
+        for job in combo_jobs:
+            job_id = job.get("id")
+            title = job.get("title", f"Untitled Job {job_id}")
+            if job.get("hidden", False):
+                title = f"{title} (Hidden)"
+            self.comboBox_jobs.addItem(title, job_id)
+            if job.get("hidden", False):
+                hidden_combo_indexes.append(self.comboBox_jobs.count() - 1)
+
+        # The active job is authoritative. This also keeps a job selected when
+        # an admin hides it while the application is already displaying it.
+        selection_job_id = self._active_job_id
+        if self.comboBox_jobs.findData(selection_job_id) < 0:
+            selection_job_id = previously_selected_job_id
+        selection_index = self.comboBox_jobs.findData(selection_job_id)
+        if selection_index >= 0:
+            self.comboBox_jobs.setCurrentIndex(selection_index)
+
+        # With hidden jobs off, retain the active hidden job for context only.
+        combo_model = self.comboBox_jobs.model()
+        for index in hidden_combo_indexes:
+            item = combo_model.item(index)
+            if item is not None:
+                item.setEnabled(getattr(self, '_show_hidden_jobs', False))
+                item.setToolTip("This job is hidden in Django admin")
+
+        self.comboBox_jobs.blockSignals(False)
+        # The initial request now completes after the first layout pass. Qt's
+        # minimum-content adjustment policy retains the empty control's width
+        # unless the content-aware size hint is explicitly invalidated.
+        self.comboBox_jobs.updateGeometry()
+
+        return combo_jobs
+
     @pyqtSlot(object)
     def _on_data(self, jobs):
         self._fetch_in_flight = False
@@ -3867,58 +3919,17 @@ class page_nukedash(QMainWindow):
                 self.timelines_tabs.removeTab(0)
                 tab.deleteLater()
             self.timelines_tabs.blockSignals(False)
-        
+
         # Hide loading dialog now that data has arrived (but only after initial load completes)
         if not self._initial_load:
             self._loading_dialog.hide_loading()
-        
+
         # Populate filter dropdowns on first data load
         if not self._dropdowns_populated:
             self._populate_filter_dropdowns()
 
-        # --- populate comboBox_jobs ---
-        combo_jobs = _nukedash_combo_jobs(jobs, self._active_job_id)
+        combo_jobs = self._populate_job_selector(jobs)
 
-        # Save the currently selected job ID before clearing
-        previously_selected_job_id = self.comboBox_jobs.currentData()
-        
-        self.comboBox_jobs.blockSignals(True)  # avoid triggering anything while updating
-        self.comboBox_jobs.clear()
-
-        hidden_combo_indexes = []
-        for job in combo_jobs:
-            job_id = job.get("id")
-            title = job.get("title", f"Untitled Job {job_id}")
-            if job.get("hidden", False):
-                title = f"{title} (Hidden)"
-            self.comboBox_jobs.addItem(title, job_id)
-            if job.get("hidden", False):
-                hidden_combo_indexes.append(self.comboBox_jobs.count() - 1)
-
-        # The active job is authoritative. This also keeps a job selected when
-        # an admin hides it while the application is already displaying it.
-        selection_job_id = self._active_job_id
-        if self.comboBox_jobs.findData(selection_job_id) < 0:
-            selection_job_id = previously_selected_job_id
-        selection_index = self.comboBox_jobs.findData(selection_job_id)
-        if selection_index >= 0:
-            self.comboBox_jobs.setCurrentIndex(selection_index)
-
-        # A hidden active job remains visible for context, but cannot be chosen
-        # again after the user switches to another job.
-        combo_model = self.comboBox_jobs.model()
-        for index in hidden_combo_indexes:
-            item = combo_model.item(index)
-            if item is not None:
-                item.setEnabled(False)
-                item.setToolTip("This job is hidden in Django admin")
-        
-        self.comboBox_jobs.blockSignals(False)
-        # The initial request now completes after the first layout pass. Qt's
-        # minimum-content adjustment policy retains the empty control's width
-        # unless the content-aware size hint is explicitly invalidated.
-        self.comboBox_jobs.updateGeometry()
-        
         # index by id for fast lookup
         by_id = {}
         for job in jobs:
@@ -3930,7 +3941,7 @@ class page_nukedash(QMainWindow):
         selectable_by_id = {
             job.get("id"): job
             for job in combo_jobs
-            if job.get("id") is not None and not bool(job.get("hidden", False))
+            if job.get("id") is not None and (getattr(self, '_show_hidden_jobs', False) or not bool(job.get("hidden", False)))
         }
         self._jobs_by_id = by_id
         self._jobs_source_context = getattr(jobs, 'source_context', None)
@@ -4017,6 +4028,8 @@ class page_nukedash(QMainWindow):
         self._finish_timed_load_after_data()
 
     def _remove_retained_hidden_job_options(self, selected_job_id):
+        if getattr(self, '_show_hidden_jobs', False):
+            return
         self.comboBox_jobs.blockSignals(True)
         try:
             for combo_index in reversed(range(self.comboBox_jobs.count())):
@@ -4041,7 +4054,8 @@ class page_nukedash(QMainWindow):
         job_id = self.comboBox_jobs.itemData(index)
         job = self._jobs_by_id.get(job_id)
         if job:
-            if job.get("hidden", False) and job_id != self._active_job_id:
+            if (job.get("hidden", False) and job_id != self._active_job_id
+                    and not getattr(self, '_show_hidden_jobs', False)):
                 active_index = self.comboBox_jobs.findData(self._active_job_id)
                 if active_index >= 0:
                     self.comboBox_jobs.blockSignals(True)

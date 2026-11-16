@@ -126,7 +126,7 @@ class AdapterTests(unittest.TestCase):
         adapter = self.install()
         self.assertTrue(hasattr(adapter, "timer"), "Timer wiring is missing")
         self.assertTrue(adapter.timer.active)
-        self.assertEqual(adapter.timer.interval, 30000)
+        self.assertEqual(adapter.timer.interval, 1000)
         self.nuke.fire("KnobChanged")
         self.clock.advance(30)
         adapter.timer.timeout.emit()

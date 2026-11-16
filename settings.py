@@ -159,6 +159,7 @@ DEFAULT_SETTINGS = {
     
     # Session restore settings
     "remember_last_session": True,  # Enable/disable session restore
+    "show_hidden_jobs": False,
     "last_job_id": None,  # Last selected job ID
     "last_timeline_index": 0,  # Last selected timeline tab index
     "last_scroll_position": 0,  # Last scroll position in timeline
@@ -782,6 +783,11 @@ class SettingsPage(QWidget):
             "timeline tab, and scroll position when you restart the application."
         )
         session_layout.addWidget(self.remember_session_check)
+        self.show_hidden_jobs_check = QCheckBox("Show hidden jobs")
+        self.show_hidden_jobs_check.setToolTip(
+            "Include hidden jobs in the Tasks job dropdown. Applies immediately."
+        )
+        session_layout.addWidget(self.show_hidden_jobs_check)
         
         # Info label
         session_info = QLabel(
@@ -1247,6 +1253,7 @@ class SettingsPage(QWidget):
         
         # Session Restore
         self.remember_session_check.setChecked(self._settings.get("remember_last_session", True))
+        self.show_hidden_jobs_check.setChecked(self._settings.get("show_hidden_jobs", False))
 
         # Startup
         startup_tab = self._settings.get("startup_tab", 0)
@@ -1570,6 +1577,7 @@ class SettingsPage(QWidget):
         
         # Window
         self._set_pending_setting("remember_window_size", self.remember_size_check.isChecked(), save=False)
+        self._set_pending_setting("show_hidden_jobs", self.show_hidden_jobs_check.isChecked(), save=False)
         self._set_pending_setting("always_on_top", self.always_on_top_check.isChecked(), save=False)
         
         # Session Restore
@@ -1662,6 +1670,7 @@ class SettingsPage(QWidget):
                 self.nukedash_task_style_combo.currentData() or "checklist",
             )
             self._emit_saved_setting("card_spacing", self.card_spacing_spin.value())
+            self._emit_saved_setting("show_hidden_jobs", self.show_hidden_jobs_check.isChecked())
             self._emit_saved_setting("row_height", self.row_height_spin.value())
             self._emit_saved_setting(
                 "quick_view_screen_percentage",

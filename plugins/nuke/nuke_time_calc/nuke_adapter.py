@@ -25,7 +25,7 @@ class Adapter:
             self.on_focus(app.applicationState())
             self.timer = qt_core.QTimer()
             self._timer_stop_pending = True
-            self.timer.setInterval(30000)
+            self.timer.setInterval(1000)
             self.timer.timeout.connect(self._tick_callback)
             self._tick_connected = True
             self.last_checkpoint = collector.monotonic()

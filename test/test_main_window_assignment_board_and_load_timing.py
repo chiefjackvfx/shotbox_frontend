@@ -207,6 +207,7 @@ def build_main_window(startup_tab: int = 0, extra_settings: dict | None = None,
                           main_module.MainWindow._apply_initial_settings
                           if apply_initial_settings else lambda self: None), \
         mock.patch.object(main_module.MainWindow, "_apply_notification_settings", lambda self: None), \
+        mock.patch.object(main_module.MainWindow, "_start_automatic_nuke_time", lambda self: None), \
         mock.patch.object(main_module.MainWindow, "_apply_window_settings", lambda self: None), \
         mock.patch.object(main_module.MainWindow, "_apply_runtime_settings_to_pages", lambda self: None), \
         mock.patch.object(main_module.MainWindow, "_wire_review_page", lambda self: None), \
@@ -231,6 +232,8 @@ class TimingHarness(QMainWindow):
     refresh_clicked = page_nukedash.page_nukedash.refresh_clicked
     _on_error = page_nukedash.page_nukedash._on_error
     _on_data = page_nukedash.page_nukedash._on_data
+    _populate_job_selector = page_nukedash.page_nukedash._populate_job_selector
+    set_show_hidden_jobs = page_nukedash.page_nukedash.set_show_hidden_jobs
     _remove_retained_hidden_job_options = (
         page_nukedash.page_nukedash._remove_retained_hidden_job_options
     )
@@ -934,6 +937,35 @@ class NukeDashLoadTimingTests(unittest.TestCase):
         self.assertEqual(self.harness.comboBox_jobs.itemData(0), 1)
         self.assertEqual(set(self.harness._jobs_by_id), {1, 2})
         self.assertEqual(self.harness.jobs_data_updated.emitted[-1][0], jobs)
+
+    def test_show_hidden_jobs_toggle_keeps_active_job_and_enables_hidden_choices(self):
+        jobs = [dict(id=1, title='Visible', hidden=False, timelines=[]),
+                dict(id=2, title='Hidden', hidden=True, timelines=[])]
+        self.harness._active_job_id = 1
+        self.harness._on_data(jobs)
+        self.harness.set_show_hidden_jobs(True)
+        combo = self.harness.comboBox_jobs
+        self.assertEqual(combo.currentData(), 1)
+        self.assertTrue(combo.model().item(combo.findData(2)).isEnabled())
+        self.harness._remove_retained_hidden_job_options(1)
+        self.assertGreaterEqual(combo.findData(2), 0)
+        self.harness._active_job_id = 2
+        self.harness.set_show_hidden_jobs(False)
+        self.assertEqual(combo.currentData(), 2)
+        self.assertFalse(combo.model().item(combo.findData(2)).isEnabled())
+        self.harness._remove_retained_hidden_job_options(1)
+        self.assertEqual(combo.findData(2), -1)
+
+    def test_show_hidden_jobs_allows_restoring_hidden_job_on_startup(self):
+        self.harness._show_hidden_jobs = True
+        self.harness._active_job_id = None
+        self.harness._settings_manager = FakeSettingsManager(
+            extra_settings={'remember_last_session': True, 'last_job_id': 2})
+        jobs = [dict(id=1, title='Visible', hidden=False, timelines=[]),
+                dict(id=2, title='Hidden', hidden=True, timelines=[])]
+        self.harness._on_data(jobs)
+        self.assertEqual(self.harness.comboBox_jobs.currentData(), 2)
+        self.assertTrue(self.harness.comboBox_jobs.model().item(1).isEnabled())
 
     def test_active_hidden_job_is_retained_disabled_until_switch(self):
         jobs = [
