@@ -10,6 +10,8 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
+- [2026-11-16 11:22:47 AM +00:00] Recognize mapped Windows project shares when verifying Nuke shots.
+
 ## 5.7.3 - 2026-11-16
 
 ### Fixed

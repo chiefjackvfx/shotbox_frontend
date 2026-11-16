@@ -8,6 +8,49 @@ import unittest
 
 
 class SetupTests(unittest.TestCase):
+    def test_mapped_drive_realpath_records_binding_and_runtime_accepts_same_share(self):
+        from nuke_time_calc import context, managed_setup
+        from nuke_time_calc.runtime import BoundResolver
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        import uuid
+        folder = self.root / 'show' / 'SH010'
+        folder.mkdir(parents=True)
+        script = folder / 'v001.nk'
+        script.write_text('Root {}')
+        shot = dict(id=34, base_path=str(folder), timeline=7)
+        jobs = [dict(id=12, timelines=[dict(id=7, shots=[shot])])]
+        managed_setup.save_config(dict(enabled=True, server='https://shotbox.example', artist_id=1,
+            device_id=str(uuid.uuid4()), token_file=str(self.root / 'token'),
+            outbox_dir=str(self.root / 'outbox')), self.config)
+        unc_root = '//server/projects/PROJECTS'
+        real_script = [unc_root + '/show/SH010/v001.nk']
+        original_resolve = Path.resolve
+
+        def resolve(path, *args, **kwargs):
+            if str(path).replace('\\', '/') == 'Z:/PROJECTS':
+                return Path(unc_root)
+            if path == script:
+                return Path(real_script[0])
+            return original_resolve(path, *args, **kwargs)
+
+        with patch.object(context, 'os', SimpleNamespace(name='nt')), \
+                patch.object(context, 'ROOT_ALIASES', (('Z:/PROJECTS', str(self.root)),)), \
+                patch.object(Path, 'resolve', resolve):
+            self.assertTrue(managed_setup.record_launch_context(jobs, shot, str(script),
+                source_server='https://shotbox.example/api/', source_artist_id=1,
+                config_path=self.config))
+            config = managed_setup.load_config(self.config)
+            self.assertEqual(config['mappings'][0]['shot_id'], 34)
+            bound = BoundResolver(config, self.config)
+            self.assertEqual(bound(str(script))['shot_id'], 34)
+            # Resolving outside the verified shot still blocks reporting.
+            real_script[0] = unc_root + '/show/SH011/v001.nk'
+            self.assertIsNone(bound(str(script)))
+            self.assertFalse(managed_setup.record_launch_context(jobs, shot, str(script),
+                source_server='https://shotbox.example/api/', source_artist_id=1,
+                config_path=self.config))
+
     def setUp(self):
         scratch = Path(__file__).resolve().parents[4] / '.cache' / 'nuke-time-setup-tests'
         scratch.mkdir(parents=True, exist_ok=True)

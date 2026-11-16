@@ -1,12 +1,33 @@
 """Offline, explicit shot bindings. Importing this module has no side effects."""
 import posixpath
 import re
+import os
+from pathlib import Path
 
 # Same mounted project-root aliases as the desktop; no drive/basename guessing.
 ROOT_ALIASES = (
     ('Z:/PROJECTS', '/Volumes/projects/PROJECTS', '/mnt/projects/PROJECTS'),
     ('X:/Projects B', '/Volumes/Expansion_B/Projects B'),
 )
+
+
+def _mounted_aliases(aliases):
+    """Include the UNC target of configured Windows project mounts.
+
+    Resolve only the trusted project root, not individual shot/script paths:
+    symlinks within a shot must still fail the real-path containment check.
+    Do not persist machine-specific share names or infer shots from filenames.
+    """
+    yield from aliases
+    if os.name == 'nt':
+        for root in aliases:
+            if re.match(r'^[A-Za-z]:/', root):
+                try:
+                    resolved = str(Path(root).resolve(strict=True)).replace('\\', '/')
+                except (OSError, RuntimeError):
+                    continue
+                if resolved.startswith('//'):
+                    yield resolved.rstrip('/')
 
 
 def _path(value):
@@ -23,11 +44,13 @@ def _key(value):
     if path is None:
         return None
     for index, aliases in enumerate(ROOT_ALIASES):
-        for root in aliases:
-            candidate = path.casefold() if ':' in root else path
-            compare_root = root.casefold() if ':' in root else root
+        for root in _mounted_aliases(aliases):
+            windows = os.name == 'nt' or ':' in root or root.startswith('//')
+            candidate = path.casefold() if windows else path
+            compare_root = root.casefold() if windows else root
             if candidate == compare_root or candidate.startswith(compare_root + '/'):
-                return '@root%d%s' % (index, path[len(root):])
+                suffix = path[len(root):]
+                return '@root%d%s' % (index, suffix.casefold() if os.name == 'nt' else suffix)
     return path
 
 
