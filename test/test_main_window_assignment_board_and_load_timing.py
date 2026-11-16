@@ -697,6 +697,15 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_timeline_review_has_its_own_tab_and_stable_startup_id(self):
+        window = build_main_window(startup_tab=6)
+        try:
+            self.assertIs(window.tabs.currentWidget(), window.page_timeline_review)
+            self.assertIn("Timeline Review", [window.tabs.tabText(i) for i in range(window.tabs.count())])
+            self.assertFalse(hasattr(window, "page_review"))
+        finally:
+            window.close()
+
     def test_import_timeline_is_independent_and_has_stable_startup_id(self):
         window = build_main_window(startup_tab=5, extra_settings={'enable_timeline_import_page': True})
         try:

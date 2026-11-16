@@ -113,8 +113,39 @@ def test_single_otio_still_loads_when_no_xml_is_present(page, tmp_path, app):
     assert page.document.path == str(tmp_path / 'edit.otio')
 
 
-def test_folder_drop_rejects_files_multiple_folders_remote_urls_and_busy_scans(page, tmp_path):
-    path = tmp_path / 'edit.xml'
+@pytest.mark.parametrize('target_name', ['background', 'folder', 'table', 'validation'])
+def test_xml_drop_loads_only_timeline_and_clears_previous_media(page, tmp_path, app, target_name):
+    load(page, tmp_path)
+    path = tmp_path / 'edit.XML'
+    path.write_text(xml_text())
+    page.path_overrides['old'] = 'old.mov'
+    target = {'background': page, 'folder': page.folder_edit,
+              'table': page.tableWidgetTemp.viewport(), 'validation': page.validation_text.viewport()}[target_name]
+    with mock.patch('import_timeline_page.discover') as discover, mock.patch('import_timeline_page.probe_media') as probe:
+        assert drop_urls(target, [QUrl.fromLocalFile(str(path))]) == (True, True)
+        wait_read(page, app)
+    discover.assert_not_called()
+    probe.assert_not_called()
+    assert page.document.path == str(path)
+    assert page.timeline_combo.currentData() == str(path)
+    assert page.media == {}
+    assert page.path_overrides == {}
+    assert page.prepared.rows
+    assert not page.btnNukeAll.isEnabled()
+
+
+def test_invalid_xml_drop_reports_error(page, tmp_path, app):
+    path = tmp_path / 'bad.xml'
+    path.write_text('<unrelated/>')
+    assert drop_urls(page, [QUrl.fromLocalFile(str(path))]) == (True, True)
+    wait_read(page, app)
+    assert page.document is None
+    assert 'xmeml' in page.validation_text.toPlainText()
+    assert not page.btnNukeAll.isEnabled()
+
+
+def test_folder_drop_rejects_other_files_multiple_folders_remote_urls_and_busy_scans(page, tmp_path):
+    path = tmp_path / 'edit.txt'
     path.write_text(xml_text())
     page.folder_edit.setText('keep current folder')
     for urls in ([QUrl.fromLocalFile(str(path))], [QUrl.fromLocalFile(str(tmp_path))] * 2,
@@ -144,7 +175,8 @@ def test_new_page_preserves_existing_settings_and_single_shot_action(page):
     assert not page.spinboxHandles.isEnabled()
     assert page.detect_colourspace_check.isChecked()
     assert page.checkBoxAddToDB.isChecked()
-    assert page.checkBoxCreateTasks.isChecked()
+    assert not page.checkBoxCreateTasks.isChecked()
+    assert not page.create_tasks
     assert not page.btnNukeAll.isEnabled()
 
 
@@ -366,3 +398,86 @@ def test_loading_timeline_initializes_editable_name(page, tmp_path):
     page._documents_loaded(replacement)
     assert page.timeline_name_edit.text() == 'Next edit'
     assert page.parser.edit_name == 'Next edit'
+
+
+@pytest.mark.parametrize('target_name', ['card', 'field', 'button'])
+def test_raw_folder_drop_preserves_timeline_and_replaces_media(page, tmp_path, app, target_name):
+    load(page, tmp_path)
+    original = page.document
+    raw = tmp_path / 'raw'
+    path, info = media_file(raw / 'card1')
+    (raw / 'unrelated.xml').write_text('not a timeline')
+    target = {'card': page.raw_media_card, 'field': page.raw_folder_edit,
+              'button': page.raw_folder_button}[target_name]
+    with mock.patch('import_timeline_page.probe_media', return_value=info) as probe, \
+            mock.patch.object(page, '_show_scan_folder', wraps=page._show_scan_folder) as progress:
+        assert drop_urls(target, [QUrl.fromLocalFile(str(raw))]) == (True, True)
+        wait_read(page, app)
+    probe.assert_called_once()
+    progress.assert_any_call(str(raw))
+    progress.assert_any_call(str(raw / 'card1'))
+    assert page.loading_folder_label.isHidden()
+    assert page.document is original
+    assert list(page.media) == [path]
+    assert page.prepared.rows[0].match.path == path
+    assert page.raw_folder_edit.text() == str(raw)
+    assert '1 media files' in page.raw_media_status.text()
+    assert 'unsupported XML' not in page.raw_media_status.text()
+
+
+def test_raw_folder_before_xml_is_retained(page, tmp_path, app):
+    raw = tmp_path / 'raw'
+    path, info = media_file(raw)
+    with mock.patch('import_timeline_page.probe_media', return_value=info):
+        page._load_raw_folder(str(raw))
+        wait_read(page, app)
+    xml = tmp_path / 'edit.xml'
+    xml.write_text(xml_text())
+    page._load_xml_file(str(xml))
+    wait_read(page, app)
+    assert page.prepared.rows[0].match.path == path
+
+
+def test_raw_folder_error_preserves_loaded_timeline_and_media(page, tmp_path, app):
+    load(page, tmp_path)
+    original, media = page.document, page.media
+    page._load_raw_folder(str(tmp_path / 'missing'))
+    wait_read(page, app)
+    assert page.document is original
+    assert page.media is media
+    assert 'Unable to load raw media' in page.raw_media_status.text()
+
+
+def test_raw_section_rejects_busy_drops(page, tmp_path):
+    page._busy = True
+    assert drop_urls(page.raw_media_card, [QUrl.fromLocalFile(str(tmp_path))]) == (False, False)
+    page._busy = False
+
+
+def test_raw_scan_only_probes_timeline_candidates(page, tmp_path, app):
+    load(page, tmp_path)
+    raw = tmp_path / 'raw'
+    path, info = media_file(raw)
+    media_file(raw, name='unrelated.mxf')
+    with mock.patch('import_timeline_page.probe_media', return_value=info) as probe:
+        page._load_raw_folder(str(raw))
+        wait_read(page, app)
+    assert probe.call_count == 1
+    assert probe.call_args.args[0] == path
+    assert '2 media files found; 1 checked' in page.raw_media_status.text()
+
+
+def test_raw_workflow_defaults_to_ten_handles_and_preserves_user_edits(page, tmp_path, app):
+    load(page, tmp_path)
+    path, info = media_file(tmp_path / 'raw', frames=1000, start=800)
+    with mock.patch('import_timeline_page.probe_media', return_value=info):
+        page._load_raw_folder(str(tmp_path / 'raw'))
+        wait_read(page, app)
+        assert not page.detect_handles_check.isChecked()
+        assert page.spinboxHandles.value() == 10
+        assert page.prepared.shots[0].duration == 40
+        page.spinboxHandles.setValue(5)
+        page._load_raw_folder(str(tmp_path / 'raw'))
+        wait_read(page, app)
+    assert page.spinboxHandles.value() == 5
+    assert page.prepared.shots[0].duration == 30

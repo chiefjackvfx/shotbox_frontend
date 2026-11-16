@@ -646,7 +646,9 @@ class NukeScriptGenerator:
             source_width, source_height = self._get_video_format(primary_clip_path)
         width, height = create_nk.compute_target_root_format(source_width, source_height)
         frame_first = 1001
-        frame_last = frame_first + max(shot.duration, 1) - 1
+        working_duration = (shot.cut_duration + (shot.head_handles or 0) + (shot.tail_handles or 0)
+                            if shot.cut_duration is not None else shot.duration)
+        frame_last = frame_first + max(working_duration, 1) - 1
         extra_plate_paths: List[str] = []
 
         for clip in sorted(shot.clips, key=lambda current: (current.track, current.name, current.filepath)):
@@ -702,7 +704,7 @@ class NukeScriptGenerator:
             artist_name=self.user,
             fps=shot.fps,
             colourspace=(primary_clip.media_timing or {}).get('input_colourspace', self.colourspace),
-            duration=max(shot.duration, 1),
+            duration=max(working_duration, 1),
             edit_inpoint=shot.edit_inpoint,
             edit_outpoint=shot.edit_outpoint,
             frame_first=frame_first,
@@ -1870,7 +1872,7 @@ class XMLImportPage(QWidget):
             colourspace=self.colourspace,
             handles=self.handles,
             add_to_db=self.add_to_db,
-            create_tasks=self.create_tasks,
+            create_tasks=False,
             skip_activity_logging=self.skip_activity_logging,
         )
         dialog_result = creation_dialog.exec()
@@ -2085,7 +2087,7 @@ class SingleShotCreationDialog(QDialog):
 
     def __init__(self, parent=None, default_shot_name: str = "sho010", 
                  colourspace: str = "", handles: int = 25,
-                 add_to_db: bool = True, create_tasks: bool = True,
+                 add_to_db: bool = True, create_tasks: bool = False,
                  skip_activity_logging: bool = False):
         super().__init__(parent)
 

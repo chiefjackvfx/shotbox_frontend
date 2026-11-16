@@ -243,6 +243,11 @@ helpers and the frontend `.cache` folder. Follow the cleanup requirements in
 
 ## Review renders and colour management
 
+**Timeline Review** is a separate desktop tab for reviewing assembled edits,
+versioned MP4 previews, tasks and frame annotations using the existing backend.
+See [Timeline Review](docs/TIMELINE_REVIEW.md) for controls, media requirements
+and verification. Choose it as the Default Tab in Settings if desired.
+
 Use **Play Render** to play the latest MOV or EXR sequence in a shot's
 `renders/comp` folder. While viewing a render, the button changes to **Play Preview**
 to return to the chosen preview at the current playback time. If a shot has only

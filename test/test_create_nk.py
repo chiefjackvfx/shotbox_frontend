@@ -392,6 +392,25 @@ class CreateNkTests(unittest.TestCase):
             self.assertEqual(fake.toNode('Viewer1')['frame_range'].value(), '1011-1030')
             self.assertEqual(fake.toNode('Read1')['colorspace'].value(), 'ARRI LogC3 (EI800)')
 
+    def test_proxy_raw_cut_retime_limits_root_to_cut_plus_ten_handles(self):
+        with tempfile.TemporaryDirectory() as directory:
+            request = self._request(Path(directory))
+            request.duration, request.cut_duration = 291, 271
+            request.head_handles = request.tail_handles = 10
+            request.frame_first, request.frame_last = 1001, 1291
+            request.plate_timings = [{'frames': 678, 'cut_start': 192, 'speed': 1}]
+            fake = _FakeNuke()
+            module._TemplateEditor(fake).edit(request)
+            retime = fake.toNode('Retime1')
+            self.assertEqual(fake.root()['first_frame'].value(), 1001)
+            self.assertEqual(fake.root()['last_frame'].value(), 1291)
+            self.assertEqual(retime['input.first'].value(), 183)
+            self.assertEqual(retime['input.last'].value(), 473)
+            self.assertEqual(retime['output.first'].value(), 1001)
+            self.assertEqual(retime['output.last'].value(), 1291)
+            self.assertEqual(retime['speed'].value(), 1)
+            self.assertEqual(fake.toNode('Viewer1')['frame_range'].value(), '1011-1281')
+
     def test_denoise_branches_use_plain_retimes_and_vertical_spacing(self):
         with tempfile.TemporaryDirectory() as directory:
             request = self._request(Path(directory))

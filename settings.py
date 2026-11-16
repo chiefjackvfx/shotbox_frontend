@@ -385,6 +385,7 @@ class SettingsPage(QWidget):
     nuke_locks_preview_requested = pyqtSignal(bool)
     nuke_locks_clear_requested = pyqtSignal(dict)
     server_url_changed = pyqtSignal(str)  # new server URL
+    cache_clear_requested = pyqtSignal()
     
     def __init__(self, settings_manager: Optional[SettingsManager] = None, parent=None):
         super().__init__(parent)
@@ -821,6 +822,7 @@ class SettingsPage(QWidget):
         self.startup_tab_combo.addItem("Activity", 3)
         self.startup_tab_combo.addItem("Settings", 4)
         self.startup_tab_combo.addItem("Import Timeline", 5)
+        self.startup_tab_combo.addItem("Timeline Review", 6)
         startup_layout.addRow("Default Tab:", self.startup_tab_combo)
 
         self.show_startup_loading_check = QCheckBox("Show Loading Dialog on Startup")
@@ -1471,6 +1473,7 @@ class SettingsPage(QWidget):
 
         if self._cache_clear_task is not None:
             return
+        self.cache_clear_requested.emit()
         self.clear_cache_btn.setEnabled(False)
         self.cache_status_label.setText("Clearing cache…")
         self.cache_status_label.setToolTip("")

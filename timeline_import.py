@@ -85,13 +85,15 @@ class Discovery:
     warnings: list[str] = field(default_factory=list)
 
 
-def discover(folder: str, cancel=lambda: False) -> Discovery:
+def discover(folder: str, cancel=lambda: False, *, include_timelines=True, progress=None) -> Discovery:
     root = Path(folder).resolve()
     if not root.is_dir():
         raise ValueError('Select an existing media folder')
     result = Discovery(str(root))
     for directory, dirs, files in os.walk(root, followlinks=False, onerror=lambda e: result.warnings.append(str(e))):
         checkpoint(cancel)
+        if progress:
+            progress(directory)
         dirs[:] = sorted(d for d in dirs if not Path(directory, d).is_symlink())
         for name in sorted(files):
             path = Path(directory, name)
@@ -100,6 +102,8 @@ def discover(folder: str, cancel=lambda: False) -> Discovery:
             ext = path.suffix.lower()
             if ext in MEDIA_EXTENSIONS:
                 result.media.append(str(path))
+            elif not include_timelines:
+                continue
             elif ext == '.otio':
                 result.timelines.append(str(path))
             elif ext == '.drt':
@@ -383,7 +387,7 @@ class Match:
     candidates: list[str]
 
 
-def match_media(clip: TimelineClip, media: dict[str, MediaInfo]) -> Match:
+def match_media(clip: TimelineClip, media: dict[str, MediaInfo], *, relink_raw=False) -> Match:
     hints = {basename(s) for s in (clip.reference, clip.file_name) if s}
     # Display names are less reliable: use only when no explicit media identity exists.
     if not hints:
@@ -404,7 +408,28 @@ def match_media(clip: TimelineClip, media: dict[str, MediaInfo]) -> Match:
         return Match(None, 'Ambiguous filename', candidates)
     stems = {Path(s).stem.casefold() for s in hints} | {clip.reel.casefold()}
     suggestions = [p for p in media if Path(p).stem.casefold() in stems]
+    identity_stems = {Path(s).stem.casefold() for s in hints}
+    if relink_raw and len(identity_stems) == 1:
+        compatible = [p for p in suggestions if Path(p).stem.casefold() in identity_stems
+                      and _covers_cut(clip, media[p])]
+        if len(compatible) == 1:
+            return Match(compatible[0], 'Filename stem + timecode coverage', suggestions)
     return Match(None, 'Confirm suggested media' if suggestions else 'Missing local media', suggestions)
+
+
+def candidate_media_paths(document: TimelineDocument, paths: list[str]) -> list[str]:
+    """Filter metadata reads using the same identities as media matching."""
+    names, stems = set(), set()
+    for clip in document.clips:
+        hints = {basename(s).casefold() for s in (clip.reference, clip.file_name) if s}
+        if not hints:
+            hints = {basename(clip.name).casefold()}
+        names.update(hints)
+        stems.update(Path(name).stem for name in hints)
+        if clip.reel:
+            stems.add(clip.reel.casefold())
+    return [path for path in paths if Path(path).name.casefold() in names
+            or Path(path).stem.casefold() in stems]
 
 
 def local_start(clip: TimelineClip, media: MediaInfo) -> float | None:
@@ -479,12 +504,18 @@ class PreparedImport:
                 raise ValueError(f'Media changed or became unavailable since review: {path}')
 
 
+_DEFAULT_HANDLES = object()
+RAW_RELINK_HANDLES = 10
+
+
 def prepare_import(document: TimelineDocument, media: dict[str, MediaInfo], *, companion=None,
                    path_overrides=None, timing_choices=None, offset_overrides=None,
-                   handles=None, accepted_handles=None, excluded=(), auto_colourspace=False,
-                   colourspace_overrides=None, manual_colourspace=None) -> PreparedImport:
-    """Resolve in memory. handles=None uses measured head/tail availability."""
+                   handles=_DEFAULT_HANDLES, accepted_handles=None, excluded=(), auto_colourspace=False,
+                   colourspace_overrides=None, manual_colourspace=None, relink_raw=False) -> PreparedImport:
+    """Raw relinks default to ten handles; explicit None uses all availability."""
     from import_xml_v2 import ParsedClip, XMLTimelineParser
+    if handles is _DEFAULT_HANDLES:
+        handles = RAW_RELINK_HANDLES if relink_raw else None
     path_overrides = path_overrides or {}
     timing_choices = timing_choices or {}
     offset_overrides = offset_overrides or {}
@@ -501,7 +532,7 @@ def prepare_import(document: TimelineDocument, media: dict[str, MediaInfo], *, c
         other = conflicts.get(clip.uid)
         choice = timing_choices.get(clip.uid)
         effective = other if choice == 'companion' and other else clip
-        match = match_media(effective, media)
+        match = match_media(effective, media, relink_raw=relink_raw)
         if clip.uid in path_overrides:
             override = str(Path(path_overrides[clip.uid]).resolve())
             match = Match(override if override in media else None, 'Manual selection', [override])

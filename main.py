@@ -210,6 +210,13 @@ class MainWindow(QMainWindow):
             if hasattr(self.page_review, "set_settings_manager"):
                 self.page_review.set_settings_manager(self._settings_manager)
             self.tabs.addTab(self.page_review, 'Review')
+        from timeline_review_page import TimelineReviewPage
+
+        self.page_timeline_review = TimelineReviewPage()
+        self.page_timeline_review.set_settings_manager(self._settings_manager)
+        if hasattr(self.page_nukedash, "active_job_changed"):
+            self.page_nukedash.active_job_changed.connect(self.page_timeline_review.set_initial_job)
+        self.tabs.addTab(self.page_timeline_review, 'Timeline Review')
         if hasattr(self, "page_importer"):
             self.tabs.addTab(self.page_importer, 'Import')
 
@@ -250,6 +257,8 @@ class MainWindow(QMainWindow):
         # Connect settings signals
         self.page_settings.settings_changed.connect(self._on_settings_changed)
         self.page_settings.server_url_changed.connect(self._on_server_url_changed)
+        if hasattr(self.page_settings, "cache_clear_requested"):
+            self.page_settings.cache_clear_requested.connect(self.page_timeline_review.clear_frame_cache)
         self.page_settings.nuke_locks_preview_requested.connect(self.page_nukedash.lock_clear_preview_requested)
         self.page_settings.nuke_locks_clear_requested.connect(self.page_nukedash.lock_clear_requested)
         self.page_nukedash.lock_clear_preview_ready.connect(self.page_settings.review_nuke_lock_clear_preview)
@@ -432,6 +441,7 @@ class MainWindow(QMainWindow):
             3: getattr(self, "page_activity", None),
             4: getattr(self, "page_settings", None),
             5: getattr(self, "page_timelineImport", None),
+            6: getattr(self, "page_timeline_review", None),
         }
         return logical_tabs.get(startup_tab)
 
@@ -975,6 +985,7 @@ class MainWindow(QMainWindow):
     def _on_server_url_changed(self, url: str):
         """Handle server URL change."""
         self._update_server_url(url)
+        self.page_timeline_review.reset_server()
         http_help.DjangoAPI.set_current_user_by_id(
             self._settings_manager.get("django_username")
         )
@@ -1140,6 +1151,7 @@ class MainWindow(QMainWindow):
             return
         if toolbox is not None:
             toolbox.close_tools()
+        self.page_timeline_review.shutdown()
         process = getattr(self, "_automatic_update_process", None)
         if process is not None and process.state() != QProcess.ProcessState.NotRunning:
             self._automatic_update_check_finished = True

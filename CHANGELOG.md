@@ -6,7 +6,21 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-16 04:30:54 PM +00:00] Add JKL timeline playback shortcuts with bidirectional double speed.
+- [2026-11-16 03:45:15 PM +00:00] Verify timeline timing, playback, drafts, and existing API integration.
+- [2026-11-16 03:45:15 PM +00:00] Add independent Timeline Review tab, tasks, versions, and annotations.
+- [2026-11-16 03:44:35 PM +00:00] Relink raw extensions using unique stems and validated timecodes.
+- [2026-11-16 03:32:48 PM +00:00] Add separate raw media folder drop zone and matching.
+- [2026-11-16 03:27:14 PM +00:00] Load dropped XML timelines without scanning surrounding media.
+
 ### Changed
+
+- [2026-11-16 04:32:34 PM +00:00] Default task creation off for timeline and single-shot imports.
+- [2026-11-16 04:30:54 PM +00:00] Allow further picture and timeline zooming out during review.
+- [2026-11-16 04:26:36 PM +00:00] Verify ten-frame proxy handles and bounded Nuke retime ranges.
+- [2026-11-16 03:45:15 PM +00:00] Document desktop timeline review controls and media requirements.
+- [2026-11-16 03:44:35 PM +00:00] Probe only timeline candidates when scanning raw media folders.
+- [2026-11-16 03:39:28 PM +00:00] Show current scan folder beside timeline import progress.
 
 ### Fixed
 

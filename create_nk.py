@@ -662,9 +662,10 @@ class _TemplateEditor:
                     self._set_knob(read['frame'], f'frame + {fraction:.15g}')
                 for knob, value in (
                     ('input.first', anchor), ('input.first_lock', True),
-                    ('input.last', frames), ('input.last_lock', False),
+                    ('input.last', math.floor(working_source_last + 0.000001)), ('input.last_lock', True),
                     ('output.first', self.request.frame_first), ('output.first_lock', True),
-                    ('output.last_lock', False), ('speed', 1.0), ('reverse', False),
+                    ('output.last', self.request.frame_last), ('output.last_lock', False),
+                    ('speed', 1.0), ('reverse', False),
                     ('before', 'continue'), ('after', 'continue'), ('filter', 'none'), ('shutter', 0.0),
                 ):
                     self._set_knob(retime[knob], value)

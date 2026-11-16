@@ -52,7 +52,7 @@ def arrange_timeline_page(page):
         page.btnSelectXML, page.btnMakeThumbs, page.btnShotTable, page.btnNukeAll,
         page.checkBoxAddToDB, page.checkBoxCreateTasks, page.checkBoxSkipActivityLogging,
         page.btnMakeShot, page.tableWidgetTemp, page.folder_edit, page.cancel_scan_button,
-        page.loading_label, page.loading_progress, page.timeline_combo, page.accept_handles_button,
+        page.loading_label, page.loading_folder_label, page.loading_progress, page.timeline_combo, page.accept_handles_button,
         page.validation_text, page.timeline_name_edit,
     }
 
@@ -104,28 +104,47 @@ def arrange_timeline_page(page):
 
     source, source_layout, _ = _card('01', 'Choose your timeline')
     source.setObjectName('timeline_source_card')
-    source_layout.addWidget(_label('Drop a media-managed folder anywhere on this page, or browse to one.'))
+    source_layout.addWidget(_label('Drop an XML file to load just the timeline, or drop or browse to a media-managed folder.'))
     folder_row = QHBoxLayout()
     folder_row.addWidget(page.folder_edit, 1)
     folder_row.addWidget(page.btnSelectXML)
     page.btnSelectXML.setIcon(page.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon))
-    page.folder_edit.setPlaceholderText('Folder containing your clips and DRT / XML / OTIO timeline')
+    page.folder_edit.setPlaceholderText('XML file or folder containing your clips and timeline')
     source_layout.addLayout(folder_row)
     timelines = _field('Timeline to import · choose DRT, XML or OTIO', page.timeline_combo)
     page.timeline_combo.setMinimumWidth(0)
-    page.timeline_combo.setPlaceholderText('Select a folder first')
+    page.timeline_combo.setPlaceholderText('Drop an XML file or select a folder first')
     source_layout.addLayout(timelines)
     loading = QHBoxLayout()
     page.loading_label.setProperty('role', 'loading')
-    loading.addWidget(page.loading_label, 1)
+    loading.addWidget(page.loading_label)
+    page.loading_folder_label.setProperty('role', 'loading')
+    page.loading_folder_label.setMinimumWidth(0)
+    page.loading_folder_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+    loading.addWidget(page.loading_folder_label, 1)
     page.loading_progress.setFixedHeight(5)
     loading.addWidget(page.loading_progress)
     loading.addWidget(page.cancel_scan_button)
     page.cancel_scan_button.hide()
     source_layout.addLayout(loading)
-    setup.addWidget(source)
+    source_row = QHBoxLayout()
+    source_row.addWidget(source, 1)
+    page.raw_media_card, raw_layout, _ = _card('02', 'Choose raw media')
+    page.raw_media_card.setObjectName('timeline_raw_media_card')
+    page.raw_media_card.setAcceptDrops(True)
+    raw_layout.addWidget(_label('Drop a raw media folder here to relink the timeline. Subfolders are included.'))
+    raw_row = QHBoxLayout()
+    page.raw_folder_edit.setPlaceholderText('Folder containing camera originals')
+    raw_row.addWidget(page.raw_folder_edit, 1)
+    raw_row.addWidget(page.raw_folder_button)
+    raw_layout.addLayout(raw_row)
+    page.raw_media_status.setProperty('role', 'muted')
+    raw_layout.addWidget(page.raw_media_status)
+    raw_layout.addStretch()
+    source_row.addWidget(page.raw_media_card, 1)
+    setup.addLayout(source_row)
 
-    settings, settings_layout, settings_heading = _card('02', 'Import settings')
+    settings, settings_layout, settings_heading = _card('03', 'Import settings')
     settings_heading.addWidget(page.updateBtn)
     page.updateBtn.setText('Apply settings')
     settings_layout.addLayout(_field('Timeline name', page.timeline_name_edit))
@@ -177,7 +196,7 @@ def arrange_timeline_page(page):
     settings_layout.addLayout(options)
     setup.addWidget(settings)
 
-    review, review_layout, review_heading = _card('03', 'Review matches')
+    review, review_layout, review_heading = _card('04', 'Review matches')
     review.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Ignored)
     review.setMinimumHeight(270)
     page.review_summary_label = _label('No timeline loaded', 'muted')
@@ -200,7 +219,7 @@ def arrange_timeline_page(page):
     icon.setPixmap(page.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon).pixmap(36, 36))
     empty_layout.addWidget(icon)
     for text, role in [('Your timeline starts here', 'emptyTitle'),
-                       ('Choose a folder to review local clips, timing and handles before importing.', 'muted')]:
+                       ('Drop an XML file or choose a folder to review clips before importing.', 'muted')]:
         label = _label(text, role)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         empty_layout.addWidget(label)
@@ -239,7 +258,7 @@ def arrange_timeline_page(page):
     content_splitter.setSizes([450, 350])
 
     footer = QHBoxLayout()
-    page.import_status_label = _label('Choose a folder to begin', 'importStatus')
+    page.import_status_label = _label('Drop an XML file or choose a folder to begin', 'importStatus')
     page.import_status_label.setProperty('tone', 'neutral')
     footer.addWidget(page.import_status_label, 1)
     page.btnNukeAll.setProperty('role', 'primary')

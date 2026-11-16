@@ -551,3 +551,31 @@ def test_sixteenth_layer_still_requires_alignment(tmp_path):
     doc = document(tmp_path, [occurrence(), occurrence(uid='16:0', track=16, timeline_start=1)])
     with pytest.raises(ValueError, match='not aligned'):
         module._validate_structure(doc)
+
+
+def test_candidate_metadata_reads_keep_duplicates_and_extension_changes(tmp_path):
+    doc = document(tmp_path)
+    paths = ['/raw/card1/camera.mxf', '/raw/card2/CAMERA.MXF', '/raw/card3/camera.mov',
+             '/raw/unrelated.mxf']
+    assert module.candidate_media_paths(doc, paths) == paths[:3]
+
+
+def test_raw_relink_requires_unique_stem_and_timecode_coverage(tmp_path):
+    path, info = media_file(tmp_path, 'camera.mov')
+    assert module.match_media(occurrence(), {path: info}, relink_raw=True).path == path
+    assert module.match_media(occurrence(source_start=2000), {path: info}, relink_raw=True).path is None
+    other, duplicate = media_file(tmp_path / 'duplicate', 'camera.mov')
+    assert module.match_media(occurrence(), {path: info, other: duplicate}, relink_raw=True).path is None
+    assert module.match_media(occurrence(reference='/other.mov'), {path: info}, relink_raw=True).path is None
+
+
+def test_proxy_relink_defaults_to_ten_handles_on_long_raw(tmp_path):
+    path, info = media_file(tmp_path, 'camera.mxf', frames=678, start=288617)
+    doc = document(tmp_path, [occurrence(reference='/proxy/camera.mov', file_name='camera.mov',
+                                         source_start=288809, duration=271)])
+    result = module.prepare_import(doc, {path: info}, relink_raw=True)
+    assert not result.errors
+    shot = result.shots[0]
+    assert (shot.head_handles, shot.tail_handles) == (10, 10)
+    assert (shot.duration, shot.cut_first, shot.cut_last) == (291, 1011, 1281)
+    assert shot.primary_clip.media_timing['cut_start'] == 192

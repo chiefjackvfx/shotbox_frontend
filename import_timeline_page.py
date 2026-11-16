@@ -13,13 +13,14 @@ from PyQt6.QtWidgets import (
 
 from import_xml_v2 import XMLImportPage
 from colourspace_defaults import COLOURSPACE_LIST
-from timeline_import import Cancelled, discover, prepare_import, probe_media, read_timeline
+from timeline_import import Cancelled, Discovery, RAW_RELINK_HANDLES, candidate_media_paths, discover, prepare_import, probe_media, read_timeline
 
 
 class ReadWorker(QThread):
     """Cooperative cancellation for scanning/probing; no filesystem writes."""
     result = pyqtSignal(object)
     failed = pyqtSignal(str)
+    progress = pyqtSignal(str)
 
     def __init__(self, work, parent=None):
         super().__init__(parent)
@@ -52,7 +53,11 @@ class ImportTimelinePage(XMLImportPage):
         self._pending_timeline = None
         self._busy = False
         self._refreshing = False
+        self._raw_media_root = ''
+        self._managed_handle_settings = None
         super().__init__(parent)
+        self.create_tasks = False
+        self.checkBoxCreateTasks.setChecked(False)
         self.setAcceptDrops(True)
         # Capture URL drops over child editors/table viewports as well as the
         # page background. Separate dialogs keep their own drop behavior.
@@ -75,7 +80,10 @@ class ImportTimelinePage(XMLImportPage):
         self.detect_handles_check.setChecked(True)
         self.detect_handles_check.setToolTip('Use the measured head/tail frames available on every layer. Counts remain editable per shot.')
         self.spinboxHandles.setEnabled(False)
-        self.spinboxHandles.setToolTip('Manual handle request; disable automatic detection to use this value.')
+        self.spinboxHandles.setToolTip(
+            'Frames before and after the cut. Raw relinks default to 10 at each end. '
+            'The Nuke working range starts at 1001 and includes the cut plus these handles. '
+            'Disable automatic detection to edit this value.')
         self.layout().itemAt(2).layout().insertWidget(0, self.detect_handles_check)
         self.detect_handles_check.toggled.connect(self._handle_mode_changed)
         self.btnSelectXML.setText('Select Folder')
@@ -97,6 +105,10 @@ class ImportTimelinePage(XMLImportPage):
         loading_row = QHBoxLayout()
         self.loading_label = QLabel()
         self.loading_label.setWordWrap(True)
+        self.loading_folder_label = QLabel()
+        self.loading_folder_label.setWordWrap(True)
+        self.loading_folder_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.loading_folder_label.hide()
         loading_row.addWidget(self.loading_label, 1)
         self.loading_progress = QProgressBar()
         self.loading_progress.setRange(0, 0)
@@ -137,6 +149,12 @@ class ImportTimelinePage(XMLImportPage):
         self.timeline_combo.currentIndexChanged.connect(self._timeline_changed)
         self.spinboxHandles.valueChanged.connect(self._handles_changed)
         self.folder_edit.returnPressed.connect(self._on_select_xml)
+        self.raw_folder_edit = QLineEdit()
+        self.raw_folder_button = QPushButton('Select Raw Folder')
+        self.raw_media_status = QLabel('No raw media folder selected')
+        self.raw_media_status.setWordWrap(True)
+        self.raw_folder_button.clicked.connect(self._select_raw_folder)
+        self.raw_folder_edit.returnPressed.connect(self._select_raw_folder)
         from timeline_import_ui import arrange_timeline_page
         arrange_timeline_page(self)
 
@@ -154,8 +172,10 @@ class ImportTimelinePage(XMLImportPage):
                 and event.mimeData().hasUrls()):
             urls = event.mimeData().urls()
             folder = urls[0].toLocalFile() if len(urls) == 1 and urls[0].isLocalFile() else ''
+            raw_drop = watched is self.raw_media_card or self.raw_media_card.isAncestorOf(watched)
             try:
-                valid = bool(folder) and Path(folder).is_dir()
+                valid = bool(folder) and (Path(folder).is_dir() or
+                    (Path(folder).is_file() and Path(folder).suffix.lower() == '.xml'))
             except (OSError, ValueError):
                 valid = False
             if not self.isEnabled() or self._busy or not valid:
@@ -164,11 +184,16 @@ class ImportTimelinePage(XMLImportPage):
             event.setDropAction(Qt.DropAction.CopyAction)
             event.accept()
             if event.type() == QEvent.Type.Drop:
-                self._load_folder(folder)
+                if Path(folder).is_file():
+                    self._load_xml_file(folder)
+                elif raw_drop:
+                    self._load_raw_folder(folder)
+                else:
+                    self._load_folder(folder)
             return True
         return super().eventFilter(watched, event)
 
-    def _start_read(self, work, callback, message='Reading timeline/media metadata…'):
+    def _start_read(self, work, callback, message='Reading timeline/media metadata…', on_failure=None):
         if self._read_worker and self._read_worker.isRunning():
             return
         self._busy = True
@@ -176,6 +201,8 @@ class ImportTimelinePage(XMLImportPage):
         self._set_read_controls(False)
         self.validation_text.setPlainText(message)
         self.loading_label.setText(message)
+        self.loading_folder_label.clear()
+        self.loading_folder_label.setToolTip('')
         self.loading_label.show()
         self.loading_progress.show()
         self.cancel_scan_button.show()
@@ -183,14 +210,36 @@ class ImportTimelinePage(XMLImportPage):
         worker = ReadWorker(work, self)
         self._read_worker = worker
         worker.result.connect(callback)
-        worker.failed.connect(self._read_failed)
+        worker.progress.connect(self._show_scan_folder)
+        worker.failed.connect(on_failure or self._read_failed)
         worker.finished.connect(self._read_finished)
         worker.start()
+
+    def _show_scan_folder(self, folder):
+        if self._read_cancelled or not self._busy:
+            return
+        self.loading_folder_label.setText(folder)
+        self.loading_folder_label.setToolTip(folder)
+        self.loading_folder_label.show()
+
+    def _scan_media_folder(self, folder, cancel, *, include_timelines=True, document=None):
+        progress = self._read_worker.progress.emit
+        found = discover(folder, cancel, include_timelines=include_timelines, progress=progress)
+        media = {}
+        last_folder = None
+        paths = candidate_media_paths(document, found.media) if document else found.media
+        for path in paths:
+            current_folder = str(Path(path).parent)
+            if current_folder != last_folder:
+                progress(current_folder)
+                last_folder = current_folder
+            media[path] = probe_media(path, cancel)
+        return found, media
 
     def _set_read_controls(self, enabled):
         for widget in (self.btnSelectXML, self.folder_edit, self.timeline_combo, self.timeline_name_edit,
                        self.updateBtn, self.accept_handles_button, self.tableWidgetTemp,
-                       self.detect_colourspace_check):
+                       self.detect_colourspace_check, self.raw_folder_edit, self.raw_folder_button):
             widget.setEnabled(enabled)
         self.colourspaceComboBox.setEnabled(enabled and not self.detect_colourspace_check.isChecked())
         self.cancel_scan_button.setEnabled(not enabled)
@@ -198,6 +247,8 @@ class ImportTimelinePage(XMLImportPage):
 
     def _cancel_read(self):
         if self._read_worker:
+            if self.raw_media_status.text().startswith('Scanning raw media'):
+                self.raw_media_status.setText('Raw media scan cancelled. Previous media selection retained.')
             self._read_cancelled = True
             self._read_worker.requestInterruption()
             self.loading_label.setText('Cancelling…')
@@ -210,6 +261,7 @@ class ImportTimelinePage(XMLImportPage):
         self._set_read_controls(True)
         self.loading_label.hide()
         self.loading_progress.hide()
+        self.loading_folder_label.hide()
         self.cancel_scan_button.hide()
         if cancelled:
             self._pending_timeline = None
@@ -233,15 +285,73 @@ class ImportTimelinePage(XMLImportPage):
 
     def _on_select_xml(self):
         folder = self.folder_edit.text().strip()
+        if self.sender() is not self.btnSelectXML and Path(folder).is_file() and Path(folder).suffix.lower() == '.xml':
+            self._load_xml_file(folder)
+            return
         if self.sender() is self.btnSelectXML or not folder:
             folder = QFileDialog.getExistingDirectory(self, 'Select media-managed folder', folder)
         if not folder:
             return
         self._load_folder(folder)
 
+    def _load_xml_file(self, path):
+        """Load only the dropped XML; media can be linked during review."""
+        if self._busy or not self.isEnabled():
+            return
+        path = str(Path(path).resolve())
+        self.folder_edit.setText(path)
+        self._pending_timeline = None
+        self.discovery = Discovery(str(Path(path).parent), timelines=[path])
+        if not self._raw_media_root:
+            self.media = {}
+        self.timeline_combo.blockSignals(True)
+        self.timeline_combo.clear()
+        self.timeline_combo.addItem(Path(path).name, path)
+        self.timeline_combo.setCurrentIndex(0)
+        self.timeline_combo.blockSignals(False)
+        self._timeline_changed()
+
+    def _select_raw_folder(self):
+        folder = self.raw_folder_edit.text().strip()
+        if self.sender() is self.raw_folder_button or not folder:
+            folder = QFileDialog.getExistingDirectory(self, 'Select raw media folder', folder)
+        if folder:
+            self._load_raw_folder(folder)
+
+    def _load_raw_folder(self, folder):
+        if self._busy or not self.isEnabled():
+            return
+        folder = str(Path(folder).resolve())
+        self.raw_media_status.setText('Scanning raw media, including subfolders…')
+        def work(cancel):
+            return self._scan_media_folder(folder, cancel, include_timelines=False, document=self.document)
+        def loaded(value):
+            found, self.media = value
+            if not self._raw_media_root:
+                self._managed_handle_settings = (self.detect_handles_check.isChecked(), self.spinboxHandles.value())
+                self._set_handle_preferences(False, RAW_RELINK_HANDLES)
+            self._raw_media_root = folder
+            self.raw_folder_edit.setText(folder)
+            self._reset_choices()
+            self.raw_media_status.setText(
+                f'{len(found.media)} media files found; {len(self.media)} checked for timeline matches.'
+                + ('\n' + '\n'.join(found.warnings) if found.warnings else ''))
+            if self.document:
+                self._refresh_preview()
+            else:
+                self._set_review_status('Raw media ready — drop an XML timeline')
+        self._start_read(work, loaded, 'Scanning raw media and reading metadata…',
+                         on_failure=lambda message: self.raw_media_status.setText(f'Unable to load raw media: {message}'))
+
     def _load_folder(self, folder):
         if self._busy or not self.isEnabled():
             return
+        if self._managed_handle_settings is not None:
+            self._set_handle_preferences(*self._managed_handle_settings)
+            self._managed_handle_settings = None
+        self._raw_media_root = ''
+        self.raw_folder_edit.clear()
+        self.raw_media_status.setText('No raw media folder selected')
         self.folder_edit.setText(folder)
         self._pending_timeline = None
         self.document = self.prepared = None
@@ -251,9 +361,7 @@ class ImportTimelinePage(XMLImportPage):
         self.review_summary_label.setText('No timeline loaded')
         self._reset_choices()
         def work(cancel):
-            found = discover(folder, cancel)
-            media = {p: probe_media(p, cancel) for p in found.media}
-            return found, media
+            return self._scan_media_folder(folder, cancel)
         self._start_read(work, self._folder_loaded, 'Scanning folder and reading media metadata…')
 
     def _folder_loaded(self, value):
@@ -315,12 +423,25 @@ class ImportTimelinePage(XMLImportPage):
         self.review_stack.setCurrentIndex(0)
         self.prepared = None
         message = f'Parsing {Path(path).suffix[1:].upper()} timeline: {Path(path).name}'
+        raw_root = self._raw_media_root
+        def work(cancel):
+            document = read_timeline(path)
+            scanned = self._scan_media_folder(raw_root, cancel, include_timelines=False, document=document) if raw_root else None
+            return document, scanned
+        def loaded(value):
+            document, scanned = value
+            if scanned is not None:
+                found, self.media = scanned
+                self.raw_media_status.setText(
+                    f'{len(found.media)} media files found; {len(self.media)} checked for timeline matches.')
+            self._documents_loaded(document)
         self._start_read(
-            lambda cancel: read_timeline(path),
-            self._documents_loaded, message)
+            work, loaded, message)
 
     def _documents_loaded(self, value):
         self.document = value
+        self.btnSelecRoot.setEnabled(True)
+        self.btnShotTable.setEnabled(True)
         self.timeline_name_edit.setText(self.document.name)
         self._refresh_preview()
 
@@ -343,6 +464,17 @@ class ImportTimelinePage(XMLImportPage):
     def _handles_changed(self):
         self.accepted_handles.clear()
         self._refresh_preview()
+
+    def _set_handle_preferences(self, detected, count):
+        """Switch workflow defaults without rebuilding an intermediate preview."""
+        self.detect_handles_check.blockSignals(True)
+        self.spinboxHandles.blockSignals(True)
+        self.detect_handles_check.setChecked(detected)
+        self.spinboxHandles.setValue(count)
+        self.detect_handles_check.blockSignals(False)
+        self.spinboxHandles.blockSignals(False)
+        self.spinboxHandles.setEnabled(not detected)
+        self.accept_handles_button.setText('Reset to detected handles' if detected else 'Accept available handles for all shots')
 
     def _handle_mode_changed(self, detected):
         self.spinboxHandles.setEnabled(not detected)
@@ -399,6 +531,7 @@ class ImportTimelinePage(XMLImportPage):
                 handles=None if self.detect_handles_check.isChecked() else self.handles,
                 accepted_handles=self.accepted_handles, excluded=self.excluded,
                 auto_colourspace=self.detect_colourspace_check.isChecked(),
+                relink_raw=bool(self._raw_media_root),
                 colourspace_overrides=self.colourspace_overrides,
                 manual_colourspace=self.colourspaceComboBox.currentText())
             try:
