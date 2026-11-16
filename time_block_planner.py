@@ -3,6 +3,8 @@ Time Block Planner - Daily task scheduling interface
 v3 - Design focused: better visuals, completed states, context menus
 """
 
+from themes import set_widget_style
+
 import sys
 from datetime import datetime, date, timedelta
 from PyQt6.QtWidgets import (
@@ -108,7 +110,7 @@ class TempTaskDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Add Block")
         self.setFixedWidth(280)
-        self.setStyleSheet(f"""
+        set_widget_style(self, f"""
             QDialog {{ background: {COLORS['bg_panel']}; border: 1px solid {COLORS['border']}; border-radius: 8px; }}
             QLabel {{ color: {COLORS['text']}; }}
             QLineEdit, QDoubleSpinBox {{ 
@@ -130,7 +132,7 @@ class TempTaskDialog(QDialog):
         # Time label
         if default_time:
             time_lbl = QLabel(default_time)
-            time_lbl.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 12px;")
+            set_widget_style(time_lbl, f"color: {COLORS['text_muted']}; font-size: 12px;")
             layout.addWidget(time_lbl)
         
         # Task name
@@ -160,7 +162,7 @@ class TempTaskDialog(QDialog):
         btn_row.addWidget(btn_cancel)
         
         btn_add = QPushButton("Add")
-        btn_add.setStyleSheet(f"background: {COLORS['accent']}; border-color: {COLORS['accent']};")
+        set_widget_style(btn_add, f"background: {COLORS['accent']}; border-color: {COLORS['accent']};")
         btn_add.clicked.connect(self.accept)
         btn_row.addWidget(btn_add)
         
@@ -192,7 +194,7 @@ class DraggableTaskCard(QFrame):
         
         self.setObjectName("task_card")
         self.setCursor(Qt.CursorShape.OpenHandCursor)
-        self.setStyleSheet(f"""
+        set_widget_style(self, f"""
             QFrame#task_card {{
                 background: {COLORS['bg_card']};
                 border: 1px solid {COLORS['border']};
@@ -216,18 +218,18 @@ class DraggableTaskCard(QFrame):
         header.setSpacing(8)
         
         shot_label = QLabel(self.task_data.get("shot", "SHOT"))
-        shot_label.setStyleSheet(f"font-weight: 600; font-size: 13px; color: {COLORS['text']};")
+        set_widget_style(shot_label, f"font-weight: 600; font-size: 13px; color: {COLORS['text']};")
         header.addWidget(shot_label)
         
         task_label = QLabel(self.task_data.get("task", ""))
-        task_label.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 12px;")
+        set_widget_style(task_label, f"color: {COLORS['text_muted']}; font-size: 12px;")
         header.addWidget(task_label)
         
         header.addStretch()
         
         # Priority badge
         pri_label = QLabel(f"P{priority}")
-        pri_label.setStyleSheet(f"""
+        set_widget_style(pri_label, f"""
             background: {priority_color}22; 
             color: {priority_color}; 
             padding: 2px 6px; 
@@ -245,13 +247,13 @@ class DraggableTaskCard(QFrame):
         
         hours = self.task_data.get("budget_hours", 1.0)
         hours_label = QLabel(f"{hours}h")
-        hours_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+        set_widget_style(hours_label, f"color: {COLORS['text_dim']}; font-size: 11px;")
         footer.addWidget(hours_label)
         
         deadline_text, deadline_color = get_deadline_status(self.task_data.get("deadline"))
         if deadline_text:
             dl_label = QLabel(deadline_text)
-            dl_label.setStyleSheet(f"color: {deadline_color}; font-size: 11px; font-weight: 600;")
+            set_widget_style(dl_label, f"color: {deadline_color}; font-size: 11px; font-weight: 600;")
             footer.addWidget(dl_label)
         
         footer.addStretch()
@@ -324,7 +326,7 @@ class TimeSlotWidget(QFrame):
         
         if self.minute == 0:
             self.time_gutter.setText(format_time_12h(self.hour))
-            self.time_gutter.setStyleSheet(f"""
+            set_widget_style(self.time_gutter, f"""
                 color: {COLORS['text_muted']}; 
                 font-size: 11px; 
                 font-weight: 500;
@@ -332,7 +334,7 @@ class TimeSlotWidget(QFrame):
                 padding-top: 4px;
             """)
         else:
-            self.time_gutter.setStyleSheet("padding-right: 12px;")
+            set_widget_style(self.time_gutter, "padding-right: 12px;")
         
         layout.addWidget(self.time_gutter)
         
@@ -354,7 +356,7 @@ class TimeSlotWidget(QFrame):
     
     def _set_default_style(self):
         border_style = "border-top: 1px solid #2a2a2a;" if self.minute == 0 else "border-top: 1px dotted #222222;"
-        self.drop_zone.setStyleSheet(f"""
+        set_widget_style(self.drop_zone, f"""
             QFrame#drop_zone {{
                 background: {COLORS['bg_slot']};
                 {border_style}
@@ -365,10 +367,10 @@ class TimeSlotWidget(QFrame):
                 background: {COLORS['bg_slot_hover']};
             }}
         """)
-        self.content_label.setStyleSheet(f"color: {COLORS['text_dim']};")
+        set_widget_style(self.content_label, f"color: {COLORS['text_dim']};")
     
     def _set_drag_hover_style(self):
-        self.drop_zone.setStyleSheet(f"""
+        set_widget_style(self.drop_zone, f"""
             QFrame#drop_zone {{
                 background: {COLORS['bg_drop_target']};
                 border: 2px dashed {COLORS['accent']};
@@ -380,7 +382,7 @@ class TimeSlotWidget(QFrame):
     def set_blocked(self, label: str = ""):
         self.is_blocked = True
         self.content_label.setText(label)
-        self.content_label.setStyleSheet(f"color: {COLORS['text_dim']};")
+        set_widget_style(self.content_label, f"color: {COLORS['text_dim']};")
     
     def set_continuation(self):
         self.is_continuation = True
@@ -469,7 +471,7 @@ class SpanningTaskWidget(QFrame):
         # Checkbox
         self.checkbox = QCheckBox()
         self.checkbox.setFixedSize(18, 18)
-        self.checkbox.setStyleSheet(f"""
+        set_widget_style(self.checkbox, f"""
             QCheckBox::indicator {{
                 width: 16px; height: 16px;
                 border: 2px solid {COLORS['border_light']};
@@ -498,23 +500,23 @@ class SpanningTaskWidget(QFrame):
         
         if is_temp:
             self.title_label = QLabel(self.task_data.get('task', 'Block'))
-            self.title_label.setStyleSheet(f"font-weight: 600; color: {COLORS['text']}; font-size: 13px;")
+            set_widget_style(self.title_label, f"font-weight: 600; color: {COLORS['text']}; font-size: 13px;")
         else:
             self.title_label = QLabel(f"{self.task_data.get('shot', '')}  •  {self.task_data.get('task', '')}")
-            self.title_label.setStyleSheet(f"font-weight: 600; color: {COLORS['text']}; font-size: 13px;")
+            set_widget_style(self.title_label, f"font-weight: 600; color: {COLORS['text']}; font-size: 13px;")
         title_row.addWidget(self.title_label)
         title_row.addStretch()
         
         if not is_temp:
             pri_label = QLabel(f"P{priority}")
-            pri_label.setStyleSheet(f"color: {priority_color}; font-size: 10px; font-weight: 600;")
+            set_widget_style(pri_label, f"color: {priority_color}; font-size: 10px; font-weight: 600;")
             title_row.addWidget(pri_label)
         
         content_layout.addLayout(title_row)
         
         # Duration label (we'll update this dynamically)
         self.dur_label = QLabel(f"{self.task_data.get('budget_hours', 1.0)}h")
-        self.dur_label.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 11px;")
+        set_widget_style(self.dur_label, f"color: {COLORS['text_muted']}; font-size: 11px;")
         content_layout.addWidget(self.dur_label)
         
         content_layout.addStretch()
@@ -542,7 +544,7 @@ class SpanningTaskWidget(QFrame):
         
         # Add split highlight gradient if hovering
         if highlight_side == 'right':
-            self.setStyleSheet(f"""
+            set_widget_style(self, f"""
                 SpanningTaskWidget {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                         stop:0 {base_bg}, stop:0.5 {base_bg}, stop:0.5 {COLORS['bg_drop_target']}, stop:1 {COLORS['bg_drop_target']});
@@ -552,7 +554,7 @@ class SpanningTaskWidget(QFrame):
                 }}
             """)
         elif highlight_side == 'left':
-            self.setStyleSheet(f"""
+            set_widget_style(self, f"""
                 SpanningTaskWidget {{
                     background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                         stop:0 {COLORS['bg_drop_target']}, stop:0.5 {COLORS['bg_drop_target']}, stop:0.5 {base_bg}, stop:1 {base_bg});
@@ -563,7 +565,7 @@ class SpanningTaskWidget(QFrame):
             """)
         else:
             hover_bg = COLORS['bg_card_hover'] if not self.is_completed else base_bg
-            self.setStyleSheet(f"""
+            set_widget_style(self, f"""
                 SpanningTaskWidget {{
                     background: {base_bg};
                     border: 1px solid {base_border};
@@ -581,15 +583,15 @@ class SpanningTaskWidget(QFrame):
         self._apply_style(priority_color, self.task_data.get("is_temp", False))
         
         if self.is_completed:
-            self.title_label.setStyleSheet(f"font-weight: 600; color: {COLORS['text_muted']}; font-size: 13px; text-decoration: line-through;")
+            set_widget_style(self.title_label, f"font-weight: 600; color: {COLORS['text_muted']}; font-size: 13px; text-decoration: line-through;")
         else:
-            self.title_label.setStyleSheet(f"font-weight: 600; color: {COLORS['text']}; font-size: 13px;")
+            set_widget_style(self.title_label, f"font-weight: 600; color: {COLORS['text']}; font-size: 13px;")
         
         self.completed_changed.emit(self.slot_index, self.is_completed)
     
     def _show_context_menu(self, pos):
         menu = QMenu(self)
-        menu.setStyleSheet(f"""
+        set_widget_style(menu, f"""
             QMenu {{
                 background: {COLORS['bg_panel']};
                 border: 1px solid {COLORS['border']};
@@ -706,7 +708,7 @@ class LunchBlockWidget(QFrame):
         
         self.setFixedHeight(span_slots * slot_height - 6)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
-        self.setStyleSheet(f"""
+        set_widget_style(self, f"""
             LunchBlockWidget {{
                 background: qlineargradient(x1:0, y1:0, x2:1, y2:0, 
                     stop:0 #2a2a22, stop:1 #252520);
@@ -723,17 +725,17 @@ class LunchBlockWidget(QFrame):
         layout.setContentsMargins(12, 8, 12, 8)
         
         icon = QLabel("☕")
-        icon.setStyleSheet("font-size: 16px;")
+        set_widget_style(icon, "font-size: 16px;")
         layout.addWidget(icon)
         
         title = QLabel("Lunch")
-        title.setStyleSheet(f"color: {COLORS['text']}; font-weight: 500;")
+        set_widget_style(title, f"color: {COLORS['text']}; font-weight: 500;")
         layout.addWidget(title)
         
         layout.addStretch()
         
         dur = QLabel("1h")
-        dur.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 11px;")
+        set_widget_style(dur, f"color: {COLORS['text_muted']}; font-size: 11px;")
         layout.addWidget(dur)
     
     def mousePressEvent(self, event):
@@ -786,7 +788,7 @@ class CurrentTimeIndicator(QWidget):
         self.time_label = QLabel()
         self.time_label.setFixedWidth(70)
         self.time_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self.time_label.setStyleSheet(f"""
+        set_widget_style(self.time_label, f"""
             color: {COLORS['text']};
             background: #cc4444;
             border-radius: 3px;
@@ -800,7 +802,7 @@ class CurrentTimeIndicator(QWidget):
         # Line
         line = QFrame()
         line.setFixedHeight(2)
-        line.setStyleSheet("background: #cc4444;")
+        set_widget_style(line, "background: #cc4444;")
         layout.addWidget(line, 1)
     
     def set_time(self, hour: int, minute: int):
@@ -821,7 +823,7 @@ class TaskListPanel(QFrame):
         self._setup_ui()
     
     def _setup_ui(self):
-        self.setStyleSheet(f"background: {COLORS['bg_panel']}; border: none;")
+        set_widget_style(self, f"background: {COLORS['bg_panel']}; border: none;")
         self.setMinimumWidth(280)
         
         layout = QVBoxLayout(self)
@@ -830,12 +832,12 @@ class TaskListPanel(QFrame):
         
         # Header
         header = QLabel("Tasks")
-        header.setStyleSheet(f"color: {COLORS['text']}; font-size: 18px; font-weight: 600;")
+        set_widget_style(header, f"color: {COLORS['text']}; font-size: 18px; font-weight: 600;")
         layout.addWidget(header)
         
         # Summary
         self.summary_label = QLabel("0 tasks • 0h")
-        self.summary_label.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 12px;")
+        set_widget_style(self.summary_label, f"color: {COLORS['text_muted']}; font-size: 12px;")
         layout.addWidget(self.summary_label)
         
         # Sort
@@ -843,13 +845,13 @@ class TaskListPanel(QFrame):
         sort_row.setSpacing(8)
         
         sort_label = QLabel("Sort:")
-        sort_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+        set_widget_style(sort_label, f"color: {COLORS['text_dim']}; font-size: 11px;")
         sort_row.addWidget(sort_label)
         
         self.sort_combo = QComboBox()
         self.sort_combo.addItems(["Priority", "Hours", "Deadline", "Name"])
         self.sort_combo.setFixedHeight(28)
-        self.sort_combo.setStyleSheet(f"""
+        set_widget_style(self.sort_combo, f"""
             QComboBox {{
                 background: {COLORS['bg_card']};
                 border: 1px solid {COLORS['border']};
@@ -876,7 +878,7 @@ class TaskListPanel(QFrame):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet(f"""
+        set_widget_style(scroll, f"""
             QScrollArea {{ border: none; background: transparent; }}
             QScrollBar:vertical {{
                 background: {COLORS['bg_panel']};
@@ -893,7 +895,7 @@ class TaskListPanel(QFrame):
         """)
         
         self.task_container = QWidget()
-        self.task_container.setStyleSheet("background: transparent;")
+        set_widget_style(self.task_container, "background: transparent;")
         self.task_layout = QVBoxLayout(self.task_container)
         self.task_layout.setContentsMargins(0, 0, 0, 0)
         self.task_layout.setSpacing(8)
@@ -952,13 +954,13 @@ class TaskListPanel(QFrame):
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat("application/x-task"):
             event.acceptProposedAction()
-            self.setStyleSheet(f"background: {COLORS['bg_drop_target']}; border: none;")
+            set_widget_style(self, f"background: {COLORS['bg_drop_target']}; border: none;")
     
     def dragLeaveEvent(self, event):
-        self.setStyleSheet(f"background: {COLORS['bg_panel']}; border: none;")
+        set_widget_style(self, f"background: {COLORS['bg_panel']}; border: none;")
     
     def dropEvent(self, event):
-        self.setStyleSheet(f"background: {COLORS['bg_panel']}; border: none;")
+        set_widget_style(self, f"background: {COLORS['bg_panel']}; border: none;")
         if event.mimeData().hasFormat("application/x-task"):
             task_data = json.loads(event.mimeData().data("application/x-task").data().decode())
             if not task_data.get("is_temp"):
@@ -994,7 +996,7 @@ class TimeBlockPanel(QFrame):
         self._setup_time_indicator()
     
     def _setup_ui(self):
-        self.setStyleSheet(f"background: {COLORS['bg_dark']}; border: none;")
+        set_widget_style(self, f"background: {COLORS['bg_dark']}; border: none;")
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 16, 20, 16)
@@ -1021,12 +1023,12 @@ class TimeBlockPanel(QFrame):
         
         self.btn_prev = QPushButton("‹")
         self.btn_prev.setFixedSize(32, 32)
-        self.btn_prev.setStyleSheet(nav_btn_style)
+        set_widget_style(self.btn_prev, nav_btn_style)
         self.btn_prev.clicked.connect(self._prev_day)
         header_row.addWidget(self.btn_prev)
         
         self.btn_today = QPushButton("Today")
-        self.btn_today.setStyleSheet(f"""
+        set_widget_style(self.btn_today, f"""
             QPushButton {{
                 background: {COLORS['accent']};
                 border: none;
@@ -1043,21 +1045,21 @@ class TimeBlockPanel(QFrame):
         
         self.btn_next = QPushButton("›")
         self.btn_next.setFixedSize(32, 32)
-        self.btn_next.setStyleSheet(nav_btn_style)
+        set_widget_style(self.btn_next, nav_btn_style)
         self.btn_next.clicked.connect(self._next_day)
         header_row.addWidget(self.btn_next)
         
         header_row.addSpacing(16)
         
         self.date_label = QLabel()
-        self.date_label.setStyleSheet(f"color: {COLORS['text']}; font-size: 20px; font-weight: 600;")
+        set_widget_style(self.date_label, f"color: {COLORS['text']}; font-size: 20px; font-weight: 600;")
         header_row.addWidget(self.date_label)
         
         header_row.addStretch()
         
         # Extend day button
         self.btn_extend = QPushButton("+ Add Hour")
-        self.btn_extend.setStyleSheet(f"""
+        set_widget_style(self.btn_extend, f"""
             QPushButton {{
                 background: {COLORS['bg_card']};
                 border: 1px solid {COLORS['border']};
@@ -1077,7 +1079,7 @@ class TimeBlockPanel(QFrame):
         
         # Hours label
         self.hours_label = QLabel()
-        self.hours_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+        set_widget_style(self.hours_label, f"color: {COLORS['text_dim']}; font-size: 11px;")
         self._update_hours_label()
         header_row.addWidget(self.hours_label)
         
@@ -1089,7 +1091,7 @@ class TimeBlockPanel(QFrame):
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll.setStyleSheet(f"""
+        set_widget_style(self.scroll, f"""
             QScrollArea {{ border: none; background: transparent; }}
             QScrollBar:vertical {{
                 background: {COLORS['bg_dark']};
@@ -1104,7 +1106,7 @@ class TimeBlockPanel(QFrame):
         """)
         
         self.slots_container = QWidget()
-        self.slots_container.setStyleSheet("background: transparent;")
+        set_widget_style(self.slots_container, "background: transparent;")
         self.slots_layout = QVBoxLayout(self.slots_container)
         self.slots_layout.setContentsMargins(0, 0, 0, 0)
         self.slots_layout.setSpacing(0)
@@ -1422,8 +1424,8 @@ class TimeBlockPanel(QFrame):
 # =============================================================================
 
 class TimeBlockPlanner(QMainWindow):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.setWindowTitle("Time Block Planner")
         self.setMinimumSize(950, 700)
         self.resize(1150, 800)
@@ -1433,7 +1435,7 @@ class TimeBlockPlanner(QMainWindow):
         self._connect_signals()
     
     def _setup_ui(self):
-        self.setStyleSheet(f"background: {COLORS['bg_dark']};")
+        set_widget_style(self, f"background: {COLORS['bg_dark']};")
         
         central = QWidget()
         self.setCentralWidget(central)
@@ -1444,7 +1446,7 @@ class TimeBlockPlanner(QMainWindow):
         
         # Main content
         splitter = QSplitter(Qt.Orientation.Horizontal)
-        splitter.setStyleSheet(f"""
+        set_widget_style(splitter, f"""
             QSplitter::handle {{
                 background: {COLORS['border']};
                 width: 1px;
@@ -1466,7 +1468,7 @@ class TimeBlockPlanner(QMainWindow):
         # Status bar
         status = QFrame()
         status.setFixedHeight(40)
-        status.setStyleSheet(f"""
+        set_widget_style(status, f"""
             background: {COLORS['bg_panel']};
             border-top: 1px solid {COLORS['border']};
         """)
@@ -1474,14 +1476,14 @@ class TimeBlockPlanner(QMainWindow):
         status_layout = QHBoxLayout(status)
         status_layout.setContentsMargins(20, 0, 20, 0)
         
-        self.status_label = QLabel("Drag tasks to schedule")
-        self.status_label.setStyleSheet(f"color: {COLORS['text_muted']}; font-size: 12px;")
+        self.status_label = QLabel("Sample tasks · session only — drag tasks to schedule")
+        set_widget_style(self.status_label, f"color: {COLORS['text_muted']}; font-size: 12px;")
         status_layout.addWidget(self.status_label)
         
         status_layout.addStretch()
         
         self.stats_label = QLabel("")
-        self.stats_label.setStyleSheet(f"color: {COLORS['text_dim']}; font-size: 11px;")
+        set_widget_style(self.stats_label, f"color: {COLORS['text_dim']}; font-size: 11px;")
         status_layout.addWidget(self.stats_label)
         
         layout.addWidget(status)
@@ -1490,6 +1492,10 @@ class TimeBlockPlanner(QMainWindow):
         for task in DUMMY_TASKS:
             self.task_list.add_task(task)
         self._update_stats()
+
+    def is_busy(self):
+        """The planner has no background jobs that block application shutdown."""
+        return False
     
     def _connect_signals(self):
         self.time_blocks.schedule_changed.connect(self._on_schedule_changed)
@@ -1539,6 +1545,16 @@ class TimeBlockPlanner(QMainWindow):
 # ENTRY POINT
 # =============================================================================
 
+def open_tool(parent=None):
+    """Open an owned pop-out using the host application's theme and input guard."""
+    from input_behaviour import install_input_wheel_guard
+
+    install_input_wheel_guard(QApplication.instance())
+    window = TimeBlockPlanner(parent)
+    window.setWindowFlag(Qt.WindowType.Window, True)
+    return window
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     
@@ -1547,6 +1563,6 @@ if __name__ == "__main__":
     font.setFamily("Segoe UI, SF Pro Display, -apple-system, sans-serif")
     app.setFont(font)
     
-    window = TimeBlockPlanner()
+    window = open_tool()
     window.show()
     sys.exit(app.exec())

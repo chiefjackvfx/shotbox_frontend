@@ -1,5 +1,7 @@
 """Presentation for Import Timeline; parsing and import actions stay on the page."""
 
+from themes import set_widget_style
+
 from pathlib import Path
 
 from PyQt6.QtCore import Qt
@@ -67,7 +69,7 @@ def arrange_timeline_page(page):
     clear(root)
     page.setObjectName('import_timeline_page')
     ui_dir = Path(__file__).parent / 'ui'
-    page.setStyleSheet((ui_dir / 'import_timeline.qss').read_text(encoding='utf-8')
+    set_widget_style(page, (ui_dir / 'import_timeline.qss').read_text(encoding='utf-8')
                       .replace('@TIMELINE_UI@', ui_dir.as_posix()))
     root.setContentsMargins(20, 18, 20, 16)
     root.setSpacing(14)

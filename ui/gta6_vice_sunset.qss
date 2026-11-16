@@ -1,0 +1,384 @@
+/*
+GTA VI — Vice Sunset. An original tropical sunset style for ShotBox.
+Inherits the original QSS selectors through themes.apply_theme.
+Palette mappings apply to decorative colours only; status hues, priorities,
+DCC identities, shot colour strips and media canvases retain their colours.
+@map #1a1d23 #171126
+@map #1e2228 #21182F
+@map #252931 #302044
+@map #2a3038 #39274E
+@map #2f3542 #453254
+@map #404754 #62486F
+@map #d4d4d4 #FFF5EA
+@map #9ca3af #C6B5D0
+@map #6b7280 #95839F
+@map #ffffff #FFF5EA
+@map #ff6b35 #F48BB5
+@map #d85a28 #B58BDD
+@map #ff8659 #FFB38A
+@map #e45b29 #B58BDD
+@map #ffe0d2 #FFD391
+@map #f05a20 #F48BB5
+@map #ffbb98 #FFB38A
+@map #5a9a5a #F48BB5
+@map #121212 #171126
+@map #1a1a1a #21182F
+@map #242424 #302044
+@map #2a2a2a #39274E
+@map #1e1e1e #281D39
+@map #333333 #453254
+@map #444444 #62486F
+@map #e0e0e0 #FFF5EA
+@map #888888 #C6B5D0
+@map #555555 #95839F
+@map #17191c #21182F
+@map #4c5057 #62486F
+@map #f2f3f5 #FFF5EA
+@map #aeb3bb #C6B5D0
+@map #777d86 #95839F
+@map #24272b #302044
+@map #30343a #453254
+@map #4a4f57 #62486F
+@map #454b54 #62486F
+@map #f3f4f6 #FFF5EA
+@map #22262e #302044
+@map #363d49 #62486F
+@map #b7bfcc #C6B5D0
+@map #d4d9e2 #FFF5EA
+@map #909bab #C6B5D0
+@map #aab6c7 #C6B5D0
+@map #343b47 #453254
+@map #919bac #95839F
+@map #171a20 #171126
+@map #dddddd #FFF5EA
+@map #bbbbbb #C6B5D0
+@map #aaaaaa #C6B5D0
+@map #999999 #AE9ABA
+@map #15181e #171126
+@map #1e222a #302044
+@map #333945 #453254
+@map #603d2f #62486F
+@map #edf0f5 #FFF5EA
+@map #9aa5b6 #C6B5D0
+@map #c7cfdb #C6B5D0
+@map #30231e #39274E
+@map #2a303b #453254
+@map #dce3ed #FFF5EA
+@map #434c5c #62486F
+@map #373f4d #62486F
+@map #7e899b #B58BDD
+@map #202631 #302044
+@map #242932 #302044
+@map #657084 #95839F
+@map #343c49 #453254
+@map #ff8357 #FFB38A
+@map #3d2922 #39274E
+@map #af7c65 #95839F
+@map #171b22 #21182F
+@map #e2e7ef #FFF5EA
+@map #3b4453 #62486F
+@map #613d2b #62486F
+@map #778396 #95839F
+@map #303846 #453254
+@map #536074 #62486F
+@map #191e26 #21182F
+@map #202630 #302044
+@map #343e4e #453254
+@map #354557 #62486F
+@map #1a202a #302044
+@map #29313e #453254
+@map #252c37 #302044
+@map #b9c6d8 #C6B5D0
+@map #404b5d #62486F
+@map #aebbd0 #C6B5D0
+@map #333d4b #453254
+@map #30343c #453254
+@map #141619 #171126
+@map #14171b #171126
+@map #15191e #171126
+@map #161a1e #171126
+@map #171b20 #21182F
+@map #1b1f26 #21182F
+@map #1b2026 #21182F
+@map #1c1f25 #21182F
+@map #202329 #302044
+@map #20252c #302044
+@map #20262e #302044
+@map #22262d #302044
+@map #252c35 #39274E
+@map #343e4a #453254
+@map #39414c #62486F
+@map #39424e #62486F
+@map #4b5563 #62486F
+@map #4f5665 #62486F
+@map #657386 #B58BDD
+@map #818793 #95839F
+@map #a8b0bb #C6B5D0
+@map #afbbcb #C6B5D0
+@map #b8c4d3 #C6B5D0
+@map #c6cfdb #C6B5D0
+@map #c7ccd6 #C6B5D0
+@map #c9d1da #C6B5D0
+@map #d1d5db #FFF5EA
+@map #dce3ec #FFF5EA
+@map #e5e7eb #FFF5EA
+@map #f1f5fa #FFF5EA
+@map #f5f7fa #FFF5EA
+*/
+
+/* VICE OPERATIONS — a late-night production terminal.
+   Deep ink, sunset chrome, inset fields, and compact dossier cards. */
+QWidget {
+    font-family: "DejaVu Sans", "Segoe UI", "Arial", sans-serif;
+    font-size: 12px;
+}
+QMainWindow, QTabWidget, QTabBar { background: #141022; }
+QFrame#vice_console_header {
+    background-color: #141022;
+    background-image: url("@THEME_UI@/vice_sunset/skyline.svg");
+    background-repeat: no-repeat;
+    background-position: right center;
+    border: none;
+    border-bottom: 2px solid #F48BB5;
+}
+QLabel#vice_console_eyebrow {
+    background: transparent;
+    color: #FFB38A;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 2px;
+}
+QFrame#vice_console_header[compact="true"] {
+    background-image: none;
+}
+QLabel#vice_console_title {
+    background: transparent;
+    color: #FFF5EA;
+    font-family: "DejaVu Sans Condensed", "Arial", sans-serif;
+    font-size: 30px;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: 4px;
+}
+
+/* Navigation resembles a bank of illuminated console keys. */
+QTabWidget::pane {
+    background: #171126;
+    border: none;
+    border-top: 1px solid #453254;
+}
+QTabBar::tab {
+    background: #21182F;
+    color: #C6B5D0;
+    border: 1px solid #453254;
+    border-bottom: 3px solid #21182F;
+    border-top-left-radius: 9px;
+    border-top-right-radius: 9px;
+    margin: 8px 3px 0 0;
+    padding: 10px 16px;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+QTabBar::tab:selected {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+        stop:0 #FFCEAA, stop:0.55 #F48BB5, stop:1 #B58BDD);
+    color: #171126;
+    border-color: #F48BB5;
+    border-bottom-color: #FFCEAA;
+}
+QTabBar::tab:hover:!selected {
+    background: #39274E;
+    color: #FFF5EA;
+    border-bottom-color: #62C9CB;
+}
+QTabBar::tab:!selected { margin-top: 8px; }
+
+/* Satin controls with a bright edge, instead of solid accent blocks. */
+QPushButton, QToolButton {
+    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #392B4B,stop:1 #271E38);
+    color: #FFF5EA;
+    border: 1px solid #62486F;
+    border-top-color: #856589;
+    border-radius: 6px;
+    padding: 7px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0px;
+}
+QPushButton:hover, QToolButton:hover {
+    background: #453254;
+    color: #FFCEAA;
+    border-color: #F48BB5;
+}
+QPushButton:pressed, QToolButton:pressed {
+    background: #171126;
+    color: #F48BB5;
+    border-color: #B58BDD;
+}
+QPushButton:disabled, QToolButton:disabled {
+    background: #251D33;
+    color: #95839F;
+    border-color: #453254;
+}
+QPushButton:default:enabled, QPushButton#save_button:enabled {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #FFCEAA,stop:0.55 #F48BB5,stop:1 #B58BDD);
+    color: #171126;
+    border-color: #F48BB5;
+    font-weight: bold;
+}
+QPushButton:default:pressed { background: #B58BDD; color: #171126; }
+QPushButton:focus, QToolButton:focus { border-color: #62C9CB; }
+
+/* Dossier cards: rounded outer shell, fine separators, strong title hierarchy. */
+QFrame#frame_7, QFrame#frame_7[v02="true"] {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #30213F,stop:1 #21182F);
+    border: 1px solid #62486F;
+    border-top: 2px solid #B58BDD;
+    border-radius: 12px;
+}
+QFrame#frame_7:hover, QFrame#frame_7[v02="true"]:hover {
+    border-color: #F48BB5;
+    border-top-color: #FFCEAA;
+}
+QLabel#label_shot, QLabel#label_shot[v02="true"] {
+    color: #FFF5EA;
+    font-family: "DejaVu Sans Condensed", "Arial", sans-serif;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+QLabel#label_shot[v02="true"][compact="true"] { font-size: 14px; }
+QLabel#label_thumbnail { border: 1px solid #62486F; border-radius: 6px; }
+QFrame#task_frame, QFrame#task_frame[v02="true"] {
+    background: #21182F;
+    border: 1px solid #453254;
+    border-radius: 7px;
+}
+QFrame#task_frame:hover { background: #2B1F3B; border-color: #856589; }
+QPushButton#btn_task_title, QFrame#task_frame[v02="true"] QPushButton#btn_task_title {
+    font-family: "DejaVu Sans", "Segoe UI", sans-serif;
+    font-weight: 600;
+    letter-spacing: 0px;
+}
+QPushButton#btn_status { border-radius: 4px; letter-spacing: 0.5px; }
+
+/* Recessed data entry: the turquoise edge identifies keyboard focus. */
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QAbstractSpinBox {
+    background: #171126;
+    color: #FFF5EA;
+    border: 1px solid #62486F;
+    border-bottom: 2px solid #856589;
+    border-radius: 5px;
+    padding: 7px 10px;
+    selection-background-color: #F48BB5;
+    selection-color: #171126;
+}
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus,
+QComboBox:focus, QAbstractSpinBox:focus {
+    background: #21182F;
+    border-color: #62C9CB;
+    border-bottom-color: #62C9CB;
+}
+QLineEdit:disabled, QComboBox:disabled, QAbstractSpinBox:disabled {
+    color: #95839F; background: #251D33; border-color: #453254;
+}
+QComboBox::drop-down {
+    width: 24px; background: #302044;
+    border-left: 1px solid #62486F;
+    border-top-right-radius: 5px; border-bottom-right-radius: 5px;
+}
+QComboBox QAbstractItemView, QMenu {
+    background: #21182F; color: #FFF5EA;
+    border: 1px solid #B58BDD; padding: 5px;
+    selection-background-color: #F48BB5; selection-color: #171126;
+}
+QMenu::item { padding: 7px 18px; border-radius: 4px; }
+QAbstractItemView::item:selected, QMenu::item:selected {
+    background: #F48BB5; color: #171126;
+}
+QGroupBox {
+    background: #21182F;
+    border: 1px solid #453254;
+    border-radius: 10px;
+    margin-top: 16px;
+    padding: 16px 12px 12px;
+    font-weight: bold;
+}
+QGroupBox::title {
+    color: #FFCEAA;
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    left: 14px;
+    padding: 0 7px;
+}
+QHeaderView::section {
+    background: #302044; color: #FFCEAA;
+    border: none; border-bottom: 2px solid #856589;
+    padding: 8px; font-size: 10px; font-weight: bold;
+}
+QTableView, QTreeView, QListView {
+    background: #171126; alternate-background-color: #21182F;
+    border: 1px solid #453254; border-radius: 6px;
+    gridline-color: #453254;
+}
+QScrollBar:vertical { background: #171126; width: 9px; border: none; }
+QScrollBar:horizontal { background: #171126; height: 9px; border: none; }
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: #856589; border: none; border-radius: 4px; min-height: 24px; min-width: 24px;
+}
+QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { background: #F48BB5; }
+QProgressBar { background: #171126; border: 1px solid #62486F; border-radius: 5px; color: #FFF5EA; }
+QProgressBar::chunk {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #62486F,stop:0.6 #8E4265,stop:1 #93594A);
+    border-radius: 4px;
+}
+QCheckBox::indicator { width: 15px; height: 15px; border-radius: 4px; border: 1px solid #856589; background: #171126; }
+QCheckBox::indicator:checked { background: #F48BB5; border-color: #FFCEAA; }
+QSlider::groove:horizontal { background: #302044; border: none; height: 4px; border-radius: 2px; }
+QSlider::handle:horizontal { background: #FFCEAA; border: 2px solid #F48BB5; border-radius: 7px; width: 12px; height: 12px; margin: -5px 0; }
+QToolTip { background: #302044; color: #FFF5EA; border: 1px solid #B58BDD; border-radius: 4px; padding: 7px; }
+QStatusBar { background: #141022; color: #C6B5D0; border-top: 1px solid #453254; }
+
+/* Local overrides also apply to components that own a private stylesheet. */
+/* @local toolbox_page */
+QWidget#toolbox_page QLabel#toolbox_title {
+    color: #FFF5EA; font-family: "DejaVu Sans Condensed", "Arial", sans-serif;
+    font-size: 32px; font-style: italic; font-weight: 900; letter-spacing: 1px;
+}
+QWidget#toolbox_page QGroupBox {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #30213F,stop:1 #21182F);
+    border: 1px solid #62486F; border-top: 2px solid #B58BDD;
+    border-radius: 14px; padding: 22px 18px 18px;
+}
+QWidget#toolbox_page QGroupBox::title {
+    color: #FFCEAA; font-size: 16px; font-weight: bold; padding: 0 8px;
+}
+QWidget#toolbox_page QPushButton {
+    border-radius: 6px; padding: 10px 16px; font-weight: bold;
+    text-transform: none;
+}
+QWidget#toolbox_page QPushButton#copy_speed_ramps_button:enabled,
+QWidget#toolbox_page QPushButton#open_time_block_planner:enabled {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #FFCEAA,stop:0.6 #F48BB5,stop:1 #B58BDD);
+    color: #171126; border: 1px solid #F48BB5;
+}
+QWidget#toolbox_page QPushButton#copy_speed_ramps_button:pressed,
+QWidget#toolbox_page QPushButton#open_time_block_planner:pressed { background: #B58BDD; }
+/* @endlocal */
+
+/* @local import_timeline_page */
+QWidget#import_timeline_page QFrame[role="card"] {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #30213F,stop:1 #21182F);
+    border: 1px solid #62486F; border-top: 2px solid #B58BDD; border-radius: 12px;
+}
+QWidget#import_timeline_page QLabel[role="pageTitle"] {
+    font-family: "DejaVu Sans Condensed", "Arial", sans-serif;
+    font-size: 30px; font-style: italic; font-weight: bold;
+}
+QWidget#import_timeline_page QPushButton[role="primary"]:enabled {
+    background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #FFCEAA,stop:0.6 #F48BB5,stop:1 #B58BDD);
+    color: #171126; border-radius: 6px;
+}
+/* @endlocal */

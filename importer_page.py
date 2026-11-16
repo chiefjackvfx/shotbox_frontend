@@ -4,6 +4,8 @@ Filesystem Importer Page for ShotBox.
 Scans a directory structure and allows selective import of jobs/timelines/shots via the API.
 """
 
+from themes import set_widget_style
+
 import os
 import platform
 from pathlib import Path
@@ -345,7 +347,7 @@ class ImporterPage(QWidget):
             "Select which items to import into the database."
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #888;")
+        set_widget_style(desc, "color: #888;")
         layout.addWidget(desc)
         
         # Path selection row
@@ -417,7 +419,7 @@ class ImporterPage(QWidget):
         self.import_btn = QPushButton("Import Selected")
         self.import_btn.setEnabled(False)
         self.import_btn.clicked.connect(self._on_import)
-        self.import_btn.setStyleSheet("font-weight: bold;")
+        set_widget_style(self.import_btn, "font-weight: bold;")
         btn_layout.addWidget(self.import_btn)
         
         layout.addWidget(btn_frame)

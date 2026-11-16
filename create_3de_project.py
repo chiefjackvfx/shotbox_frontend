@@ -4,6 +4,8 @@ Standalone 3DE project creator for EXR sequences.
 
 from __future__ import annotations
 
+from themes import set_widget_style
+
 import json
 import os
 import re
@@ -924,15 +926,15 @@ class PathDropLabel(QLabel):
 
     def show_empty(self) -> None:
         self.setText(self.default_text)
-        self.setStyleSheet(DROP_STYLE_EMPTY)
+        set_widget_style(self, DROP_STYLE_EMPTY)
 
     def show_valid(self, label: str) -> None:
         self.setText(label)
-        self.setStyleSheet(DROP_STYLE_VALID)
+        set_widget_style(self, DROP_STYLE_VALID)
 
     def show_invalid(self, label: str) -> None:
         self.setText(label)
-        self.setStyleSheet(DROP_STYLE_INVALID)
+        set_widget_style(self, DROP_STYLE_INVALID)
 
     def dragEnterEvent(self, event) -> None:
         if event.mimeData().hasUrls():
@@ -985,7 +987,7 @@ class PresetChipGroup(QWidget):
         layout.setSpacing(6)
 
         label = QLabel(title)
-        label.setStyleSheet("font-weight: bold; color: #ddd;")
+        set_widget_style(label, "font-weight: bold; color: #ddd;")
         layout.addWidget(label)
 
         container = QWidget()
@@ -998,7 +1000,7 @@ class PresetChipGroup(QWidget):
         for preset_name in preset_names:
             button = QPushButton(preset_name)
             button.setCheckable(True)
-            button.setStyleSheet(PRESET_BUTTON_STYLE)
+            set_widget_style(button, PRESET_BUTTON_STYLE)
             self._button_group.addButton(button)
             self._flow_layout.addWidget(button)
             if preset_name == default_name:
@@ -1029,7 +1031,7 @@ class ExrClipSlot(QWidget):
         layout.setSpacing(6)
 
         self.title_label = QLabel("Clip 1")
-        self.title_label.setStyleSheet("font-weight: bold; color: #ddd;")
+        set_widget_style(self.title_label, "font-weight: bold; color: #ddd;")
         layout.addWidget(self.title_label)
 
         self.drop_label = PathDropLabel(
@@ -1049,7 +1051,7 @@ class ExrClipSlot(QWidget):
 
         self.info_label = QLabel("No clip selected.")
         self.info_label.setWordWrap(True)
-        self.info_label.setStyleSheet("color: #9aa;")
+        set_widget_style(self.info_label, "color: #9aa;")
         layout.addWidget(self.info_label)
 
         controls_row = QHBoxLayout()
@@ -1102,14 +1104,14 @@ class ExrClipSlot(QWidget):
             self.focal_length_spin.setValue(DEFAULT_FOCAL_LENGTH_MM)
         self.drop_label.show_empty()
         self.info_label.setText("No clip selected.")
-        self.info_label.setStyleSheet("color: #9aa;")
+        set_widget_style(self.info_label, "color: #9aa;")
         self.clear_button.setEnabled(False)
 
     def show_invalid(self, folder_label: str, details: str) -> None:
         self.sequence_info = None
         self.drop_label.show_invalid(f"⚠ {folder_label}\nInvalid EXR clip")
         self.info_label.setText(details)
-        self.info_label.setStyleSheet("color: #f99;")
+        set_widget_style(self.info_label, "color: #f99;")
         self.clear_button.setEnabled(bool(self.current_path()))
 
     def show_valid(self, sequence_info: SequenceInfo) -> None:
@@ -1120,7 +1122,7 @@ class ExrClipSlot(QWidget):
             f"{sequence_info.first_frame}-{sequence_info.last_frame} | "
             f"{sequence_info.width}x{sequence_info.height}"
         )
-        self.info_label.setStyleSheet("color: #8f8;")
+        set_widget_style(self.info_label, "color: #8f8;")
         self.clear_button.setEnabled(True)
 
 
@@ -1143,19 +1145,19 @@ class Create3DEProjectWindow(QWidget):
             "Add one or more EXR sequence folders, pick a shared camera preset, set focal length per clip, then build a 3DE project ready for tracking."
         )
         intro.setWordWrap(True)
-        intro.setStyleSheet("color: #bbb;")
+        set_widget_style(intro, "color: #bbb;")
         main_layout.addWidget(intro)
 
         instructions = QLabel(
             "Each clip becomes its own 3DE sequence camera. The camera preset is shared across all clips. Lens names use the focal length."
         )
         instructions.setWordWrap(True)
-        instructions.setStyleSheet("color: #9aa;")
+        set_widget_style(instructions, "color: #9aa;")
         main_layout.addWidget(instructions)
 
         clip_header_row = QHBoxLayout()
         clip_header_label = QLabel("Clips")
-        clip_header_label.setStyleSheet("font-weight: bold; color: #ddd;")
+        set_widget_style(clip_header_label, "font-weight: bold; color: #ddd;")
         clip_header_row.addWidget(clip_header_label)
         clip_header_row.addStretch(1)
         main_layout.addLayout(clip_header_row)
@@ -1238,9 +1240,7 @@ class Create3DEProjectWindow(QWidget):
         button_row = QHBoxLayout()
         button_row.addStretch(1)
         self.create_button = QPushButton("Create 3DE Project")
-        self.create_button.setStyleSheet(
-            "background-color: #f05a20; color: white; font-weight: bold; padding: 8px 16px;"
-        )
+        set_widget_style(self.create_button, "background-color: #f05a20; color: white; font-weight: bold; padding: 8px 16px;")
         self.create_button.clicked.connect(self._create_project)
         button_row.addWidget(self.create_button)
 
@@ -1250,7 +1250,7 @@ class Create3DEProjectWindow(QWidget):
         main_layout.addLayout(button_row)
 
         log_label = QLabel("Log")
-        log_label.setStyleSheet("font-weight: bold; color: #ddd;")
+        set_widget_style(log_label, "font-weight: bold; color: #ddd;")
         main_layout.addWidget(log_label)
 
         self.log_output = QPlainTextEdit()

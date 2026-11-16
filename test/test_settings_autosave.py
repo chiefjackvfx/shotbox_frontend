@@ -54,6 +54,26 @@ class SettingsAutosaveTests(unittest.TestCase):
         self.page._load_current_values()
         self.assertTrue(self.page.show_hidden_jobs_check.isChecked())
 
+    def test_theme_selection_is_saved_emitted_and_reloaded(self):
+        changes = []
+        self.page.settings_changed.connect(lambda key, value: changes.append((key, value)))
+        index = self.page.theme_combo.findData("gta6_vice_sunset.qss")
+        self.assertGreaterEqual(index, 0)
+        self.page.theme_combo.setCurrentIndex(index)
+        self.page._flush_autosave()
+        self.assertEqual(self.read_saved("theme_file"), "gta6_vice_sunset.qss")
+        self.assertIn(("theme_file", "gta6_vice_sunset.qss"), changes)
+        self.page._load_current_values()
+        self.assertEqual(self.page.theme_combo.currentData(), "gta6_vice_sunset.qss")
+        self.page.theme_combo.setCurrentIndex(self.page.theme_combo.findData("dark_v01.qss"))
+        self.page._flush_autosave()
+        self.assertEqual(self.read_saved("theme_file"), "dark_v01.qss")
+
+    def test_unknown_saved_theme_displays_original(self):
+        self.manager.set("theme_file", "missing.qss", save=False)
+        self.page._load_current_values()
+        self.assertEqual(self.page.theme_combo.currentData(), "dark_v01.qss")
+
     def test_deadline_qualified_workers_are_deduplicated_and_persisted(self):
         self.page.deadline_workers_edit.setText("linux-worker, windows-worker, linux-worker, ")
         QTest.qWait(650)

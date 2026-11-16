@@ -1,6 +1,7 @@
 """Paint flexible text without changing the values used by action handlers."""
 
 from math import ceil
+from themes import theme_colour
 
 from PyQt6.QtCore import QPointF, QSize, Qt
 from PyQt6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPen, QTextLayout, QTextOption
@@ -44,15 +45,19 @@ class NewFeatureTabBar(QTabBar):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             for width, alpha in ((8, 18), (5, 28), (3, 48)):
-                painter.setPen(QPen(QColor(255, 107, 53, alpha), width,
+                glow = QColor(theme_colour('#ff6b35'))
+                glow.setAlpha(alpha)
+                painter.setPen(QPen(glow, width,
                                     Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin))
                 painter.drawPath(path)
             shine = QLinearGradient(path.boundingRect().topLeft(), path.boundingRect().bottomLeft())
             stops = (((0, '#ffffff'), (0.4, '#fff8f3'), (0.55, '#ffe2d5'), (1, '#ffffff'))
                      if selected else
                      ((0, '#ffb18e'), (0.4, '#fff0e9'), (0.55, '#ff6b35'), (1, '#ff9971')))
+            if selected and theme_colour('#ff6b35') != '#ff6b35':
+                stops = ((0, '#171126'), (1, '#302044'))
             for stop, colour in stops:
-                shine.setColorAt(stop, QColor(colour))
+                shine.setColorAt(stop, QColor(theme_colour(colour)))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(shine)
             painter.drawPath(path)

@@ -11,6 +11,8 @@ QWidget {
     color: #D4D4D4;
     font-family: "Consolas", "JetBrainsMono", "SF Mono", monospace;
     font-size: 12px;
+    font-style: normal;
+    font-weight: normal;
 }
 
 /* === REVIEW === */

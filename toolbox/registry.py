@@ -15,4 +15,7 @@ class Tool:
 
 TOOLS = (Tool("shotbox_matte", "Shotbox Matte",
               "Generate mattes from image sequences and movies, with single-shot and batch workflows.",
-              "toolbox.shotbox_matte.plugin:open_tool"),)
+              "toolbox.shotbox_matte.plugin:open_tool"),
+         Tool("time_block_planner", "Time Block Planner",
+              "Try daily scheduling with sample tasks. Plans last while ShotBox is open.",
+              "time_block_planner:open_tool"))

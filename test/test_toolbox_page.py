@@ -23,6 +23,35 @@ class ToolboxPageTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_planner_button_opens_owned_window_and_reuses_session(self):
+        page = toolbox_page.ToolboxPage()
+        try:
+            button = page.findChild(QPushButton, "open_time_block_planner")
+            self.assertIsNotNone(button)
+            button.click()
+            self.app.processEvents()
+            window = page._tool_windows["time_block_planner"]
+            self.assertIs(window.parent(), page)
+            self.assertTrue(window.isWindow())
+            self.assertTrue(window.isVisible())
+            self.assertFalse(page.has_busy_tools())
+            # Keep planner state when the popup is closed and reopened.
+            window.time_blocks._place_task(0, dict(window.task_list.task_cards[1].task_data))
+            schedule = window.time_blocks.get_schedule()
+            self.assertTrue(schedule)
+            window.close()
+            button.click()
+            self.assertIs(page._tool_windows["time_block_planner"], window)
+            self.assertTrue(window.isVisible())
+            self.assertEqual(window.time_blocks.get_schedule(), schedule)
+            page.close_tools()
+            self.assertFalse(window.isVisible())
+        finally:
+            page.close_tools()
+            page.close()
+            page.deleteLater()
+            self.app.processEvents()
+
     def test_resolve_connection_uses_bundled_scripting_loader(self):
         resolve = object()
         scripting_module = SimpleNamespace(

@@ -13,6 +13,7 @@ import sys
 import getpass
 import re
 import yaml
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -28,6 +29,8 @@ from PyQt6.QtGui import QDesktopServices, QFont, QIcon, QWheelEvent
 import app_update
 import plugins_install
 from app_version import UPDATE_BRANCH
+from themes import DEFAULT_THEME, THEMES, normalize_theme
+from special_events import SPECIAL_EVENTS
 from app_cache import CACHE_ROOT, cache_directory, clear_cache_files
 
 
@@ -147,7 +150,8 @@ DEFAULT_SETTINGS = {
     },
     
     # Appearance settings
-    "theme_file": "dark_v01.qss",  # QSS filename (locked)
+    "theme_file": DEFAULT_THEME,  # Bundled QSS pack filename
+    "special_events": {event.completion_key.split(".")[-1]: False for event in SPECIAL_EVENTS},
     
     # Window settings
     "remember_window_size": True,
@@ -253,7 +257,7 @@ class SettingsManager:
                     if loaded is None:
                         loaded = {}
                     # Merge with defaults (loaded values override defaults)
-                    self._settings = self._deep_merge(DEFAULT_SETTINGS.copy(), loaded)
+                    self._settings = self._deep_merge(deepcopy(DEFAULT_SETTINGS), loaded)
                     self._settings["shots_layout_mode"] = normalize_shots_layout_mode(
                         self._settings["shots_layout_mode"]
                     )
@@ -261,10 +265,10 @@ class SettingsManager:
                         self._settings["deadline_shared_roots"] = default_deadline_shared_roots()
             except Exception as e:
                 print(f"[Settings] Error loading settings: {e}")
-                self._settings = DEFAULT_SETTINGS.copy()
+                self._settings = deepcopy(DEFAULT_SETTINGS)
         else:
             # Create new settings file with defaults
-            self._settings = DEFAULT_SETTINGS.copy()
+            self._settings = deepcopy(DEFAULT_SETTINGS)
             self._save_settings()
     
     def _deep_merge(self, base: dict, override: dict) -> dict:
@@ -332,7 +336,11 @@ class SettingsManager:
     
     def reset_to_defaults(self) -> None:
         """Reset all settings to default values."""
-        self._settings = DEFAULT_SETTINGS.copy()
+        events = deepcopy(self._settings.get("special_events", {}))
+        self._settings = deepcopy(DEFAULT_SETTINGS)
+        if isinstance(events, dict):
+            self._settings["special_events"] = self._deep_merge(
+                self._settings["special_events"], events)
         self._save_settings()
     
     def save(self) -> bool:
@@ -715,9 +723,11 @@ class SettingsPage(QWidget):
         appearance_group = self._create_group_box("Appearance")
         appearance_layout = QFormLayout(appearance_group)
         
-        # Theme is locked to dark_v01 for now.
-        self.theme_label = QLabel("dark_v01")
-        appearance_layout.addRow("Theme (QSS):", self.theme_label)
+        self.theme_combo = NoScrollComboBox()
+        for filename, label in THEMES.items():
+            self.theme_combo.addItem(label, filename)
+        self.theme_combo.setToolTip("Applies throughout ShotBox after autosave; no restart required.")
+        appearance_layout.addRow("Theme (QSS):", self.theme_combo)
         
         container_layout.addWidget(appearance_group)
 
@@ -1224,7 +1234,9 @@ class SettingsPage(QWidget):
         )
         
         # Appearance
-        self.theme_label.setText("dark_v01")
+        self.theme_combo.setCurrentIndex(
+            self.theme_combo.findData(normalize_theme(self._settings.get("theme_file")))
+        )
 
         # Shots layout
         layout_mode = self._settings.get("shots_layout_mode", "list")
@@ -1551,7 +1563,7 @@ class SettingsPage(QWidget):
         )
         
         # Appearance
-        self._set_pending_setting("theme_file", "dark_v01.qss", save=False)
+        self._set_pending_setting("theme_file", self.theme_combo.currentData() or DEFAULT_THEME, save=False)
 
         # Shots layout
         self._set_pending_setting(
@@ -1658,6 +1670,8 @@ class SettingsPage(QWidget):
             self._emit_saved_setting("nuke_exe_path", self.nuke_exe_path_edit.text().strip())
             self._emit_saved_setting("threede_exe_path", self.threede_exe_path_edit.text().strip())
             self._emit_saved_setting("houdini_exe_path", self.houdini_exe_path_edit.text().strip())
+
+            self._emit_saved_setting("theme_file", self.theme_combo.currentData() or DEFAULT_THEME)
 
             # UI density settings
             self._emit_saved_setting(

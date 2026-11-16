@@ -201,6 +201,7 @@ def build_main_window(startup_tab: int = 0, extra_settings: dict | None = None,
     settings_manager = FakeSettingsManager(startup_tab=startup_tab, extra_settings=extra_settings)
     with mock.patch.dict(sys.modules, fake_modules, clear=False), \
         mock.patch.object(main_module, "get_settings_manager", return_value=settings_manager), \
+        mock.patch.object(main_module, "SpecialEventController"), \
         mock.patch.object(main_module, "page_nukedash", FakeNukeDash), \
         mock.patch.object(main_module, "SettingsPage", FakeSettingsPage), \
         mock.patch.object(main_module.MainWindow, "_apply_initial_settings",

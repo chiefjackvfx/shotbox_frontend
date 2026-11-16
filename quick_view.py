@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from themes import set_widget_style
+
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Iterable
@@ -722,8 +724,7 @@ class QuickViewPopup(QWidget):
         self._next_frame_shortcut.activated.connect(lambda: self._step_frame(1))
 
     def _apply_style(self) -> None:
-        self.setStyleSheet(
-            """
+        set_widget_style(self, """
             QWidget#quick_view_popup {
                 background: transparent;
             }
@@ -791,8 +792,7 @@ class QuickViewPopup(QWidget):
                 margin: -4px 0;
                 border-radius: 6px;
             }
-            """
-        )
+            """)
 
     def show_media(self, media: QuickViewMedia, position_ms: int = 0, screen=None) -> None:
         continuing_session = self._session_visible and self.isVisible()

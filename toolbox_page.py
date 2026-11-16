@@ -1,5 +1,7 @@
 """Toolbox page for project setup and reusable utilities."""
 
+from themes import set_widget_style
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication,
@@ -45,7 +47,7 @@ class ToolboxPage(QWidget):
 
     def _setup_ui(self) -> None:
         self.setObjectName("toolbox_page")
-        self.setStyleSheet("""
+        set_widget_style(self, """
             QWidget#toolbox_page QLabel { background: transparent; }
             QLabel#toolbox_title { font-size: 28px; font-weight: bold; color: #F3F4F6; }
             QLabel#toolbox_description { color: #9CA3AF; font-size: 13px; }

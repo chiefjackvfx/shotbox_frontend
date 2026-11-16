@@ -10,6 +10,8 @@ Run standalone:
     python duration_updater.py
 """
 
+from themes import set_widget_style
+
 import os
 import re
 import platform
@@ -357,7 +359,7 @@ class DurationUpdaterPage(QWidget):
             "Looks for txt files in: Project/Nuke/Timeline/Shot/Shot.txt"
         )
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #888;")
+        set_widget_style(desc, "color: #888;")
         layout.addWidget(desc)
         
         # Path selection row
@@ -430,7 +432,7 @@ class DurationUpdaterPage(QWidget):
         self.update_btn = QPushButton("Update Selected")
         self.update_btn.setEnabled(False)
         self.update_btn.clicked.connect(self._on_update)
-        self.update_btn.setStyleSheet("font-weight: bold;")
+        set_widget_style(self.update_btn, "font-weight: bold;")
         btn_layout.addWidget(self.update_btn)
         
         layout.addWidget(btn_frame)

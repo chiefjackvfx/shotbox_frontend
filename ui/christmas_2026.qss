@@ -1,0 +1,248 @@
+/* Christmas — Evergreen & Gold. Original festive ShotBox styling.
+Shared base widget coverage; semantic colours and media canvases are preserved.
+@map #1a1d23 #0C2019
+@map #1e2228 #122B22
+@map #252931 #1B382C
+@map #2a3038 #284735
+@map #2f3542 #365442
+@map #404754 #627151
+@map #d4d4d4 #FFF4DE
+@map #9ca3af #C8CFBA
+@map #6b7280 #919C87
+@map #ffffff #FFF4DE
+@map #ff6b35 #D6B77A
+@map #d85a28 #AA8651
+@map #ff8659 #EDD39C
+@map #e45b29 #AA8651
+@map #ffe0d2 #F5E4BB
+@map #f05a20 #D6B77A
+@map #ffbb98 #EDD39C
+@map #5a9a5a #D6B77A
+@map #121212 #0C2019
+@map #1a1a1a #122B22
+@map #242424 #1B382C
+@map #2a2a2a #284735
+@map #1e1e1e #173327
+@map #333333 #365442
+@map #444444 #627151
+@map #e0e0e0 #FFF4DE
+@map #888888 #C8CFBA
+@map #555555 #919C87
+@map #17191c #122B22
+@map #4c5057 #627151
+@map #f2f3f5 #FFF4DE
+@map #aeb3bb #C8CFBA
+@map #777d86 #919C87
+@map #24272b #1B382C
+@map #30343a #365442
+@map #4a4f57 #627151
+@map #454b54 #627151
+@map #f3f4f6 #FFF4DE
+@map #22262e #1B382C
+@map #363d49 #627151
+@map #b7bfcc #C8CFBA
+@map #d4d9e2 #FFF4DE
+@map #909bab #C8CFBA
+@map #aab6c7 #C8CFBA
+@map #343b47 #365442
+@map #919bac #919C87
+@map #171a20 #0C2019
+@map #dddddd #FFF4DE
+@map #bbbbbb #C8CFBA
+@map #aaaaaa #C8CFBA
+@map #999999 #ABB89D
+@map #15181e #0C2019
+@map #1e222a #1B382C
+@map #333945 #365442
+@map #603d2f #627151
+@map #edf0f5 #FFF4DE
+@map #9aa5b6 #C8CFBA
+@map #c7cfdb #C8CFBA
+@map #30231e #284735
+@map #2a303b #365442
+@map #dce3ed #FFF4DE
+@map #434c5c #627151
+@map #373f4d #627151
+@map #7e899b #AA8651
+@map #202631 #1B382C
+@map #242932 #1B382C
+@map #657084 #919C87
+@map #343c49 #365442
+@map #ff8357 #EDD39C
+@map #3d2922 #284735
+@map #af7c65 #919C87
+@map #171b22 #122B22
+@map #e2e7ef #FFF4DE
+@map #3b4453 #627151
+@map #613d2b #627151
+@map #778396 #919C87
+@map #303846 #365442
+@map #536074 #627151
+@map #191e26 #122B22
+@map #202630 #1B382C
+@map #343e4e #365442
+@map #354557 #627151
+@map #1a202a #1B382C
+@map #29313e #365442
+@map #252c37 #1B382C
+@map #b9c6d8 #C8CFBA
+@map #404b5d #627151
+@map #aebbd0 #C8CFBA
+@map #333d4b #365442
+@map #30343c #365442
+@map #141619 #0C2019
+@map #14171b #0C2019
+@map #15191e #0C2019
+@map #161a1e #0C2019
+@map #171b20 #122B22
+@map #1b1f26 #122B22
+@map #1b2026 #122B22
+@map #1c1f25 #122B22
+@map #202329 #1B382C
+@map #20252c #1B382C
+@map #20262e #1B382C
+@map #22262d #1B382C
+@map #252c35 #284735
+@map #343e4a #365442
+@map #39414c #627151
+@map #39424e #627151
+@map #4b5563 #627151
+@map #4f5665 #627151
+@map #657386 #AA8651
+@map #818793 #919C87
+@map #a8b0bb #C8CFBA
+@map #afbbcb #C8CFBA
+@map #b8c4d3 #C8CFBA
+@map #c6cfdb #C8CFBA
+@map #c7ccd6 #C8CFBA
+@map #c9d1da #C8CFBA
+@map #d1d5db #FFF4DE
+@map #dce3ec #FFF4DE
+@map #e5e7eb #FFF4DE
+@map #f1f5fa #FFF4DE
+@map #f5f7fa #FFF4DE
+*/
+/* A winter production desk: evergreen, warm paper, cranberry and brass. */
+QWidget {
+    font-family: "DejaVu Sans", "Segoe UI", "Arial", sans-serif;
+    font-size: 12px;
+}
+QMainWindow, QTabWidget, QTabBar { background: #0C2019; }
+QFrame#vice_console_header {
+    background: #0C2019;
+    background-image: url("@THEME_UI@/christmas/garland.svg");
+    background-repeat: no-repeat;
+    background-position: right center;
+    border: none;
+    border-bottom: 2px solid #D6B77A;
+}
+QLabel#vice_console_eyebrow {
+    background: transparent; color: #D6B77A;
+    font-size: 9px; font-weight: bold; letter-spacing: 1px;
+}
+QLabel#vice_console_title {
+    background: transparent; color: #FFF4DE;
+    font-family: "Georgia", "DejaVu Serif", serif;
+    font-size: 27px; font-weight: bold; font-style: normal;
+    letter-spacing: 0px;
+}
+QLabel#christmas_party_countdown {
+    background: transparent;
+    color: #EDD39C;
+    font-family: "DejaVu Sans", "Segoe UI", sans-serif;
+    font-size: 11px;
+    font-weight: normal;
+    letter-spacing: 0px;
+}
+QFrame#vice_console_header[compact="true"] { background-image: none; }
+QFrame#vice_console_header[compact="true"] QLabel#vice_console_title { font-size: 18px; }
+QFrame#vice_console_header[compact="true"] QLabel#vice_console_eyebrow { font-size: 8px; letter-spacing: 0px; }
+QTabWidget::pane { background: #0C2019; border: none; border-top: 1px solid #627151; }
+QTabBar::tab {
+    background: #122B22; color: #C8CFBA;
+    border: 1px solid #365442; border-bottom: 3px solid #122B22;
+    border-top-left-radius: 6px; border-top-right-radius: 6px;
+    padding: 10px 16px; margin: 7px 3px 0 0;
+    font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
+}
+QTabBar::tab:selected {
+    background: #813644; color: #FFF4DE;
+    border-color: #AD6871; border-bottom-color: #EDD39C;
+}
+QTabBar::tab:hover:!selected { background: #284735; color: #FFF4DE; border-bottom-color: #D6B77A; }
+QTabBar::tab:!selected { margin-top: 7px; }
+QPushButton, QToolButton {
+    background: #284735; color: #FFF4DE;
+    border: 1px solid #627151; border-bottom: 2px solid #627151;
+    border-radius: 6px; padding: 7px 12px;
+    font-size: 11px; font-weight: 600; text-transform: none; letter-spacing: 0px;
+}
+QPushButton:hover, QToolButton:hover { background: #365442; color: #FFF4DE; border-color: #EDD39C; }
+QPushButton:pressed, QToolButton:pressed { background: #122B22; border-color: #D6B77A; }
+QPushButton:disabled, QToolButton:disabled { background: #1B382C; color: #919C87; border-color: #365442; }
+QPushButton:default:enabled {
+    background: #813644; color: #FFF4DE; border-color: #C37B80;
+}
+QPushButton:default:pressed { background: #642A35; }
+QPushButton:focus, QToolButton:focus { border-color: #EDD39C; }
+QFrame#frame_7, QFrame#frame_7[v02="true"] {
+    background: #122B22; border: 1px solid #627151;
+    border-top: 2px solid #D6B77A; border-radius: 9px;
+}
+QFrame#frame_7:hover, QFrame#frame_7[v02="true"]:hover { border-color: #EDD39C; }
+QLabel#label_shot, QLabel#label_shot[v02="true"] {
+    color: #FFF4DE; font-size: 17px; font-weight: bold; letter-spacing: 0px;
+}
+QLabel#label_shot[v02="true"][compact="true"] { font-size: 14px; }
+QFrame#task_frame, QFrame#task_frame[v02="true"] { background: #173327; border: 1px solid #365442; border-radius: 5px; }
+QFrame#task_frame:hover { background: #1B382C; border-color: #627151; }
+QPushButton#btn_status { border-radius: 4px; }
+QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QAbstractSpinBox {
+    background: #0C2019; color: #FFF4DE;
+    border: 1px solid #627151; border-radius: 5px; padding: 7px 10px;
+    selection-background-color: #813644; selection-color: #FFF4DE;
+}
+QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QComboBox:focus, QAbstractSpinBox:focus {
+    border-color: #EDD39C; background: #122B22;
+}
+QLineEdit:disabled, QComboBox:disabled, QAbstractSpinBox:disabled { background: #1B382C; color: #919C87; border-color: #365442; }
+QComboBox::drop-down { background: #284735; width: 24px; border-left: 1px solid #627151; }
+QComboBox QAbstractItemView, QMenu {
+    background: #122B22; color: #FFF4DE; border: 1px solid #D6B77A;
+    padding: 5px; selection-background-color: #813644; selection-color: #FFF4DE;
+}
+QAbstractItemView::item:selected, QMenu::item:selected { background: #813644; color: #FFF4DE; }
+QGroupBox {
+    background: #122B22; border: 1px solid #627151; border-radius: 8px;
+    margin-top: 16px; padding: 16px 12px 12px; font-weight: bold;
+}
+QGroupBox::title { color: #EDD39C; subcontrol-origin: margin; subcontrol-position: top left; left: 14px; padding: 0 7px; }
+QHeaderView::section { background: #1B382C; color: #EDD39C; border: none; border-bottom: 2px solid #627151; padding: 8px; font-size: 10px; font-weight: bold; }
+QTableView, QTreeView, QListView { background: #0C2019; alternate-background-color: #122B22; border: 1px solid #365442; border-radius: 5px; gridline-color: #365442; }
+QScrollBar:vertical { background: #0C2019; width: 9px; border: none; }
+QScrollBar:horizontal { background: #0C2019; height: 9px; border: none; }
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal { background: #627151; border: none; border-radius: 4px; min-height: 24px; min-width: 24px; }
+QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { background: #D6B77A; }
+QProgressBar { background: #0C2019; color: #FFF4DE; border: 1px solid #627151; border-radius: 4px; }
+QProgressBar::chunk { background: #813644; border-radius: 3px; }
+QCheckBox::indicator { width: 15px; height: 15px; background: #0C2019; border: 1px solid #627151; border-radius: 3px; }
+QCheckBox::indicator:checked { background: #813644; border-color: #EDD39C; }
+QSlider::groove:horizontal { background: #284735; border: none; height: 4px; border-radius: 2px; }
+QSlider::handle:horizontal { background: #EDD39C; border: 2px solid #AA8651; border-radius: 7px; width: 12px; height: 12px; margin: -5px 0; }
+QToolTip { background: #122B22; color: #FFF4DE; border: 1px solid #D6B77A; padding: 7px; }
+QStatusBar { background: #0C2019; color: #C8CFBA; border-top: 1px solid #627151; }
+/* @local toolbox_page */
+QWidget#toolbox_page QLabel#toolbox_title { font-family: "Georgia", "DejaVu Serif", serif; font-size: 30px; font-weight: bold; color: #FFF4DE; }
+QWidget#toolbox_page QGroupBox { background: #122B22; border: 1px solid #627151; border-top: 2px solid #D6B77A; border-radius: 9px; padding: 22px 18px 18px; }
+QWidget#toolbox_page QGroupBox::title { color: #EDD39C; font-size: 16px; font-weight: bold; padding: 0 8px; }
+QWidget#toolbox_page QPushButton { border-radius: 6px; padding: 10px 16px; font-weight: bold; text-transform: none; }
+QWidget#toolbox_page QPushButton#copy_speed_ramps_button:enabled,
+QWidget#toolbox_page QPushButton#open_time_block_planner:enabled { background: #813644; color: #FFF4DE; border: 1px solid #C37B80; }
+QWidget#toolbox_page QPushButton#copy_speed_ramps_button:pressed,
+QWidget#toolbox_page QPushButton#open_time_block_planner:pressed { background: #642A35; }
+/* @endlocal */
+/* @local import_timeline_page */
+QWidget#import_timeline_page QFrame[role="card"] { background: #122B22; border: 1px solid #627151; border-top: 2px solid #D6B77A; border-radius: 9px; }
+QWidget#import_timeline_page QLabel[role="pageTitle"] { font-family: "Georgia", "DejaVu Serif", serif; font-size: 28px; font-weight: bold; }
+QWidget#import_timeline_page QPushButton[role="primary"]:enabled { background: #813644; color: #FFF4DE; border-color: #C37B80; border-radius: 6px; }
+/* @endlocal */

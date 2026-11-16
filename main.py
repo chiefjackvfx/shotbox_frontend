@@ -33,6 +33,9 @@ from PyQt6.QtWidgets import QMainWindow, QMessageBox, QTabWidget, QSizePolicy
 
 import app_update
 from app_version import APP_VERSION
+from themes import apply_theme, create_theme_header, set_widget_style
+from workday_countdown import WorkdayCountdown
+from special_events import SpecialEventController
 import http_help
 import filesIO
 from input_behaviour import install_input_wheel_guard
@@ -143,6 +146,7 @@ class MainWindow(QMainWindow):
         
         # Initialize settings manager first
         self._settings_manager = get_settings_manager()
+        self._special_event = SpecialEventController(self._settings_manager, self)
 
         self._enable_assignment_board = bool(
             self._settings_manager.get("enable_assignment_board", ENABLE_ASSIGNMENT_BOARD)
@@ -165,6 +169,7 @@ class MainWindow(QMainWindow):
         
         # Apply settings to modules before creating pages
         self._apply_initial_settings()
+        self._special_event.check()
         http_help.DjangoAPI.set_current_user_by_id(
             self._settings_manager.get("django_username")
         )
@@ -250,12 +255,21 @@ class MainWindow(QMainWindow):
         self.page_nukedash.lock_clear_preview_ready.connect(self.page_settings.review_nuke_lock_clear_preview)
         self.page_nukedash.lock_clear_finished.connect(self.page_settings.show_nuke_lock_clear_result)
         
-        self.setCentralWidget(self.tabs)
+        shell = QtWidgets.QWidget(self)
+        shell_layout = QtWidgets.QVBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
+        self._theme_header = create_theme_header(shell)
+        shell_layout.addWidget(self._theme_header)
+        shell_layout.addWidget(self.tabs, 1)
+        self.setCentralWidget(shell)
         self.version_label = QtWidgets.QLabel(f"ShotBox v{APP_VERSION}", self)
-        self.version_label.setStyleSheet("color: #9CA3AF;")
+        set_widget_style(self.version_label, "color: #9CA3AF;")
         self.version_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.version_label.setContentsMargins(0, 0, 6, 0)
         self.statusBar().setSizeGripEnabled(False)
+        self.workday_countdown = WorkdayCountdown(self)
+        self.statusBar().addPermanentWidget(self.workday_countdown)
         self.statusBar().addPermanentWidget(self.version_label)
         self._relax_minimum_sizes()
         
@@ -284,6 +298,8 @@ class MainWindow(QMainWindow):
         self._automatic_update_process = None
         self._automatic_update_initial_status = None
         self._start_automatic_nuke_time()
+        self._special_event.bind_settings_page(self.page_settings)
+        self._special_event.start()
 
     def _start_automatic_nuke_time(self):
         from nuke_time_setup_controller import AutomaticNukeTimeSetup
@@ -379,28 +395,7 @@ class MainWindow(QMainWindow):
     
     def _apply_theme_file(self, theme_file: str) -> None:
         """Apply a QSS theme file to the whole app."""
-        _ = theme_file
-        locked_theme_file = "dark_v01.qss"
-
-        qss_paths = [
-            os.path.join(SCRIPT_DIR, "ui", locked_theme_file),  # ./ui/theme.qss
-            os.path.join(SCRIPT_DIR, locked_theme_file),        # ./theme.qss (legacy)
-        ]
-
-        for qss_path in qss_paths:
-            if os.path.exists(qss_path):
-                try:
-                    with open(qss_path, "r", encoding="utf-8") as f:
-                        qss = f.read()
-                    app = QtWidgets.QApplication.instance()
-                    if app:
-                        app.setStyleSheet(qss)
-                    return
-                except Exception as e:
-                    print(f"[Theme] Error loading theme {locked_theme_file}: {e}")
-                    return
-
-        print(f"[Theme] Theme file not found: {locked_theme_file}")
+        apply_theme(theme_file)
 
     def _update_server_url(self, url: str):
         """Update server URL in all relevant modules."""
@@ -845,7 +840,10 @@ class MainWindow(QMainWindow):
 
     def _on_settings_changed(self, key: str, value):
         """Handle settings changes that need immediate action."""
-        if key == "django_username":
+        if key == "theme_file":
+            self._apply_theme_file(value)
+
+        elif key == "django_username":
             http_help.DjangoAPI.set_current_user_by_id(value)
             self._sync_automatic_nuke_time()
 
@@ -1183,10 +1181,6 @@ if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     if os.path.exists(APP_ICON_PATH):
         app.setWindowIcon(QIcon(APP_ICON_PATH))
-    dark_theme_path = os.path.join(SCRIPT_DIR, "ui", "dark_v01.qss")
-    with open(dark_theme_path, "r", encoding="utf-8") as f:
-        qss = f.read()
-    app.setStyleSheet(qss)
     main_window = MainWindow()
     main_window.show()
     sys.exit(app.exec())

@@ -1,3 +1,5 @@
+
+from themes import set_widget_style
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QSizePolicy, QLineEdit, QStackedWidget, QApplication
@@ -11,7 +13,7 @@ def _add_frame_reference_badge(widget):
     badge.setObjectName("task_frame_reference")
     badge.setTextFormat(Qt.TextFormat.PlainText)
     badge.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
-    badge.setStyleSheet("QLabel#task_frame_reference { color: #ffbb98; background-color: rgba(255, 135, 88, 18); border: none; border-radius: 4px; padding: 3px 6px; font-family: monospace; font-size: 10px; }")
+    set_widget_style(badge, "QLabel#task_frame_reference { color: #ffbb98; background-color: rgba(255, 135, 88, 18); border: none; border-radius: 4px; padding: 3px 6px; font-family: monospace; font-size: 10px; }")
     badge.hide()
     widget.frame_reference_badge = badge
     return badge

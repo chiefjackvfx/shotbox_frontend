@@ -4,6 +4,8 @@ XML Tools Page for ShotBox - Consolidated version with all dependencies.
 Parses XML timelines and creates Nuke shot folders/scripts.
 """
 
+from themes import set_widget_style
+
 # Standard Library Imports
 import os
 import sys
@@ -93,7 +95,7 @@ class UIToolsMixin:
         """Loads and applies a QSS stylesheet."""
         try:
             with open(filename, "r", encoding='utf-8') as f:
-                self.setStyleSheet(f.read())
+                set_widget_style(self, f.read())
         except FileNotFoundError:
             print(f"Stylesheet '{filename}' not found.")
 
@@ -578,12 +580,12 @@ class ShotSetupDrop(QWidget, ConfigureMixin):
     def initUI(self):
         self.label1 = QLabel("Drag and drop a .mov here")
         self.label1.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label1.setStyleSheet("background-color: #F0F0F0; color: #333333; font-size: 16px; padding: 10px; border: 1px solid #CCCCCC;")
+        set_widget_style(self.label1, "background-color: #F0F0F0; color: #333333; font-size: 16px; padding: 10px; border: 1px solid #CCCCCC;")
         self.label1.setMinimumHeight(150)
 
         self.label2 = QLabel("Drag and drop the folder here for Nuke folder to be created")
         self.label2.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label2.setStyleSheet("background-color: #F0F0F0; color: #333333; font-size: 16px; padding: 10px; border: 1px solid #CCCCCC;")
+        set_widget_style(self.label2, "background-color: #F0F0F0; color: #333333; font-size: 16px; padding: 10px; border: 1px solid #CCCCCC;")
         self.label2.setMinimumHeight(150)
 
         self.singleshoNametextbox = QLineEdit(self)
@@ -594,7 +596,7 @@ class ShotSetupDrop(QWidget, ConfigureMixin):
         self.btnMake_Shot = QToolButton(self)
         self.btnMake_Shot.setText("Make shot")
         self.btnMake_Shot.clicked.connect(self.make_shot_check)
-        self.btnMake_Shot.setStyleSheet(f"background-color: #{self.ui_colour_orange}; color: #FFFFFF; font-size: 16px; padding: 10px; border-radius: 5px;")
+        set_widget_style(self.btnMake_Shot, f"background-color: #{self.ui_colour_orange}; color: #FFFFFF; font-size: 16px; padding: 10px; border-radius: 5px;")
 
         hbox = QHBoxLayout()
         hbox.addWidget(self.singleshoNametextbox)
@@ -1088,7 +1090,7 @@ class page_xmlTools(QWidget, ConfigureMixin):
         shotIndexBtn.setText("Set up")
         shotIndexBtn.clicked.connect(lambda: self.folderSetup(shotIndex, read_paths, thumb, duration))
         shotIndexBtn.clicked.connect(lambda: print(f"Set up shot {shotIndex + 1}"))
-        shotIndexBtn.clicked.connect(lambda: shotIndexBtn.setStyleSheet("background-color: green"))
+        shotIndexBtn.clicked.connect(lambda: set_widget_style(shotIndexBtn, "background-color: green"))
         return shotIndexBtn
 
     def shotTable(self):
@@ -1276,7 +1278,7 @@ class page_xmlTools(QWidget, ConfigureMixin):
         # Update buttons to green if we have them
         if hasattr(self, 'btnShots'):
             for btn in self.btnShots:
-                btn.setStyleSheet("background-color: green")
+                set_widget_style(btn, "background-color: green")
         
         # Show summary
         summary = f"Created: {created} shots\nSkipped: {skipped} shots (already exist)"

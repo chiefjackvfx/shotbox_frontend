@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="88" viewBox="0 0 600 88">
+<defs>
+ <linearGradient id="bg"><stop stop-color="#0C2019"/><stop offset="1" stop-color="#244735"/></linearGradient>
+ <linearGradient id="gold" x2="1" y2="1"><stop stop-color="#FFF0BC"/><stop offset=".5" stop-color="#D6B77A"/><stop offset="1" stop-color="#947044"/></linearGradient>
+ <radialGradient id="red"><stop stop-color="#D88480"/><stop offset=".4" stop-color="#AC4853"/><stop offset="1" stop-color="#682D39"/></radialGradient>
+ <linearGradient id="fade"><stop stop-color="#0C2019"/><stop offset=".45" stop-color="#0C2019" stop-opacity="0"/></linearGradient>
+ <g id="sprig" stroke="#478065" stroke-width="1.4"><path d="M0 0L60 18M12 4L10 -6M12 4L5 9M23 7L22 -6M23 7L16 15M34 10L35 -3M34 10L27 20M45 14L48 2M45 14L40 24M55 17L59 8M55 17L52 28"/></g>
+</defs>
+<path fill="url(#bg)" d="M0 0h600v88H0z"/>
+<g fill="#EDE3C7" opacity=".6"><circle cx="270" cy="50" r="1.3"/><circle cx="350" cy="70" r="1"/><circle cx="395" cy="40" r="1.5"/><circle cx="560" cy="75" r="1.2"/><circle cx="486" cy="66" r="1.4"/></g>
+<path d="M160 -3Q375 46 610 0" stroke="#D6B77A" fill="none" opacity=".6"/>
+<g fill="url(#gold)"><circle cx="230" cy="11" r="3"/><circle cx="292" cy="20" r="3"/><circle cx="364" cy="25" r="3"/><circle cx="440" cy="22" r="3"/><circle cx="569" cy="7" r="3"/></g>
+<path d="M505 16v19M425 0v40" stroke="#D6B77A"/>
+<rect x="499" y="33" width="12" height="6" rx="2" fill="#D6B77A"/>
+<circle cx="505" cy="54" r="18" fill="url(#red)"/>
+<path d="M493 54h24" stroke="#D6B77A" opacity=".7"/>
+<path d="M425 37l4 9 10 1-8 7 2 10-8-5-9 5 2-10-7-7 10-1z" fill="url(#gold)"/>
+<g transform="translate(385 -9)"><use href="#sprig"/><use href="#sprig" transform="translate(45 8) rotate(-8)"/><use href="#sprig" transform="translate(100 10) rotate(-12)"/><use href="#sprig" transform="translate(160 8) rotate(-16)"/></g>
+<g fill="#AC4853"><circle cx="458" cy="13" r="3"/><circle cx="463" cy="16" r="3"/><circle cx="457" cy="19" r="3"/></g>
+<path fill="url(#fade)" d="M0 0h600v88H0z"/>
+</svg>

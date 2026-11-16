@@ -2,6 +2,74 @@
 
 PyQt6 desktop frontend for ShotBox.
 
+The bottom-right status bar shows time remaining until **6:00 PM local time**
+beside the version number, for example `2h 30m left today`. It refreshes while
+ShotBox runs and when returning to the app, shows zero after 6 PM, and resets
+for the next day.
+
+## Themes
+
+Choose **Settings → Appearance → Theme (QSS)** to switch between **Dark —
+Original**, **GTA VI — Vice Sunset**, and **Christmas — Evergreen & Gold**.
+The selection autosaves and applies
+throughout the open app without restarting, then persists on the next launch.
+Vice Sunset turns the app into a Vice Operations production console: an
+original palm-and-skyline header, italic display typography, illuminated
+navigation keys, dossier cards, recessed inputs and turquoise focus indicators.
+Selecting **Dark — Original** turns the entire design off, including the header.
+The header hides its artwork in narrow windows to keep text readable. Shot
+colours, task status hues and neutral media canvases retain their meaning.
+Missing or unreadable packs fall back to the original theme. Christmas adds
+evergreen panels, cranberry controls, warm gold trim, festive artwork and a
+live countdown to the 21 December Christmas party. It can also be selected
+manually before the automatic event.
+
+Bundled packs are registered in `themes.py`. The seasonal QSS packs inherit
+`ui/dark_v01.qss`, apply their comment-based `@map` decorative colour mappings,
+and adds standard Qt QSS overrides. This keeps shared widget rules in one place.
+Use `themes.set_widget_style(widget, qss)` for local decorative styles so open
+widgets and newly created dialogs switch together and restore their original
+styles when switching back. Custom painters can use `themes.theme_colour`.
+Pack sections marked `/* @local object_name */` through `/* @endlocal */`
+also override private stylesheets on matching widgets. `@THEME_UI@` resolves
+artwork paths relative to the frontend installation.
+
+## Special Events
+
+Starting **Wednesday 18 November 2026 at 11:00 PM UK time**
+(`2026-11-18T23:00:00Z`), ShotBox switches each user's theme to **GTA VI — Vice
+Sunset** once. It checks before first paint, every 30 seconds while running,
+and immediately when the app returns to the foreground.
+
+**Christmas mode** activates once on **Tuesday 1 December 2026 at midnight UK
+time** (`2026-12-01T00:00:00Z`). Its header counts calendar days until the
+**Christmas party on 21 December 2026**: 20 days on 1 December, one day on
+20 December, and “It's party day!” on the 21st. After the party, it displays
+“Merry Christmas!” rather than a negative countdown. The countdown updates
+while the app stays open and when returning from sleep or another application.
+
+Late launches apply the newest due theme once and mark earlier due events
+handled in the same save, so Christmas cannot be replaced by an overdue GTA
+event. Settings does not announce scheduled events or their activation times;
+the party countdown appears in the Christmas header when that theme is active.
+
+After activation, users can select any theme. The completion marker survives
+preference resets, so each event never forces that user's theme again. Pending
+settings are saved before switching; failed loads or saves restore the previous
+theme and leave the event eligible for retry. The event runs locally and uses
+UTC, so it works offline and does not depend on the computer's timezone.
+
+Users must install a release containing this feature through the normal update
+process. Older installations cannot receive this event automatically.
+
+## Time Block Planner
+
+Open **Toolbox → Time Block Planner → Open Time Block Planner** to launch
+the planner in a separate window. Repeated clicks bring the same window forward;
+closing and reopening it keeps the current session. It follows the selected
+ShotBox theme and closes with the application. This prototype uses sample tasks;
+plans are kept only while ShotBox is open and do not update server tasks.
+
 ## Entry Point
 
 - Run the app from `main.py` using frontend `venv` (Python 3.13 on Linux, Windows and macOS).

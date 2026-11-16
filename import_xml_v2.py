@@ -6,6 +6,8 @@ XML Import V2 for ShotBox - Combined XML parsing, Nuke setup, and Django import.
 Single-step process: Parse XML → Create Nuke folders/scripts → Add to Django DB.
 """
 
+from themes import set_widget_style
+
 # =============================================================================
 # IMPORTS
 # =============================================================================
@@ -2047,7 +2049,7 @@ class SingleShotClipSlot(QWidget):
 
         self.role_label = QLabel()
         self.role_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.role_label.setStyleSheet("font-weight: bold; color: #ddd;")
+        set_widget_style(self.role_label, "font-weight: bold; color: #ddd;")
         layout.addWidget(self.role_label)
 
         self.drop_label = QLabel()
@@ -2120,7 +2122,7 @@ class SingleShotCreationDialog(QDialog):
         # Instructions
         instructions = QLabel(f"Drag clips left to right: Primary/V1 through V{MAX_SINGLE_SHOT_CLIPS}. Drop an EXR frame or sequence folder into a clip slot.")
         instructions.setWordWrap(True)
-        instructions.setStyleSheet("color: #888; font-style: italic;")
+        set_widget_style(instructions, "color: #888; font-style: italic;")
         main_layout.addWidget(instructions)
 
         # Ordered clip slots
@@ -2156,7 +2158,7 @@ class SingleShotCreationDialog(QDialog):
         self.folder_drop_label = QLabel("📁 Drag and drop output folder here\n(where shot folder will be created)")
         self.folder_drop_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.folder_drop_label.setMinimumHeight(100)
-        self.folder_drop_label.setStyleSheet("""
+        set_widget_style(self.folder_drop_label, """
             QLabel {
                 background-color: #2a2a2a;
                 border: 2px dashed #555;
@@ -2285,7 +2287,7 @@ class SingleShotCreationDialog(QDialog):
 
         self.create_shot_button = QPushButton("Create Shot")
         self.create_shot_button.clicked.connect(self._validate_and_accept)
-        self.create_shot_button.setStyleSheet("background-color: #f05a20; color: white; font-weight: bold; padding: 8px 16px;")
+        set_widget_style(self.create_shot_button, "background-color: #f05a20; color: white; font-weight: bold; padding: 8px 16px;")
         action_buttons_row_layout.addWidget(self.create_shot_button)
 
         outer_layout.addLayout(action_buttons_row_layout)
@@ -2355,7 +2357,7 @@ class SingleShotCreationDialog(QDialog):
 
     def _apply_clip_slot_style(self, slot: SingleShotClipSlot, *, valid: bool, invalid: bool = False):
         if valid:
-            slot.drop_label.setStyleSheet("""
+            set_widget_style(slot.drop_label, """
                 QLabel {
                     background-color: #1a3a1a;
                     border: 2px solid #4a4;
@@ -2367,7 +2369,7 @@ class SingleShotCreationDialog(QDialog):
             """)
             return
         if invalid:
-            slot.drop_label.setStyleSheet("""
+            set_widget_style(slot.drop_label, """
                 QLabel {
                     background-color: #3a1a1a;
                     border: 2px solid #a44;
@@ -2378,7 +2380,7 @@ class SingleShotCreationDialog(QDialog):
                 }
             """)
             return
-        slot.drop_label.setStyleSheet("""
+        set_widget_style(slot.drop_label, """
             QLabel {
                 background-color: #2a2a2a;
                 border: 2px dashed #555;
@@ -2551,7 +2553,7 @@ class SingleShotCreationDialog(QDialog):
         if text and os.path.isdir(text):
             foldername = os.path.basename(text)
             self.folder_drop_label.setText(f"✅ {foldername}")
-            self.folder_drop_label.setStyleSheet("""
+            set_widget_style(self.folder_drop_label, """
                 QLabel {
                     background-color: #1a3a1a;
                     border: 2px solid #4a4;
@@ -2563,7 +2565,7 @@ class SingleShotCreationDialog(QDialog):
             """)
         else:
             self.folder_drop_label.setText("📁 Drag and drop output folder here\n(where shot folder will be created)")
-            self.folder_drop_label.setStyleSheet("""
+            set_widget_style(self.folder_drop_label, """
                 QLabel {
                     background-color: #2a2a2a;
                     border: 2px dashed #555;

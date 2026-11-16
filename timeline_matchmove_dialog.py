@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from themes import set_widget_style
+
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -136,7 +138,7 @@ class TimelineMatchmoveDialog(QDialog):
             "Each selected sequence becomes its own 3DE camera. Camera preset, FPS, and frame override are shared."
         )
         details.setWordWrap(True)
-        details.setStyleSheet("color: #9aa;")
+        set_widget_style(details, "color: #9aa;")
         layout.addWidget(details)
 
         project_row = QHBoxLayout()
@@ -196,7 +198,7 @@ class TimelineMatchmoveDialog(QDialog):
             if candidate.display_title != current_shot_title:
                 current_shot_title = candidate.display_title
                 shot_label = QLabel(current_shot_title, scroll_contents)
-                shot_label.setStyleSheet("font-weight: bold; color: #ddd; margin-top: 6px;")
+                set_widget_style(shot_label, "font-weight: bold; color: #ddd; margin-top: 6px;")
                 self._group_labels.append(shot_label)
                 scroll_layout.addWidget(shot_label)
 
@@ -230,18 +232,18 @@ class TimelineMatchmoveDialog(QDialog):
             self._validated_project_name()
         except Exception as exc:
             self.validation_label.setText(str(exc))
-            self.validation_label.setStyleSheet("color: #f99;")
+            set_widget_style(self.validation_label, "color: #f99;")
             self.create_button.setEnabled(False)
             return
 
         if selected_count <= 0:
             self.validation_label.setText("Select at least one EXR sequence.")
-            self.validation_label.setStyleSheet("color: #f99;")
+            set_widget_style(self.validation_label, "color: #f99;")
             self.create_button.setEnabled(False)
             return
 
         self.validation_label.setText(f"{selected_count} clip(s) selected.")
-        self.validation_label.setStyleSheet("color: #9aa;")
+        set_widget_style(self.validation_label, "color: #9aa;")
         self.create_button.setEnabled(True)
 
     def build_request(self) -> shared_matchmove.MatchmoveProjectRequest:
