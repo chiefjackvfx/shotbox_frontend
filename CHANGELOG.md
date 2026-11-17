@@ -6,9 +6,33 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-17 09:57:59 AM +00:00] Add draggable, rotatable reference wipes with swap and reset.
+
+- [2026-11-16 06:04:28 PM +00:00] Automatically load saved timeline references using workstation path mappings.
+
+- [2026-11-16 05:47:24 PM +00:00] Overlay offline reference movies with synchronized timing and opacity.
 ### Changed
 
+- [2026-11-17 09:57:59 AM +00:00] Verify wipe rendering, gestures, zoom, playback, and fullscreen.
+
+- [2026-11-17 09:47:23 AM +00:00] Test delayed reference rendering, continuous playback, and failure recovery.
+
+- [2026-11-16 06:06:50 PM +00:00] Test actual preview encoding from 6K sources at 60fps.
+
+- [2026-11-16 06:04:28 PM +00:00] Verify saved references, missing files, and preserved manual selections.
+
+- [2026-11-16 06:03:57 PM +00:00] Verify OG preview timing locally and in prepared scenes.
+
+- [2026-11-16 05:53:10 PM +00:00] Require desktop and web review feature parity going forward.
+
+- [2026-11-16 05:47:24 PM +00:00] Verify reference alignment, compositing, cancellation, and playback integration.
 ### Fixed
+
+- [2026-11-17 09:47:23 AM +00:00] Prevent reference overlay flicker while playback frames decode.
+
+- [2026-11-16 06:06:50 PM +00:00] Preserve HD resizing for retimed previews; correct OCIO view.
+
+- [2026-11-16 06:03:57 PM +00:00] Apply saved OG cut ranges and retimes to previews.
 
 ## 5.8.0 - 2026-11-16
 

@@ -23,3 +23,14 @@ All new frontend features must store disposable runtime temporary files and disk
 Use `app_cache.cache_directory("temp")` for working files and pass it explicitly as `dir=` to `TemporaryDirectory`, `NamedTemporaryFile`, or `mkstemp`. Use a named category such as `app_cache.cache_directory("exr-previews-v1")` for reusable disk caches. Avoid system temporary-directory defaults and hardcoded machine paths.
 
 Decorate operations that need temporary files while running with `@app_cache.temporary_cache_task`, so Settings → Cache → Clear Cache preserves those files. New background cache writers must support cancellation and finish outstanding writes before cache clearing deletes their files; clear associated memory caches as well. Keep `.cache/` ignored by Git and document any new cache category when adding it.
+
+# Review feature parity
+
+When changing or adding review features, implement the change in both the desktop
+Timeline Review tab (`shotbox_frontend`) and the web timeline review
+(`shotbox_backend/tasks/templates/tasks/edit_player.html` and its static assets).
+Keep their controls, appearance and behavior aligned where the platforms allow.
+The desktop remains independent of hosted/synchronized sessions and custom cursors.
+Keep local offline reference files local: never upload or share their contents or
+paths through review sessions. Avoid API or database changes when existing
+interfaces suffice. Verify both implementations and document platform limitations.

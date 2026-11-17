@@ -3,7 +3,8 @@
 Timeline Review is a separate, always-available top-level tab. Restart Shotbox
 after updating to load it. Settings → Default Tab can select Timeline Review.
 It uses the existing jobs, timelines, shots, users and tasks APIs. There are no
-backend changes, migrations, hosted sessions, shared playback or custom cursors.
+desktop API changes, migrations, hosted sessions, shared playback or custom cursors.
+Web reference streaming uses a separate authenticated, read-only endpoint.
 
 ## Opening an edit
 
@@ -53,6 +54,50 @@ No disk caches or temporary runtime files are created by this feature.
 
 The existing Review tab continues to provide its MOV/EXR, OCIO and In/Out tools.
 Timeline Review currently uses the web workflow's versioned MP4 previews.
+
+## Offline reference overlay
+
+The tab automatically reads `timeline.online_reference`, applies the application's
+workstation path mappings, and loads that movie when selecting a timeline. The
+saved path is never changed by the review controls. Missing or unreadable files
+show an error without stopping primary playback; use **Offline ref…** to select a
+local replacement. Refreshing an unchanged saved path preserves manual selection,
+removal and overlay adjustments. A changed saved path is loaded on the next
+preview refresh. Switching timelines loads that timeline's saved reference.
+
+Use **Offline ref…** beneath the version controls to choose a locally accessible
+reference movie. Its frame zero aligns with the beginning of the assembled
+timeline, independently of embedded source timecode. **Reference** toggles it and
+**Opacity** blends it over the picture (100% shows the reference alone). Both
+images share picture zoom/pan and fullscreen; annotations remain above them.
+
+Choose **Compare → Wipe** (or press **W** outside text fields) for a full-opacity
+split between the reference and the selected render version. Initially the
+reference is on the left. Drag the centre circle or dividing line to reposition
+it; drag the outer circle to rotate it. **Angle** also sets rotation in degrees.
+**Swap sides** reverses the comparison, and **Reset wipe** restores a centred,
+vertical split. **W** or **Compare → Overlay** restores blending at the previous
+opacity. Drawing tools take priority over wipe dragging; annotations stay visible.
+The wipe follows zoom, pan and fullscreen, works during playback, and its settings
+are local to this viewer. Wheel scrolling does not edit these controls.
+
+**Offset** is measured in timeline frames: positive values delay reference frame
+zero; negative values skip a reference leader. Reference FPS is converted against
+the timeline FPS. Scrubbing, frame stepping, reverse playback and 2× playback
+retain this alignment. Frames outside the reference range are hidden. The
+reference status shows its filename, source frame and any load/decode errors.
+
+Reference decoding runs separately from primary media loading. The last complete
+picture/reference pair remains visible while either next frame is decoding, then
+both images are replaced together. Playback waits
+for an enabled reference frame so the overlay cannot show a different timeline
+position from the picture. Reference errors do not stall primary playback.
+Its decoder uses a separate 64 MB memory cache; Clear frame cache and Settings
+→ Cache → Clear Cache invalidate it too. No temporary or cache files are created.
+
+**Remove ref** releases the reference. Changing timelines or servers releases it before loading the new saved reference;
+refreshing the same timeline retains it. Selection and alignment are local to
+the current tab session and are not saved to the backend or reference file.
 
 ## Tasks and drawings
 
@@ -119,3 +164,8 @@ are created by these tests. Main-window integration and settings tests should
 also pass before release. Live project-path, storage performance and Windows/macOS
 interactive qualification remain necessary before treating those platforms as
 verified.
+
+Future review feature changes apply to both this tab and the web timeline review.
+The web offline reference overlay uses browser-supported movie codecs; the desktop
+uses its local decoder. Local references remain private to each viewer in both.
+Desktop hosted/sync and custom cursor exclusions remain in place.

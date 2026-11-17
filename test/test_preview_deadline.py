@@ -39,11 +39,16 @@ class PreviewDeadlineTests(unittest.TestCase):
     def test_submission_prepares_overwrite_without_local_render_and_reports_queued(self):
         output, _, _ = module.build_preview_output_path(str(self.directory), 'SH010', version=1, plate_name='plate_01')
         output.write_bytes(b'existing movie')
+        scripts = self.directory / "scripts"
+        scripts.mkdir()
+        timing_script = scripts / "SH010_v002.nk"
+        timing_script.touch()
         calls = []
         def command(executable, args, **kwargs):
             calls.append((executable, args))
             if executable == '/nuke':
                 request = json.loads(Path(args[-1]).read_text())
+                self.assertEqual(request['arguments']['timing_script'], str(timing_script))
                 Path(request['scene']).touch()
                 Path(request['result']).write_text(json.dumps({'first': 1001, 'last': 1024, 'nuke_version': '17.1v2'}))
                 return ''

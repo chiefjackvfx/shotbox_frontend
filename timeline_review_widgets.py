@@ -4,10 +4,29 @@ from collections import OrderedDict
 import math
 
 from PyQt6.QtCore import Qt, QRectF, QPointF, pyqtSignal
-from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF
+from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPolygonF, QRegion
 from PyQt6.QtWidgets import QWidget, QToolTip
 
 from timeline_review_model import timecode
+
+
+def wipe_polygon(rect, centre, angle, swapped=False):
+    """Clip an image rectangle against a movable, rotatable comparison plane."""
+    radians = math.radians(angle)
+    nx, ny = math.cos(radians), math.sin(radians)
+    if swapped:
+        nx, ny = -nx, -ny
+    points = [rect.topLeft(), rect.topRight(), rect.bottomRight(), rect.bottomLeft()]
+    result = []
+    def distance(point):
+        return (point.x() - centre.x()) * nx + (point.y() - centre.y()) * ny
+    for a, b in zip(points, points[1:] + points[:1]):
+        da, db = distance(a), distance(b)
+        if da <= 0:
+            result.append(a)
+        if (da <= 0) != (db <= 0):
+            result.append(a + (b - a) * (da / (da - db)))
+    return QPolygonF(result)
 
 
 class ReviewPicture(QWidget):
@@ -15,6 +34,7 @@ class ReviewPicture(QWidget):
     drawing_started = pyqtSignal()
     drawing_changed = pyqtSignal()
     zoom_changed = pyqtSignal(int)
+    wipe_changed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -22,6 +42,13 @@ class ReviewPicture(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setMouseTracking(True)
         self.image = QImage()
+        self.reference_image = QImage()
+        self.reference_opacity = .5
+        self.reference_wipe = False
+        self.wipe_centre = QPointF(.5, .5)
+        self.wipe_angle = 0.
+        self.wipe_swapped = False
+        self._wipe_drag = None
         self.message = "Choose a timeline to begin."
         self.overlay_text = ""
         self.zoom = 1.0
@@ -103,8 +130,26 @@ class ReviewPicture(QWidget):
         self.update()
         event.accept()
 
+    def wipe_handles(self):
+        target = self.target()
+        centre = QPointF(target.x() + self.wipe_centre.x() * target.width(),
+                         target.y() + self.wipe_centre.y() * target.height())
+        radians = math.radians(self.wipe_angle)
+        normal = QPointF(math.cos(radians), math.sin(radians))
+        return centre, centre + normal * 50, normal
+
     def mousePressEvent(self, event):
         self.setFocus()
+        if event.button() == Qt.MouseButton.LeftButton and self.reference_wipe and not self.reference_image.isNull() and not self.tool:
+            centre, handle, normal = self.wipe_handles()
+            delta = event.position() - centre
+            if (event.position() - handle).manhattanLength() <= 14:
+                self._wipe_drag = 'rotate'
+            elif self.target().contains(event.position()) and abs(delta.x() * normal.x() + delta.y() * normal.y()) <= 9:
+                self._wipe_drag = 'move'
+            if self._wipe_drag:
+                event.accept()
+                return
         self._origin = event.position()
         self._moved = False
         if event.button() == Qt.MouseButton.MiddleButton:
@@ -125,6 +170,17 @@ class ReviewPicture(QWidget):
             self.update()
 
     def mouseMoveEvent(self, event):
+        if self._wipe_drag:
+            if self._wipe_drag == 'move':
+                self.wipe_centre = self.point(event.position())
+            else:
+                centre, _, _ = self.wipe_handles()
+                delta = event.position() - centre
+                self.wipe_angle = math.degrees(math.atan2(delta.y(), delta.x()))
+            self.wipe_changed.emit()
+            self.update()
+            event.accept()
+            return
         if self._origin is None:
             return
         if (event.position() - self._origin).manhattanLength() > 3:
@@ -142,6 +198,10 @@ class ReviewPicture(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._wipe_drag:
+            self._wipe_drag = None
+            event.accept()
+            return
         if event.button() == Qt.MouseButton.MiddleButton:
             if not self._moved:
                 self.fit()
@@ -164,10 +224,34 @@ class ReviewPicture(QWidget):
             painter.setPen(QColor("#c7cbd4"))
             painter.drawText(self.rect().adjusted(20, 20, -20, -20),
                              Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap, self.message)
+        if not self.reference_image.isNull() and (self.reference_wipe or self.reference_opacity > 0):
+            size = self.reference_image.size().scaled(target.size().toSize(), Qt.AspectRatioMode.KeepAspectRatio)
+            ref_target = QRectF(target.center().x() - size.width() / 2,
+                                target.center().y() - size.height() / 2, size.width(), size.height())
+            painter.save()
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            if self.reference_wipe:
+                centre, _, _ = self.wipe_handles()
+                painter.setClipRegion(QRegion(wipe_polygon(target, centre, self.wipe_angle, self.wipe_swapped).toPolygon()))
+            else:
+                painter.setOpacity(self.reference_opacity)
+            painter.drawImage(ref_target, self.reference_image)
+            painter.restore()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setClipRect(target)
         for shape in self.saved_shapes + self.shapes:
             self._paint_shape(painter, target, shape)
+        if self.reference_wipe and not self.reference_image.isNull() and not self.tool:
+            centre, handle, normal = self.wipe_handles()
+            tangent = QPointF(-normal.y(), normal.x()) * math.hypot(target.width(), target.height())
+            painter.setPen(QPen(QColor('#101216'), 3))
+            painter.drawLine(centre - tangent, centre + tangent)
+            painter.setPen(QPen(QColor('#e7eaf0'), 1))
+            painter.drawLine(centre - tangent, centre + tangent)
+            painter.drawLine(centre, handle)
+            painter.setBrush(QColor('#ff8758'))
+            painter.drawEllipse(centre, 6, 6)
+            painter.drawEllipse(handle, 5, 5)
         if self.overlay_text:
             painter.setClipping(False)
             rect = QRectF(0, self.height() - 35, self.width(), 35)

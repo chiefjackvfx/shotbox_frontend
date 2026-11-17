@@ -24,6 +24,7 @@ from app_cache import cache_directory, temporary_cache_task
 from timeline_review_model import Edit, prepare_timeline, preview_versions, timecode, parse_timecode
 from timeline_review_media import MovieDecoder
 from timeline_review_page import TimelineReviewPage
+from timeline_review_reference import reference_frame
 
 
 def shot(identifier=1, start=100, end=110, **extra):
@@ -72,6 +73,14 @@ class TimingTests(unittest.TestCase):
         for value in ("abc", "00:60:00:00", "00:00:00:25"):
             with self.assertRaises(ValueError):
                 parse_timecode(value, 25)
+
+    def test_reference_timing_maps_rates_offsets_and_hides_outside_range(self):
+        media = {'fps': 24, 'frame_count': 48}
+        self.assertEqual(reference_frame(125, 100, 25, media), 24)
+        self.assertEqual(reference_frame(125, 100, 25, media, 5), 19)
+        self.assertIsNone(reference_frame(105, 100, 25, media, 10))
+        self.assertIsNone(reference_frame(150, 100, 25, media))
+        self.assertEqual(reference_frame(100, 100, 25, media, -25), 24)
 
 
 class FakeAPI:
@@ -134,6 +143,7 @@ class NativeReviewTests(unittest.TestCase):
         self.page.shutdown()
         self.page._pool.waitForDone(10000)
         self.page._media_pool.waitForDone(10000)
+        self.page.reference.pool.waitForDone(10000)
         self.page.close()
         self.app.processEvents()
         self.page.deleteLater()
@@ -299,6 +309,214 @@ class NativeReviewTests(unittest.TestCase):
         picture.fit()
         self.assertEqual(picture.zoom, 1.)
 
+    def test_reference_detects_saved_path_and_preserves_manual_override_on_refresh(self):
+        reference = self.page.reference
+        FakeAPI.timeline['online_reference'] = 'Z:/PROJECTS/reference.mov'
+        with mock.patch('timeline_review_reference.convert_path', return_value='/mapped/reference.mov') as convert, \
+                mock.patch.object(reference, 'load') as load:
+            self.page.timeline_combo.addItem('Main', 7)
+            self.wait(lambda: load.called)
+            convert.assert_called_once_with('Z:/PROJECTS/reference.mov')
+            load.assert_called_once_with('/mapped/reference.mov')
+            reference.clear()  # Removing or manually replacing survives an unchanged refresh.
+            reference.follow_timeline(FakeAPI.timeline)
+            self.assertEqual(load.call_count, 1)
+            FakeAPI.timeline['online_reference'] = 'Z:/PROJECTS/new.mov'
+            reference.follow_timeline(FakeAPI.timeline)
+            self.assertEqual(load.call_count, 2)
+            FakeAPI.timeline['online_reference'] = ''
+            reference.follow_timeline(FakeAPI.timeline)
+            self.assertIsNone(reference.media)
+            self.assertFalse(reference.enabled.isEnabled())
+
+    def test_missing_saved_reference_reports_error_without_stalling_review(self):
+        self.page.reference.follow_timeline({'id': 7, 'online_reference': '/missing/review/reference.mp4'})
+        self.wait(lambda: 'Could not load' in self.page.reference.status.text())
+        self.assertIsNone(self.page.reference.media)
+        self.assertFalse(self.page.reference.waiting)
+        self.page.seek(125)
+        self.assertEqual(self.page.frame, 125)
+
+    def test_wipe_renders_unblended_sides_rotates_and_swaps_under_zoom(self):
+        picture = self.page.picture
+        primary = QImage(160, 90, QImage.Format.Format_RGB888)
+        primary.fill(Qt.GlobalColor.red)
+        reference = QImage(160, 90, QImage.Format.Format_RGB888)
+        reference.fill(Qt.GlobalColor.blue)
+        picture.set_image(primary)
+        picture.reference_image = reference
+        picture.reference_wipe = True
+        picture.reference_opacity = 0  # Wipe remains full strength independently of blend opacity.
+        def pixel(x, y):
+            target = picture.target()
+            point = QPoint(round(target.x() + target.width() * x), round(target.y() + target.height() * y))
+            return picture.grab().toImage().pixelColor(point)
+        self.assertEqual(pixel(.2, .5).blue(), 255)
+        self.assertEqual(pixel(.8, .5).red(), 255)
+        picture.wipe_angle = 90
+        self.assertEqual(pixel(.2, .2).blue(), 255)
+        self.assertEqual(pixel(.8, .8).red(), 255)
+        picture.wipe_swapped = True
+        self.assertEqual(pixel(.2, .2).red(), 255)
+        self.assertEqual(pixel(.8, .8).blue(), 255)
+        picture.zoom = .5
+        picture.pan.setX(20)
+        self.assertEqual(pixel(.2, .2).red(), 255)
+        self.assertEqual(pixel(.8, .8).blue(), 255)
+        self.assertEqual(picture.image.pixelColor(0, 0).red(), 255)
+
+    def test_wipe_drag_and_rotation_do_not_toggle_playback_or_draw(self):
+        picture = self.page.picture
+        image = QImage(160, 90, QImage.Format.Format_RGB888)
+        image.fill(Qt.GlobalColor.blue)
+        picture.set_image(image)
+        picture.reference_image = image
+        picture.reference_wipe = True
+        clicked = mock.Mock()
+        picture.clicked.connect(clicked)
+        centre, handle, _ = picture.wipe_handles()
+        target = centre.toPoint() + QPoint(70, 10)
+        QTest.mousePress(picture, Qt.MouseButton.LeftButton, pos=centre.toPoint())
+        QTest.mouseMove(picture, target)
+        QTest.mouseRelease(picture, Qt.MouseButton.LeftButton, pos=target)
+        self.assertGreater(picture.wipe_centre.x(), .5)
+        centre, handle, _ = picture.wipe_handles()
+        QTest.mousePress(picture, Qt.MouseButton.LeftButton, pos=handle.toPoint())
+        QTest.mouseMove(picture, centre.toPoint() + QPoint(0, 50))
+        QTest.mouseRelease(picture, Qt.MouseButton.LeftButton, pos=centre.toPoint() + QPoint(0, 50))
+        self.assertAlmostEqual(picture.wipe_angle, 90, delta=2)
+        clicked.assert_not_called()
+        self.assertFalse(picture.shapes)
+        self.page.reference._reset_wipe()
+        self.assertEqual(picture.wipe_angle, 0)
+        self.assertAlmostEqual(picture.wipe_centre.x(), .5)
+
+    def test_wipe_controls_and_shortcut_preserve_overlay_opacity(self):
+        reference = self.page.reference
+        reference.media = {'path': 'reference.mp4', 'fps': 25, 'frame_count': 12}
+        reference._controls(True)
+        reference.opacity.setValue(30)
+        self.page.strip.setFocus()
+        QTest.keyClick(self.page.strip, Qt.Key.Key_W)
+        self.assertTrue(self.page.picture.reference_wipe)
+        self.assertFalse(reference.opacity.isEnabled())
+        self.assertTrue(reference.angle.isEnabled())
+        reference.angle.setValue(45)
+        self.assertEqual(self.page.picture.wipe_angle, 45)
+        reference.swap.click()
+        self.assertTrue(self.page.picture.wipe_swapped)
+        reference.reset.click()
+        self.assertFalse(self.page.picture.wipe_swapped)
+        QTest.keyClick(self.page.strip, Qt.Key.Key_W)
+        self.assertFalse(self.page.picture.reference_wipe)
+        self.assertTrue(reference.opacity.isEnabled())
+        self.assertEqual(reference.opacity.value(), 30)
+
+    def test_reference_blends_beneath_annotations_without_changing_primary_image(self):
+        picture = self.page.picture
+        primary = QImage(100, 100, QImage.Format.Format_RGB888)
+        primary.fill(Qt.GlobalColor.red)
+        reference = QImage(100, 100, QImage.Format.Format_RGB888)
+        reference.fill(Qt.GlobalColor.blue)
+        picture.set_image(primary)
+        picture.reference_image = reference
+        self.page.reference.opacity.setValue(50)
+        # Direct image setup exercises painting independently of the decoder.
+        picture.reference_image = reference
+        pixel = picture.grab().toImage().pixelColor(picture.rect().center())
+        self.assertAlmostEqual(pixel.red(), 127, delta=2)
+        self.assertAlmostEqual(pixel.blue(), 128, delta=2)
+        self.assertEqual(picture.image.pixelColor(0, 0).red(), 255)
+        self.page.reference.opacity.setValue(0)
+        self.assertEqual(picture.grab().toImage().pixelColor(picture.rect().center()).red(), 255)
+
+    def test_reference_keeps_complete_blend_during_slow_decode_and_swaps_frame_pair(self):
+        reference = self.page.reference
+        reference.media = {'path': 'reference.mp4', 'fps': 25, 'frame_count': 12}
+        callbacks = []
+        def submit(fn, done=None, **kwargs):
+            if done:
+                callbacks.append(done)
+        def image(colour):
+            result = QImage(100, 100, QImage.Format.Format_RGB888)
+            result.fill(colour)
+            return result
+        def pixel():
+            self.app.processEvents()
+            return self.page.picture.grab().toImage().pixelColor(self.page.picture.rect().center())
+        self.page._requested_key = self.page._display_key = 'first'
+        self.page.picture.set_image(image(Qt.GlobalColor.red))
+        with mock.patch.object(self.page, '_submit', side_effect=submit):
+            reference.enabled.setChecked(True)
+            callbacks.pop(0)(image(Qt.GlobalColor.blue))
+            before = pixel()
+            self.assertAlmostEqual(before.red(), 127, delta=2)
+            self.assertAlmostEqual(before.blue(), 128, delta=2)
+            # Advancing the primary clock must not expose an unblended frame.
+            self.page.frame = 101
+            self.page._requested_key = 'second'
+            reference.request()
+            self.assertEqual(pixel(), before)
+            # Primary decoding completes first; keep the previous matched pair.
+            self.page._display_key = 'second'
+            reference.present_primary(image(Qt.GlobalColor.green))
+            self.assertTrue(reference.waiting)
+            self.assertEqual(pixel(), before)
+            callbacks.pop(0)(image(Qt.GlobalColor.yellow))
+            self.assertFalse(reference.waiting)
+            after = pixel()
+            self.assertAlmostEqual(after.red(), 128, delta=2)
+            self.assertGreater(after.green(), 250)
+            self.assertLess(after.blue(), 2)
+            # Switching off during the next decode immediately releases the primary.
+            self.page.frame = 102
+            self.page._requested_key = self.page._display_key = 'third'
+            reference.present_primary(image(Qt.GlobalColor.red))
+            reference.enabled.setChecked(False)
+            self.assertFalse(reference.waiting)
+            self.assertTrue(self.page.picture.reference_image.isNull())
+            self.assertEqual(self.page.picture.image.pixelColor(0, 0).red(), 255)
+
+    def test_reference_decode_error_releases_pending_primary_without_stalling(self):
+        reference = self.page.reference
+        reference.media = {'path': 'reference.mp4', 'fps': 25, 'frame_count': 12}
+        reference.enabled.blockSignals(True)
+        reference.enabled.setChecked(True)
+        reference.enabled.blockSignals(False)
+        self.page._requested_key = self.page._display_key = 'new frame'
+        image = QImage(10, 10, QImage.Format.Format_RGB888)
+        image.fill(Qt.GlobalColor.green)
+        errors = []
+        with mock.patch.object(self.page, '_submit', side_effect=lambda fn, done=None, **kwargs: errors.append(kwargs['error'])):
+            reference.present_primary(image)
+            self.assertTrue(reference.waiting)
+            errors.pop(0)('Decoder unavailable')
+            self.assertFalse(reference.waiting)
+            self.assertTrue(self.page.picture.reference_image.isNull())
+            self.assertEqual(self.page.picture.image.pixelColor(0, 0).green(), 255)
+            self.assertIn('Decoder unavailable', reference.status.text())
+
+    def test_reference_discards_stale_decode_and_toggle_hides_immediately(self):
+        reference = self.page.reference
+        reference.media = {'path': 'reference.mp4', 'fps': 25, 'frame_count': 10}
+        callbacks = []
+        def submit(fn, done=None, **kwargs):
+            if done:
+                callbacks.append(done)
+        with mock.patch.object(self.page, '_submit', side_effect=submit):
+            reference.enabled.setChecked(True)
+            self.assertTrue(reference.waiting)
+            self.page.seek(103)
+            image = QImage(10, 10, QImage.Format.Format_RGB888)
+            image.fill(Qt.GlobalColor.blue)
+            callbacks.pop(0)(image)
+            self.assertTrue(self.page.picture.reference_image.isNull())
+            callbacks.pop(0)(image)
+            self.assertFalse(reference.waiting)
+            self.assertFalse(self.page.picture.reference_image.isNull())
+            reference.enabled.setChecked(False)
+            self.assertTrue(self.page.picture.reference_image.isNull())
+
     def test_shot_updates_and_task_deletion_use_existing_api(self):
         self.page.shot_notes.setPlainText("Saved notes")
         self.page.save_shot()
@@ -447,6 +665,28 @@ class LocalMediaTests(unittest.TestCase):
                 while page._display_key is None and time.monotonic() < deadline:
                     QTest.qWait(10)
                 self.assertIsNotNone(page._display_key)
+                data["online_reference"] = str(path)
+                page.reference.follow_timeline(data)
+                deadline = time.monotonic() + 3
+                while (page.reference.media is None or page.reference.waiting) and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                self.assertIsNotNone(page.reference.media)
+                self.assertFalse(page.picture.reference_image.isNull())
+                page.seek(105)
+                deadline = time.monotonic() + 3
+                while (page._decode_busy or page.reference.waiting) and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                self.assertIn('Reference frame 5', page.reference.status.text())
+                self.assertLess(abs(page.picture.reference_image.pixelColor(0, 0).red() - 75), 12)
+                page.reference.offset.setValue(2)
+                deadline = time.monotonic() + 3
+                while page.reference.waiting and time.monotonic() < deadline:
+                    QTest.qWait(10)
+                self.assertIn('Reference frame 3', page.reference.status.text())
+                page.seek(100)
+                self.assertTrue(page.picture.reference_image.isNull())
+                page.reference.offset.setValue(0)
+                page.seek(100)
                 page.toggle_play()
                 deadline = time.monotonic() + 4
                 while page.playing and time.monotonic() < deadline:
@@ -457,6 +697,7 @@ class LocalMediaTests(unittest.TestCase):
                 page.shutdown()
                 page._pool.waitForDone(5000)
                 page._media_pool.waitForDone(5000)
+                page.reference.pool.waitForDone(5000)
                 page.close()
                 page.deleteLater()
                 app.processEvents()

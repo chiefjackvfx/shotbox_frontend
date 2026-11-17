@@ -24,6 +24,7 @@ from timeline_review_model import Edit, prepare_timeline, timecode, parse_timeco
 from timeline_review_widgets import ReviewPicture, TimelineStrip
 from timeline_review_media import MovieDecoder, Work
 from timeline_review_sidebar import build_sidebar, sync_drawing_controls, task_card
+from timeline_review_reference import ReferenceOverlay
 
 
 STATUSES = [(key, key.replace("_", " ").capitalize()) for key in STATUS_COLORS]
@@ -168,6 +169,7 @@ class TimelineReviewPage(QWidget):
         versions.addWidget(self.zoom_label)
         self._button("Fit picture", self.picture.fit, versions)
         middle.addLayout(versions)
+        self.reference = ReferenceOverlay(self, middle)
         quality = QHBoxLayout()
         quality.addWidget(QLabel("Resolution"))
         self.resolution = QComboBox()
@@ -354,6 +356,11 @@ class TimelineReviewPage(QWidget):
         timeline_id = self.timeline_combo.currentData()
         old_frame = self.frame
         old_id = self.edit.timeline.get("id")
+        if timeline_id != old_id:
+            self.reference.clear()
+            self.reference._timeline_reference = None
+        else:
+            self.reference.clear_cache()
         old_versions = {c.shot["id"]: c.media.get("version") for c in self.edit.cuts}
         self._invalidate_media()
         self.edit = Edit()
@@ -375,6 +382,7 @@ class TimelineReviewPage(QWidget):
                     shot["preview"] = next((m for m in shot.get("versions", [])
                                             if m["version"] == old_versions.get(shot["id"])), shot.get("preview"))
             self.edit = Edit(data)
+            self.reference.follow_timeline(self.edit.timeline)
             self.strip.edit = self.edit
             self._layout_strip()
             self.duration_label.setText(f"{timecode(self.edit.end - self.edit.start, self.edit.fps)} · {self.edit.fps:g} fps")
@@ -407,6 +415,7 @@ class TimelineReviewPage(QWidget):
             self._show_shot(None)
             self.picture.message = "No shots in this timeline."
             self.picture.update()
+            self.reference.request()
             return
         previous = self.edit.at(self.frame)
         self.frame = max(self.edit.start, min(self.edit.end - 1, int(frame)))
@@ -422,6 +431,7 @@ class TimelineReviewPage(QWidget):
         self._sync_versions(cut)
         self._sync_drawing_context()
         self._request_picture()
+        self.reference.request()
 
     def _request_picture(self):
         cut = self.edit.at(self.frame)
@@ -454,7 +464,7 @@ class TimelineReviewPage(QWidget):
             if key == self._requested_key and image is not None:
                 self._display_key = key
                 self.picture.overlay_text = ""
-                self.picture.set_image(image)
+                self.reference.present_primary(image)
                 self.cache_label.setText(f"{decoder.bytes / 1024**2:.0f} MB")
             self._request_picture()
         def failed(message):
@@ -553,7 +563,7 @@ class TimelineReviewPage(QWidget):
         self.play_button.setText("Play")
 
     def _tick(self):
-        if self._decode_busy or self._requested_key != self._display_key:
+        if self._decode_busy or self._requested_key != self._display_key or self.reference.waiting:
             return
         cut = self.edit.at(self.frame)
         start, end = (cut.start, cut.end) if self.repeat.isChecked() and cut else (self.edit.start, self.edit.end)
@@ -633,6 +643,7 @@ class TimelineReviewPage(QWidget):
         if self._settings:
             self._settings.set("timeline_review_scale", self.resolution.currentData())
         self._request_picture()
+        self.reference.request()
 
     def _cache_changed(self):
         if self._settings:
@@ -641,6 +652,7 @@ class TimelineReviewPage(QWidget):
         self.clear_frame_cache()
 
     def clear_frame_cache(self):
+        self.reference.clear_cache()
         self._thumbnail_epoch += 1
         self._thumbnail_pending.clear()
         self.strip.thumbnails.clear()
@@ -650,6 +662,7 @@ class TimelineReviewPage(QWidget):
         self.cache_label.setText("0 MB")
         if self.isVisible():
             self._request_picture()
+            self.reference.request()
 
     def fullscreen(self):
         if self._presentation:
@@ -684,11 +697,12 @@ class TimelineReviewPage(QWidget):
                         ("Right", lambda: self.jump(1)), ("Up", lambda: self.change_version(-1)),
                         ("Down", lambda: self.change_version(1)), (",", lambda: self.step(-1)),
                         (".", lambda: self.step(1)), ("H", self.toggle_hidden),
+                        ("W", self.reference.toggle_wipe),
                         ("Home", lambda: self.scrub(self.edit.start)),
                         ("End", lambda: self.scrub(self.edit.end - 1)), ("F11", self.fullscreen)):
             shortcut = QShortcut(QKeySequence(key), parent)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-            if key in ("Space", "J", "K", "L"):
+            if key in ("Space", "J", "K", "L", "W"):
                 shortcut.setAutoRepeat(False)
             shortcut.activated.connect(partial(self._key_action, fn))
             parent._timeline_keys.append(shortcut)
@@ -1198,6 +1212,8 @@ class TimelineReviewPage(QWidget):
 
     def reset_server(self):
         self.pause()
+        self.reference.clear()
+        self.reference._timeline_reference = None
         self._epoch += 1
         self._load_ticket += 1
         self._polling = self._saving = False
@@ -1232,6 +1248,7 @@ class TimelineReviewPage(QWidget):
             self._presentation.close()
         self._poll_timer.stop()
         self._load_cancel.set()
+        self.reference.shutdown()
         self.decoder.cancel()
         self._submit(self.decoder.close, pool=self._media_pool)
         self._closed = True

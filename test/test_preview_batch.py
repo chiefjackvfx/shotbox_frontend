@@ -165,10 +165,15 @@ class PreviewBatchTests(unittest.TestCase):
         generator._preview_worker = worker
         request = {"input_path": str(source), "shot_dir": str(self.directory), "shot_name": "sho010",
                    "version": 3, "plate_name": "plate_02", "fps": 24, "colourspace": "ACEScg", "quality": "high"}
+        scripts = self.directory / "scripts"
+        scripts.mkdir()
+        timing_script = scripts / "sho010_v003.nk"
+        timing_script.touch()
         result = generator.generate_preview(**request)
         self.assertTrue(result.success)
         self.assertEqual(result.relative_path, "renders/precomp/previews/sho010_plate_02_v003.mp4")
         arguments = worker.render.call_args.args[0]
+        self.assertEqual(arguments["timing_script"], str(timing_script))
         self.assertEqual((arguments["fps"], arguments["colourspace"], arguments["quality"]), (24, "ACEScg", "high"))
         self.assertEqual(generator.generate_preview(**request).error, "FILE_EXISTS")
         worker.render.assert_called_once()

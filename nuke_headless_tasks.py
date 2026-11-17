@@ -581,6 +581,61 @@ def _duration_timecode(frame_count: int, fps: float) -> str:
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}:{frames:02d}"
 
 
+def preview_timing_script(shot_dir, plate_name):
+    """OG plate previews use the shot's current saved source mapping."""
+    if not plate_name:
+        return None
+    scripts = Path(shot_dir) / "scripts"
+    candidates = [(int(match[1]), path) for path in scripts.glob("*.nk")
+                  if (match := re.search(r"_v(\d+)\.nk$", path.name, re.IGNORECASE))]
+    return str(max(candidates, key=lambda item: (item[0], item[1].name))[1]) if candidates else None
+
+
+def _load_preview_timing(nuke, script_path, input_path):
+    """Snapshot only the selected Read's timing and its direct retime node."""
+    nuke.scriptOpen(_normalize_nuke_path(script_path))
+
+    def identity(path):
+        path = Path(str(path).replace("\\", "/"))
+        if not path.is_absolute():
+            path = Path(script_path).parent / path
+        return os.path.normcase(str(path.resolve()))
+
+    reads = nuke.allNodes("Read")
+    matches = [node for node in reads if identity(node["file"].evaluate()) == identity(input_path)]
+    if not matches:
+        # Saved scripts can reference another platform's mount point.
+        basename = Path(input_path).name
+        matches = [node for node in reads
+                   if Path(str(node["file"].value()).replace("\\", "/")).name == basename]
+    if len(matches) != 1:
+        raise ValueError("Cannot identify the OG plate timing uniquely in " + script_path)
+    read = matches[0]
+    retimes = [node for node in nuke.allNodes()
+               if node.Class() in ("Retime", "TimeWarp") and node.input(0) is read]
+    if len(retimes) != 1:
+        raise ValueError("OG plate needs one direct Retime or TimeWarp in " + script_path)
+    ranges = {str(node["frame_range"].value()) for node in nuke.allNodes("Viewer")
+              if node["frame_range_lock"].value()}
+    if len(ranges) > 1:
+        raise ValueError("Conflicting saved Viewer cut ranges in " + script_path)
+    if ranges:
+        match = re.fullmatch(r"(-?\d+)-(-?\d+)", ranges.pop())
+        if not match:
+            raise ValueError("Invalid saved cut range in " + script_path)
+        first, last = map(int, match.groups())
+    else:
+        first, last = int(nuke.root()["first_frame"].value()), int(nuke.root()["last_frame"].value())
+    if last < first:
+        raise ValueError("Invalid OG preview cut range")
+    result = dict(first=first, last=last, node_class=retimes[0].Class(),
+                  knobs=retimes[0].writeKnobs(nuke.TO_SCRIPT),
+                  read_knobs={key: read[key].toScript() for key in ("frame_mode", "frame")
+                              if key in read.knobs()})
+    nuke.scriptClear(ignoreUnsavedChanges=True)
+    return result
+
+
 class _PreviewTemplateEditor:
     REQUIRED_NODES = (
         "Read1",
@@ -611,7 +666,9 @@ class _PreviewTemplateEditor:
         fps: float,
         quality: str,
         prepare_scene: Optional[str] = None,
+        timing_script: Optional[str] = None,
     ) -> Tuple[int, int]:
+        timing = _load_preview_timing(self.nuke, timing_script, input_path) if timing_script else None
         self.nuke.scriptOpen(_normalize_nuke_path(template_path))
         self._validate_template()
 
@@ -636,6 +693,19 @@ class _PreviewTemplateEditor:
 
         source_first = int(read["first"].value())
         source_last = int(read["last"].value())
+        if timing:
+            source_first, source_last = timing["first"], timing["last"]
+            for key, value in timing["read_knobs"].items():
+                read[key].fromScript(value)
+            for node in self.nuke.allNodes():
+                node.setSelected(False)
+            mapping = self.nuke.createNode(timing["node_class"], timing["knobs"], inpanel=False)
+            mapping.setInput(0, read)
+            # Keep the template's HD resize between the source mapping and slate.
+            # Connecting the retime directly to this node bypasses Reformat2 and
+            # sends camera resolution to H.264 (which can exceed its level).
+            resize = self._required_node("Reformat2")
+            resize.setInput(0, mapping)
         duration = max(source_last - source_first + 1, 1)
         vfx_first = 1001
         vfx_last = vfx_first + duration - 1
@@ -648,6 +718,12 @@ class _PreviewTemplateEditor:
         self._set_optional_knob(retime, "output.first_lock", True)
         self._set_optional_knob(retime, "output.last", vfx_last)
         self._set_optional_knob(retime, "output.last_lock", True)
+        if timing:
+            self._set_optional_knob(retime, "output.last_lock", False)
+            self._set_optional_knob(retime, "speed", 1.0)
+            self._set_optional_knob(retime, "reverse", False)
+            self._set_optional_knob(retime, "filter", "none")
+            self._set_optional_knob(retime, "shutter", 0.0)
 
         root = self.nuke.root()
         self._set_optional_knob(root, "frame", vfx_first)
@@ -670,8 +746,8 @@ class _PreviewTemplateEditor:
         self._set_optional_knob(write, "checkHashOnRead", False)
         self._set_optional_knob(write, "colorspace", "color_picking")
         self._set_optional_knob(write, "ocioColorspace", "scene_linear")
-        self._set_optional_knob(write, "display", "ACES")
-        self._set_optional_knob(write, "view", "sRGB")
+        self._set_optional_knob(write, "display", "sRGB - Display")
+        self._set_optional_knob(write, "view", "ACES 2.0 - SDR 100 nits (Rec.709)")
         self._set_optional_knob(write, "mov64_quality", {"low": "Low", "medium": "Medium", "high": "High"}.get(quality, "Medium"))
 
         slate_group = self._required_node("MS_slate_overlay")
@@ -1127,6 +1203,7 @@ class PreviewGenerator:
                 relative_path=f"{PreviewConfig.PREVIEW_SUBDIR}/{output_path.name}"
             )
         
+        timing_script = preview_timing_script(shot_dir, plate_name)
         # Build command
         cmd = build_preview_command(
             nuke_exe=self.nuke_exe,
@@ -1141,6 +1218,8 @@ class PreviewGenerator:
             headless_script=str(self.headless_script)
         )
         
+        if timing_script:
+            cmd.extend(["--timing-script", timing_script])
         if self._preview_worker is not None:
             cmd = self._preview_worker.command
         # Run the process
@@ -1164,7 +1243,7 @@ class PreviewGenerator:
                 success, error = self._preview_worker.render(
                     {"input_path": str(input_path), "output_path": str(output_path),
                      "shot_name": shot_name, "project": project, "artist": artist,
-                     "colourspace": colourspace or "sRGB", "fps": fps, "quality": quality},
+                     "colourspace": colourspace or "sRGB", "fps": fps, "quality": quality, "timing_script": timing_script},
                     on_output=batch_output, check_cancelled=check_cancelled,
                 )
                 return PreviewResult(
@@ -1479,7 +1558,7 @@ class MakePreviewTask:
             raise RuntimeError("Must be run via: Nuke -t nuke_headless_tasks.py ...")
     
     def run(self, input_path, output_path, shot_name="", project="", artist="", 
-            colourspace="sRGB", fps=25, quality="medium"):
+            colourspace="sRGB", fps=25, quality="medium", timing_script=None):
         """Open the preview template, patch runtime knobs, and render the write node."""
         self.setup_nuke()
         nuke = self.nuke
@@ -1517,6 +1596,7 @@ class MakePreviewTask:
             colourspace=colourspace,
             fps=fps,
             quality=quality,
+            timing_script=timing_script,
         )
         elapsed = time.time() - start_time
         print(f"Rendered frames: {first}-{last}")
@@ -1892,6 +1972,8 @@ def main():
     preview.add_argument('--fps', type=float, default=25, help='Output FPS')
     preview.add_argument('--quality', choices=['low', 'medium', 'high'], default='medium')
 
+    preview.add_argument("--timing-script", default=None)
+
     # make_precomp_exr command
     precomp_exr = subparsers.add_parser('make_precomp_exr', help='Create precomp EXR sequence (ACEScg)')
     precomp_exr.add_argument('--input', '-i', required=True, help='Input video file')
@@ -1915,7 +1997,8 @@ def main():
             artist=args.artist,
             colourspace=args.colourspace,
             fps=args.fps,
-            quality=args.quality
+            quality=args.quality,
+            timing_script=args.timing_script,
         )
         sys.exit(0 if success else 1)
     elif args.command == 'make_precomp_exr':

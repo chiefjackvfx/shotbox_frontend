@@ -114,3 +114,29 @@ Acceptance invokes the real dashboard slot with isolated tasks and a mocked
 API; it never writes the user's shot folders or database. Performance and native
 process behavior have been measured on Linux only; Windows/macOS remain covered
 by the existing portable code paths rather than native timing evidence.
+
+## OG cut and retime verification
+
+OG plate previews now read the highest-version saved Nuke script in the shot's
+`scripts` directory. The selected source Read and its directly connected Retime
+or TimeWarp supply the mapping, including fractional Read offsets. The locked
+Viewer range supplies the inclusive cut range; scripts without a locked Viewer
+use the root range. Output starts at 1001 and contains exactly that many cut
+frames. Render previews are not retimed again. Shots without a saved versioned
+script retain the full-source fallback because no saved mapping is available.
+Ambiguous source matches, conflicting Viewer ranges, or unsupported graph
+connections fail with an explanatory error rather than selecting another plate.
+
+This applies to individual previews, the batch worker, and prepared Deadline
+scenes. Existing previews require regeneration with overwrite enabled.
+
+Regression checks cover source selection, conflicting ranges, version discovery,
+and timing handoff through individual, batch, and Deadline paths. Native Nuke
+17.0v1 checks passed for 1x, 0.5x, and 2x timing with fractional source anchors:
+`Nuke -t test/preview_timing_acceptance.py`. The test creates 6048×4032 frame-coded EXRs under the application cache,
+prepares and reopens each scene, and checks every frame of a six-frame cut.
+It asserts that the template HD resize remains connected and encodes actual
+MP4s at 60 fps for all three retimes. The original timing change bypassed this
+resize; preserving it fixes H.264 level failures on camera-resolution sources.
+The Write uses the configured sRGB display and ACES 2.0 SDR view. These checks
+validate timing, scene serialization, and encoding, not an actual Deadline farm run.

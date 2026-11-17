@@ -8,7 +8,7 @@ import app_cache
 import deadline_client as client
 from nuke_denoise_display import DenoiseCancelled
 from nuke_headless_tasks import (build_preview_output_path, preview_input_exists,
-                                  resolve_preview_input_colourspace)
+                                  resolve_preview_input_colourspace, preview_timing_script)
 
 
 def submission_files(directory, scene, output, prepared, options, info):
@@ -62,6 +62,8 @@ def submit_preview(task, generator, options, files_io, *, quality, overwrite, ca
                          media_type=task.get('media_type'), input_path=source,
                          requested_colourspace=shot.get('colourspace', 'sRGB')),
                      'fps': shot.get('fps', 25), 'quality': quality}
+        if task['source_type'] == 'original_clip':
+            arguments['timing_script'] = preview_timing_script(shot_dir, task.get('plate_name'))
         request.write_text(json.dumps({'arguments': arguments, 'scene': str(scene), 'result': str(result)}), encoding='utf-8')
         client.command(generator.nuke_exe, ['-t', str(Path(__file__).with_name('preview_deadline_prepare.py')), str(request)],
                        cancelled=cancelled, timeout=300)
