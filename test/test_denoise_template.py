@@ -77,6 +77,27 @@ class TemplateTests(unittest.TestCase):
         read["colorspace"].setValue.assert_called_once_with(colourspace)
         self.assertEqual(result["read_colorspace"], colourspace)
         nuke.delete.assert_called_once_with(probe)
+        # A timed cut uses the edit FPS even when source metadata differs.
+        probe.metadata.return_value = {"input/frame_rate": 48}
+        timing = {"first": 1006, "last": 1025, "node_class": "TimeWarp",
+                  "knobs": "lookup {{11 + (frame - 1006) * 0.5}}", "read_knobs": {}}
+        with mock.patch.object(template, "_load_preview_timing", return_value=timing):
+            result = template.prepare(nuke, {**request, "timing_script": "/saved.nk", "fps": 24})
+        self.assertEqual((result["render_first"], result["render_last"], result["fps"]), (1006, 1025, 24))
+        self.assertTrue(result["retimed"])
+        nuke.nodes.TimeOffset.assert_called_with(name="ShotBoxFrameOffset", inputs=[nuke.createNode.return_value], time_offset=0)
+        nuke.createNode.return_value.setInput.assert_called_once_with(0, read)
+
+
+    def test_single_plate_request_includes_saved_timing(self):
+        scripts = Path(self.media["shot_dir"]) / "scripts"
+        scripts.mkdir(parents=True)
+        script = scripts / "sho010_v002.nk"
+        script.touch()
+        directory = self.root / "worker"
+        directory.mkdir()
+        request = json.loads(template.create_template_request(directory, self.media, "/nuke").read_text())
+        self.assertEqual(request["timing_script"], str(script))
 
     def test_windows_requests_full_gui_while_linux_keeps_qt_terminal(self):
         for platform, qt_terminal in (("win32", False), ("linux", True)):

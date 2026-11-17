@@ -11,7 +11,9 @@ import shutil
 import sys
 from fractions import Fraction
 
-from nuke_headless_tasks import preview_input_exists, resolve_preview_sequence_input, resolve_preview_input_colourspace, map_input_colorspace
+from nuke_headless_tasks import (preview_input_exists, resolve_preview_sequence_input,
+                                 resolve_preview_input_colourspace, map_input_colorspace,
+                                 preview_timing_script, _load_preview_timing)
 
 from denoise_paths import normalized_sources, plate_identifier, output_stem, source_identity as canonical_source_identity
 
@@ -127,6 +129,7 @@ def create_template_request(directory, media, executable):
     request = {"workflow": "template", "script": str(working), "sha256": digest(working),
                "template": str(template), "source": source, "colourspace": media.get("colourspace"),
                "fps": media.get("fps") or 25,
+               "timing_script": preview_timing_script(media["shot_dir"], "original_clip"),
                "output_pattern": (output / (output.name + "_####.exr")).as_posix(),
                # Windows manual profiling succeeds in the full NukeX GUI;
                # use its normal visible startup. Keep Linux's
@@ -188,7 +191,12 @@ def native_sequence(nuke, source):
 
 
 def prepare(nuke, request):
-    """Configure a loaded template; never open or modify an artist's comp."""
+    """Configure the working template using a read-only snapshot of saved timing."""
+    timing = None
+    if request.get("timing_script"):
+        nuke.scriptClear(ignoreUnsavedChanges=True)
+        timing = _load_preview_timing(nuke, request["timing_script"], request["source"])
+        nuke.scriptOpen(request["script"])
     nodes = {}
     for name, cls in (("Read1", "Read"), ("Reformat1", "Reformat"), ("Write1", "Write")):
         node = nuke.toNode(name)
@@ -235,7 +243,19 @@ def prepare(nuke, request):
             read[knob].setValue(value)
     finally:
         nuke.delete(probe)
-    offset = nuke.nodes.TimeOffset(name="ShotBoxFrameOffset", inputs=[read], time_offset=1001-first)
+    mapping = read
+    output_first, output_last = first, last
+    if timing:
+        for key, value in timing["read_knobs"].items():
+            read[key].fromScript(value)
+        for node in nuke.allNodes():
+            node.setSelected(False)
+        mapping = nuke.createNode(timing["node_class"], timing["knobs"], inpanel=False)
+        mapping.setInput(0, read)
+        output_first, output_last = timing["first"], timing["last"]
+    render_first = output_first if timing else 1001
+    render_last = render_first + output_last - output_first
+    offset = nuke.nodes.TimeOffset(name="ShotBoxFrameOffset", inputs=[mapping], time_offset=render_first-output_first)
     reformat.setInput(0, offset)
     out_width, out_height = output_size(width, height)
     reformat["disable"].setValue(width <= 4096)
@@ -249,12 +269,12 @@ def prepare(nuke, request):
             reformat["box_pixel_aspect"].setValue(aspect)
     root = nuke.root()
     root["format"].setValue(nuke.addFormat(f"{out_width} {out_height} {aspect} ShotBoxDenoise_{out_width}x{out_height}_{aspect}").name())
-    root["first_frame"].setValue(1001)
-    root["last_frame"].setValue(1001 + last - first)
-    root["frame"].setValue(1001)
+    root["first_frame"].setValue(render_first)
+    root["last_frame"].setValue(render_last)
+    root["frame"].setValue(render_first)
     root["proxy"].setValue(False)
     fps = request.get("fps") or 25
-    for key in ("input/frame_rate", "input/frameRate", "input/fps", "frame_rate", "fps"):
+    for key in (() if timing else ("input/frame_rate", "input/frameRate", "input/fps", "frame_rate", "fps")):
         try:
             value = float(Fraction(str(metadata.get(key, 0))))
             if math.isfinite(value) and value > 0:
@@ -273,4 +293,5 @@ def prepare(nuke, request):
     write["use_limit"].setValue(False)
     return {"source": source, "source_first": first, "source_last": last, "source_width": width,
             "source_height": height, "width": out_width, "height": out_height, "pixel_aspect": aspect,
+            "render_first": render_first, "render_last": render_last, "retimed": bool(timing),
             "resized": width > 4096, "fps": float(fps), "read_colorspace": read["colorspace"].value()}

@@ -187,3 +187,10 @@ Do not use this installed Deadline version's `AddOrUpdatePluginConfigSetting`
 helper for rollback: it writes event-plugin configuration instead.
 
 See [mixed-farm verification](DEADLINE_MIXED_VERIFICATION.md) for native Windows/Linux results and current qualified workers.
+
+## Cut-aware jobs
+
+Prepared denoise scenes now carry the selected OG clip's saved cut and retime
+mapping when available. Deadline job frames follow that cut range, retaining
+shot frame numbers. Source Read nodes still expose the full media for temporal
+filtering. See `DENOISE_VERIFICATION.md` for fallback behavior and timing checks.

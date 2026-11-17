@@ -87,3 +87,12 @@ def test_individual_preview_passes_saved_timing_to_headless_command(tmp_path):
     assert result.success
     command = launch.call_args.args[0]
     assert command[command.index('--timing-script') + 1] == str(script)
+
+
+def test_sequence_padding_styles_match_the_same_saved_read(tmp_path):
+    nuke, read, pools = scene(tmp_path)
+    read["file"].value.return_value = '../plates/source.%04d.exr'
+    read["file"].evaluate.return_value = '../plates/source.1001.exr'
+    timing = _load_preview_timing(nuke, str(tmp_path / 'scripts/shot_v001.nk'),
+                                  str(tmp_path / 'plates/source.####.exr'))
+    assert (timing['first'], timing['last']) == (1004, 1023)

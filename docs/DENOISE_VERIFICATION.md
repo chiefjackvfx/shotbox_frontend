@@ -22,7 +22,8 @@ Legacy shots with an empty `original_clips` list use `original_clip`.
 Single-clip and batch processing share output identities. For `sho010`, a
 single source produces `renders/precomp/sho010_DN_v001/` and a multi-source
 shot produces `sho010_plate_01_DN_v001/`, `sho010_plate_02_DN_v001/`, etc.
-EXRs use the directory's name plus `_1001.exr`, `_1002.exr`, and so on.
+EXRs use the directory's name plus the shot cut frame number. Untimed sources
+start at `_1001.exr`, `_1002.exr`, and so on.
 Choosing plate 2 individually retains its plate-2 output name. Missing
 unselected sources do not increase that single request's skipped count.
 Repeated tasks for the same destination are deduplicated; shared sources in
@@ -445,3 +446,26 @@ See [Deadline denoising](DEADLINE_DENOISE.md) for Linux setup, local-project
 worker restriction, chunk sizes, concurrency, persistent submission receipts,
 reconciliation and native four-clip verification evidence. Cross-platform
 mapping enforcement is deferred at the user's request.
+
+## Saved cut and retime mapping
+
+Denoising now uses the same saved source timing as OG previews. When a versioned
+Nuke script exists in the shot's `scripts` folder, its selected source Read and
+direct Retime/TimeWarp mapping are copied into the working denoise template.
+The locked Viewer range supplies the cut; without one, the saved root range is
+used. Ambiguous matches fail rather than selecting another plate. The artist's
+script is read only and is never saved by this process.
+
+The mapping is applied before the existing resize and Neat stages. Only cut
+frames are written; EXRs retain the saved shot frame numbers, including a cut
+starting after 1001, so they align with the comp. Timed cuts use the shot FPS
+rather than overriding it with camera metadata. The full reader range remains
+available for Neat's temporal samples. Untimed sources without a saved script
+retain the full-source workflow. Existing outputs need regeneration.
+
+Local, batch, and Deadline preparation share this behavior. Native Nuke 17.0v1
+checks in `test/denoise_timing_acceptance.py` verify every pre-denoise source
+sample at 1x, 0.5x, and 2x, fractional anchors, preserved cut numbering, unchanged
+source scripts, and saved/reopened prepared scenes. Automated checks cover
+request handoff and edit-FPS precedence. This timing verification does not rerun
+Neat's interactive profiling or submit farm jobs.

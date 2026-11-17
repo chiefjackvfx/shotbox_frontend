@@ -595,19 +595,25 @@ def _load_preview_timing(nuke, script_path, input_path):
     """Snapshot only the selected Read's timing and its direct retime node."""
     nuke.scriptOpen(_normalize_nuke_path(script_path))
 
+    def normalized_path(path):
+        return re.sub(r"%0?(\d*)d", lambda match: "#" * int(match[1] or 1),
+                      str(path).replace("\\", "/"))
+
     def identity(path):
-        path = Path(str(path).replace("\\", "/"))
+        path = Path(normalized_path(path))
         if not path.is_absolute():
             path = Path(script_path).parent / path
         return os.path.normcase(str(path.resolve()))
 
     reads = nuke.allNodes("Read")
-    matches = [node for node in reads if identity(node["file"].evaluate()) == identity(input_path)]
+    matches = [node for node in reads
+               if any(identity(value) == identity(input_path)
+                      for value in (node["file"].value(), node["file"].evaluate()))]
     if not matches:
         # Saved scripts can reference another platform's mount point.
-        basename = Path(input_path).name
+        basename = Path(normalized_path(input_path)).name
         matches = [node for node in reads
-                   if Path(str(node["file"].value()).replace("\\", "/")).name == basename]
+                   if Path(normalized_path(node["file"].value())).name == basename]
     if len(matches) != 1:
         raise ValueError("Cannot identify the OG plate timing uniquely in " + script_path)
     read = matches[0]
