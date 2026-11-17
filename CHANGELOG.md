@@ -8,12 +8,18 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
-- [2026-11-17 10:18:55 AM +00:00] Verify denoise timing, frame numbering, and edit FPS precedence.
+### Fixed
+
+## 5.8.2 - 2026-11-17
+
+### Changed
+
+- Verify denoise timing, frame numbering, and edit FPS precedence.
 
 ### Fixed
 
-- [2026-11-17 10:18:55 AM +00:00] Apply saved cut ranges and retimes to denoising.
-- [2026-11-17 10:18:55 AM +00:00] Match equivalent image sequence padding in saved timing scripts.
+- Apply saved cut ranges and retimes to denoising.
+- Match equivalent image sequence padding in saved timing scripts.
 
 ## 5.8.1 - 2026-11-17
 
