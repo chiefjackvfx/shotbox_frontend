@@ -352,6 +352,9 @@ class FactoryTests(unittest.TestCase):
             nuke.fire('OnScriptSave')
             queue = Outbox(config['outbox_dir'], server=config['server'],
                            artist_id=1, device_id=config['device_id'])
+            self.assertEqual(queue.pending(), [])
+            self.assertEqual(queue.status()['draft_records'], 1)
+            nuke.fire('OnScriptClose')
             self.assertEqual(queue.pending()[-1]['comp_microseconds'], 3000000)
             self.assertEqual(queue.pending()[-1]['shot_id'], 3)
             self.assertEqual(runtime.status()['outbox']['pending_records'], 1)

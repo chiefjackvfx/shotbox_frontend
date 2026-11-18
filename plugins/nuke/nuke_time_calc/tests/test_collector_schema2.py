@@ -33,6 +33,27 @@ class Schema2Tests(unittest.TestCase):
         options.update(kwargs)
         return Collector(**options)
 
+    def test_quiet_observed_time_is_capped_from_most_recent_edit(self):
+        for renew, expected in ((False, 300), (True, 540)):
+            with self.subTest(renew=renew):
+                c = self.make()
+                c.start()
+                c.activity()
+                self.assertEqual(c.comp_seconds, 0)
+                for second in range(30, 601, 30):
+                    self.clock.advance(30)
+                    c.tick()
+                    if second == 240:
+                        self.assertEqual(c.comp_seconds, 240)
+                        if renew:
+                            c.activity()
+                    if second in (300, 480, 540):
+                        self.assertEqual(c.comp_seconds, min(second, expected))
+                self.assertEqual(c.flush()['comp_microseconds'], expected * 1_000_000)
+                c.activity()
+                self.clock.advance(3)
+                self.assertEqual(c.flush()['comp_microseconds'], 3_000_000)
+
     def test_schema2_context_requires_real_integer_ids_and_valid_path(self):
         for context in ({}, None, {"job_id": "7", "shot_id": 11},
                         {"job_id": True, "shot_id": 11}, {"job_id": 7, "shot_id": 0},
@@ -68,11 +89,11 @@ class Schema2Tests(unittest.TestCase):
         r = c.flush()
         self.assertEqual(len(r["active_spans"]), 3)
         self.assertEqual([s["duration_microseconds"] for s in r["active_spans"]],
-                         [2, 3_000_000, 20_000_000])
+                         [2, 3_000_000, 25_000_000])
         for span in r["active_spans"]:
             delta = datetime.fromisoformat(span["end"]) - datetime.fromisoformat(span["start"])
             self.assertEqual(delta, timedelta(microseconds=span["duration_microseconds"]))
-        self.assertEqual(r["comp_microseconds"], 23_000_002)
+        self.assertEqual(r["comp_microseconds"], 28_000_002)
 
     def test_clock_corrections_end_epoch_exclude_gap_and_require_fresh_activity(self):
         for jump in (-3600, 3600):
@@ -393,7 +414,7 @@ class Schema2Tests(unittest.TestCase):
             "job_id", "shot_id", "script_path", "reason", "started_at", "ended_at",
             "comp_microseconds", "excluded_gap_microseconds", "active_spans"})
         self.assertEqual(record["collector_version"], "2.0")
-        self.assertEqual(record["policy_version"], "comp-v1")
+        self.assertEqual(record["policy_version"], "comp-v2")
         self.assertEqual((record["job_id"], record["shot_id"]), (7, 11))
         self.assertEqual(record["comp_microseconds"], 4_000_000)
         self.assertEqual(record["excluded_gap_microseconds"], 0)

@@ -13,6 +13,19 @@ collection remains disabled; no production credentials or Nuke startup were
 installed. The separate development worktree remains available for further
 pilot work. `PLAN.md` records locations and outstanding acceptance gates.
 
+## Managed collector batching
+
+The integrated runtime checkpoints locally about every minute and on same-path
+saves. It combines ordered deltas into immutable schema-2 uploads at about five
+minutes of observed elapsed time, or sooner at lifecycle, epoch and schema
+boundaries. Save As seals the old path. The upload interval is independent of the
+activity grace period. Identity binding and transport are unchanged. Acknowledged local work
+is recoverable; time since the last successful checkpoint is not guaranteed.
+Startup promotes outstanding drafts only in the original private partition;
+starting another Nuke can seal a live process's draft early without replaying it.
+Repeated idle checkpoints do not allocate wire IDs. See `BATCHING_VALIDATION.md`
+for measured traces, exact commands, pilot criteria and **mandatory pre-downgrade drain**.
+
 ## Components
 
 - `core.Collector(..., schema_version=2)` emits exact backend batch dictionaries,
@@ -78,8 +91,26 @@ file for the same device is reread at each attempt.
 
 ## Timing and failure policy
 
-`comp-v1` retains the initial estimator's 20-second activity allowance and
-conservative focus/render exclusions. Monotonic measurements map to a fixed UTC
+New schema-2 sessions emit `collector_version: 2.0`, `policy_version: comp-v2`.
+A recognised edit starts or renews a 300-second window. Credit accrues only
+as eligible time elapses: editing at minutes 0 and 4 can cover minutes 0–9,
+not 0–10. Loading, saving, timer ticks, Viewer knob notifications and passive
+frame/UI updates do not renew the window. Loss of focus or rendering clears it.
+Old `comp-v1` batches (20 seconds) and drafts retain their policy and session
+on recovery; the new collector starts a separate session. Enable server
+acceptance of both policies before client rollout and retain it after rollback.
+No history rewrite or change to reporting cadence is required.
+
+**Native review gate (not covered by fake-host tests):** On gambit-local with
+SH010 and the isolated backend, open the script and confirm zero credit before
+editing. Make one edit, then watch looped playback for over five minutes. Close
+to seal the last upload; inspect accepted `comp-v2` span endpoints across all
+batches for that session, not rounded chart hours. Credit must end at edit +
+300 seconds. Repeat with a second edit at minute four (end at minute nine),
+then with a focus switch (end at focus loss, no credit on return until an edit).
+Flag any unexpected callback renewal; do not infer native behavior from Qt fakes.
+
+Monotonic measurements map to a fixed UTC
 epoch. Clock corrections outside tolerance and missing-observation/suspend gaps
 end the epoch and require fresh activity; no overnight labour is extrapolated.
 Active spans use integer microseconds with exact endpoint/duration agreement.

@@ -217,7 +217,7 @@ Use captured real output and repeatable tests. Fake Nuke/Qt tests verify adapter
 
 ## Integration execution plan
 
-This section supersedes preliminary phase sketches above wherever they differ. The authoritative implemented wire contract is `shotbox_backend/docs/NUKE_TIME_API.md`: schema 2, collector `2.0`, policy `comp-v1`, integer microseconds, required real shot/job IDs, exact span-duration equality, operator-only credential provisioning and session-authenticated reporting. Earlier seconds-based, optional-shot and project-only sketches are not the implementation target.
+This section supersedes preliminary phase sketches above wherever they differ. The authoritative implemented wire contract is `shotbox_backend/docs/NUKE_TIME_API.md`: schema 2, collector `2.0`, policy `comp-v1` for legacy observations and `comp-v2` for new sessions, integer microseconds, required real shot/job IDs, exact span-duration equality, operator-only credential provisioning and session-authenticated reporting. Earlier seconds-based, optional-shot and project-only sketches are not the implementation target.
 
 ### Pre-implementation baseline
 

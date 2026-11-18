@@ -27,6 +27,7 @@ import uuid
 from urllib.parse import quote
 
 from . import storage
+from .core import POLICY_GRACE_SECONDS
 
 
 def _encode(value):
@@ -134,8 +135,8 @@ class Outbox:
         finally:
             db.close()
 
-    def put(self, batch):
-        """Commit a snapshot, or raise without losing preceding records."""
+    @staticmethod
+    def _validate(batch):
         required = {'session_id', 'sequence', 'machine', 'collector_version', 'policy_version',
                     'job_id', 'shot_id', 'script_path', 'reason', 'started_at', 'ended_at',
                     'comp_microseconds', 'excluded_gap_microseconds', 'active_spans'}
@@ -148,7 +149,8 @@ class Outbox:
                 raise ValueError()
         except (ValueError, TypeError, AttributeError):
             raise ValueError('invalid immutable batch key') from None
-        if batch['collector_version'] != '2.0' or batch['policy_version'] != 'comp-v1':
+        if batch['collector_version'] != '2.0' or (not isinstance(batch['policy_version'], str) or
+                                                   batch['policy_version'] not in POLICY_GRACE_SECONDS):
             raise ValueError('unsupported schema-2 profile')
         numbers = {'sequence', 'job_id', 'shot_id', 'comp_microseconds', 'excluded_gap_microseconds'}
         for key in numbers:
@@ -165,27 +167,141 @@ class Outbox:
                     or not isinstance(span['start'], str) or not isinstance(span['end'], str)
                     or type(span['duration_microseconds']) is not int or span['duration_microseconds'] < 0):
                 raise ValueError('exact schema-2 spans required')
-        payload = _encode(batch)
-        digest = hashlib.sha256(payload.encode()).hexdigest()
+
+    def put(self, batch):
+        """Accept an immutable upload, including legacy queues and replays."""
+        self._validate(batch)
         with self._connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            old = db.execute('SELECT digest FROM batches WHERE session=? AND sequence=?',
-                             (batch['session_id'], batch['sequence'])).fetchone()
-            if old:
-                if old[0] != digest:
-                    raise BatchConflict('immutable batch key conflict')
+            self._insert(db, batch)
+
+    def _require_slot(self, db):
+        count, = db.execute('SELECT COUNT(*) FROM batches WHERE pending=1').fetchone()
+        if count + self._draft_count(db) >= self.max_count:
+            raise QueueFull('outbox record capacity reached')
+
+    def _insert(self, db, batch):
+        payload = _encode(batch)
+        digest = hashlib.sha256(payload.encode()).hexdigest()
+        old = db.execute('SELECT digest FROM batches WHERE session=? AND sequence=?',
+                         (batch['session_id'], batch['sequence'])).fetchone()
+        if old:
+            if old[0] != digest:
+                raise BatchConflict('immutable batch key conflict')
+            return
+        self._require_slot(db)
+        try:
+            db.execute('INSERT INTO batches VALUES (?, ?, ?, ?, 1)',
+                       (batch['session_id'], batch['sequence'], payload, digest))
+        except sqlite3.OperationalError as exc:
+            if getattr(exc, 'sqlite_errorcode', None) == sqlite3.SQLITE_FULL:
+                raise QueueFull('outbox byte capacity reached') from None
+            raise
+        if db.execute('PRAGMA page_count').fetchone()[0] * db.execute('PRAGMA page_size').fetchone()[0] > self.max_bytes:
+            raise QueueFull('outbox byte capacity reached')
+
+    def enable_drafts(self):
+        with self._connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            db.execute('CREATE TABLE IF NOT EXISTS checkpoints (session TEXT PRIMARY KEY, '
+                       'ordinal INTEGER NOT NULL, digest TEXT NOT NULL, observed TEXT, draft TEXT)')
+
+            # A concurrent live collector may continue after startup seals its
+            # draft: its local ordinal remains intact and its next delta starts
+            # a new wire batch. No PID liveness guesses or identity rebinding.
+            for session, payload in db.execute(
+                    'SELECT session,draft FROM checkpoints WHERE draft IS NOT NULL').fetchall():
+                draft = self._read_draft(payload, session)
+                self._publish(db, draft)
+                db.execute('UPDATE checkpoints SET draft=NULL, observed=? WHERE session=?',
+                           (self._context_key(draft), session))
+
+    @staticmethod
+    def _pack_draft(draft):
+        payload = _encode(draft)
+        return hashlib.sha256(payload.encode()).hexdigest() + ':' + payload
+
+    @staticmethod
+    def _read_draft(stored, session):
+        digest, _, payload = stored.partition(':')
+        if hashlib.sha256(payload.encode()).hexdigest() != digest:
+            raise CorruptOutbox('draft integrity failure')
+        draft = json.loads(payload)
+        if draft['session_id'] != session:
+            raise CorruptOutbox('draft session mismatch')
+        return draft
+
+    def _publish(self, db, draft):
+        # Includes acknowledged and quarantined keys: never reuse one.
+        last, = db.execute('SELECT MAX(sequence) FROM batches WHERE session=?',
+                           (draft['session_id'],)).fetchone()
+        db.execute('UPDATE checkpoints SET draft=NULL WHERE session=?', (draft['session_id'],))
+        draft['sequence'] = (last or 0) + 1
+        self._insert(db, draft)
+
+    @staticmethod
+    def _context_key(fragment):
+        return _encode([fragment[k] for k in ('machine', 'collector_version', 'policy_version',
+                                              'job_id', 'shot_id', 'script_path')])
+
+    @staticmethod
+    def _window_seconds(first, last):
+        from datetime import datetime
+        start = datetime.fromisoformat(first['started_at'].replace('Z', '+00:00'))
+        end = datetime.fromisoformat(last['ended_at'].replace('Z', '+00:00'))
+        return (end - start).total_seconds()
+
+    def checkpoint(self, fragment):
+        """Accept an ordered local delta. Its ordinal is NOT a wire sequence."""
+        self._validate(fragment)
+        session, ordinal = fragment['session_id'], fragment['sequence']
+        digest = hashlib.sha256(_encode(fragment).encode()).hexdigest()
+        with self._connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT ordinal,digest,observed,draft FROM checkpoints WHERE session=?',
+                             (session,)).fetchone() or (0, None, None, None)
+            previous, fingerprint, observed, payload = row
+            if ordinal == previous and digest == fingerprint:
                 return
-            if db.execute('SELECT COUNT(*) FROM batches WHERE pending=1').fetchone()[0] >= self.max_count:
-                raise QueueFull('outbox record capacity reached')
-            try:
-                db.execute('INSERT INTO batches VALUES (?, ?, ?, ?, 1)',
-                           (batch['session_id'], batch['sequence'], payload, digest))
-            except sqlite3.OperationalError as exc:
-                if getattr(exc, 'sqlite_errorcode', None) == sqlite3.SQLITE_FULL:
-                    raise QueueFull('outbox byte capacity reached') from None
-                raise
-            if db.execute('PRAGMA page_count').fetchone()[0] * db.execute('PRAGMA page_size').fetchone()[0] > self.max_bytes:
-                raise QueueFull('outbox byte capacity reached')
+            if ordinal != previous + 1:
+                raise BatchConflict('out-of-order local checkpoint')
+            draft = self._read_draft(payload, session) if payload else None
+            context = self._context_key(fragment)
+            if draft and (draft['ended_at'] != fragment['started_at'] or
+                          self._context_key(draft) != context or
+                          len(draft['active_spans']) + len(fragment['active_spans']) > 256 or
+                          self._window_seconds(draft, fragment) > 86400 or
+                          fragment['reason'] == 'excluded_gap'):
+                self._publish(db, draft)
+                draft = None
+            if draft is None:
+                draft = dict(fragment, active_spans=list(fragment['active_spans']))
+            else:
+                spans = draft['active_spans']
+                for span in fragment['active_spans']:
+                    if spans and spans[-1]['end'] == span['start']:
+                        spans[-1]['end'] = span['end']
+                        spans[-1]['duration_microseconds'] += span['duration_microseconds']
+                    else:
+                        spans.append(dict(span))
+                draft['comp_microseconds'] += fragment['comp_microseconds']
+                draft['excluded_gap_microseconds'] += fragment['excluded_gap_microseconds']
+                draft.update(ended_at=fragment['ended_at'], reason=fragment['reason'])
+            boundary = fragment['reason'] not in ('checkpoint', 'script_save')
+            elapsed = self._window_seconds(draft, fragment)
+            if (not draft['comp_microseconds'] and not draft['excluded_gap_microseconds']
+                    and observed == context and fragment['reason'] != 'clock_epoch_end'):
+                draft = None
+            elif boundary or elapsed >= 300:
+                self._publish(db, draft)
+                observed, draft = context, None
+            if draft and not db.execute('SELECT 1 FROM checkpoints WHERE session=? AND draft IS NOT NULL',
+                                        (session,)).fetchone():
+                self._require_slot(db)
+            if boundary:
+                observed = None
+            db.execute('INSERT OR REPLACE INTO checkpoints VALUES (?,?,?,?,?)',
+                       (session, ordinal, digest, observed, self._pack_draft(draft) if draft else None))
 
     def acknowledge(self, session_id, sequence):
         """Trusted caller only: remove payload after exact accepted/duplicate ack."""
@@ -199,12 +315,22 @@ class Outbox:
             db.execute('UPDATE batches SET pending=-1 WHERE session=? AND sequence=? AND pending=1',
                        (session_id, sequence))
 
+    @staticmethod
+    def _draft_count(db):
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='checkpoints'").fetchone():
+            return 0
+        return db.execute('SELECT COUNT(*) FROM checkpoints WHERE draft IS NOT NULL').fetchone()[0]
+
     def status(self):
         with self._connect() as db:
             count = db.execute('SELECT COUNT(*) FROM batches WHERE pending=1').fetchone()[0]
             rejected = db.execute('SELECT COUNT(*) FROM batches WHERE pending=-1').fetchone()[0]
             size = db.execute('PRAGMA page_count').fetchone()[0] * db.execute('PRAGMA page_size').fetchone()[0]
-            return dict(pending_records=count, quarantined_records=rejected, storage_bytes=size, max_records=self.max_count, max_bytes=self.max_bytes)
+            drafts = self._draft_count(db)
+            acknowledged, = db.execute('SELECT COUNT(*) FROM batches WHERE pending=0').fetchone()
+            return dict(pending_records=count, quarantined_records=rejected, draft_records=drafts,
+                        acknowledged_fingerprints=acknowledged, storage_bytes=size,
+                        max_records=self.max_count, max_bytes=self.max_bytes)
 
     def pending(self):
         with self._connect() as db:

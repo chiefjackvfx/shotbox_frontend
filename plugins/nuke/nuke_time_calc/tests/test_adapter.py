@@ -69,6 +69,12 @@ class FakeNuke:
         for callback in list(self.callbacks.get(name, [])):
             callback()
 
+    def thisNode(self):
+        return SimpleNamespace(Class=lambda: 'Grade')
+
+    def thisKnob(self):
+        return SimpleNamespace(name=lambda: 'multiply')
+
     def executing(self):
         return self.is_executing
 

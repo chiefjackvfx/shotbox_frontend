@@ -8,6 +8,9 @@ import time
 import uuid
 
 
+POLICY_GRACE_SECONDS = {"comp-v1": 20.0, "comp-v2": 300.0}
+
+
 def _wire_text(value, limit, name):
     if not isinstance(value, str) or not value.strip() or len(value) > limit or "\x00" in value:
         raise ValueError("invalid " + name)
@@ -49,11 +52,15 @@ class Collector:
     ``unknown``; no filesystem or filename inference is performed. Identity is a
     local binding label only, and is never emitted in schema-2 batches.
 
-    Each schema-2 sink argument is exactly one backend batch. Only transport may
-    wrap batches in {schema_version: 2, batches: [...]}. A normal sink return
-    acknowledges that batch; exceptions retain an immutable retry snapshot.
+    A schema-2 sink receives an ordered local checkpoint delta in batch shape.
+    A direct diagnostic sink can use it unchanged. The integrated durable
+    sink folds these deltas into drafts and assigns a separate upload sequence
+    only on finalization. Normal return accepts the delta, not a server ACK;
+    exceptions retain an immutable retry snapshot.
     Neither mode performs networking or provides crash durability itself.
     """
+
+    policy_version = "comp-v1"  # schema-1 local diagnostic
 
     def __new__(cls, *, schema_version=1, **kwargs):
         if cls is Collector and schema_version == 2:
@@ -125,7 +132,7 @@ class Collector:
             self.last_activity = None
         self.last_utc = wall
         if self.running and not self.blocked and self.focused and not self.rendering and self.last_activity is not None:
-            end = min(now, self.last_activity + 20.0)
+            end = min(now, self.last_activity + POLICY_GRACE_SECONDS[self.policy_version])
             self.comp_seconds += max(0.0, end - self.last_tick)
         self.last_tick = now
         return now
@@ -194,7 +201,7 @@ class Collector:
 
 
 class _SpanCollector(Collector):
-    """comp-v1: 20s idle allowance, >60s missing-observation exclusion.
+    """comp-v2: 300s idle allowance, >60s missing-observation exclusion.
 
     Durations and endpoints are differences of rounded *absolute* epoch offsets,
     never sums of rounded tick deltas. Contiguous active spans coalesce. UTC is
@@ -209,6 +216,8 @@ class _SpanCollector(Collector):
     after saturation is not extrapolated: recovery starts a new epoch/session.
     All retained state is memory-only until an accepting durable sink owns it.
     """
+
+    policy_version = "comp-v2"
 
     def __init__(self, **kwargs):
         from math import isfinite
@@ -296,7 +305,7 @@ class _SpanCollector(Collector):
     def _accumulate(self, start, end):
         if not self.focused or self.rendering or self.last_activity is None:
             return
-        end = min(end, self.last_activity + 20.0)
+        end = min(end, self.last_activity + POLICY_GRACE_SECONDS[self.policy_version])
         start_us = round((start - self._epoch_tick) * 1_000_000)
         end_us = round((end - self._epoch_tick) * 1_000_000)
         duration = end_us - start_us
@@ -341,7 +350,7 @@ class _SpanCollector(Collector):
         self.sequence += 1
         ended_at = self._timestamp(tick)
         record = dict(session_id=self.session_id, sequence=self.sequence,
-                      machine=self.machine, collector_version="2.0", policy_version="comp-v1",
+                      machine=self.machine, collector_version="2.0", policy_version=self.policy_version,
                       job_id=self.context["job_id"], shot_id=self.context["shot_id"],
                       script_path=self.context["script_path"], reason=reason,
                       started_at=self.started_at, ended_at=ended_at,

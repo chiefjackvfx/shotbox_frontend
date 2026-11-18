@@ -41,6 +41,58 @@ class OutboxTests(unittest.TestCase):
         from nuke_time_calc.outbox import Outbox
         return Outbox(self.root, server='https://example.test', artist_id='artist-1', device_id='device-1', **kwargs)
 
+    def test_full_sqlite_promotion_rolls_back_then_retries(self):
+        from nuke_time_calc.outbox import QueueFull
+        q = self.make()
+        q.enable_drafts()
+        first = dict(batch(), reason='checkpoint')
+        q.checkpoint(first)
+        q.max_bytes = q.status()['storage_bytes']
+        end = dict(batch(2), reason='script_close', started_at=first['ended_at'],
+                   active_spans=first['active_spans'] * 250, comp_microseconds=250000000)
+        with self.assertRaises(QueueFull):
+            q.checkpoint(end)
+        self.assertEqual(q.pending(), [])
+        self.assertEqual(q.status()['draft_records'], 1)
+        q.max_bytes *= 16
+        q.checkpoint(end)
+        q.checkpoint(end)
+        row, = q.pending()
+        self.assertEqual((row['sequence'], row['comp_microseconds']), (1, 251000000))
+
+    def test_corrupt_draft_fails_closed_before_recovery(self):
+        from nuke_time_calc.outbox import CorruptOutbox
+        q = self.make()
+        q.enable_drafts()
+        q.checkpoint(dict(batch(), reason='checkpoint'))
+        with q._connect() as db:
+            db.execute("UPDATE checkpoints SET draft=REPLACE(draft,'/test.nk','/lost.nk')")
+        with self.assertRaises(CorruptOutbox):
+            q.enable_drafts()
+        self.assertEqual(q.status()['draft_records'], 1)
+        self.assertEqual(q.pending(), [])
+
+    def test_window_limit_cannot_absorb_earlier_draft(self):
+        q = self.make()
+        q.enable_drafts()
+        first = dict(batch(), reason='script_save')
+        q.checkpoint(first)
+        q.checkpoint(dict(first, sequence=2, reason='window_limit', started_at=first['ended_at'],
+                          ended_at='2026-01-02T00:00:01Z', active_spans=[], comp_microseconds=0))
+        self.assertEqual([b['sequence'] for b in q.pending()], [1, 2])
+
+    def test_draft_reserves_slot_until_atomic_publish(self):
+        from nuke_time_calc.outbox import QueueFull
+        q = self.make(max_records=1)
+        q.enable_drafts()
+        fragment = dict(batch(), reason='checkpoint')
+        q.checkpoint(fragment)
+        with self.assertRaises(QueueFull):
+            q.put(batch(2))
+        q.enable_drafts()
+        q.checkpoint(fragment)  # ambiguous local acknowledgement after recovery
+        self.assertEqual(q.pending(), [fragment])
+
     def test_limits_fail_closed_and_partitions_do_not_mix(self):
         from nuke_time_calc.outbox import QueueFull, Outbox
         q = self.make(max_records=1)

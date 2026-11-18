@@ -141,7 +141,12 @@ and `stop()`. Construction and `start()` alone do not count as activity.
 It accepts injected `monotonic` and `utc_now` callables (the latter returning an
 aware UTC `datetime`). Calls must be serialized on the owning thread.
 
-Policy in this initial experiment:
+The integrated schema-2 plugin uses `comp-v2`: eligible time accrues until
+five minutes after the last recognised edit, never five minutes up front.
+Opening a script, saving, and watching playback do not count as edits.
+See `INTEGRATION.md` for exclusions, upgrade order and native review.
+
+Legacy schema-1 local diagnostic policy (unchanged):
 
 - Activity callbacks: knob changes, user node creation, node destruction.
   While unfocused, stopped, rendering, or blocked, activity is ignored.

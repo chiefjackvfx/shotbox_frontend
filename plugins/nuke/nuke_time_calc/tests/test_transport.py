@@ -237,6 +237,21 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(q.pending(), [])
         self.assertEqual(len(self.committed), 1)
 
+    def test_finalized_draft_survives_lost_ack(self):
+        from nuke_time_calc.transport import Uploader
+        q = self.queue()
+        q.enable_drafts()
+        q.checkpoint(dict(batch(), reason='script_save'))
+        self.assertEqual(q.pending(), [])
+        q.enable_drafts()
+        self.lose_ack = True
+        for expected in (False, True):
+            worker = Uploader(self.queue(), token_file=self.token, allow_loopback_http=True)
+            self.assertEqual(worker.run_once(), expected)
+        self.assertEqual(self.received[0][2], self.received[1][2])
+        self.assertEqual(len(self.committed), 1)
+        self.assertEqual(q.status()['acknowledged_fingerprints'], 1)
+
     def test_background_worker_stop_is_bounded_while_network_is_blocked(self):
         import time
         from nuke_time_calc.transport import Uploader

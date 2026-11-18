@@ -192,6 +192,7 @@ def build_runtime(config, nuke, config_path=None, *, uploader_factory=None, inst
     from .nuke_adapter import install
     outbox = Outbox(config['outbox_dir'], server=config['server'],
                     artist_id=config['artist_id'], device_id=config['device_id'])
+    outbox.enable_drafts()
     upload_options = dict(token_file=config['token_file'])
     if 'ca_file' in config:
         upload_options['ca_file'] = config.get('ca_file')
@@ -199,7 +200,7 @@ def build_runtime(config, nuke, config_path=None, *, uploader_factory=None, inst
         upload_options['allow_lan_http'] = config['allow_lan_http']
     uploader = (uploader_factory or Uploader)(outbox, **upload_options)
     return Runtime(nuke=nuke, identity='device:' + config['device_id'],
-        resolve=BoundResolver(config, config_path), sink=outbox.put,
+        resolve=BoundResolver(config, config_path), sink=outbox.checkpoint,
         uploader=uploader, installer=installer or install, outbox=outbox)
 
 

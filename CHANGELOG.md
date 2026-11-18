@@ -6,7 +6,12 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-18T11:29:43+00:00] Added runtime storage traces and batching release gates.
+
 ### Changed
+
+- [2026-11-18 02:54:54 PM +00:00] Extended Nuke activity grace to five minutes after edits.
+- [2026-11-18T11:29:43+00:00] Batched Nuke uploads while retaining minute-level recovery.
 
 ### Fixed
 

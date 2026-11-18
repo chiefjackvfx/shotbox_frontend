@@ -110,6 +110,20 @@ class Adapter:
         getattr(self.nuke, "add" + suffix)(callback)
         self.bindings.append((suffix, callback))
 
+    def on_knob_changed(self):
+        # Playback/UI notifications are observations, not edits. Do not let a
+        # looping Viewer renew the production allowance on every frame.
+        if self.collector.schema_version == 2:
+            knob = self.nuke.thisKnob()
+            node = self.nuke.thisNode()
+            if knob is None or node is None:
+                return
+            name, kind = knob.name(), node.Class()
+            if (name in ('frameChanged', 'updateUI') or kind == 'Viewer' or
+                    (kind == 'Root' and name == 'frame')):
+                return
+        self.collector.activity()
+
     def on_before_render(self):
         self.collector.set_rendering(True)
 
@@ -125,6 +139,8 @@ class Adapter:
         now = self.collector.tick()
         if self.collector.rendering and not self.nuke.executing():
             self.collector.set_rendering(False)
+        if now < self.last_checkpoint:
+            self.last_checkpoint = now  # new monotonic epoch; don't wait for the old clock
         if now - self.last_checkpoint >= 60.0:
             if self.collector.running:
                 self.collector.flush()
@@ -184,7 +200,7 @@ def install(*, enabled=False, identity=None, context_resolver=None, emit=None,
                 raise ValueError("unsupported Nuke callback: " + prefix + suffix)
     adapter = Adapter(collector, nuke_module, context_resolver, qt_core, app)
     try:
-        adapter.bind("KnobChanged", collector.activity)
+        adapter.bind("KnobChanged", adapter.on_knob_changed)
         adapter.bind("OnUserCreate", collector.activity)
         adapter.bind("OnDestroy", collector.activity)
         adapter.bind("OnScriptClose", adapter.on_close)
