@@ -4,6 +4,7 @@ from datetime import date, datetime, timezone
 import re
 from weakref import WeakKeyDictionary, WeakSet
 
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QFrame
 
 DEFAULT_THEME = "dark_v01.qss"
@@ -197,6 +198,11 @@ def apply_theme(filename, *, fallback=True):
     app._shotbox_theme_palette = palette
     app._shotbox_theme = selected
     app._shotbox_local_theme_rules = local_rules
+    logo = {
+        "gta6_vice_sunset.qss": "shotbox_vice_logo.png",
+        CHRISTMAS_THEME: "shotbox_christmas_logo.png",
+    }.get(selected, "shotbox_logo.png")
+    app.setWindowIcon(QIcon(str(UI_DIR / logo)))
     app.setStyleSheet(stylesheet)
     for widget, (original, previous) in list(_local_styles.items()):
         try:

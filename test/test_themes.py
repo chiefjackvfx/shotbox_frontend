@@ -28,6 +28,17 @@ class ThemeTests(unittest.TestCase):
         self.addCleanup(self.restore_theme)
         themes.apply_theme(themes.DEFAULT_THEME)
 
+    def test_window_logo_follows_theme(self):
+        from PyQt6.QtGui import QIcon
+        window = QWidget()
+        for theme, asset in (("gta6_vice_sunset.qss", "shotbox_vice_logo.png"),
+                             (themes.CHRISTMAS_THEME, "shotbox_christmas_logo.png"),
+                             (themes.DEFAULT_THEME, "shotbox_logo.png")):
+            themes.apply_theme(theme)
+            expected = QIcon(str(themes.UI_DIR / asset)).pixmap(64, 64)
+            self.assertFalse(expected.isNull())
+            self.assertEqual(window.windowIcon().pixmap(64, 64).toImage(), expected.toImage())
+
     def restore_theme(self):
         themes.apply_theme(self.original_theme)
         self.app.setStyleSheet(self.original_style)
@@ -159,6 +170,17 @@ class ThemeTests(unittest.TestCase):
                 self.assertEqual(themes.apply_theme("gta6_vice_sunset.qss"), themes.DEFAULT_THEME)
         self.assertEqual(self.app.styleSheet(),
                          (themes.UI_DIR / themes.DEFAULT_THEME).read_text(encoding="utf-8"))
+
+    def test_christmas_checkbox_has_visible_check_mark(self):
+        from PyQt6.QtWidgets import QCheckBox
+        themes.apply_theme(themes.CHRISTMAS_THEME)
+        box = QCheckBox()
+        box.setChecked(True)
+        box.resize(box.sizeHint())
+        image = box.grab().toImage()
+        # The ivory tick is inside the indicator, not its gold outline.
+        self.assertTrue(any(image.pixelColor(x, y).name() == '#fff4de'
+                            for x in range(3, 14) for y in range(3, 14)))
 
     def test_unknown_theme_uses_original(self):
         for value in ("../../custom.qss", "missing.qss", None, []):

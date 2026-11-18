@@ -8,6 +8,10 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-18 05:28:39 PM +00:00] Switch the window logo with the Vice Sunset theme.
+- [2026-11-18 05:31:17 PM +00:00] Use the snowy SB window logo for Christmas.
+- [2026-11-18 05:33:32 PM +00:00] Refine Christmas tabs, countdown badge, and checkbox marks.
+
 ### Fixed
 
 ## 6.0.0 - 2026-11-18

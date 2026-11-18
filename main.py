@@ -179,8 +179,6 @@ class MainWindow(QMainWindow):
         self._apply_notification_settings()
 
         self.setWindowTitle('ShotBox')
-        if os.path.exists(APP_ICON_PATH):
-            self.setWindowIcon(QIcon(APP_ICON_PATH))
         self.page_nukedash = page_nukedash()
         
         # Create the importer page

@@ -147,8 +147,9 @@ QLabel#vice_console_title {
     letter-spacing: 0px;
 }
 QLabel#christmas_party_countdown {
-    background: transparent;
-    color: #EDD39C;
+    background: #213C30;
+    border: 1px solid #88764E; border-radius: 8px; padding: 4px 8px;
+    color: #F5E4BB;
     font-family: "DejaVu Sans", "Segoe UI", sans-serif;
     font-size: 11px;
     font-weight: normal;
@@ -162,11 +163,13 @@ QTabBar::tab {
     background: #122B22; color: #C8CFBA;
     border: 1px solid #365442; border-bottom: 3px solid #122B22;
     border-top-left-radius: 6px; border-top-right-radius: 6px;
-    padding: 10px 16px; margin: 7px 3px 0 0;
-    font-size: 10px; font-weight: bold; letter-spacing: 0.5px;
+    padding: 8px 13px; margin: 7px 3px 0 0;
+    font-size: 11px; font-weight: bold; letter-spacing: 0.5px;
 }
 QTabBar::tab:selected {
-    background: #813644; color: #FFF4DE;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                stop:0 #873A49, stop:1 #652C38);
+    color: #FFF4DE;
     border-color: #AD6871; border-bottom-color: #EDD39C;
 }
 QTabBar::tab:hover:!selected { background: #284735; color: #FFF4DE; border-bottom-color: #D6B77A; }
@@ -226,7 +229,10 @@ QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover { backgro
 QProgressBar { background: #0C2019; color: #FFF4DE; border: 1px solid #627151; border-radius: 4px; }
 QProgressBar::chunk { background: #813644; border-radius: 3px; }
 QCheckBox::indicator { width: 15px; height: 15px; background: #0C2019; border: 1px solid #627151; border-radius: 3px; }
-QCheckBox::indicator:checked { background: #813644; border-color: #EDD39C; }
+QCheckBox::indicator:checked {
+    background: #813644; border-color: #EDD39C;
+    image: url("@THEME_UI@/christmas/check.svg");
+}
 QSlider::groove:horizontal { background: #284735; border: none; height: 4px; border-radius: 2px; }
 QSlider::handle:horizontal { background: #EDD39C; border: 2px solid #AA8651; border-radius: 7px; width: 12px; height: 12px; margin: -5px 0; }
 QToolTip { background: #122B22; color: #FFF4DE; border: 1px solid #D6B77A; padding: 7px; }
