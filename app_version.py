@@ -1,6 +1,6 @@
 from typing import Optional
 
-APP_VERSION = "6.0.0"
+APP_VERSION = "6.0.1"
 UPDATE_BRANCH = "main"
 UPDATE_REMOTE = "origin"
 
