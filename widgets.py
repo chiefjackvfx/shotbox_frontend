@@ -3100,25 +3100,8 @@ class ShotCard(QWidget):
         self.label_thumbnail.setParent(self._thumb_container)
         thumb_container_layout.addWidget(self.label_thumbnail)
         
-        # Create video widget - don't set fixed size yet
-        self._video_widget = QVideoWidget()
-        self._video_widget.setSizePolicy(
-            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
-        )
-        
-        # Create media player
-        self._video_player = QMediaPlayer(self)
-        self._audio_output = QAudioOutput()
-        self._audio_output.setVolume(0.5)
-        self._video_player.setAudioOutput(self._audio_output)
-        self._video_player.setVideoOutput(self._video_widget)
-        self._video_player.setLoops(QMediaPlayer.Loops.Infinite)
-        
-        # Add to stack (thumbnail first, video second)
-        self._preview_stack.addWidget(self._thumb_container)  # Index 0
-        self._preview_stack.addWidget(self._video_widget)      # Index 1
-        self._preview_stack.setCurrentIndex(0)  # Show thumbnail by default
-        
+        self._preview_stack.addWidget(self._thumb_container)
+
         # Add stack to the original layout
         if thumb_layout:
             thumb_layout.insertWidget(0, self._preview_stack)
@@ -3142,6 +3125,24 @@ class ShotCard(QWidget):
         self._thumbnail_hover_target = self._preview_stack
         self._thumbnail_hover_target.installEventFilter(self)
         self.label_thumbnail.installEventFilter(self)
+
+    def _create_preview_player(self):
+        """Allocate native multimedia resources on the first playable hover."""
+        # Create video widget - don't set fixed size yet
+        self._video_widget = QVideoWidget()
+        self._video_widget.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed
+        )
+
+        # Create media player
+        self._video_player = QMediaPlayer(self)
+        self._audio_output = QAudioOutput()
+        self._audio_output.setVolume(0.5)
+        self._video_player.setAudioOutput(self._audio_output)
+        self._video_player.setVideoOutput(self._video_widget)
+        self._video_player.setLoops(QMediaPlayer.Loops.Infinite)
+        self._video_widget.setFixedSize(self.label_thumbnail.size())
+        self._preview_stack.addWidget(self._video_widget)
         self._video_widget.installEventFilter(self)
     
     def _position_preview_indicator(self):
@@ -3186,10 +3187,12 @@ class ShotCard(QWidget):
             return
         if not self._has_preview or not self._preview_video_path:
             return
-        if not HAS_MULTIMEDIA or not self._video_player:
+        if not HAS_MULTIMEDIA:
             return
             
         try:
+            if self._video_player is None:
+                self._create_preview_player()
             # Set video source and play
             self._video_player.setSource(QUrl.fromLocalFile(self._preview_video_path))
             if self._quick_view_resume_position:

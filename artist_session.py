@@ -289,7 +289,9 @@ def start_artist_session(window_factory, on_finished):
                     app.pending_artist_picker = None
                     window = None
                     try:
+                        print("[ShotBox] Opening selected artist settings", flush=True)
                         window = build(selected_id)
+                        print("[ShotBox] Dashboard constructed, activating session", flush=True)
                         confirm(window, memory, selected_id)
                     except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
                         recover(dialog, window, exc)

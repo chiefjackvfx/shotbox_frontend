@@ -130,21 +130,25 @@ class ProfileIris(QWidget):
     def __init__(self, window, picker, *, chromatic=False):
         flags = (Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                  | Qt.WindowType.WindowTransparentForInput | Qt.WindowType.WindowDoesNotAcceptFocus)
-        # Keep the Win32 dashboard unmodified during login. Paint the iris in
-        # the frameless overlay and show the dashboard once the reveal ends.
-        live_mask = QApplication.platformName() == "xcb"
-        # grab() paints child widgets synchronously. Capture before attaching
-        # the iris so it cannot paint itself halfway through construction.
-        source = window.grab() if chromatic or not live_mask else None
-        super().__init__(window if live_mask else picker, Qt.WindowType.Widget if live_mask else flags)
+        platform = QApplication.platformName()
+        live_mask = platform == "xcb"
+        in_picker = platform == "windows"
+        # Capture before attaching the iris. On Windows render the rim inside
+        # the picker, avoiding a synchronous grab of native dashboard children.
+        capture_dashboard = not in_picker and (chromatic or not live_mask)
+        source = window.grab() if capture_dashboard else None
+        parent = window if live_mask else picker
+        super().__init__(parent, Qt.WindowType.Widget if live_mask or in_picker else flags)
+        self.in_picker = in_picker
+        self.chromatic = chromatic
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, not live_mask)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, not live_mask and not self.in_picker)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setStyleSheet("background: transparent;")
         self.window_to_reveal = window
         self.live_mask = live_mask
         self.snapshot = None if live_mask else source
-        self.chromatic_channels = self.split_channels(source) if chromatic else None
+        self.chromatic_channels = self.split_channels(source) if chromatic and source is not None else ()
         self.original_mask = window.mask()
         self.picker = picker
         self.place_over_workspace()
@@ -168,6 +172,11 @@ class ProfileIris(QWidget):
     def place_over_workspace(self):
         window = self.window_to_reveal
         picker = self.picker
+        if self.in_picker:
+            self.setGeometry(picker.rect())
+            self.workspace = QRectF(self.rect())
+            self.picker_offset = QPointF()
+            return
         workspace = QRect(window.mapToGlobal(QPoint()), window.size())
         area = workspace if self.live_mask else workspace.united(QRect(picker.mapToGlobal(QPoint()), picker.size()))
         self.setGeometry(window.rect() if self.live_mask else area)
@@ -211,7 +220,7 @@ class ProfileIris(QWidget):
             center = self.origin - self.workspace.topLeft()
             radius = self.inner_radius(progress)
             # Include the chosen rim in the native window shape.
-            if self.chromatic_channels is None:
+            if not self.chromatic:
                 radius /= 0.95
                 radius += min(radius * 0.32, 40.0) * (1 - progress) * 0.6 + 2
             else:
@@ -234,12 +243,11 @@ class ProfileIris(QWidget):
 
     def show_workspace(self):
         # Submit the clean final frame before mapping the native main window.
-        self.repaint()
-        if QApplication.platformName() == "windows":
+        if self.in_picker:
             self.window_to_reveal.show()
-            # A covered Win32 window can defer painting until the overlay closes.
-            QTimer.singleShot(250, Qt.TimerType.PreciseTimer, self.picker.accept)
+            self.picker.accept()
         else:
+            self.repaint()
             self.window_to_reveal.installEventFilter(self)
             self.window_to_reveal.show()
 
@@ -392,7 +400,7 @@ class ProfileIris(QWidget):
             painter.setClipPath(mask)
             painter.drawPixmap(self.workspace.topLeft(), self.snapshot)
             painter.restore()
-        if inner > 0 and self.chromatic_channels is not None:
+        if inner > 0 and self.chromatic:
             self.paint_chromatic_edge(painter, center, inner, progress)
         elif radius > 0:
             self.paint_blades(painter, center, radius, progress)

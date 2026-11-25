@@ -1225,6 +1225,8 @@ def show_after_workspace_load(window, picker):
     link_picker = app.platformName() == "xcb"
 
     def finish_reveal():
+        if windows_login:
+            print("[ShotBox] Dashboard shown, login complete", flush=True)
         if link_picker:
             window.windowHandle().setTransientParent(None)
         window._settings_manager.startup_picker = None
@@ -1270,6 +1272,7 @@ def show_after_workspace_load(window, picker):
 
     picker.rejected.connect(cancel)
     if windows_login:
+        print("[ShotBox] Starting dashboard transition", flush=True)
         picker.set_load_progress("Opening workspace…", 1, 1)
         reveal()
         return

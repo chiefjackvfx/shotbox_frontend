@@ -438,7 +438,7 @@ class V02CardTests(unittest.TestCase):
         loader = mock.Mock()
         loader.load.side_effect = lambda url, callback: QTimer.singleShot(0, lambda: callback(pixmap))
         with mock.patch.object(widgets, "HAS_MULTIMEDIA", True), \
-             mock.patch.object(widgets, "QMediaPlayer"), \
+             mock.patch.object(widgets, "QMediaPlayer") as media_player, \
              mock.patch.object(widgets, "QAudioOutput"), \
              mock.patch.object(widgets.ImageLoader, "instance", return_value=loader):
             data = shot_data(99, self.temp.name, 2)
@@ -568,9 +568,17 @@ class V02CardTests(unittest.TestCase):
         if not hasattr(widgets, "QMediaPlayer"):
             self.skipTest("Qt multimedia is unavailable")
         with mock.patch.object(widgets, "HAS_MULTIMEDIA", True), \
-             mock.patch.object(widgets, "QMediaPlayer"), \
+             mock.patch.object(widgets, "QMediaPlayer") as media_player, \
              mock.patch.object(widgets, "QAudioOutput"):
             card = widgets.ShotCard(shot_data(99, self.temp.name, 0), api=self.api, folders=FakeFolders())
+            media_player.assert_not_called()
+            card._has_preview = True
+            card._preview_video_path = "test-preview.mp4"
+            card._on_preview_hover_enter()
+            card._on_preview_hover_leave()
+            card._on_preview_hover_enter()
+            media_player.assert_called_once_with(card)
+            self.assertEqual(card._preview_stack.currentIndex(), 1)
         self.addCleanup(card.deleteLater)
         stack = card._preview_stack
         player = card._video_player

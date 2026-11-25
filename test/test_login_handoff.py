@@ -225,11 +225,15 @@ class LoginHandoffTests(unittest.TestCase):
                 window._settings_manager = MagicMock()
                 window._settings_manager.get.return_value = animation
                 with (patch.object(QApplication, "platformName", return_value="windows"),
+                      patch.object(window, "grab", side_effect=AssertionError("captured hidden Windows dashboard")),
                       patch("main.motion_enabled", return_value=True)):
                     show_after_workspace_load(window, picker)
                     if animation != "none":
                         overlay = picker.findChild(ProfileIris)
-                        self.assertFalse(overlay.snapshot.isNull())
+                        self.assertIsNone(overlay.snapshot)
+                        self.assertFalse(overlay.isWindow())
+                        overlay.animation.setCurrentTime(310)
+                        overlay.repaint()
                         self.assertFalse(window.isVisible())
                         window.setUpdatesEnabled(False)
                         overlay.animation.setCurrentTime(overlay.animation.duration())
