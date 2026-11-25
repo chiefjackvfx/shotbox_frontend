@@ -6,7 +6,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-11-25 11:34:43 AM +00:00] Crossfade the login picker into the ready workspace.
+- [2026-11-25 12:39:18 PM +00:00] Added blue glass iris with stronger radial colour separation.
+
+- [2026-11-25 12:08:14 PM +00:00] Choose iris reveal or no animation in Login settings.
+
+- [2026-11-25 11:34:43 AM +00:00] Reveal workspace with rotating aperture blades and sweeping amber flare.
 
 - [2026-11-25 11:14:06 AM +00:00] Added faint grain and focus highlights to profile circles.
 
@@ -25,6 +29,10 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-25 12:10:59 PM +00:00] Wrap login profiles into centred rows sized for the screen.
+
+- [2026-11-25 12:09:06 PM +00:00] Restored borderless login with draggable Shotbox title bar.
+
 - [2026-11-24 03:15:19 PM +00:00] Prepare artist workspace ahead of selection without automatic login.
 
 - [2026-11-24 03:10:08 PM +00:00] Enlarge login layout and retain its size throughout startup.
@@ -37,6 +45,14 @@ All notable frontend publish changes should be documented in this file.
 - [2026-11-24 10:11:38 AM +00:00] Give profile splash a frameless Shotbox title bar.
 
 ### Fixed
+
+- [2026-11-25 12:43:29 PM +00:00] Fixed native chromatic iris crash during dashboard capture.
+
+- [2026-11-25 12:06:43 PM +00:00] Reveal live desktop through iris during login.
+
+- [2026-11-25 12:01:57 PM +00:00] Hold final iris frame 250ms after dashboard paints.
+
+- [2026-11-25 11:59:27 AM +00:00] Mask workspace inside iris before showing the main window.
 
 - [2026-11-24 03:51:24 PM +00:00] Stop activity workers before switching preloaded artist workspaces.
 

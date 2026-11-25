@@ -1,12 +1,13 @@
-"""Frameless artist picker shared by desktop startup and the design preview."""
+"""Artist picker shared by desktop startup and the design preview."""
 
 
 from functools import cache
+from math import cos, hypot, pi, radians, sin
 from random import Random
 from zlib import crc32
 
-from PyQt6.QtCore import QAbstractAnimation, QEasingCurve, QEvent, QEventLoop, QRectF, Qt, QTimer, QVariantAnimation
-from PyQt6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPen
+from PyQt6.QtCore import QAbstractAnimation, QEasingCurve, QEvent, QEventLoop, QPoint, QPointF, QRect, QRectF, Qt, QTimer, QVariantAnimation
+from PyQt6.QtGui import QBrush, QColor, QConicalGradient, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient, QRegion
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
     QProgressBar, QScrollArea, QStyle, QVBoxLayout, QWidget,
@@ -18,6 +19,8 @@ from themes import set_widget_style, theme_colour
 PICKER_WIDTH = 640
 PICKER_HEIGHT = 380
 DIAMETER = 100
+TILE_WIDTH = DIAMETER + 18
+TILE_HEIGHT = DIAMETER + 40
 GAP = 24
 LOGIN_MS = 3000
 
@@ -61,7 +64,7 @@ class ArtistCircle(QPushButton):
         self.highlight.valueChanged.connect(lambda _: self.update())
         colours = ("#514552", "#394f57", "#4c5041", "#494b62", "#59473c")
         self.fill = QColor(colours[crc32(username.encode()) % len(colours)]).darker(110)
-        self.setFixedSize(DIAMETER + 18, DIAMETER + 40)
+        self.setFixedSize(TILE_WIDTH, TILE_HEIGHT)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.setCheckable(True)
         self.setAutoDefault(True)
@@ -121,6 +124,280 @@ class ArtistCircle(QPushButton):
                          Qt.AlignmentFlag.AlignCenter, name)
 
 
+class ProfileIris(QWidget):
+    """Reveal the workspace through a native window mask or a clipped snapshot."""
+
+    def __init__(self, window, picker, *, chromatic=False):
+        flags = (Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+                 | Qt.WindowType.WindowTransparentForInput | Qt.WindowType.WindowDoesNotAcceptFocus)
+        live_mask = QApplication.platformName() in ("xcb", "windows")
+        # grab() paints child widgets synchronously. Capture before attaching
+        # the iris so it cannot paint itself halfway through construction.
+        source = window.grab() if chromatic or not live_mask else None
+        super().__init__(window if live_mask else picker, Qt.WindowType.Widget if live_mask else flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, not live_mask)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setStyleSheet("background: transparent;")
+        self.window_to_reveal = window
+        self.live_mask = live_mask
+        self.snapshot = None if live_mask else source
+        self.chromatic_channels = self.split_channels(source) if chromatic else None
+        self.original_mask = window.mask()
+        self.picker = picker
+        self.place_over_workspace()
+        self.origin_in_picker = QPointF(picker.rect().center())
+        for circle in picker.findChildren(ArtistCircle):
+            if circle.artist_id == picker.artist_id and circle.visibleRegion():
+                center = QPointF(circle.width() / 2, 8 + DIAMETER / 2
+                                 - 2 * circle.highlight.currentValue())
+                self.origin_in_picker = circle.mapTo(picker, center)
+                break
+        self.accent = QColor(theme_colour("#ff6b35"))
+        self.animation = QVariantAnimation(self)
+        self.animation.setStartValue(0.0)
+        self.animation.setEndValue(1.0)
+        self.animation.setDuration(620)
+        self.animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self.animation.valueChanged.connect(self.advance_iris)
+        picker.rejected.connect(self.animation.stop)
+        self.animation.finished.connect(self.finish_animation)
+
+    def place_over_workspace(self):
+        window = self.window_to_reveal
+        picker = self.picker
+        workspace = QRect(window.mapToGlobal(QPoint()), window.size())
+        area = workspace if self.live_mask else workspace.united(QRect(picker.mapToGlobal(QPoint()), picker.size()))
+        self.setGeometry(window.rect() if self.live_mask else area)
+        self.workspace = QRectF(workspace.translated(-area.topLeft()))
+        self.picker_offset = QPointF(picker.mapToGlobal(QPoint()) - area.topLeft())
+
+    @property
+    def origin(self):
+        return self.picker_offset + self.origin_in_picker
+
+    def inner_radius(self, progress):
+        center = self.origin
+        corners = (self.workspace.topLeft(), self.workspace.topRight(),
+                   self.workspace.bottomLeft(), self.workspace.bottomRight())
+        return (max(hypot(p.x() - center.x(), p.y() - center.y()) for p in corners) + 12) * progress
+
+    def start(self):
+        if self.live_mask:
+            # An empty QRegion removes the mask. An off-window pixel hides
+            # the client while the window manager assigns its final position.
+            self.window_to_reveal.setMask(QRegion(-2, -2, 1, 1))
+            self.setMask(QRegion(-2, -2, 1, 1))
+            self.window_to_reveal.show()
+            QTimer.singleShot(0, self.begin_animation)
+        else:
+            self.begin_animation()
+
+    def begin_animation(self):
+        if not self.picker.isVisible():
+            return
+        if self.live_mask:
+            self.place_over_workspace()
+            self.clearMask()
+            self.raise_()
+        self.show()
+        self.animation.start()
+
+    def advance_iris(self, progress):
+        if self.live_mask:
+            self.place_over_workspace()
+            center = self.origin - self.workspace.topLeft()
+            radius = self.inner_radius(progress)
+            # Include the chosen rim in the native window shape.
+            if self.chromatic_channels is None:
+                radius /= 0.95
+                radius += min(radius * 0.32, 40.0) * (1 - progress) * 0.6 + 2
+            else:
+                radius += min(radius * 0.16, 8 * sin(pi * progress)) * 1.03 + 2
+            rect = QRectF(center.x() - radius, center.y() - radius, 2 * radius, 2 * radius)
+            aperture = QRegion(rect.toAlignedRect(), QRegion.RegionType.Ellipse)
+            if not self.original_mask.isEmpty():
+                aperture &= self.original_mask
+            self.window_to_reveal.setMask(aperture if not aperture.isEmpty() else QRegion(-2, -2, 1, 1))
+        self.update()
+
+    def finish_animation(self):
+        if self.live_mask:
+            self.window_to_reveal.setMask(self.original_mask)
+            self.hide()
+            QTimer.singleShot(250, Qt.TimerType.PreciseTimer, self.picker.accept)
+            self.deleteLater()
+        else:
+            self.show_workspace()
+
+    def show_workspace(self):
+        # Submit the clean final frame before mapping the native main window.
+        self.repaint()
+        self.window_to_reveal.installEventFilter(self)
+        self.window_to_reveal.show()
+
+    def eventFilter(self, watched, event):
+        if watched is self.window_to_reveal and event.type() == QEvent.Type.Paint:
+            watched.removeEventFilter(self)
+            # Hold the final iris frame as the live dashboard settles.
+            QTimer.singleShot(250, Qt.TimerType.PreciseTimer, self.parentWidget().accept)
+        return super().eventFilter(watched, event)
+
+    @staticmethod
+    def split_channels(source):
+        # Soften the capture once. The three textures can then refract at
+        # different scales around the selected profile on every frame.
+        size = source.deviceIndependentSize()
+        soft = source.scaled(max(1, round(size.width() / 2)), max(1, round(size.height() / 2)),
+                             Qt.AspectRatioMode.IgnoreAspectRatio,
+                             Qt.TransformationMode.SmoothTransformation)
+        channels = []
+        for colour in (QColor(235, 0, 0), QColor(0, 248, 0), QColor(0, 0, 255)):
+            channel = soft.copy()
+            with QPainter(channel) as tint:
+                tint.setCompositionMode(QPainter.CompositionMode.CompositionMode_Multiply)
+                tint.fillRect(QRectF(QPointF(), channel.deviceIndependentSize()), colour)
+            channels.append(channel)
+        return channels
+
+    def paint_chromatic_edge(self, painter, center, radius, progress):
+        strength = sin(pi * progress)
+        width = min(radius, 4 + 48 * strength)
+        band = QPainterPath()
+        band.addEllipse(center, radius, radius)
+        band.addEllipse(center, radius - width, radius - width)
+        painter.save()
+        painter.setClipPath(band)
+        painter.fillPath(band, Qt.GlobalColor.black)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_Plus)
+        # Dispersion follows the radius, so opposite sides of the glass
+        # split in opposite directions, including at the top and bottom.
+        for channel, displacement in zip(self.chromatic_channels, (0, 9, 21)):
+            zoom = 1 + min(0.24, displacement * strength / radius)
+            target = QRectF(center + (self.workspace.topLeft() - center) * zoom,
+                            self.workspace.size() * zoom)
+            painter.drawPixmap(target, channel, QRectF(channel.rect()))
+        painter.restore()
+
+        bevel = QRadialGradient(center, radius)
+        for depth, colour in ((0, QColor(16, 72, 194, 0)),
+                              (0.25, QColor(29, 84, 211, 55)),
+                              (0.64, QColor(45, 85, 219, 70)),
+                              (0.82, QColor(112, 215, 255, 95)),
+                              (0.95, QColor(8, 44, 143, 192)),
+                              (1, QColor(93, 191, 255, 180))):
+            bevel.setColorAt(1 - (1 - depth) * width / radius, colour)
+        painter.fillPath(band, bevel)
+
+        separation = min(radius * 0.16, 8 * strength)
+        painter.save()
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        for shift, colour in ((-separation, "#c25aff"), (separation, "#32dfff")):
+            origin = center + QPointF(shift, -shift * 0.24)
+            painter.setPen(QPen(QColor(colour), 2))
+            painter.drawEllipse(origin, radius, radius)
+
+        # Two narrow reflections roll along opposite sides of the glass.
+        light = QConicalGradient(center, 110 - 45 * progress)
+        for stop, colour in ((0, "#6488cc"), (0.06, "#edffff"), (0.11, "#79caff"),
+                             (0.30, "#254885"), (0.54, "#81bfff"), (0.58, "#ddfaff"),
+                             (0.66, "#558bdd"), (0.84, "#263d82"), (1, "#6488cc")):
+            light.setColorAt(stop, QColor(colour))
+        painter.setPen(QPen(QBrush(light), 2))
+        painter.drawEllipse(center, radius, radius)
+        painter.restore()
+
+    def paint_blades(self, painter, center, radius, progress):
+        # Each leaf shares its swept seam with the next. Retract the tips
+        # into the rim near the end so the last corners clear cleanly.
+        depth = min(radius * 0.32, 40.0) * (1 - progress)
+        outer = radius + depth * 0.6
+        inner = radius - depth
+        twist = radians(32)
+        tip = QPointF(inner * cos(twist), -inner * sin(twist))
+        next_tip = QPointF(inner * cos(twist + radians(60)),
+                           -inner * sin(twist + radians(60)))
+        leaf = QPainterPath()
+        leaf.moveTo(outer, 0)
+        leaf.arcTo(QRectF(-outer, -outer, outer * 2, outer * 2), 0, 60)
+        leaf.lineTo(next_tip)
+        leaf.quadTo(QPointF(radius * cos(twist + radians(30)),
+                            -radius * sin(twist + radians(30))), tip)
+        leaf.closeSubpath()
+        painter.save()
+        painter.translate(center)
+        painter.rotate(-20 + 55 * progress)
+        for index in range(6):
+            shade = 49 + index % 3 * 8
+            painter.fillPath(leaf, QColor(shade, shade + 3, shade + 7))
+            painter.setPen(QPen(QColor(188, 188, 180, 110), 1))
+            painter.drawLine(QPointF(outer, 0), tip)
+            painter.rotate(-60)
+        painter.restore()
+
+    def paint_flare(self, painter, center, radius):
+        phase = self.animation.currentTime() / self.animation.duration()
+        angle = 210 - 290 * phase
+        radians_angle = radians(angle)
+        head = center + QPointF(radius * cos(radians_angle), -radius * sin(radians_angle))
+        sweep = QConicalGradient(center, angle)
+        sweep.setColorAt(0, QColor("#fff4cc"))
+        sweep.setColorAt(0.035, QColor("#ffc160"))
+        sweep.setColorAt(0.22, QColor(255, 92, 20, 0))
+        sweep.setColorAt(0.985, QColor(255, 92, 20, 0))
+        sweep.setColorAt(1, QColor("#fff4cc"))
+        painter.save()
+        strength = sin(pi * phase) ** 2
+        for width, opacity in ((20, 0.14), (9, 0.34), (3, 1.0)):
+            painter.setOpacity(strength * opacity)
+            painter.setPen(QPen(QBrush(sweep), width))
+            painter.drawEllipse(center, radius, radius)
+        # Stretch a single warm glint horizontally as it rides the rim.
+        painter.translate(head)
+        painter.scale(1, 0.085)
+        spread = 26 + 87 * strength
+        flare = QRadialGradient(QPointF(), spread)
+        flare.setColorAt(0, QColor("#fff9e4"))
+        flare.setColorAt(0.12, QColor(255, 202, 108, 238))
+        flare.setColorAt(0.46, QColor(255, 125, 48, 108))
+        flare.setColorAt(1, QColor(255, 91, 25, 0))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(flare)
+        painter.drawEllipse(QPointF(), spread, spread)
+        painter.restore()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        center = self.origin
+        progress = self.animation.currentValue()
+        if progress >= 1.0:
+            if self.snapshot is not None:
+                painter.drawPixmap(self.workspace.topLeft(), self.snapshot)
+            return
+        inner = self.inner_radius(progress)
+        radius = inner / 0.95
+        if self.snapshot is not None:
+            mask = QPainterPath()
+            mask.addEllipse(center, inner, inner)
+            painter.save()
+            painter.setClipPath(mask)
+            painter.drawPixmap(self.workspace.topLeft(), self.snapshot)
+            painter.restore()
+        if inner > 0 and self.chromatic_channels is not None:
+            self.paint_chromatic_edge(painter, center, inner, progress)
+        elif radius > 0:
+            self.paint_blades(painter, center, radius, progress)
+            painter.setPen(QPen(self.accent, 3))
+            painter.drawEllipse(center, radius, radius)
+            self.paint_flare(painter, center, radius)
+            # A finer trailing rim gives the aperture a ripple as it opens.
+            painter.setOpacity(0.45 * (1 - progress))
+            painter.setPen(QPen(self.accent, 1))
+            painter.drawEllipse(center, inner, inner)
+
+
 class ProfileSplash(QDialog):
     def __init__(self, profiles, memory):
         super().__init__()
@@ -135,7 +412,7 @@ class ProfileSplash(QDialog):
         self.browse_timer.setSingleShot(True)
         self.browse_timer.timeout.connect(self.update_browsing)
         self.setWindowTitle("Shotbox · Choose your profile")
-        self.setWindowFlag(Qt.WindowType.FramelessWindowHint)
+        self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self.setObjectName("LoadingDialog")
         set_widget_style(self, "QDialog#LoadingDialog { border: 0; }")
         window_layout = QVBoxLayout(self)
@@ -166,10 +443,8 @@ class ProfileSplash(QDialog):
         close_button.setAutoDefault(False)
         close_button.clicked.connect(self.reject)
         set_widget_style(close_button, """
-            QPushButton {
-                background: transparent; border: 1px solid transparent;
-                border-radius: 3px; padding: 0; font-size: 21px;
-            }
+            QPushButton { background: transparent; border: 1px solid transparent;
+                          border-radius: 3px; padding: 0; font-size: 21px; }
             QPushButton:hover, QPushButton:pressed { background: #404754; }
             QPushButton:focus { border-color: #d4d4d4; }
         """)
@@ -184,14 +459,13 @@ class ProfileSplash(QDialog):
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
         scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         roster = QWidget()
         roster.setObjectName("roster")
-        row = QHBoxLayout(roster)
-        row.setContentsMargins(0, 0, 0, 0)
-        row.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        row.setSpacing(GAP)
-        self.row = row
+        self.roster_layout = QVBoxLayout(roster)
+        self.roster_layout.setContentsMargins(0, 0, 0, 0)
+        self.roster_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.roster_layout.setSpacing(8)
         self.scroll = scroll
         set_widget_style(scroll, "QScrollArea, QWidget#roster { background: #1e2228; border: 0; }")
         scroll.setWidget(roster)
@@ -240,33 +514,50 @@ class ProfileSplash(QDialog):
         self.loading_logo = QLabel()
         self.loading_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.loading_logo.setPixmap(QApplication.windowIcon().pixmap(80, 80))
-        row.addWidget(self.loading_logo)
+        self.roster_layout.addWidget(self.loading_logo)
         if profiles is not None:
             self.populate_profiles(profiles)
 
     def populate_profiles(self, profiles):
-        row = self.row
-        row.removeWidget(self.loading_logo)
+        self.roster_layout.removeWidget(self.loading_logo)
         self.loading_logo.hide()
-        scroll = self.scroll
-        roster = scroll.widget()
+        profiles = list(profiles)
+        available = self.screen().availableGeometry()
+        # Allow space for a vertical scrollbar on unusually large rosters.
+        bar_width = self.scroll.verticalScrollBar().sizeHint().width()
+        max_columns = max(1, (available.width() - 64 - bar_width + GAP) // (TILE_WIDTH + GAP))
+        preferred_columns = len(profiles) if len(profiles) <= 4 else (len(profiles) + 1) // 2
+        columns = max(1, min(preferred_columns, max_columns))
         last_id = self.settings.value("last_artist", "", type=str)
-        for artist_id, username, name in profiles:
+        for index, (artist_id, username, name) in enumerate(profiles):
+            if index % columns == 0:
+                row = QHBoxLayout()
+                row.setSpacing(GAP)
+                row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                self.roster_layout.addLayout(row)
             circle = ArtistCircle(artist_id, username, name)
             circle.clicked.connect(lambda checked, user=artist_id: self.choose(user))
             circle.installEventFilter(self)
             row.addWidget(circle)
+            if index == 0:
+                circle.setFocus()
             if artist_id == last_id:
                 circle.setChecked(True)
                 self.returning_artist = circle
-        if row.count():
-            row.itemAt(0).widget().setFocus()
-        if not row.count():
-            row.addWidget(QLabel("No VFX artist profiles available."))
-        scroll_height = roster.sizeHint().height()
-        if roster.sizeHint().width() + 64 > self.width():
-            scroll_height += scroll.horizontalScrollBar().sizeHint().height()
-        scroll.setMinimumHeight(scroll_height)
+        if not profiles:
+            self.roster_layout.addWidget(QLabel("No VFX artist profiles available."))
+        rows = (len(profiles) + columns - 1) // columns
+        content_height = rows * TILE_HEIGHT + max(0, rows - 1) * self.roster_layout.spacing()
+        content_width = columns * TILE_WIDTH + (columns - 1) * GAP
+        # Reserve room for the loading message, progress and retry controls.
+        roster_height = min(content_height, max(1, available.height() - 250))
+        self.scroll.setMinimumHeight(roster_height)
+        width = content_width + 64 + (bar_width if roster_height < content_height else 0)
+        self.setMinimumWidth(min(available.width(), max(self.minimumWidth(), width)))
+        self.resize(self.minimumWidth(), min(available.height(), max(self.height(), PICKER_HEIGHT + roster_height - TILE_HEIGHT)))
+        if self.isVisible():
+            self.move(max(available.left(), min(self.x(), available.right() + 1 - self.width())),
+                      max(available.top(), min(self.y(), available.bottom() + 1 - self.height())))
         artist = self.returning_artist
         if artist:
             artist.setFocus()
@@ -341,8 +632,8 @@ class ProfileSplash(QDialog):
     def eventFilter(self, watched, event):
         if watched is self.title_bar and event.type() == QEvent.Type.MouseButtonPress:
             if event.button() == Qt.MouseButton.LeftButton:
-                window = self.windowHandle()
-                if window is not None and window.startSystemMove():
+                handle = self.windowHandle()
+                if handle and handle.startSystemMove():
                     return True
         if isinstance(watched, ArtistCircle):
             event_type = event.type()

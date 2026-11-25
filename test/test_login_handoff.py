@@ -7,12 +7,12 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PyQt6.QtCore import QSettings, QTimer
+from PyQt6.QtCore import QPoint, QSettings, Qt, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
 import http_help
-from artist_picker import ArtistCircle, ProfileSplash
+from artist_picker import ArtistCircle, ProfileIris, ProfileSplash
 from main import show_after_workspace_load
 from page_nukedash import page_nukedash
 from settings import SettingsManager
@@ -36,6 +36,7 @@ class LoginHandoffTests(unittest.TestCase):
             return picker
 
         first = open_picker()
+        self.assertTrue(first.windowFlags() & Qt.WindowType.FramelessWindowHint)
         self.assertTrue(first.auto_login.isChecked())
         self.assertFalse(first.login_timer.isActive())
         first.settings.setValue("last_artist", "1")
@@ -71,6 +72,24 @@ class LoginHandoffTests(unittest.TestCase):
         QTest.qWait(650)
         self.assertEqual(returning.artist_id, "1")
 
+    def test_larger_roster_wraps_and_every_profile_is_visible(self):
+        directory = Path(self.enterContext(TemporaryDirectory()))
+        memory = QSettings(str(directory / "picker.ini"), QSettings.Format.IniFormat)
+        memory.setValue("last_artist", "6")
+        picker = ProfileSplash(None, memory)
+        self.addCleanup(picker.close)
+        picker.show()
+        picker.populate_profiles([(str(i), f"user{i}", f"Artist {i}") for i in range(7)])
+        picker.set_load_progress("Loading workspace…")
+        QTest.qWait(30)
+        circles = picker.findChildren(ArtistCircle)
+        self.assertEqual(len({circle.y() for circle in circles}), 2)
+        self.assertFalse(picker.scroll.horizontalScrollBar().isVisible())
+        self.assertFalse(picker.scroll.verticalScrollBar().isVisible())
+        self.assertTrue(all(circle.visibleRegion().contains(circle.rect()) for circle in circles))
+        picker.returning_artist.click()
+        self.assertEqual(picker.artist_id, "6")
+
     def test_choice_during_preload_is_kept_for_startup(self):
         memory = MagicMock()
         memory.value.side_effect = lambda key, default, **_: "1" if key == "last_artist" else default
@@ -92,6 +111,9 @@ class LoginHandoffTests(unittest.TestCase):
         app = QApplication.instance() or QApplication([])
         directory = self.enterContext(TemporaryDirectory())
         settings = SettingsManager(str(Path(directory) / "prefs.yaml"))
+        settings.set("login_animation", "none", save=False)
+        iris = self.enterContext(patch("main.ProfileIris"))
+        self.enterContext(patch("main.motion_enabled", return_value=True))
         settings.artist = {"id": 1}
         memory = MagicMock()
         memory.value.side_effect = lambda key, default, **_: default
@@ -132,11 +154,128 @@ class LoginHandoffTests(unittest.TestCase):
             if window.isVisible():
                 break
         self.assertTrue(window.isVisible())
+        iris.assert_not_called()
         self.assertFalse(dash._task_materialize_queue)
         self.assertFalse(any(visible for _, visible in updates))
         self.assertTrue(any("shots" in text for text, _ in updates))
         self.assertTrue(any("tasks" in text for text, _ in updates))
         self.assertEqual(len(dash.findChild(ShotCard)._task_widgets_by_id), 21)
+
+    def test_inner_circle_reveals_workspace_before_main_window_is_shown(self):
+        directory = Path(self.enterContext(TemporaryDirectory()))
+        memory = QSettings(str(directory / "picker.ini"), QSettings.Format.IniFormat)
+        picker = ProfileSplash([("1", "avery", "Avery Morgan")], memory)
+        picker.keep_open_after_choice = True
+        picker.move(35, 70)
+        picker.show()
+        picker.choose("1")
+        window = QMainWindow()
+        window.setGeometry(180, 110, 700, 500)
+        window.setStyleSheet("background-color: #13765c")
+        window.page_nukedash = MagicMock()
+        window.page_nukedash._awaiting_workspace = False
+        window._settings_manager = MagicMock()
+        self.addCleanup(window.close)
+        self.addCleanup(self.app.setQuitOnLastWindowClosed, self.app.quitOnLastWindowClosed())
+        with (patch("main.motion_enabled", return_value=True),
+              patch.object(QApplication, "platformName", return_value="offscreen")):
+            show_after_workspace_load(window, picker)
+        overlay = picker.findChild(ProfileIris)
+        overlay.animation.pause()
+        overlay.animation.setCurrentTime(0)
+        self.assertFalse(window.isVisible())
+        self.assertTrue(picker.isVisible())
+        self.assertEqual(overlay.grab().toImage().pixelColor(5, 5).alpha(), 0)
+        overlay.animation.setCurrentTime(265)
+        frame = overlay.grab().toImage()
+        self.assertEqual(frame.pixelColor(overlay.origin.toPoint()).name(), "#13765c")
+        corner = overlay.workspace.bottomRight().toPoint() - QPoint(4, 4)
+        self.assertEqual(frame.pixelColor(corner).alpha(), 0)
+        self.assertFalse(window.isVisible())
+        window.setUpdatesEnabled(False)
+        overlay.animation.resume()
+        QTest.qWait(overlay.animation.duration() + 100)
+        self.assertTrue(window.isVisible())
+        self.assertTrue(picker.isVisible())
+        self.assertTrue(overlay.isVisible())
+        last_frame = overlay.grab().toImage()
+        self.assertEqual(last_frame.pixelColor(corner).name(), "#13765c")
+        window.setUpdatesEnabled(True)
+        window.repaint()
+        QTest.qWait(150)
+        self.assertTrue(overlay.isVisible())
+        QTest.qWait(180)
+        self.assertIsNone(window._settings_manager.startup_picker)
+
+    def test_native_iris_reveals_one_live_window_in_place(self):
+        if self.app.platformName() not in ("xcb", "windows"):
+            self.skipTest("Requires native window shape support")
+        memory = MagicMock()
+        memory.value.side_effect = lambda key, default, **_: default
+        picker = ProfileSplash([("1", "avery", "Avery Morgan")], memory)
+        picker.keep_open_after_choice = True
+        picker.move(100, 100)
+        picker.show()
+        picker.choose("1")
+        window = QMainWindow()
+        window.setStyleSheet("background: #13765c")
+        window.move(50, 50)
+        window.resize(800, 550)
+        self.addCleanup(window.close)
+        self.addCleanup(picker.close)
+        overlay = ProfileIris(window, picker)
+        overlay.start()
+        QTest.qWait(100)
+        overlay.animation.pause()
+        overlay.animation.setCurrentTime(265)
+        self.assertIsNone(overlay.snapshot)
+        self.assertTrue(window.isVisible())
+        self.assertTrue(window.mask().contains((overlay.origin - overlay.workspace.topLeft()).toPoint()))
+        self.assertFalse(window.mask().contains(QPoint(2, 2)))
+        live_position = window.mapToGlobal(QPoint())
+        QTest.qWait(80)
+        if self.app.platformName() == "xcb":
+            frame = window.screen().grabWindow(0).toImage()
+            self.assertEqual(frame.pixelColor(overlay.mapToGlobal(overlay.origin.toPoint())).name(),
+                             "#13765c")
+        overlay.animation.resume()
+        QTest.qWait(750)
+        self.assertTrue(window.mask().isEmpty())
+        self.assertFalse(picker.isVisible())
+        self.assertEqual(window.mapToGlobal(QPoint()), live_position)
+
+    def test_chromatic_login_captures_before_attaching_native_overlay(self):
+        memory = MagicMock()
+        memory.value.side_effect = lambda key, default, **_: default
+        picker = ProfileSplash([("1", "avery", "Avery Morgan")], memory)
+        picker.keep_open_after_choice = True
+        picker.show()
+        picker.choose("1")
+        window = QMainWindow()
+        window._settings_manager = MagicMock()
+        window._settings_manager.get.return_value = "chromatic"
+        window.page_nukedash = MagicMock()
+        window.page_nukedash._awaiting_workspace = False
+        self.addCleanup(window.close)
+        self.addCleanup(self.app.setQuitOnLastWindowClosed, self.app.quitOnLastWindowClosed())
+        grab = window.grab
+
+        def grab_workspace():
+            self.assertIsNone(window.findChild(ProfileIris))
+            return grab()
+
+        with (patch.object(QApplication, "platformName", return_value="xcb"),
+              patch.object(window, "grab", side_effect=grab_workspace) as capture,
+              patch("main.motion_enabled", return_value=True)):
+            show_after_workspace_load(window, picker)
+        capture.assert_called_once()
+        overlay = window.findChild(ProfileIris)
+        self.assertEqual(len(overlay.chromatic_channels), 3)
+        self.assertTrue(all(not channel.isNull() for channel in overlay.chromatic_channels))
+        QTest.qWait(overlay.animation.duration() + 400)
+        self.assertTrue(window.isVisible())
+        self.assertTrue(window.mask().isEmpty())
+        self.assertIsNone(window._settings_manager.startup_picker)
 
     def test_ready_workspace_waits_for_click_and_switch_discards_it(self):
         from PyQt6.QtCore import QSettings

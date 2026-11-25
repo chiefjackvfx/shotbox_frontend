@@ -180,6 +180,7 @@ DEFAULT_SETTINGS = {
     # Startup behavior
     "startup_tab": 0,  # 0=Tasks, 1=Review, 2=XML Import, 3=Activity, 4=Settings, 5=Import Timeline
     "show_startup_loading_dialog": True,
+    "login_animation": "iris",
     "enable_assignment_board": False,
     "enable_review_page": False,
     "review_cache_mb": 1024,
@@ -820,6 +821,14 @@ class SettingsPage(QWidget):
         
         container_layout.addWidget(session_group)
 
+        login_group = self._create_group_box("Login")
+        login_layout = QFormLayout(login_group)
+        self.login_animation_combo = NoScrollComboBox()
+        self.login_animation_combo.addItem("Iris reveal", "iris")
+        self.login_animation_combo.addItem("Chromatic aberration iris", "chromatic")
+        self.login_animation_combo.addItem("No animation", "none")
+        login_layout.addRow("Boot animation:", self.login_animation_combo)
+
         # === Startup Section ===
         startup_group = self._create_group_box("Startup")
         startup_layout = QFormLayout(startup_group)
@@ -1009,7 +1018,7 @@ class SettingsPage(QWidget):
         self._settings_columns = []
         for groups in (
             (system_group, server_group, polling_group, preview_group, plugins_group, cache_group, self.updates_group),
-            (appearance_group, startup_group, session_group, notif_group, debug_group),
+            (appearance_group, login_group, startup_group, session_group, notif_group, debug_group),
         ):
             column = QWidget()
             column_layout = QVBoxLayout(column)
@@ -1284,6 +1293,8 @@ class SettingsPage(QWidget):
         self.show_hidden_jobs_check.setChecked(self._settings.get("show_hidden_jobs", False))
 
         # Startup
+        animation = self._settings.get("login_animation", "iris")
+        self.login_animation_combo.setCurrentIndex(max(0, self.login_animation_combo.findData(animation)))
         startup_tab = self._settings.get("startup_tab", 0)
         idx = self.startup_tab_combo.findData(startup_tab)
         if idx >= 0:
@@ -1616,6 +1627,7 @@ class SettingsPage(QWidget):
         self._set_pending_setting("remember_last_session", self.remember_session_check.isChecked(), save=False)
 
         # Startup
+        self._set_pending_setting("login_animation", self.login_animation_combo.currentData(), save=False)
         self._set_pending_setting("startup_tab", self.startup_tab_combo.currentData(), save=False)
         self._set_pending_setting("show_startup_loading_dialog", self.show_startup_loading_check.isChecked(), save=False)
         self._set_pending_setting("enable_assignment_board", self.enable_assignment_board_check.isChecked(), save=False)

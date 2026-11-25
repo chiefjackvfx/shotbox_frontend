@@ -27,10 +27,10 @@ if __name__ == "__main__":
         pass
 
 from PyQt6 import QtWidgets
-from PyQt6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QTimer, Qt, qInstallMessageHandler
+from PyQt6.QtCore import QProcess, QTimer, Qt, qInstallMessageHandler
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QTabWidget, QSizePolicy
 
-from artist_picker import motion_enabled
+from artist_picker import ProfileIris, motion_enabled
 from input_behaviour import install_input_wheel_guard
 
 import app_update
@@ -1222,35 +1222,25 @@ def show_after_workspace_load(window, picker):
     app = QtWidgets.QApplication.instance()
     app.setQuitOnLastWindowClosed(False)
 
-    def reveal():
-        dashboard.startup_ready.disconnect(reveal)
-        overlay = None
-        if motion_enabled(window) and picker.isVisible():
-            overlay = QtWidgets.QLabel(window)
-            overlay.setPixmap(picker.grab())
-            overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-            overlay.setAutoFillBackground(True)
-            overlay.setPalette(picker.palette())
-            effect = QtWidgets.QGraphicsOpacityEffect(overlay)
-            effect.setOpacity(1.0)
-            overlay.setGraphicsEffect(effect)
-            fade = QPropertyAnimation(effect, b"opacity", overlay)
-            fade.setDuration(220)
-            fade.setStartValue(1.0)
-            fade.setEndValue(0.0)
-            fade.setEasingCurve(QEasingCurve.Type.InOutSine)
-            fade.finished.connect(overlay.deleteLater)
-        window.show()
-        if overlay is not None:
-            overlay.setGeometry(window.rect())
-            overlay.raise_()
-            overlay.show()
-            fade.start()
-        picker.accept()
+    def finish_reveal():
+        window.windowHandle().setTransientParent(None)
         window._settings_manager.startup_picker = None
         app.setQuitOnLastWindowClosed(True)
         picker.deleteLater()
+
+    def reveal():
+        dashboard.startup_ready.disconnect(reveal)
+        # Associate the new native surface with the foreground login window.
+        window.winId()
+        window.windowHandle().setTransientParent(picker.windowHandle())
+        picker.accepted.connect(finish_reveal)
+        animation = window._settings_manager.get("login_animation", "iris")
+        if animation != "none" and motion_enabled(window) and picker.isVisible():
+            overlay = ProfileIris(window, picker, chromatic=animation == "chromatic")
+            overlay.start()
+        else:
+            window.show()
+            picker.accept()
 
     def cancel():
         dashboard._awaiting_workspace = False

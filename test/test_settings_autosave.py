@@ -54,6 +54,16 @@ class SettingsAutosaveTests(unittest.TestCase):
         self.page._load_current_values()
         self.assertTrue(self.page.show_hidden_jobs_check.isChecked())
 
+    def test_login_animation_defaults_to_iris_and_saves_all_choices(self):
+        combo = self.page.login_animation_combo
+        self.assertEqual(combo.currentData(), "iris")
+        for choice in ("chromatic", "none", "iris"):
+            combo.setCurrentIndex(combo.findData(choice))
+            self.page._flush_autosave()
+            self.assertEqual(self.read_saved("login_animation"), choice)
+            self.page._load_current_values()
+            self.assertEqual(combo.currentData(), choice)
+
     def test_theme_selection_is_saved_emitted_and_reloaded(self):
         changes = []
         self.page.settings_changed.connect(lambda key, value: changes.append((key, value)))
