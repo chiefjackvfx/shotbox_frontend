@@ -207,8 +207,39 @@ class LoginHandoffTests(unittest.TestCase):
         QTest.qWait(180)
         self.assertIsNone(window._settings_manager.startup_picker)
 
+    def test_windows_handoff_shows_independent_dashboard_for_each_animation(self):
+        for animation in ("iris", "chromatic", "none"):
+            with self.subTest(animation=animation):
+                memory = MagicMock()
+                memory.value.side_effect = lambda key, default, **_: default
+                picker = ProfileSplash([("1", "avery", "Avery Morgan")], memory)
+                picker.keep_open_after_choice = True
+                picker.show()
+                picker.choose("1")
+                window = QMainWindow()
+                self.addCleanup(window.close)
+                self.addCleanup(self.app.setQuitOnLastWindowClosed, self.app.quitOnLastWindowClosed())
+                window.page_nukedash = MagicMock()
+                window.page_nukedash._awaiting_workspace = False
+                window._settings_manager = MagicMock()
+                window._settings_manager.get.return_value = animation
+                with (patch.object(QApplication, "platformName", return_value="windows"),
+                      patch("main.motion_enabled", return_value=True)):
+                    show_after_workspace_load(window, picker)
+                    if animation != "none":
+                        overlay = picker.findChild(ProfileIris)
+                        self.assertFalse(overlay.snapshot.isNull())
+                        self.assertFalse(window.isVisible())
+                        overlay.animation.setCurrentTime(overlay.animation.duration())
+                    QTest.qWait(400)
+                self.assertTrue(window.isVisible())
+                self.assertTrue(window.mask().isEmpty())
+                self.assertIsNone(window.windowHandle().transientParent())
+                self.assertIsNone(window._settings_manager.startup_picker)
+                window.close()
+
     def test_native_iris_reveals_one_live_window_in_place(self):
-        if self.app.platformName() not in ("xcb", "windows"):
+        if self.app.platformName() != "xcb":
             self.skipTest("Requires native window shape support")
         memory = MagicMock()
         memory.value.side_effect = lambda key, default, **_: default
@@ -276,6 +307,33 @@ class LoginHandoffTests(unittest.TestCase):
         self.assertTrue(window.isVisible())
         self.assertTrue(window.mask().isEmpty())
         self.assertIsNone(window._settings_manager.startup_picker)
+
+    def test_closing_picker_during_roster_fetch_ignores_late_response(self):
+        from threading import Event
+        from artist_session import fetch_roster
+
+        directory = Path(self.enterContext(TemporaryDirectory()))
+        picker = ProfileSplash(None, QSettings(str(directory / "picker.ini"), QSettings.Format.IniFormat))
+        self.addCleanup(picker.close)
+        release = Event()
+        finished = Event()
+        completed = []
+
+        def get(*args, **kwargs):
+            release.wait(2)
+            finished.set()
+            return MagicMock()
+
+        with patch("artist_session.requests.get", side_effect=get):
+            fetch_roster("http://studio", picker, completed.append)
+            self.assertTrue(picker.isVisible())
+            self.assertFalse(finished.is_set())
+            picker.reject()
+            self.assertEqual(completed, [None])
+            release.set()
+            self.assertTrue(finished.wait(1))
+            QTest.qWait(60)
+            self.assertEqual(completed, [None])
 
     def test_ready_workspace_waits_for_click_and_switch_discards_it(self):
         from PyQt6.QtCore import QSettings
@@ -346,7 +404,14 @@ class LoginHandoffTests(unittest.TestCase):
             return select_for_startup(picker)
 
         self.enterContext(patch.object(ProfileSplash, "select_for_startup", choose))
-        window = start_artist_session(Window)
+        completed = []
+        start_artist_session(Window, completed.append)
+        for _ in range(300):
+            if completed:
+                break
+            QTest.qWait(20)
+        self.assertEqual(len(completed), 1)
+        window = completed[0]
         from PyQt6.QtCore import QEvent
         self.addCleanup(app.sendPostedEvents, None, QEvent.Type.DeferredDelete)
         self.addCleanup(window.deleteLater)

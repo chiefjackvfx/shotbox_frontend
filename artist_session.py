@@ -9,7 +9,7 @@ from time import monotonic
 
 import requests
 from PyQt6.QtCore import QEventLoop, QSettings, QTimer
-from PyQt6.QtWidgets import QInputDialog, QMessageBox
+from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 from artist_picker import ProfileSplash
 from nuke_lock_utils import local_machine_name
@@ -158,7 +158,7 @@ class ArtistSettings(SettingsManager):
         return True
 
 
-def fetch_roster(server, picker):
+def fetch_roster(server, picker, on_finished):
     result = Future()
 
     def fetch():
@@ -169,18 +169,27 @@ def fetch_roster(server, picker):
         except Exception as exc:
             result.set_exception(exc)
 
-    loop = QEventLoop()
-    poll = QTimer()
-    poll.timeout.connect(lambda: loop.quit() if result.done() else None)
-    picker.rejected.connect(loop.quit)
+    poll = QTimer(QApplication.instance())
+
+    def finish(completed):
+        poll.stop()
+        picker.rejected.disconnect(cancel)
+        poll.deleteLater()
+        on_finished(completed)
+
+    def cancel():
+        finish(None)
+
+    def check_result():
+        if result.done():
+            finish(result)
+
+    poll.timeout.connect(check_result)
+    picker.rejected.connect(cancel)
     picker.set_load_progress("Loading artist profiles…")
     picker.show()
     Thread(target=fetch, name="Shotbox artist roster", daemon=True).start()
     poll.start(20)
-    loop.exec()
-    poll.stop()
-    picker.rejected.disconnect(loop.quit)
-    return result.result() if picker.isVisible() else None
 
 
 def discard_staged_window(window):
@@ -223,7 +232,7 @@ def choose_while_loading(window, dialog):
     return selected_id
 
 
-def start_artist_session(window_factory):
+def start_artist_session(window_factory, on_finished):
     workstation = QSettings("Shotbox", "Desktop")
     workstation.beginGroup("workstations/" + local_machine_name())
     legacy_path = get_settings_file_path()
@@ -231,17 +240,22 @@ def start_artist_session(window_factory):
     initial_server = legacy.get("server_url") if legacy else DEFAULT_SETTINGS["server_url"]
     server = workstation.value("server", initial_server, type=str).rstrip("/")
     apply_theme(DEFAULT_THEME)
-    while True:
-        dialog = None
+
+    def begin():
+        memory = QSettings("Shotbox", "Desktop")
+        memory.beginGroup(workstation.group() + "/picker/" + sha256(server.encode()).hexdigest())
+        dialog = ProfileSplash(None, memory)
+        dialog.keep_open_after_choice = True
+        fetch_roster(server, dialog, lambda result: open_workspace(dialog, memory, result))
+
+    def open_workspace(dialog, memory, result):
+        nonlocal server
+        if result is None:
+            on_finished(None)
+            return
         window = None
         try:
-            memory = QSettings("Shotbox", "Desktop")
-            memory.beginGroup(workstation.group() + "/picker/" + sha256(server.encode()).hexdigest())
-            dialog = ProfileSplash(None, memory)
-            dialog.keep_open_after_choice = True
-            entries = fetch_roster(server, dialog)
-            if entries is None:
-                return None
+            entries = result.result()
             artists = {str(item["id"]): item for item in entries}
             if not artists:
                 raise ValueError("This server has no active VFX artists.")
@@ -278,7 +292,8 @@ def start_artist_session(window_factory):
                 discard_staged_window(window)
                 window = None
             if selected_id is None:
-                return None
+                on_finished(None)
+                return
             if window is None:
                 dialog.retry_button.hide()
                 window = build(selected_id)
@@ -286,12 +301,11 @@ def start_artist_session(window_factory):
             window.activate_staged_session()
             memory.setValue("last_artist", selected_id)
             workstation.setValue("server", server)
-            return window
         except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
             if window is not None:
                 discard_staged_window(window)
-            if dialog is not None:
-                dialog.close()
+            dialog.close()
+            dialog.deleteLater()
             box = QMessageBox()
             box.setWindowTitle("Shotbox · Artist profiles")
             box.setText(f"Could not open artist profiles on {server}.")
@@ -305,4 +319,10 @@ def start_artist_session(window_factory):
                 if ok and value.strip():
                     server = value.strip().rstrip("/")
             elif box.clickedButton() is not retry:
-                return None
+                on_finished(None)
+                return
+            QTimer.singleShot(0, begin)
+            return
+        on_finished(window)
+
+    begin()

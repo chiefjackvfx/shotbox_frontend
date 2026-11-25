@@ -1222,17 +1222,22 @@ def show_after_workspace_load(window, picker):
     app = QtWidgets.QApplication.instance()
     app.setQuitOnLastWindowClosed(False)
 
+    link_picker = app.platformName() == "xcb"
+
     def finish_reveal():
-        window.windowHandle().setTransientParent(None)
+        if link_picker:
+            window.windowHandle().setTransientParent(None)
         window._settings_manager.startup_picker = None
         app.setQuitOnLastWindowClosed(True)
         picker.deleteLater()
 
     def reveal():
         dashboard.startup_ready.disconnect(reveal)
-        # Associate the new native surface with the foreground login window.
-        window.winId()
-        window.windowHandle().setTransientParent(picker.windowHandle())
+        # X11 uses this focus link. On Windows the dashboard should never
+        # become an owned native window of the short-lived picker.
+        if link_picker:
+            window.winId()
+            window.windowHandle().setTransientParent(picker.windowHandle())
         picker.accepted.connect(finish_reveal)
         animation = window._settings_manager.get("login_animation", "iris")
         if animation != "none" and motion_enabled(window) and picker.isVisible():
@@ -1274,8 +1279,14 @@ if __name__ == '__main__':
     from artist_session import start_artist_session
     app = QtWidgets.QApplication(sys.argv)
     install_input_wheel_guard(app)
-    main_window = start_artist_session(MainWindow)
-    if main_window is None:
-        sys.exit(0)
-    show_after_workspace_load(main_window, get_settings_manager().startup_picker)
+    app.setQuitOnLastWindowClosed(False)
+
+    def session_ready(window):
+        if window is None:
+            app.quit()
+            return
+        app.main_window = window
+        show_after_workspace_load(window, window._settings_manager.startup_picker)
+
+    QTimer.singleShot(0, lambda: start_artist_session(MainWindow, session_ready))
     sys.exit(app.exec())

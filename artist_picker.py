@@ -130,7 +130,9 @@ class ProfileIris(QWidget):
     def __init__(self, window, picker, *, chromatic=False):
         flags = (Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                  | Qt.WindowType.WindowTransparentForInput | Qt.WindowType.WindowDoesNotAcceptFocus)
-        live_mask = QApplication.platformName() in ("xcb", "windows")
+        # Keep the Win32 dashboard unmodified during login. Paint the iris in
+        # the frameless overlay and show the dashboard once the reveal ends.
+        live_mask = QApplication.platformName() == "xcb"
         # grab() paints child widgets synchronously. Capture before attaching
         # the iris so it cannot paint itself halfway through construction.
         source = window.grab() if chromatic or not live_mask else None
