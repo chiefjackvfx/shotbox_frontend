@@ -10,7 +10,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
-- [2026-11-25 01:58:40 PM +00:00] Open selected Windows workspace while shots load in background.
+## 6.1.2 - 2026-11-25
+
+### Fixed
+
+- win
 
 ## 6.1.1 - 2026-11-25
 
