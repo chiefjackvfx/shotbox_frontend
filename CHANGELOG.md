@@ -10,7 +10,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
-- [2026-11-25 02:09:20 PM +00:00] Render Windows login effects inside picker and defer video players.
+## 6.1.3 - 2026-11-25
+
+### Fixed
+
+- win
 
 ## 6.1.2 - 2026-11-25
 
