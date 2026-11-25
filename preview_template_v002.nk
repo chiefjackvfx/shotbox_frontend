@@ -114,7 +114,13 @@ Read {
  ypos 28
 }
 Reformat {
- format "1920 1080 0 0 1920 1080 1 HD_1080"
+ type "to box"
+ box_width {{max(2,2*ceil(540.0*input.width*input.pixel_aspect/input.height-0.0001))}}
+ box_height 1080
+ box_fixed true
+ box_pixel_aspect 1
+ resize height
+ black_outside true
  name Reformat2
  xpos 303
  ypos 185

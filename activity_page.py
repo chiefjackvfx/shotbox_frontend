@@ -256,12 +256,14 @@ class ActivityPage(QWidget):
         self._request_seq = 0
         self._latest_request_id = 0
 
+        self._shutting_down = False
         self._activity_worker = ActivityWorker()
         self._activity_thread = QThread(self)
         self._activity_worker.moveToThread(self._activity_thread)
         self.request_fetch.connect(self._activity_worker.fetch)
         self._activity_worker.data_ready.connect(self._on_activity_data)
         self._activity_worker.error.connect(self._on_activity_error)
+        self._activity_thread.finished.connect(self._activity_worker.deleteLater)
         self._activity_thread.start()
         
         self._setup_ui()
@@ -347,6 +349,8 @@ class ActivityPage(QWidget):
         self._trigger_activity_fetch(params)
 
     def _trigger_activity_fetch(self, params: Dict[str, Any]) -> None:
+        if self._shutting_down:
+            return
         if self._activity_fetch_in_progress:
             self._pending_activity_params = params
             return
@@ -515,11 +519,20 @@ class ActivityPage(QWidget):
         if self._debug_notifications:
             print(message)
 
+    def shutdown(self):
+        self._shutting_down = True
+        self._refresh_timer.stop()
+        self._pending_activity_params = None
+        self._latest_request_id = -1
+        self._activity_thread.quit()
+        return self._activity_thread.wait(1000)
+
     def closeEvent(self, event):
-        if hasattr(self, "_activity_thread"):
-            self._activity_thread.quit()
-            self._activity_thread.wait(1000)
-        super().closeEvent(event)
+        if self.shutdown():
+            super().closeEvent(event)
+        else:
+            event.ignore()
+            QTimer.singleShot(100, self.close)
 
 
 class ActivityWorker(QObject):

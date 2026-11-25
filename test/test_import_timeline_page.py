@@ -92,6 +92,39 @@ def test_folder_drop_across_panel_starts_scan_and_xml_parsing(page, tmp_path, ap
     assert page.document.path == str(tmp_path / 'edit.xml')
 
 
+@pytest.mark.parametrize(('project_name', 'subfolder', 'drop_xml'), [
+    ('C2303_Half_Spoon', 'Exports/XML/2026-11-23', True),
+    ('C2292_Meanwhile_Reel', 'DaVinci/To VFX/Even_Tighter_Version_03', False),
+    ('C2300_Parent/c2301_Project', 'C23012_Export/XML', False),
+])
+def test_import_source_sets_nearest_project_destination(page, tmp_path, app, project_name, subfolder, drop_xml):
+    project = tmp_path / project_name
+    folder = project / subfolder
+    folder.mkdir(parents=True)
+    xml = folder / 'edit.xml'
+    xml.write_text(xml_text())
+    source = xml if drop_xml else folder
+    assert drop_urls(page, [QUrl.fromLocalFile(str(source))]) == (True, True)
+    wait_read(page, app)
+    assert page.document.path == str(xml)
+    assert page.parser.project_root == str(project)
+    assert page.lableRoot.text() == f'Project: {project}'
+
+    manual = str(tmp_path / 'manual')
+    with mock.patch.object(import_xml_v2.QFileDialog, 'getExistingDirectory', return_value=manual):
+        page.btnSelecRoot.click()
+    assert page.parser.project_root == manual
+    assert page.lableRoot.text() == f'Project: {manual}'
+
+    unmatched = tmp_path / 'C12345_Export'
+    unmatched.mkdir()
+    (unmatched / 'edit.xml').write_text(xml_text())
+    assert drop_urls(page, [QUrl.fromLocalFile(str(unmatched))]) == (True, True)
+    wait_read(page, app)
+    assert page.parser.project_root == ''
+    assert page.lableRoot.text() == 'Project: (click Change Project Path)'
+
+
 def test_unique_xml_is_default_and_only_selected_timeline_is_parsed(page, tmp_path, app):
     (tmp_path / 'zzz.xml').write_text(xml_text())
     write_otio(tmp_path / 'aaa.otio')

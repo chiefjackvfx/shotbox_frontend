@@ -815,6 +815,7 @@ class NukeDashRegressionTests(unittest.TestCase):
             self.assertEqual([task["shot"]["id"] for task in tasks], [1, 1, 2])
             self.assertEqual([task["media"]["source"] for task in tasks], [str(source), str(secondary), str(source)])
             self.assertTrue(all(task["media"]["mode"] == "overwrite" for task in tasks))
+            self.assertTrue(all(task["media"]["use_project_range"] for task in tasks))
             self.assertEqual(controller.start_batch.call_args.kwargs, {"skipped": 1})
             choice.assert_called_once_with(page, 3, 1, timeline_name='One', include_destination=True)
             alias = {**first, "id": 99}
@@ -829,6 +830,7 @@ class NukeDashRegressionTests(unittest.TestCase):
             self.assertEqual(single[0]["media"]["mode"], "new")
             self.assertEqual(single[0]["media"]["plate"], "plate_02")
             self.assertEqual(single[0]["media"]["source"], str(secondary))
+            self.assertFalse(single[0]["media"].get("use_project_range", False))
             select_shots.side_effect = lambda parent, tasks, **kwargs: [t for t in tasks if t['shot']['id'] == 2]
             with mock.patch.object(page, "_ensure_denoise_controller", return_value=controller), \
                     mock.patch("denoise_controller.choose_output_mode", return_value='overwrite') as selected_choice:

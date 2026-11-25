@@ -452,20 +452,19 @@ mapping enforcement is deferred at the user's request.
 Denoising now uses the same saved source timing as OG previews. When a versioned
 Nuke script exists in the shot's `scripts` folder, its selected source Read and
 direct Retime/TimeWarp mapping are copied into the working denoise template.
-The locked Viewer range supplies the cut; without one, the saved root range is
-used. Ambiguous matches fail rather than selecting another plate. The artist's
-script is read only and is never saved by this process.
+Timeline batch denoise uses the saved Nuke project range for local and Deadline
+jobs. Single-clip denoise uses the locked Viewer range when available and the
+saved project range otherwise. The source Read and retime must match uniquely.
+The process reads the artist's script without saving it.
 
-The mapping is applied before the existing resize and Neat stages. Only cut
-frames are written; EXRs retain the saved shot frame numbers, including a cut
-starting after 1001, so they align with the comp. Timed cuts use the shot FPS
-rather than overriding it with camera metadata. The full reader range remains
+The mapping is applied before the existing resize and Neat stages. EXRs retain
+the saved shot frame numbers and use the shot FPS. The full reader range remains
 available for Neat's temporal samples. Untimed sources without a saved script
-retain the full-source workflow. Existing outputs need regeneration.
+retain the full-source workflow. Rerun previously shortened sequences to fill
+the full project range.
 
-Local, batch, and Deadline preparation share this behavior. Native Nuke 17.0v1
-checks in `test/denoise_timing_acceptance.py` verify every pre-denoise source
-sample at 1x, 0.5x, and 2x, fractional anchors, preserved cut numbering, unchanged
-source scripts, and saved/reopened prepared scenes. Automated checks cover
-request handoff and edit-FPS precedence. This timing verification does not rerun
-Neat's interactive profiling or submit farm jobs.
+The native checks in `test/denoise_timing_acceptance.py` verify source samples
+at 1x, 0.5x, and 2x, fractional anchors, frame numbering, saved script integrity,
+and the state of reopened prepared scenes. The batch check renders the expected
+EXR sequence with Neat bypassed. Automated checks cover request handoff and
+edit-FPS precedence.

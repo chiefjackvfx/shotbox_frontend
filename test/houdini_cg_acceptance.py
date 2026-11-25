@@ -83,8 +83,8 @@ for root in obj.children():
               if len(keys) > 1 for key in keys]
     if frames:
         ranges.append([min(frames), max(frames)])
-report = dict(fps=hou.fps(), frame_range=hou.playbar.frameRange(),
-              playback_range=hou.playbar.playbackRange(), job=hou.getenv('JOB'),
+report = dict(fps=hou.fps(), frame_range=tuple(hou.playbar.frameRange()),
+              playback_range=tuple(hou.playbar.playbackRange()), job=hou.getenv('JOB'),
               cameras=len(cameras), animation_ranges=ranges, ui=hou.isUIAvailable(),
               houdini_path=hou.houdiniPath())
 with open(sys.argv[2], 'w') as stream:

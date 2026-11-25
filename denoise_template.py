@@ -130,6 +130,7 @@ def create_template_request(directory, media, executable):
                "template": str(template), "source": source, "colourspace": media.get("colourspace"),
                "fps": media.get("fps") or 25,
                "timing_script": preview_timing_script(media["shot_dir"], "original_clip"),
+               "use_project_range": media.get("use_project_range", False),
                "output_pattern": (output / (output.name + "_####.exr")).as_posix(),
                # Windows manual profiling succeeds in the full NukeX GUI;
                # use its normal visible startup. Keep Linux's
@@ -195,7 +196,8 @@ def prepare(nuke, request):
     timing = None
     if request.get("timing_script"):
         nuke.scriptClear(ignoreUnsavedChanges=True)
-        timing = _load_preview_timing(nuke, request["timing_script"], request["source"])
+        timing = _load_preview_timing(nuke, request["timing_script"], request["source"],
+                                      use_project_range=request.get("use_project_range", False))
         nuke.scriptOpen(request["script"])
     nodes = {}
     for name, cls in (("Read1", "Read"), ("Reformat1", "Reformat"), ("Write1", "Write")):

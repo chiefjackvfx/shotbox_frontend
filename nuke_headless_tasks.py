@@ -40,10 +40,13 @@ import shutil
 import glob
 import platform
 import re
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Callable, Tuple, List
+
+import app_cache
 
 
 # =============================================================================
@@ -591,9 +594,51 @@ def preview_timing_script(shot_dir, plate_name):
     return str(max(candidates, key=lambda item: (item[0], item[1].name))[1]) if candidates else None
 
 
-def _load_preview_timing(nuke, script_path, input_path):
-    """Snapshot only the selected Read's timing and its direct retime node."""
+def _resolve_arriraw_timing_paths(script, script_dir):
+    """Nuke needs the absolute MXF path before loading the saved ARRI menus."""
+    def resolve_read(match):
+        block = match[0]
+        if not re.search(r"^ arri_\w+ ", block, re.MULTILINE):
+            return block
+        file_knob = re.search(
+            r'^ file (?:"([^"\n]+)"|([^\s"]+))[ \t]*$', block, re.MULTILINE,
+        )
+        if file_knob is None:
+            return block
+        path = Path(_normalize_nuke_path(file_knob[1] or file_knob[2]))
+        if path.is_absolute() or path.suffix.lower() != ".mxf":
+            return block
+        absolute_path = script_dir / path
+        if not absolute_path.is_file():
+            return block
+        filename = _normalize_nuke_path(absolute_path.resolve())
+        filename = re.sub(r'([\\\[\]$"])', r'\\\1', filename)
+        return block[:file_knob.start()] + f' file "{filename}"' + block[file_knob.end():]
+
+    return re.sub(r"^Read \{\n.*?^\}", resolve_read, script, flags=re.MULTILINE | re.DOTALL)
+
+
+@app_cache.temporary_cache_task
+def _open_preview_timing_script(nuke, script_path):
+    script_path = Path(script_path).absolute()
+    if script_path.is_file():
+        original = script_path.read_text(encoding="utf-8", errors="surrogateescape")
+        resolved = _resolve_arriraw_timing_paths(original, script_path.parent)
+        if resolved != original:
+            with app_cache.temporary_cache_lease(), tempfile.TemporaryDirectory(
+                prefix="preview-timing-", dir=app_cache.cache_directory("temp"),
+            ) as directory:
+                copy = Path(directory) / script_path.name
+                copy.write_text(resolved, encoding="utf-8", errors="surrogateescape")
+                nuke.scriptOpen(_normalize_nuke_path(copy))
+                nuke.root()["name"].setValue(_normalize_nuke_path(script_path))
+            return
     nuke.scriptOpen(_normalize_nuke_path(script_path))
+
+
+def _load_preview_timing(nuke, script_path, input_path, *, use_project_range=False):
+    """Snapshot the selected Read, its direct retime, and the requested range."""
+    _open_preview_timing_script(nuke, script_path)
 
     def normalized_path(path):
         return re.sub(r"%0?(\d*)d", lambda match: "#" * int(match[1] or 1),
@@ -621,8 +666,10 @@ def _load_preview_timing(nuke, script_path, input_path):
                if node.Class() in ("Retime", "TimeWarp") and node.input(0) is read]
     if len(retimes) != 1:
         raise ValueError("OG plate needs one direct Retime or TimeWarp in " + script_path)
-    ranges = {str(node["frame_range"].value()) for node in nuke.allNodes("Viewer")
-              if node["frame_range_lock"].value()}
+    ranges = set()
+    if not use_project_range:
+        ranges = {str(node["frame_range"].value()) for node in nuke.allNodes("Viewer")
+                  if node["frame_range_lock"].value()}
     if len(ranges) > 1:
         raise ValueError("Conflicting saved Viewer cut ranges in " + script_path)
     if ranges:
@@ -633,7 +680,7 @@ def _load_preview_timing(nuke, script_path, input_path):
     else:
         first, last = int(nuke.root()["first_frame"].value()), int(nuke.root()["last_frame"].value())
     if last < first:
-        raise ValueError("Invalid OG preview cut range")
+        raise ValueError("Invalid saved Nuke frame range in " + script_path)
     result = dict(first=first, last=last, node_class=retimes[0].Class(),
                   knobs=retimes[0].writeKnobs(nuke.TO_SCRIPT),
                   read_knobs={key: read[key].toScript() for key in ("frame_mode", "frame")
@@ -707,7 +754,7 @@ class _PreviewTemplateEditor:
                 node.setSelected(False)
             mapping = self.nuke.createNode(timing["node_class"], timing["knobs"], inpanel=False)
             mapping.setInput(0, read)
-            # Keep the template's HD resize between the source mapping and slate.
+            # Keep the template's 1080px-height resize between the source mapping and slate.
             # Connecting the retime directly to this node bypasses Reformat2 and
             # sends camera resolution to H.264 (which can exceed its level).
             resize = self._required_node("Reformat2")

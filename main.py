@@ -28,8 +28,9 @@ if __name__ == "__main__":
 
 from PyQt6 import QtWidgets
 from PyQt6.QtCore import QProcess, QTimer, Qt, qInstallMessageHandler
-from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QTabWidget, QSizePolicy
+
+from input_behaviour import install_input_wheel_guard
 
 import app_update
 from app_version import APP_VERSION
@@ -38,7 +39,6 @@ from workday_countdown import WorkdayCountdown
 from special_events import SpecialEventController
 import http_help
 import filesIO
-from input_behaviour import install_input_wheel_guard
 from duration_updater import DurationUpdaterPage
 from settings import SettingsPage, get_settings_manager
 from toolbox_page import ToolboxPage
@@ -104,7 +104,6 @@ def _show_automatic_update_dialog(parent, status: app_update.UpdateStatus) -> st
 # Get the directory where this script is located (for cross-platform path handling)
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 UI_DIR = os.path.join(SCRIPT_DIR, "ui")
-APP_ICON_PATH = os.path.join(UI_DIR, "shotbox_logo.png")
 
 # Debug flags - can be toggled from settings
 DEBUG_GENERAL = False
@@ -169,16 +168,23 @@ class MainWindow(QMainWindow):
         
         # Apply settings to modules before creating pages
         self._apply_initial_settings()
-        self._special_event.check()
-        http_help.DjangoAPI.set_current_user_by_id(
-            self._settings_manager.get("django_username")
-        )
+        staging = getattr(self._settings_manager, "staging", False)
+        if not staging:
+            self._special_event.check()
+        if hasattr(self._settings_manager, "artist"):
+            http_help.DjangoAPI.set_current_username(self._settings_manager.artist["username"])
+        else:
+            http_help.DjangoAPI.set_current_user_by_id(self._settings_manager.get("django_username"))
 
         # Notifications
         self._notification_system = NotificationSystem()
         self._apply_notification_settings()
 
         self.setWindowTitle('ShotBox')
+        picker = getattr(self._settings_manager, "startup_picker", None)
+        if picker:
+            picker.set_load_progress("Building shot dashboard…")
+            picker.repaint()
         self.page_nukedash = page_nukedash()
         
         # Create the importer page
@@ -208,6 +214,9 @@ class MainWindow(QMainWindow):
             if hasattr(self.page_review, "set_settings_manager"):
                 self.page_review.set_settings_manager(self._settings_manager)
             self.tabs.addTab(self.page_review, 'Review')
+        if picker:
+            picker.set_load_progress("Loading workspace tabs…")
+            picker.repaint()
         from timeline_review_page import TimelineReviewPage
 
         self.page_timeline_review = TimelineReviewPage()
@@ -304,9 +313,18 @@ class MainWindow(QMainWindow):
         self._automatic_update_check_finished = False
         self._automatic_update_process = None
         self._automatic_update_initial_status = None
-        self._start_automatic_nuke_time()
         self._special_event.bind_settings_page(self.page_settings)
+        if not staging:
+            self._start_automatic_nuke_time()
+            self._special_event.start()
+
+    def activate_staged_session(self):
+        self._special_event.check()
         self._special_event.start()
+        if not self.page_nukedash._awaiting_workspace:
+            self.page_nukedash.set_auto_refresh_paused(False, reason="workspace_startup")
+        self.page_nukedash._start_lock_maintenance_timers()
+        self._start_automatic_nuke_time()
 
     def _start_automatic_nuke_time(self):
         from nuke_time_setup_controller import AutomaticNukeTimeSetup
@@ -1101,7 +1119,8 @@ class MainWindow(QMainWindow):
             self._shown_once = True
             QTimer.singleShot(250, self._start_automatic_update_check)
             # Show the loading dialog centered on the main window after it's visible
-            show_loading = self._settings_manager.get("show_startup_loading_dialog", True)
+            show_loading = (not hasattr(self._settings_manager, "artist")
+                            and self._settings_manager.get("show_startup_loading_dialog", True))
             if show_loading and hasattr(self.page_nukedash, '_initial_load') and self.page_nukedash._initial_load:
                 # Use immediate timer for first show
                 QTimer.singleShot(10, self._show_initial_loading)
@@ -1147,6 +1166,12 @@ class MainWindow(QMainWindow):
                 "Finish or cancel Matte's active work before closing Shotbox.")
             event.ignore()
             return
+        activity = getattr(self, "page_activity", None)
+        if activity is not None and hasattr(activity, "shutdown") and not activity.shutdown():
+            event.ignore()
+            if not getattr(self._settings_manager, "staging", False):
+                QTimer.singleShot(100, self.close)
+            return
         if toolbox is not None:
             toolbox.close_tools()
         self.page_timeline_review.shutdown()
@@ -1167,7 +1192,10 @@ class MainWindow(QMainWindow):
                 pass  # Silent fail on shutdown
         
         # Save window geometry before closing
-        if self._settings_manager.get("remember_window_size", True):
+        if hasattr(self._settings_manager, "artist"):
+            if not self._settings_manager.save():
+                QMessageBox.warning(self, "Artist settings were not saved", self._settings_manager.save_error)
+        elif self._settings_manager.get("remember_window_size", True):
             self._settings_manager.save()
         
         # Stop the API worker thread
@@ -1187,10 +1215,53 @@ class MainWindow(QMainWindow):
         
         super().closeEvent(event)
 
+def show_after_workspace_load(window, picker):
+    """Keep the login window in front until the real dashboard finishes loading."""
+    dashboard = window.page_nukedash
+    app = QtWidgets.QApplication.instance()
+    app.setQuitOnLastWindowClosed(False)
+
+    def reveal():
+        window.show()
+        picker.accept()
+        window._settings_manager.startup_picker = None
+        app.setQuitOnLastWindowClosed(True)
+        picker.deleteLater()
+
+    def cancel():
+        dashboard._awaiting_workspace = False
+        # A worker may still be finishing a request when the picker closes.
+        if window.close():
+            app.quit()
+        else:
+            QTimer.singleShot(250, cancel)
+
+    def failed(message):
+        picker.set_load_progress("Could not load shots", 0, 1)
+        picker.progress.setToolTip(message)
+        picker.retry_button.show()
+
+    def retry():
+        picker.retry_button.hide()
+        picker.set_load_progress("Fetching shots…")
+        dashboard._request_api_refresh()
+
+    dashboard.startup_progress.connect(picker.set_load_progress)
+    dashboard.startup_ready.connect(reveal)
+    dashboard.startup_failed.connect(failed)
+    picker.retry_button.clicked.connect(retry)
+    picker.rejected.connect(cancel)
+    picker.set_load_progress("Loading shots…")
+    if not dashboard._awaiting_workspace:
+        reveal()
+
+
 if __name__ == '__main__':
+    from artist_session import start_artist_session
     app = QtWidgets.QApplication(sys.argv)
-    if os.path.exists(APP_ICON_PATH):
-        app.setWindowIcon(QIcon(APP_ICON_PATH))
-    main_window = MainWindow()
-    main_window.show()
+    install_input_wheel_guard(app)
+    main_window = start_artist_session(MainWindow)
+    if main_window is None:
+        sys.exit(0)
+    show_after_workspace_load(main_window, get_settings_manager().startup_picker)
     sys.exit(app.exec())

@@ -49,7 +49,9 @@ def validate_new_destination(destination: Path) -> None:
 def resolve_houdini(configured: str = "") -> tuple[Path, Path]:
     """Resolve Houdini and hython from one installation; explicit settings win."""
     executable = "houdini.exe" if os.name == "nt" else "houdini"
+    worker_executable = "hython.exe" if os.name == "nt" else "hython"
     candidates = [configured] if configured.strip() else []
+    configured_problem = ""
     if not candidates:
         if os.environ.get("HFS"):
             candidates.append(str(Path(os.environ["HFS"]) / "bin" / executable))
@@ -58,11 +60,18 @@ def resolve_houdini(configured: str = "") -> tuple[Path, Path]:
         expanded = os.path.expandvars(os.path.expanduser(value.strip()))
         found = shutil.which(expanded)
         if not found:
+            configured_problem = f"Could not run the configured Houdini executable:\n{expanded}"
             continue
         houdini = Path(found).resolve()
-        hython = houdini.with_name("hython.exe" if os.name == "nt" else "hython")
+        hython = houdini.with_name(worker_executable)
         if hython.is_file() and os.access(hython, os.X_OK):
             return houdini, hython
+        configured_problem = f"Could not run the matching hython executable:\n{hython}"
+    if configured.strip():
+        raise FileNotFoundError(
+            f"{configured_problem}\n\nUpdate Houdini Executable in Settings "
+            "to point to an installed Houdini with its matching hython."
+        )
     raise FileNotFoundError(
         "Could not locate Houdini and its matching hython. "
         "Set Houdini Executable in Settings, set HFS, or add Houdini to PATH."

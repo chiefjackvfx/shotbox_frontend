@@ -98,6 +98,10 @@ class TemplateTests(unittest.TestCase):
         directory.mkdir()
         request = json.loads(template.create_template_request(directory, self.media, "/nuke").read_text())
         self.assertEqual(request["timing_script"], str(script))
+        self.assertFalse(request["use_project_range"])
+        batch_media = {**self.media, "use_project_range": True}
+        request = json.loads(template.create_template_request(directory, batch_media, "/nuke").read_text())
+        self.assertTrue(request["use_project_range"])
 
     def test_windows_requests_full_gui_while_linux_keeps_qt_terminal(self):
         for platform, qt_terminal in (("win32", False), ("linux", True)):

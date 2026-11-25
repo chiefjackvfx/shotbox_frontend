@@ -154,12 +154,17 @@ def test_resolve_same_installation_and_do_not_ignore_invalid_explicit_setting(tm
         executable.chmod(0o755)
     monkeypatch.setenv("HFS", str(bin_dir.parent))
     assert helpers.resolve_houdini() == (houdini, hython)
-    with pytest.raises(FileNotFoundError):
-        helpers.resolve_houdini(str(tmp_path / "missing"))
+    missing = tmp_path / "missing"
+    with pytest.raises(FileNotFoundError) as error:
+        helpers.resolve_houdini(str(missing))
+    assert str(missing) in str(error.value)
+    assert "configured Houdini executable" in str(error.value)
     hython.unlink()
     monkeypatch.setenv("PATH", "")
-    with pytest.raises(FileNotFoundError):
+    with pytest.raises(FileNotFoundError) as error:
         helpers.resolve_houdini(str(houdini))
+    assert str(hython) in str(error.value)
+    assert "matching hython executable" in str(error.value)
 
 
 def test_worker_environment_excludes_personal_startup_and_uses_versioned_prefs(tmp_path, monkeypatch):

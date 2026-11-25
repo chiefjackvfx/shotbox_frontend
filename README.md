@@ -7,6 +7,25 @@ beside the version number, for example `2h 30m left today`. It refreshes while
 ShotBox runs and when returning to the app, shows zero after 6 PM, and resets
 for the next day.
 
+## Artist profiles
+
+Start the updated backend before launching the desktop client. The picker lists active
+Django users in the VFX group. Shotbox prepares the last artist’s workspace while you choose a profile. On first
+use it prepares the first available artist. Click to enter. Choosing a different
+artist loads their workspace in the picker. Settings shows the active artist. Relaunch Shotbox to switch artists.
+
+The backend stores preferences in `profiles/<artist-id>.yaml` under the backend
+installation. Set `SHOTBOX_PROFILE_ROOT` to a persistent writable directory to
+override this location. Include it in server backups. The picker uses the trusted
+desktop API and identifies the session by selection. Deploy it within the studio's
+trusted network. A newer save from another session causes a revision conflict.
+Reopen Shotbox to load that revision before editing again.
+
+The first session can import preferences from the existing OS-login settings YAML
+when its server and linked artist ID match. Workstation tool paths, mounts, OCIO
+file path, and server address stay local. Server address changes in Settings take
+effect on the next launch.
+
 ## Online reference edits
 
 Import Timeline accepts an optional online reference movie by dropping it onto
@@ -180,7 +199,8 @@ test commands, and the limits of this comparison.
 
 ## Houdini job and shot assets
 
-In NukeDash, open the **Job Assets** menu (left-click or right-click) and choose
+In NukeDash, click **Job Assets** to open the folder in your file explorer.
+To create an asset, right-click **Job Assets** and choose
 **Create CG Asset**. Enter a new asset name, select camera exports, then use
 **Inspect Cameras** to import them in background Houdini and calculate duration.
 ShotBox discovers `*_hou.py` exports from job, timeline and shot matchmove export

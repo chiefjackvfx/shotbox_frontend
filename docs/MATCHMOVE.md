@@ -1,7 +1,7 @@
 # Matchmove assets
 
-Job Assets → Matchmove offers Create New 3DE Project. Both click and
-right-click open the assets menu. Creation offers valid EXR precomp sequences
+Right-click **Job Assets** and choose **Matchmove → Create New 3DE Project**.
+Creation offers valid EXR precomp sequences
 from every timeline in the job, labelled by timeline and shot. The project name
 defaults to the job title.
 

@@ -78,21 +78,8 @@ SINGLE_SHOT_VIDEO_EXTENSIONS = {
     ".mov", ".mp4", ".mxf", ".avi", ".mkv", ".r3d", ".braw", ".arx", ".exr"
 }
 SINGLE_SHOT_VIDEO_FILTER = "Media Files (*.mov *.mp4 *.mxf *.avi *.mkv *.r3d *.braw *.arx *.exr);;All Files (*)"
-PROJECTS_UNC_PREFIX = "//192.168.10.20/projects/PROJECTS/"
-PROJECTS_DRIVE_PREFIX = "Z:/PROJECTS/"
-
-
-def remap_projects_unc_path(path: str) -> str:
-    """Return the canonical drive path for the projects UNC share."""
-    if not path:
-        return path
-
-    normalized_path = path.replace("\\", "/")
-    if normalized_path.casefold().startswith(PROJECTS_UNC_PREFIX.casefold()):
-        suffix = normalized_path[len(PROJECTS_UNC_PREFIX):]
-        return PROJECTS_DRIVE_PREFIX + suffix
-
-    return path
+PROJECTS_UNC_PREFIX = path_mapping.PROJECTS_UNC_ROOT + "/"
+remap_projects_unc_path = path_mapping.remap_projects_unc_path
 
 
 # =============================================================================

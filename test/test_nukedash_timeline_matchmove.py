@@ -511,18 +511,22 @@ class TimelineMatchmoveTests(unittest.TestCase):
             message_text = information.call_args.args[2]
             self.assertIn("saving matchmove_path to ShotBox failed", message_text)
 
-    def test_assets_buttons_wire_right_click_to_context_menus(self):
+    def test_assets_buttons_wire_job_click_and_context_menus(self):
         from PyQt6.QtCore import Qt
-        with mock.patch.object(TimelineMatchmoveHarness, "_show_job_assets_matchmove_menu") as job_menu, \
+        with mock.patch.object(TimelineMatchmoveHarness, "_on_open_job_assets_clicked") as open_job_assets, \
+                mock.patch.object(TimelineMatchmoveHarness, "_show_job_assets_matchmove_menu") as job_menu, \
                 mock.patch.object(TimelineMatchmoveHarness, "_show_timeline_assets_matchmove_menu") as timeline_menu:
             harness = TimelineMatchmoveHarness(self._make_job_data([]))
+            self.assertIsNone(harness.btn_open_job_assets.menu())
+            harness.btn_open_job_assets.click()
+            open_job_assets.assert_called_once()
+            job_menu.assert_not_called()
             for button, callback in ((harness.btn_open_job_assets, job_menu),
                                      (harness.btn_open_timeline_assets, timeline_menu)):
                 self.assertEqual(button.contextMenuPolicy(), Qt.ContextMenuPolicy.CustomContextMenu)
                 button.customContextMenuRequested.emit(QPoint(2, 3))
                 callback.assert_called_once_with(button.mapToGlobal(QPoint(2, 3)))
-            self.assertEqual(harness.btn_open_job_assets.popupMode(),
-                             QToolButton.ToolButtonPopupMode.InstantPopup)
+            open_job_assets.assert_called_once()
 
     def test_job_candidates_cover_timelines_label_duplicate_names_and_deduplicate(self):
         with tempfile.TemporaryDirectory() as tmpdir:

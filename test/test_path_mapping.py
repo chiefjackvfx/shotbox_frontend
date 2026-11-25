@@ -176,6 +176,18 @@ class PathMappingTests(unittest.TestCase):
 
         self.assertEqual(result, "/mnt/projects/PROJECTS/Job/plate.mov")
 
+    def test_projects_unc_path_converts_to_mounted_root(self):
+        source = r"\\192.168.10.20\projects\PROJECTS\Job\Exports\Reference.mp4"
+        expected = "/Volumes/projects/PROJECTS/Job/Exports/Reference.mp4"
+        with mock.patch.object(path_mapping.os.path, "exists", side_effect=lambda path: path == "/Volumes/projects/PROJECTS"):
+            self.assertEqual(path_mapping.convert_path(source, system="Linux"), expected)
+            self.assertEqual(path_mapping.convert_path(source, system="Darwin"), expected)
+            self.assertEqual(path_mapping.convert_path(source, system="Windows"), source)
+            extended = "\\\\?\\UNC\\" + source[2:]
+            self.assertEqual(path_mapping.convert_path(extended, system="Linux"), expected)
+            unrelated = source.replace("PROJECTS\\", "PROJECTS-archive\\")
+            self.assertEqual(path_mapping.convert_path(unrelated, system="Linux"), unrelated)
+
     def test_existing_posix_mapping_converts_to_z_on_windows(self):
         self.assertEqual(
             path_mapping.convert_path(

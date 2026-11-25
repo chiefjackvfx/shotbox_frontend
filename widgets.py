@@ -1278,11 +1278,8 @@ class ShotCard(QWidget):
         super().__init__(parent)
         data = data or {}
         self.data = data
-        self._quick_view_controller = quick_view_controller
-        
-        # Use Python UI setup instead of uic.loadUi
         setup_shot_card_ui(self)
-    
+        self._quick_view_controller = quick_view_controller
         self.setObjectName(f"shot-{data.get('id','unknown')}")
         
         # cache
@@ -1405,6 +1402,37 @@ class ShotCard(QWidget):
 
         self.update_from_data(data)
         self.set_tasks_visible(self._tasks_visible)
+
+    def _set_shot_labels(self, data):
+        self.label_shot.setText(data.get("title", "") or "")
+        self.label_notes.setText(data.get("notes", "") or "")
+
+        # Update frame range label from duration (styled same as notes)
+        if hasattr(self, 'label_frame_range'):
+            duration = data.get("duration")
+            if duration and duration not in (None, "", 0):
+                try:
+                    duration_int = int(duration)
+                    end_frame = 1000 + duration_int
+                    self.label_frame_range.setText(f"1001-{end_frame}")
+                except (ValueError, TypeError):
+                    self.label_frame_range.setText("")
+            else:
+                self.label_frame_range.setText("")
+
+        # Update edit in/out labels
+        if hasattr(self, 'label_edit_inpoint'):
+            edit_in = data.get("edit_inpoint", "—")
+            self.label_edit_inpoint.setText(f"In: {edit_in if edit_in else '—'}")
+
+        if hasattr(self, 'label_edit_outpoint'):
+            edit_out = data.get("edit_outpoint", "—")
+            self.label_edit_outpoint.setText(f"Out: {edit_out if edit_out else '—'}")
+
+        # Update colourspace label
+        if hasattr(self, 'label_colourspace'):
+            colourspace = data.get("colourspace", "—")
+            self.label_colourspace.setText(f"IDT: {colourspace   if colourspace else '—'}")
 
     def _set_nuke_file_state(
         self,
@@ -2337,7 +2365,7 @@ class ShotCard(QWidget):
         changed = False
         for task_id, widget in self._task_widgets_by_id.items():
             should_show = task_id in visible_ids
-            if widget.isVisible() != should_show:
+            if widget.isHidden() == should_show:
                 widget.setVisible(should_show)
                 changed = True
         if changed:
@@ -2579,35 +2607,7 @@ class ShotCard(QWidget):
         self.data = data
         self.shot_dir = data.get("base_path", self.shot_dir)
 
-        self.label_shot.setText(data.get("title", "") or "")
-        self.label_notes.setText(data.get("notes", "") or "")
-
-        # Update frame range label from duration (styled same as notes)
-        if hasattr(self, 'label_frame_range'):
-            duration = data.get("duration")
-            if duration and duration not in (None, "", 0):
-                try:
-                    duration_int = int(duration)
-                    end_frame = 1000 + duration_int
-                    self.label_frame_range.setText(f"1001-{end_frame}")
-                except (ValueError, TypeError):
-                    self.label_frame_range.setText("")
-            else:
-                self.label_frame_range.setText("")
-
-        # Update edit in/out labels
-        if hasattr(self, 'label_edit_inpoint'):
-            edit_in = data.get("edit_inpoint", "—")
-            self.label_edit_inpoint.setText(f"In: {edit_in if edit_in else '—'}")
-
-        if hasattr(self, 'label_edit_outpoint'):
-            edit_out = data.get("edit_outpoint", "—")
-            self.label_edit_outpoint.setText(f"Out: {edit_out if edit_out else '—'}")
-
-        # Update colourspace label
-        if hasattr(self, 'label_colourspace'):
-            colourspace = data.get("colourspace", "—")
-            self.label_colourspace.setText(f"IDT: {colourspace   if colourspace else '—'}")
+        self._set_shot_labels(data)
 
         # Update original clip label
         if hasattr(self, 'label_original_clip'):

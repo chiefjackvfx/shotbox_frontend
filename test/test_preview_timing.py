@@ -39,7 +39,7 @@ def scene(tmp_path):
     nuke = Mock()
     pools = {'Read': [read, secondary], 'Viewer': [viewer]}
     nuke.allNodes.side_effect = lambda kind=None: pools.get(kind, [read, secondary, retime, viewer])
-    nuke.root.return_value = node('Root', first_frame=1001, last_frame=1030)
+    nuke.root.return_value = node('Root', name='Root', first_frame=1001, last_frame=1030)
     return nuke, read, pools
 
 
@@ -54,6 +54,43 @@ def test_selects_source_by_path_and_preserves_fractional_mapping(tmp_path):
     nuke.scriptClear.assert_called_once_with(ignoreUnsavedChanges=True)
 
 
+def test_saved_relative_arriraw_is_absolute_before_nuke_loads_its_knobs(tmp_path, monkeypatch):
+    import nuke_headless_tasks as module
+
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    plates = tmp_path / "plates"
+    plates.mkdir()
+    source = plates / "source clip.mxf"
+    source.touch()
+    (plates / "reference.mxf").touch()
+    script = scripts / "shot_v001.nk"
+    saved = (
+        'Read {\n file "../plates/source clip.mxf"\n'
+        ' arri_colorspace "AWG3 / D65 / LogC3"\n name Read1\n}\n'
+        'Read {\n file ../plates/reference.mxf\n name Reference\n}\n'
+    )
+    script.write_text(saved)
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(module.app_cache, "CACHE_ROOT", cache)
+    nuke, read, _ = scene(tmp_path)
+    read["file"].value.return_value = str(source)
+
+    def open_script(path):
+        copy = Path(path)
+        assert copy.parent.parent == cache / "temp"
+        assert copy.read_text() == saved.replace("../plates/source clip.mxf", source.resolve().as_posix())
+
+    nuke.scriptOpen.side_effect = open_script
+    timing = _load_preview_timing(nuke, str(script), str(source))
+
+    assert (timing["first"], timing["last"]) == (1004, 1023)
+    assert "11.25" in timing["knobs"]
+    nuke.root()["name"].setValue.assert_called_once_with(script.as_posix())
+    assert script.read_text() == saved
+    assert not Path(nuke.scriptOpen.call_args.args[0]).exists()
+
+
 def test_ambiguous_plate_fails_instead_of_using_wrong_timing(tmp_path):
     nuke, read, pools = scene(tmp_path)
     pools['Read'].append(node('Read', file='../other/source.mov'))
@@ -66,6 +103,10 @@ def test_conflicting_cut_ranges_fail(tmp_path):
     pools['Viewer'].append(node('Viewer', frame_range='1001-1030', frame_range_lock=True))
     with pytest.raises(ValueError, match='Conflicting'):
         _load_preview_timing(nuke, str(tmp_path / 'scripts/shot_v001.nk'), str(tmp_path / 'plates/source.mov'))
+    timing = _load_preview_timing(nuke, str(tmp_path / 'scripts/shot_v001.nk'),
+                                  str(tmp_path / 'plates/source.mov'), use_project_range=True)
+    assert (timing['first'], timing['last']) == (1001, 1030)
+    assert timing['node_class'] == 'TimeWarp'
 
 
 def test_individual_preview_passes_saved_timing_to_headless_command(tmp_path):

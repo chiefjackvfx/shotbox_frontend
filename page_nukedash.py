@@ -299,8 +299,9 @@ class ApiWorker(QObject):
     users_ready = pyqtSignal(list)
     error = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self, startup_shots=None):
         super().__init__()
+        self.startup_shots = startup_shots
         self.api = http_help.DjangoAPI()
         self._users_loaded_at = None
         self._users_base_url = None
@@ -313,7 +314,12 @@ class ApiWorker(QObject):
             binding = getattr(self, '_time_reporting_binding', (None, 0))
             context, generation = binding
             source = _nuke_time_identity(self.api.base_url, context[2]) if context else None
-            data = self.api.getAPI()
+            preload, self.startup_shots = self.startup_shots, None
+            data = None
+            if preload is not None and (context is None or context[2] == preload.artist_id):
+                data = preload.result_for(self.api.base_url, self.api.get_current_username())
+            if data is None:
+                data = self.api.getAPI()
             if not isinstance(data, list):
                 raise ValueError("API did not return a list")
             if (source != context or binding != getattr(self, '_time_reporting_binding', (None, 0))
@@ -362,6 +368,9 @@ def _nukedash_combo_jobs(jobs: list[dict], active_job_id=None, show_hidden=False
 
 
 class page_nukedash(QMainWindow):
+    startup_ready = pyqtSignal()
+    startup_progress = pyqtSignal(str, int, int)
+    startup_failed = pyqtSignal(str)
     fetch_requested = pyqtSignal()
     lock_claim_requested = pyqtSignal(dict)
     lock_launch_finished = pyqtSignal(int, bool)
@@ -528,7 +537,16 @@ class page_nukedash(QMainWindow):
         self.timelines_layout = self.scrollArea_frame.layout()
 
         self._thread = QThread(self)
-        self._worker = ApiWorker()
+        self._settings_manager = get_settings_manager()
+        preload = getattr(self._settings_manager, "startup_shots", None)
+        if preload is not None:
+            self._settings_manager.startup_shots = None
+        self._awaiting_workspace = bool(getattr(self._settings_manager, "startup_picker", None))
+        if self._awaiting_workspace:
+            self._refresh_pause_reasons.add("workspace_startup")
+        self._startup_filters_applied = False
+        self._startup_task_total = 0
+        self._worker = ApiWorker(preload)
         self._worker.moveToThread(self._thread)
         self._worker.data_ready.connect(self._on_data)
         self._worker.users_ready.connect(self._on_users_data)
@@ -553,7 +571,6 @@ class page_nukedash(QMainWindow):
         self._pending_refresh_jobs = None  # Store pending refresh data if received during loading
         
         # --- Session Restore Setup ---
-        self._settings_manager = get_settings_manager()
         self._show_hidden_jobs = bool(self._settings_manager.get("show_hidden_jobs", False))
         saved_layout_mode = self._settings_manager.get("shots_layout_mode", "list")
         self._shots_layout_mode = widgets._normalize_layout_mode(saved_layout_mode)
@@ -618,7 +635,10 @@ class page_nukedash(QMainWindow):
         self._start_load_timing("startup")
         self._set_filter_controls_enabled(self._filters_enabled())
         self._request_api_refresh()
-        self._start_lock_maintenance_timers()
+        if not getattr(self._settings_manager, "staging", False):
+            self._start_lock_maintenance_timers()
+        else:
+            self.set_time_reporting_context(self._settings_manager.server, self._settings_manager.artist["id"])
         self._shot_file_poll_timer.start()
         self._shot_file_tooltip_timer.start()
         
@@ -853,6 +873,8 @@ class page_nukedash(QMainWindow):
                         return
 
     def _poll_visible_shot_card_file_state_batch(self) -> None:
+        if getattr(getattr(self, "_settings_manager", None), "staging", False):
+            return
         timeline_matchmove_refresher = getattr(
             self,
             "_refresh_timeline_matchmove_state",
@@ -951,6 +973,9 @@ class page_nukedash(QMainWindow):
         total = 0
         for entry in getattr(self, "_task_materialize_queue", []):
             total += len(entry.get("task_ids", []) or [])
+        if getattr(self, "_awaiting_workspace", False):
+            self._startup_task_total = total
+            self.startup_progress.emit("Preparing tasks…", 0, total)
         if total > 0:
             self._start_task_loading_timing(timeline_index)
         else:
@@ -1334,6 +1359,18 @@ class page_nukedash(QMainWindow):
         if self._task_materialize_queue and timer is not None:
             timer.start(0)
         self._sync_task_loading_status()
+        if getattr(self, "_awaiting_workspace", False) and self._startup_filters_applied:
+            remaining = sum(len(entry["task_ids"]) for entry in self._task_materialize_queue)
+            total = self._startup_task_total
+            self.startup_progress.emit(f"Loading tasks {total - remaining}/{total}", total - remaining, total)
+            if not remaining:
+                self._finish_workspace_startup()
+
+    def _finish_workspace_startup(self):
+        self._awaiting_workspace = False
+        if not getattr(self._settings_manager, "staging", False):
+            self.set_auto_refresh_paused(False, reason="workspace_startup")
+        self.startup_ready.emit()
 
     def _set_project_load_profiler_enabled(self, enabled: bool) -> None:
         enabled = bool(enabled)
@@ -1577,12 +1614,7 @@ class page_nukedash(QMainWindow):
                 Qt.ToolButtonStyle.ToolButtonTextOnly
             )
         if hasattr(self, "btn_open_job_assets") and self.btn_open_job_assets:
-            self._job_assets_menu = QMenu(self)
-            self._job_assets_menu.aboutToShow.connect(
-                lambda: self._populate_job_assets_menu(self._job_assets_menu)
-            )
-            self.btn_open_job_assets.setMenu(self._job_assets_menu)
-            self.btn_open_job_assets.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            self.btn_open_job_assets.clicked.connect(self._on_open_job_assets_clicked)
             self.btn_open_job_assets.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         for name, callback in (
             ("btn_open_job_assets", self._show_job_assets_matchmove_menu),
@@ -2449,6 +2481,8 @@ class page_nukedash(QMainWindow):
         batch_name = f"Shotbox Denoise — {timeline_name or 'Selected clips'} — {uuid.uuid4().hex[:8]}"
         for task in tasks:
             task["media"]["mode"] = mode["mode"] if isinstance(mode, dict) else mode
+            if timeline_name is not None:
+                task["media"]["use_project_range"] = True
             if deadline:
                 task["media"]["deadline"] = {**deadline, "batch_name": batch_name}
         self._ensure_denoise_controller().start_batch(tasks, skipped=skipped)
@@ -2981,7 +3015,7 @@ class page_nukedash(QMainWindow):
                 if hide_hidden_shots and is_shot_hidden:
                     shot_card.set_visible_task_ids([])
                     setattr(shot_card, "_pending_task_materialize_ids", [])
-                    if shot_card.isVisible():
+                    if not shot_card.isHidden():
                         shot_card.setVisible(False)
                     continue
 
@@ -3010,7 +3044,7 @@ class page_nukedash(QMainWindow):
                         visible = False
                 
                 # Only call setVisible if state actually changed
-                if shot_card.isVisible() != visible:
+                if shot_card.isHidden() == visible:
                     shot_card.setVisible(visible)
                 
                 if visible:
@@ -3795,6 +3829,8 @@ class page_nukedash(QMainWindow):
             reset_queue()
         self._fail_load_timing()
         self._fail_project_switch_profile(str(msg))
+        if getattr(self, "_awaiting_workspace", False):
+            self.startup_failed.emit(str(msg))
         pass  # Could log to file if needed
         # print("API error:", msg)
 
@@ -3954,6 +3990,8 @@ class page_nukedash(QMainWindow):
                 self.Label_results.setText("0 results")
             self.jobs_data_updated.emit(jobs)
             self._finish_timed_load_after_data()
+            if getattr(self, "_awaiting_workspace", False):
+                self._finish_workspace_startup()
             updater = getattr(self, "_update_assets_action_buttons", None)
             if callable(updater):
                 updater()
@@ -4087,7 +4125,8 @@ class page_nukedash(QMainWindow):
                 
                 # Show loading dialog
                 job_title = job.get("title", "job")
-                self._loading_dialog.show_loading(parent_window, f"Loading {job_title}...")
+                if is_explicit_switch or not hasattr(self._settings_manager, "artist"):
+                    self._loading_dialog.show_loading(parent_window, f"Loading {job_title}...")
                 
             # Start chunked loading after dialog is shown
             _single_shot(self, 50, lambda: self._start_job_loading(job))
@@ -4313,6 +4352,8 @@ class page_nukedash(QMainWindow):
     
     def _on_load_progress(self, current: int, total: int, message: str):
         """Handle progress updates from chunked loader."""
+        if getattr(self, "_awaiting_workspace", False):
+            self.startup_progress.emit(f"Loading shots {current}/{total}", current, total)
         self._loading_dialog.set_progress(current, total)
         self._loading_dialog.set_message(f"Loading shots ({current}/{total})")
     
@@ -4360,8 +4401,14 @@ class page_nukedash(QMainWindow):
         updater = getattr(self, "_update_assets_action_buttons", None)
         if callable(updater):
             updater()
-        # Reapply filters and task materialization after the new shot cards exist.
-        _single_shot(self, 50, lambda: self._apply_filters(force=True))
+        # Wait for the restored timeline's filters before testing queue completion.
+        def apply_restored_filters():
+            self._apply_filters(force=True)
+            if getattr(self, "_awaiting_workspace", False):
+                self._startup_filters_applied = True
+                if not self._task_materialize_queue:
+                    self._finish_workspace_startup()
+        _single_shot(self, 50, apply_restored_filters)
         
         # BUGFIX: Process any refresh data that arrived during loading
         if self._pending_refresh_jobs is not None:

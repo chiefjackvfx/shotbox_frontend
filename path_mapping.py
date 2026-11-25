@@ -8,6 +8,9 @@ import platform
 import posixpath
 from dataclasses import dataclass
 
+PROJECTS_UNC_ROOT = "//192.168.10.20/projects/PROJECTS"
+PROJECTS_DRIVE_ROOT = "Z:/PROJECTS"
+
 
 @dataclass(frozen=True)
 class PathMapping:
@@ -27,7 +30,7 @@ class PathMapping:
 
 PATH_MAPPINGS = (
     PathMapping(
-        windows=("Z:/PROJECTS",),
+        windows=(PROJECTS_DRIVE_ROOT,),
         linux=("/mnt/projects/PROJECTS", "/Volumes/projects/PROJECTS"),
         darwin=("/Volumes/projects/PROJECTS",),
     ),
@@ -48,6 +51,18 @@ def _matches_root(path: str, root: str, *, case_sensitive: bool) -> bool:
     comparable_path = path if case_sensitive else path.casefold()
     comparable_root = normalized_root if case_sensitive else normalized_root.casefold()
     return comparable_path == comparable_root or comparable_path.startswith(comparable_root + "/")
+
+
+def remap_projects_unc_path(path: str) -> str:
+    """Return the canonical drive path for the projects UNC share."""
+    if not path:
+        return path
+    normalized = _normalize_for_matching(path)
+    if normalized.casefold().startswith("//?/unc/"):
+        normalized = "//" + normalized[8:]
+    if _matches_root(normalized, PROJECTS_UNC_ROOT, case_sensitive=False):
+        return PROJECTS_DRIVE_ROOT + normalized[len(PROJECTS_UNC_ROOT):]
+    return path
 
 
 def _pick_existing_root(candidates: tuple[str, ...]) -> str:
@@ -170,6 +185,8 @@ def convert_path(file_path, system: str | None = None) -> str:
     if target_system not in ("Windows", "Linux", "Darwin"):
         return value
 
+    if target_system != "Windows":
+        value = remap_projects_unc_path(value)
     normalized = _normalize_for_matching(value)
 
     for mapping in PATH_MAPPINGS:

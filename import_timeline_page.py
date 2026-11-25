@@ -1,7 +1,9 @@
 """Folder-based timeline importer, sharing XML Import's shot creation pipeline."""
 from __future__ import annotations
 
+from os.path import abspath
 from pathlib import Path
+import re
 
 from PyQt6.QtCore import QEvent, QThread, Qt, pyqtSignal
 from PyQt6.QtGui import QColor
@@ -332,6 +334,7 @@ class ImportTimelinePage(XMLImportPage):
         """Load only the dropped XML; media can be linked during review."""
         if self._busy or not self.isEnabled():
             return
+        self._set_destination_from_folder(Path(abspath(path)).parent)
         path = str(Path(path).resolve())
         self.folder_edit.setText(path)
         self._pending_timeline = None
@@ -467,6 +470,7 @@ class ImportTimelinePage(XMLImportPage):
         self.raw_folder_edit.clear()
         self.raw_media_status.setText('No raw media folder selected')
         self.folder_edit.setText(folder)
+        self._set_destination_from_folder(Path(abspath(folder)))
         self._pending_timeline = None
         self.document = self.prepared = None
         self.shots = []
@@ -733,6 +737,12 @@ class ImportTimelinePage(XMLImportPage):
     def _on_select_root(self):
         super()._on_select_root()
         self._refresh_preview()
+
+    def _set_destination_from_folder(self, folder):
+        project = next((parent for parent in (folder, *folder.parents)
+                        if re.match(r'[Cc][0-9]{4}(?![0-9])', parent.name)), None)
+        self.parser.project_root = str(project) if project else ''
+        self.lableRoot.setText(f'Project: {project}' if project else 'Project: (click Change Project Path)')
 
     def _populate_review(self):
         table = self.tableWidgetTemp

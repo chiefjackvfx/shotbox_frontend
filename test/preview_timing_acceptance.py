@@ -56,8 +56,9 @@ def main():
             nuke.scriptOpen(str(directory / 'prepared.nk'))
             output = nuke.toNode('Retime1')
             assert output.input(0).name() == 'Reformat2'
-            assert (output.width(), output.height()) == (1920, 1080)
-            assert nuke.toNode('WriteCompMP4').width() == 1920
+            assert (output.width(), output.height()) == (1620, 1080)
+            write = nuke.toNode('WriteCompMP4')
+            assert (write.width(), write.height()) == (1620, 1200)
             for frame in range(first, last + 1):
                 nuke.frame(frame)
                 expected = offset + (frame - first) * speed
@@ -66,9 +67,30 @@ def main():
                 assert abs(actual - math.floor(expected)) < 0.0001, (speed, frame, actual, expected)
             assert not output.error()
             # Exercise the actual encoder, not only scene preparation.
-            nuke.execute(nuke.toNode('WriteCompMP4'), first, last)
+            nuke.execute(write, first, last)
             assert (directory / 'preview.mp4').stat().st_size > 0
             print(f'OG_PREVIEW_TIMING_OK speed={speed} cut={first}-{last}')
+
+        nuke.scriptClear(ignoreUnsavedChanges=True)
+        nuke.scriptOpen(str(get_preview_template_path()))
+        resize = nuke.toNode('Reformat2')
+        write = nuke.toNode('WriteCompMP4')
+        for label, source_format, expected_width in (
+            ('widescreen', '2048 858 1', 2578),
+            ('portrait', '1080 1920 1', 608),
+            ('anamorphic', '1440 1080 1.3333333333333333', 1920),
+        ):
+            source = nuke.nodes.Constant()
+            source['format'].setValue(nuke.addFormat(f'{source_format} {label}'))
+            resize.setInput(0, source)
+            assert (resize.width(), resize.height()) == (expected_width, 1080), label
+            assert resize.format().pixelAspect() == 1, label
+            assert (write.width(), write.height()) == (expected_width, 1200), label
+            movie = directory / f'{label}.mp4'
+            write['file'].setValue(str(movie))
+            nuke.execute(write, 1001, 1001)
+            assert movie.stat().st_size > 0
+            print(f'PREVIEW_ASPECT_OK {label} {expected_width}x1080')
 
 
 if __name__ == '__main__':

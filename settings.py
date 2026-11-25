@@ -183,6 +183,8 @@ DEFAULT_SETTINGS = {
     "enable_assignment_board": False,
     "enable_review_page": False,
     "review_cache_mb": 1024,
+    "timeline_review_scale": 1,
+    "timeline_review_cache_mb": 256,
     "review_ocio": {
         "mode": "environment" if os.environ.get("OCIO") else "off",
         "file": "",
@@ -466,7 +468,12 @@ class SettingsPage(QWidget):
         django_user_layout.addWidget(self.refresh_users_btn)
         django_user_layout.addStretch()
         
-        system_layout.addRow("Django Username:", django_user_layout)
+        if hasattr(self._settings, "artist"):
+            system_layout.addRow("Active artist:", QLabel(self._settings.artist["username"]))
+            self.django_user_combo.hide()
+            self.refresh_users_btn.hide()
+        else:
+            system_layout.addRow("Django Username:", django_user_layout)
         
         container_layout.addWidget(system_group)
         
@@ -475,6 +482,8 @@ class SettingsPage(QWidget):
         server_layout = QFormLayout(server_group)
         
         self.server_url_edit = QLineEdit()
+        if hasattr(self._settings, "artist"):
+            self.server_url_edit.setToolTip("Server changes apply next launch.")
         self.server_url_edit.setPlaceholderText("http://192.168.10.88:8000")
         server_layout.addRow("Server URL:", self.server_url_edit)
         
@@ -827,6 +836,7 @@ class SettingsPage(QWidget):
 
         self.show_startup_loading_check = QCheckBox("Show Loading Dialog on Startup")
         startup_layout.addRow("", self.show_startup_loading_check)
+        self.show_startup_loading_check.setVisible(not hasattr(self._settings, "artist"))
 
         self.enable_assignment_board_check = QCheckBox("Enable Assignment Board Tab")
         startup_layout.addRow("", self.enable_assignment_board_check)
@@ -1125,6 +1135,10 @@ class SettingsPage(QWidget):
     
     def _load_django_users(self):
         """Load Django users from API for the dropdown."""
+        if hasattr(self._settings, "artist"):
+            self._django_users = [self._settings.artist]
+            self._populate_user_combo()
+            return
         try:
             import http_help
             api = http_help.DjangoAPI()
@@ -1176,7 +1190,7 @@ class SettingsPage(QWidget):
             self.django_user_combo.setCurrentIndex(index)
         
         # Server
-        self.server_url_edit.setText(self._settings.get("server_url", ""))
+        self.server_url_edit.setText(getattr(self._settings, "next_server", self._settings.get("server_url", "")))
         
         # Polling (convert from seconds)
         self.polling_interval_spin.setValue(self._settings.get("polling_interval", 5))
@@ -1510,7 +1524,10 @@ class SettingsPage(QWidget):
         self._set_pending_setting("django_username", self.django_user_combo.currentData(), save=False)
         
         # Server
-        self._set_pending_setting("server_url", self.server_url_edit.text().strip(), save=False)
+        if hasattr(self._settings, "artist"):
+            self._settings.next_server = self.server_url_edit.text().strip().rstrip("/")
+        else:
+            self._set_pending_setting("server_url", self.server_url_edit.text().strip(), save=False)
         
         # Polling (stored in seconds)
         self._set_pending_setting("polling_interval", self.polling_interval_spin.value(), save=False)
@@ -1741,17 +1758,19 @@ class SettingsPage(QWidget):
             )
             
             # Emit server URL change signal
-            if not automatic or "server_url" in self._unsaved_setting_keys:
+            if not hasattr(self._settings, "artist") and (not automatic or "server_url" in self._unsaved_setting_keys):
                 self.server_url_changed.emit(self.server_url_edit.text().strip())
-            self._emit_saved_setting("django_username", self.django_user_combo.currentData())
+            if not hasattr(self._settings, "artist"):
+                self._emit_saved_setting("django_username", self.django_user_combo.currentData())
             self._unsaved_setting_keys.clear()
         else:
             self._autosave_pending = True
-            self.save_status_label.setText("Save failed. Check file permissions, then click Save Settings to retry.")
+            message = getattr(self._settings, "save_error", "") or "Check file permissions, then click Save Settings to retry."
+            self.save_status_label.setText(f"Save failed. {message}")
             if not automatic:
                 QMessageBox.warning(
                     self, "Save Failed",
-                    "Failed to save settings. Please check file permissions."
+                    message
                 )
         self._automatic_save = False
     
@@ -1772,6 +1791,9 @@ class SettingsPage(QWidget):
             self._unsaved_setting_keys.clear()
             self._settings.reset_to_defaults()
             self._load_current_values()
+            if getattr(self._settings, "save_error", ""):
+                self.save_status_label.setText(self._settings.save_error)
+                return
             self.save_status_label.setText("Defaults restored. Startup options apply next launch.")
             QMessageBox.information(
                 self,
@@ -2028,6 +2050,11 @@ class SettingsPage(QWidget):
 
 # Singleton instance for global access
 _settings_manager: Optional[SettingsManager] = None
+
+
+def install_settings_manager(manager: SettingsManager) -> None:
+    global _settings_manager
+    _settings_manager = manager
 
 
 def get_settings_manager() -> SettingsManager:
