@@ -10,9 +10,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Fixed
 
-- [2026-11-25 01:42:02 PM +00:00] Load login roster on the main Qt event loop.
+## 6.1.1 - 2026-11-25
 
-- [2026-11-25 01:38:23 PM +00:00] Use independent dashboard and snapshot transitions on Windows.
+### Fixed
+
+- win fix
 
 ## 6.1.0 - 2026-11-25
 
