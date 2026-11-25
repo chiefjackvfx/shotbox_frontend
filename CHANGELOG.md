@@ -8,7 +8,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-25 04:35:34 PM +00:00] Tested preview recovery after project share login failures.
+
 ### Fixed
+
+- [2026-11-25 04:35:34 PM +00:00] Handle inaccessible previews during dashboard refresh and Quick View.
 
 ## 6.1.5 - 2026-11-25
 

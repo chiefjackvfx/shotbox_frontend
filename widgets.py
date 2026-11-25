@@ -3220,10 +3220,17 @@ class ShotCard(QWidget):
         except Exception as e:
             pass  # Silent fail
 
+    @staticmethod
+    def _preview_file_available(path) -> bool:
+        try:
+            return Path(path).is_file()
+        except OSError:
+            return False
+
     def quick_view_media(self) -> QuickViewMedia:
         """Return a detached media snapshot suitable for the Quick View popup."""
         video_path = None
-        if self._preview_video_path and Path(self._preview_video_path).is_file():
+        if self._preview_video_path and self._preview_file_available(self._preview_video_path):
             video_path = str(self._preview_video_path)
 
         try:
@@ -3390,37 +3397,26 @@ class ShotCard(QWidget):
         if not HAS_MULTIMEDIA:
             return
             
+        full_path = None
         if preview_video:
-            # Build full path from base_path + relative preview path
-            full_path = Path(self.filesIO.convert_path(self.shot_dir)) / preview_video
-            
-            if full_path.exists():
-                self._preview_video_path = str(full_path)
-                self._has_preview = True
-                
-                # Sync version tracking from API data to prevent re-detection
-                preview_name = Path(preview_video).name
-                api_version = self._extract_version(preview_name)
-                if api_version is not None:
-                    # Only update if API has a higher or equal version
-                    if self._last_preview_version is None or api_version >= self._last_preview_version:
-                        self._last_preview_version = api_version
-                
-                # Show indicator
-                if hasattr(self, '_preview_indicator'):
-                    self._preview_indicator.show()
-                    self._position_preview_indicator()
-            else:
-                self._preview_video_path = None
-                self._has_preview = False
-                if hasattr(self, '_preview_indicator'):
-                    self._preview_indicator.hide()
-        else:
-            self._preview_video_path = None
-            self._has_preview = False
-            if hasattr(self, '_preview_indicator'):
-                self._preview_indicator.hide()
-    
+            candidate = Path(self.filesIO.convert_path(self.shot_dir)) / preview_video
+            if self._preview_file_available(candidate):
+                full_path = candidate
+
+        self._preview_video_path = str(full_path) if full_path is not None else None
+        self._has_preview = full_path is not None
+        if hasattr(self, '_preview_indicator'):
+            self._preview_indicator.setVisible(self._has_preview)
+        if full_path is None:
+            return
+
+        api_version = self._extract_version(full_path.name)
+        if api_version is not None:
+            if self._last_preview_version is None or api_version >= self._last_preview_version:
+                self._last_preview_version = api_version
+        if hasattr(self, '_preview_indicator'):
+            self._position_preview_indicator()
+
     def _update_preview_stack_size(self):
         """Update video widget and stack size when thumbnail size changes."""
         if not HAS_MULTIMEDIA:

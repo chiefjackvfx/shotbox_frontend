@@ -131,7 +131,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def _make_card(self, base_path: str, data_overrides: dict | None = None):
+    def _make_card(self, base_path: str, data_overrides: dict | None = None, *, multimedia=False):
         data = {
             "id": 7,
             "title": "sho010",
@@ -145,7 +145,7 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             data.update(data_overrides)
         fake_folders = FakeFolders()
         patches = [
-            mock.patch.object(widgets, "HAS_MULTIMEDIA", False),
+            mock.patch.object(widgets, "HAS_MULTIMEDIA", multimedia),
             mock.patch.object(widgets.http_help, "DjangoAPI", return_value=mock.Mock()),
             mock.patch.object(widgets.filesIO, "Folders", return_value=fake_folders),
             mock.patch.object(widgets.ShotCard, "_setup_nk_polling", lambda self: None),
@@ -174,6 +174,10 @@ class ShotCardMatchmoveTests(unittest.TestCase):
             project = shot / "shot_assets" / "cg" / "Oak" / "Oak_v001.hip"
             project.parent.mkdir(parents=True)
             project.touch()
+            relative = "renders/precomp/previews/shot_v001.mp4"
+            preview = shot / relative
+            preview.parent.mkdir(parents=True)
+            preview.touch()
             stat = Path.stat
 
             def deny_shot_access(path, *args, **kwargs):
@@ -182,8 +186,22 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 return stat(path, *args, **kwargs)
 
             with mock.patch.object(Path, "stat", deny_shot_access):
-                card, _ = self._make_card(tmpdir)
+                card, folders = self._make_card(tmpdir, {"preview_video": relative}, multimedia=True)
                 self.assertTrue(card.shot_cg_assets.isHidden())
+                self.assertFalse(card._has_preview)
+                self.assertTrue(card._preview_indicator.isHidden())
+                with mock.patch.object(folders, "latest_preview", create=True,
+                                       side_effect=OSError(1326, "Logon failure")):
+                    card._check_for_new_preview()
+                card._api.update_shot.assert_not_called()
+            card.update_from_data(card.data)
+            self.assertEqual(card._preview_video_path, str(preview))
+            self.assertFalse(card._preview_indicator.isHidden())
+            with mock.patch.object(Path, "stat", deny_shot_access):
+                self.assertIsNone(card.quick_view_media().video_path)
+                card.update_from_data(card.data)
+                self.assertIsNone(card._preview_video_path)
+                self.assertEqual(card.data["preview_video"], relative)
             card.apply_file_state_snapshot(None)
             self.assertEqual([b.text() for b in card._shot_cg_buttons], [project.name])
 
