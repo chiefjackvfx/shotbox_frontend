@@ -6,7 +6,7 @@ from math import cos, hypot, pi, radians, sin
 from random import Random
 from zlib import crc32
 
-from PyQt6.QtCore import QAbstractAnimation, QEasingCurve, QEvent, QEventLoop, QPoint, QPointF, QRect, QRectF, Qt, QTimer, QVariantAnimation
+from PyQt6.QtCore import QAbstractAnimation, QEasingCurve, QEvent, QEventLoop, QPoint, QPointF, QRect, QRectF, Qt, QTimer, QVariantAnimation, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QConicalGradient, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient, QRegion
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
@@ -235,8 +235,13 @@ class ProfileIris(QWidget):
     def show_workspace(self):
         # Submit the clean final frame before mapping the native main window.
         self.repaint()
-        self.window_to_reveal.installEventFilter(self)
-        self.window_to_reveal.show()
+        if QApplication.platformName() == "windows":
+            self.window_to_reveal.show()
+            # A covered Win32 window can defer painting until the overlay closes.
+            QTimer.singleShot(250, Qt.TimerType.PreciseTimer, self.picker.accept)
+        else:
+            self.window_to_reveal.installEventFilter(self)
+            self.window_to_reveal.show()
 
     def eventFilter(self, watched, event):
         if watched is self.window_to_reveal and event.type() == QEvent.Type.Paint:
@@ -401,11 +406,14 @@ class ProfileIris(QWidget):
 
 
 class ProfileSplash(QDialog):
+    profile_chosen = pyqtSignal(str)
+
     def __init__(self, profiles, memory):
         super().__init__()
         self.artist_id = None
         self.selection_loop = None
         self.keep_open_after_choice = False
+        self.waiting_for_choice = False
         self.settings = memory
         self.returning_artist = None
         self.hovered_artist = None
@@ -575,7 +583,7 @@ class ProfileSplash(QDialog):
         if artist is None:
             return
         enabled = (self.auto_login.isChecked() and self.isVisible() and self.artist_id is None
-                   and (not self.keep_open_after_choice or self.selection_loop is not None))
+                   and (not self.keep_open_after_choice or self.waiting_for_choice or self.selection_loop is not None))
         browsing = any(isinstance(item, ArtistCircle) and item is not artist
                        for item in (self.hovered_artist, self.focusWidget()))
         if enabled and not browsing:
@@ -691,6 +699,7 @@ class ProfileSplash(QDialog):
         self.status_label.show()
         self.progress.show()
         self.set_load_progress("Loading artist settings…")
+        self.profile_chosen.emit(artist_id)
         if self.selection_loop is not None:
             self.selection_loop.quit()
 

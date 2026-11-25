@@ -967,6 +967,7 @@ class page_nukedash(QMainWindow):
         label = getattr(self, "label_task_loading", None)
         if label is not None:
             label.setText(value)
+            label.setToolTip("")
             label.show()
 
     def _prepare_task_loading_progress(self, timeline_index: int | None = None) -> None:
@@ -3830,6 +3831,9 @@ class page_nukedash(QMainWindow):
         self._fail_load_timing()
         self._fail_project_switch_profile(str(msg))
         if getattr(self, "_awaiting_workspace", False):
+            if QtWidgets.QApplication.platformName() == "windows":
+                self._set_task_loading_text("Could not load shots · Click Refresh to retry")
+                self.label_task_loading.setToolTip(str(msg))
             self.startup_failed.emit(str(msg))
         pass  # Could log to file if needed
         # print("API error:", msg)
@@ -3991,6 +3995,8 @@ class page_nukedash(QMainWindow):
             self.jobs_data_updated.emit(jobs)
             self._finish_timed_load_after_data()
             if getattr(self, "_awaiting_workspace", False):
+                if QtWidgets.QApplication.platformName() == "windows":
+                    self._set_task_loading_text("No shots to load")
                 self._finish_workspace_startup()
             updater = getattr(self, "_update_assets_action_buttons", None)
             if callable(updater):

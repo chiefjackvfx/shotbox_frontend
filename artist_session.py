@@ -8,7 +8,7 @@ from threading import Event, Thread
 from time import monotonic
 
 import requests
-from PyQt6.QtCore import QEventLoop, QSettings, QTimer
+from PyQt6.QtCore import QEventLoop, QSettings, Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 from artist_picker import ProfileSplash
@@ -249,7 +249,6 @@ def start_artist_session(window_factory, on_finished):
         fetch_roster(server, dialog, lambda result: open_workspace(dialog, memory, result))
 
     def open_workspace(dialog, memory, result):
-        nonlocal server
         if result is None:
             on_finished(None)
             return
@@ -274,6 +273,36 @@ def start_artist_session(window_factory, on_finished):
                 install_settings_manager(manager)
                 return window_factory()
 
+            if QApplication.platformName() == "windows":
+                app = QApplication.instance()
+                # Keep the top-level picker alive after the roster callback returns.
+                app.pending_artist_picker = dialog
+
+                def cancelled():
+                    app.pending_artist_picker = None
+                    on_finished(None)
+
+                def chosen(selected_id):
+                    if not dialog.isVisible():
+                        return
+                    dialog.rejected.disconnect(cancelled)
+                    app.pending_artist_picker = None
+                    window = None
+                    try:
+                        window = build(selected_id)
+                        confirm(window, memory, selected_id)
+                    except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
+                        recover(dialog, window, exc)
+                        return
+                    on_finished(window)
+
+                dialog.rejected.connect(cancelled)
+                dialog.profile_chosen.connect(chosen, Qt.ConnectionType.QueuedConnection)
+                dialog.waiting_for_choice = True
+                dialog.progress.hide()
+                dialog.update_login_timer()
+                return
+
             remembered = dialog.returning_artist
             staged_id = remembered.artist_id if remembered else roster[0][0]
             dialog.status_label.setText(f"Preparing {artists[staged_id]['username']}")
@@ -297,32 +326,39 @@ def start_artist_session(window_factory, on_finished):
             if window is None:
                 dialog.retry_button.hide()
                 window = build(selected_id)
-            window._settings_manager.confirm()
-            window.activate_staged_session()
-            memory.setValue("last_artist", selected_id)
-            workstation.setValue("server", server)
+            confirm(window, memory, selected_id)
         except (requests.RequestException, KeyError, TypeError, ValueError) as exc:
-            if window is not None:
-                discard_staged_window(window)
-            dialog.close()
-            dialog.deleteLater()
-            box = QMessageBox()
-            box.setWindowTitle("Shotbox · Artist profiles")
-            box.setText(f"Could not open artist profiles on {server}.")
-            box.setInformativeText(str(exc))
-            retry = box.addButton("Retry", QMessageBox.ButtonRole.AcceptRole)
-            change = box.addButton("Change server", QMessageBox.ButtonRole.ActionRole)
-            box.addButton("Exit", QMessageBox.ButtonRole.RejectRole)
-            box.exec()
-            if box.clickedButton() is change:
-                value, ok = QInputDialog.getText(None, "Shotbox server", "Server URL", text=server)
-                if ok and value.strip():
-                    server = value.strip().rstrip("/")
-            elif box.clickedButton() is not retry:
-                on_finished(None)
-                return
-            QTimer.singleShot(0, begin)
+            recover(dialog, window, exc)
             return
         on_finished(window)
+
+    def confirm(window, memory, selected_id):
+        window._settings_manager.confirm()
+        window.activate_staged_session()
+        memory.setValue("last_artist", selected_id)
+        workstation.setValue("server", server)
+
+    def recover(dialog, window, exc):
+        nonlocal server
+        if window is not None:
+            discard_staged_window(window)
+        dialog.close()
+        dialog.deleteLater()
+        box = QMessageBox()
+        box.setWindowTitle("Shotbox · Artist profiles")
+        box.setText(f"Could not open artist profiles on {server}.")
+        box.setInformativeText(str(exc))
+        retry = box.addButton("Retry", QMessageBox.ButtonRole.AcceptRole)
+        change = box.addButton("Change server", QMessageBox.ButtonRole.ActionRole)
+        box.addButton("Exit", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is change:
+            value, ok = QInputDialog.getText(None, "Shotbox server", "Server URL", text=server)
+            if ok and value.strip():
+                server = value.strip().rstrip("/")
+        elif box.clickedButton() is not retry:
+            on_finished(None)
+            return
+        QTimer.singleShot(0, begin)
 
     begin()

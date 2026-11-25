@@ -107,7 +107,8 @@ class LoginHandoffTests(unittest.TestCase):
         self.assertTrue(watchdog.isActive())
         watchdog.stop()
 
-    def test_retry_then_wait_for_restored_tasks_before_showing_dashboard(self):
+    @patch.object(QApplication, "platformName", return_value="xcb")
+    def test_retry_then_wait_for_restored_tasks_before_showing_dashboard(self, _platform):
         app = QApplication.instance() or QApplication([])
         directory = self.enterContext(TemporaryDirectory())
         settings = SettingsManager(str(Path(directory) / "prefs.yaml"))
@@ -220,7 +221,7 @@ class LoginHandoffTests(unittest.TestCase):
                 self.addCleanup(window.close)
                 self.addCleanup(self.app.setQuitOnLastWindowClosed, self.app.quitOnLastWindowClosed())
                 window.page_nukedash = MagicMock()
-                window.page_nukedash._awaiting_workspace = False
+                window.page_nukedash._awaiting_workspace = True
                 window._settings_manager = MagicMock()
                 window._settings_manager.get.return_value = animation
                 with (patch.object(QApplication, "platformName", return_value="windows"),
@@ -230,6 +231,7 @@ class LoginHandoffTests(unittest.TestCase):
                         overlay = picker.findChild(ProfileIris)
                         self.assertFalse(overlay.snapshot.isNull())
                         self.assertFalse(window.isVisible())
+                        window.setUpdatesEnabled(False)
                         overlay.animation.setCurrentTime(overlay.animation.duration())
                     QTest.qWait(400)
                 self.assertTrue(window.isVisible())
@@ -335,7 +337,49 @@ class LoginHandoffTests(unittest.TestCase):
             QTest.qWait(60)
             self.assertEqual(completed, [None])
 
-    def test_ready_workspace_waits_for_click_and_switch_discards_it(self):
+    def test_windows_builds_only_the_selected_artists_workspace(self):
+        from concurrent.futures import Future
+        from artist_session import start_artist_session
+        from settings import get_settings_manager
+
+        directory = Path(self.enterContext(TemporaryDirectory()))
+        self.enterContext(patch("artist_session.QSettings", side_effect=lambda *_:
+                                QSettings(str(directory / "picker.ini"), QSettings.Format.IniFormat)))
+        self.enterContext(patch("artist_session.get_settings_file_path", return_value=str(directory / "legacy")))
+        self.enterContext(patch("settings._settings_manager", None))
+        self.enterContext(patch.object(QApplication, "platformName", return_value="windows"))
+        self.enterContext(patch("artist_session.StartupShots"))
+        request = self.enterContext(patch("artist_session.requests.get"))
+        request.return_value.json.return_value = {"revision": "v1", "settings": {}}
+        def roster(server, picker, done):
+            picker.show()
+            result = Future()
+            result.set_result([dict(id=i, username=name, first_name=name, last_name="")
+                               for i, name in ((1, "cronk"), (2, "temp"))])
+            done(result)
+
+        self.enterContext(patch("artist_session.fetch_roster", side_effect=roster))
+        window = QMainWindow()
+        window.activate_staged_session = MagicMock()
+        self.addCleanup(window.close)
+        def build():
+            window._settings_manager = get_settings_manager()
+            return window
+
+        completed = []
+        start_artist_session(build, completed.append)
+        request.assert_not_called()
+        picker = self.app.pending_artist_picker
+        self.addCleanup(picker.close)
+        picker.choose("2")
+        QTest.qWait(50)
+        self.assertEqual(completed, [window])
+        request.assert_called_once()
+        self.assertEqual(window._settings_manager.artist["username"], "temp")
+        self.assertIsNone(self.app.pending_artist_picker)
+
+    @patch.object(QApplication, "platformName", return_value="xcb")
+    def test_ready_workspace_waits_for_click_and_switch_discards_it(self, _platform):
         from PyQt6.QtCore import QSettings
         from artist_session import start_artist_session
         from settings import get_settings_manager

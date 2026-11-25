@@ -1217,7 +1217,7 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
 
 def show_after_workspace_load(window, picker):
-    """Keep the login window in front until the real dashboard finishes loading."""
+    """Hand off from the profile picker to the selected dashboard."""
     dashboard = window.page_nukedash
     app = QtWidgets.QApplication.instance()
     app.setQuitOnLastWindowClosed(False)
@@ -1231,8 +1231,11 @@ def show_after_workspace_load(window, picker):
         app.setQuitOnLastWindowClosed(True)
         picker.deleteLater()
 
+    windows_login = app.platformName() == "windows"
+
     def reveal():
-        dashboard.startup_ready.disconnect(reveal)
+        if not windows_login:
+            dashboard.startup_ready.disconnect(reveal)
         # X11 uses this focus link. On Windows the dashboard should never
         # become an owned native window of the short-lived picker.
         if link_picker:
@@ -1265,11 +1268,16 @@ def show_after_workspace_load(window, picker):
         picker.set_load_progress("Fetching shots…")
         dashboard._request_api_refresh()
 
+    picker.rejected.connect(cancel)
+    if windows_login:
+        picker.set_load_progress("Opening workspace…", 1, 1)
+        reveal()
+        return
+
     dashboard.startup_progress.connect(picker.set_load_progress)
     dashboard.startup_ready.connect(reveal)
     dashboard.startup_failed.connect(failed)
     picker.retry_button.clicked.connect(retry)
-    picker.rejected.connect(cancel)
     picker.set_load_progress("Loading shots…")
     if not dashboard._awaiting_workspace:
         reveal()
