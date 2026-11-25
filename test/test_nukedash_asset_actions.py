@@ -5,6 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import xml.etree.ElementTree as ET
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -198,6 +199,23 @@ class NukeDashAssetActionsTests(unittest.TestCase):
                 harness.btn_open_job_assets.property("folder_path"),
                 str(base_root / "job_assets"),
             )
+
+    def test_asset_buttons_recover_after_share_login_failure(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            timeline = Path(temp_dir) / "VFX" / "Edit_A"
+            (timeline / "timeline_assets").mkdir(parents=True)
+            job = {"id": 1, "timelines": [{"title": "Edit_A", "shots": [
+                {"base_path": str(timeline / "SHOT010")}
+            ]}]}
+            harness = AssetsHarness(job)
+            harness._update_assets_action_buttons()
+            with patch.object(Path, "stat", side_effect=OSError(1326, "Logon failure")):
+                harness._update_assets_action_buttons()
+                self.assertFalse(harness.btn_open_timeline_assets.isEnabled())
+                self.assertFalse(harness.btn_open_job_assets.isEnabled())
+            harness._update_assets_action_buttons()
+            self.assertTrue(harness.btn_open_timeline_assets.isEnabled())
+            self.assertTrue(harness.btn_open_job_assets.isEnabled())
 
     def test_timeline_matchmove_state_updates_when_switching_timelines(self):
         with tempfile.TemporaryDirectory() as temp_dir:

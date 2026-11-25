@@ -53,6 +53,14 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSET_ROOT_DIRECTORY_NAMES = {"vfx", "nuke"}
 
 
+def _dashboard_asset_path(parent, directory, *relative_parts) -> Path | None:
+    """Treat inaccessible project storage as unavailable during dashboard refresh."""
+    try:
+        return asset_path(parent, directory, *relative_parts)
+    except OSError:
+        return None
+
+
 def _single_shot(owner, delay: int, callback) -> None:
     """Keep delayed work owned by its page so deletion cancels it."""
     timer = QTimer(owner)
@@ -1633,7 +1641,7 @@ class page_nukedash(QMainWindow):
         vfx_root = self._infer_vfx_root_from_shot_dir(shot_dir)
         if vfx_root is None:
             return None
-        return asset_path(vfx_root, 'job_assets')
+        return _dashboard_asset_path(vfx_root, 'job_assets')
 
     def _resolved_job_matchmove_dir(self) -> Path | None:
         configured = str((self._active_job_data() or {}).get("matchmove_path") or "").strip()
@@ -1642,7 +1650,7 @@ class page_nukedash(QMainWindow):
         assets = self._resolve_job_assets_dir()
         if assets is None:
             return None
-        return asset_path(assets.parent, 'job_assets', 'matchmove')
+        return _dashboard_asset_path(assets.parent, 'job_assets', 'matchmove')
 
     def _discover_job_matchmove_candidates(self, job_data: dict | None = None) -> list[TimelineMatchmoveCandidate]:
         job = job_data if isinstance(job_data, dict) else self._active_job_data()
@@ -1807,9 +1815,10 @@ class page_nukedash(QMainWindow):
 
     def _legacy_timeline_assets_dir(self) -> Path | None:
         assets = self._resolve_timeline_assets_dir()
-        if assets is not None and assets.is_dir():
-            return assets
-        return None
+        try:
+            return assets if assets is not None and assets.is_dir() else None
+        except OSError:
+            return None
 
     def _resolve_timeline_assets_dir(self) -> Path | None:
         timeline_data = self._active_timeline_data()
@@ -1817,7 +1826,7 @@ class page_nukedash(QMainWindow):
         if shot_dir is not None:
             timeline_root = shot_dir.parent
             if timeline_root and timeline_root.name.lower() not in ASSET_ROOT_DIRECTORY_NAMES:
-                return asset_path(timeline_root, 'timeline_assets')
+                return _dashboard_asset_path(timeline_root, 'timeline_assets')
 
         job_data = self._active_job_data()
         reference_shot_dir = self._first_shot_dir_for_job(job_data)
@@ -1828,7 +1837,7 @@ class page_nukedash(QMainWindow):
         timeline_title = str((timeline_data or {}).get("title") or "").strip()
         if vfx_root is None or not timeline_title:
             return None
-        return asset_path(vfx_root / timeline_title, 'timeline_assets')
+        return _dashboard_asset_path(vfx_root / timeline_title, 'timeline_assets')
 
     def _resolved_timeline_matchmove_dir(self) -> Path | None:
         timeline_data = self._active_timeline_data()
@@ -1843,7 +1852,7 @@ class page_nukedash(QMainWindow):
         timeline_assets_dir = self._resolve_timeline_assets_dir()
         if timeline_assets_dir is None:
             return None
-        return asset_path(timeline_assets_dir.parent, 'timeline_assets', 'matchmove')
+        return _dashboard_asset_path(timeline_assets_dir.parent, 'timeline_assets', 'matchmove')
 
     def _discover_timeline_matchmove_candidates(
         self,
@@ -2226,7 +2235,7 @@ class page_nukedash(QMainWindow):
 
     def _on_open_timeline_assets_clicked(self) -> None:
         directory = self._legacy_timeline_assets_dir()
-        if directory is None or not directory.is_dir():
+        if directory is None:
             QMessageBox.information(self, "Timeline Assets", "The legacy timeline assets folder is unavailable.")
             return
         self._open_assets_directory(directory, "Timeline Assets")

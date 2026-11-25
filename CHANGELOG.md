@@ -8,7 +8,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-25 04:12:28 PM +00:00] Tested asset button recovery after share authentication failures.
+
 ### Fixed
+
+- [2026-11-25 04:12:28 PM +00:00] Keep dashboard open when project share authentication fails.
 
 ## 6.1.3 - 2026-11-25
 

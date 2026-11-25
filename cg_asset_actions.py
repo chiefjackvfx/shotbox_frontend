@@ -29,8 +29,8 @@ def refresh_buttons(page, *, loading=False):
     layout = getattr(page, "horizontalLayout_assets_actions", None)
     if layout is None:
         return
-    cg_root = None if loading else job_cg_root(page)
     try:
+        cg_root = None if loading else job_cg_root(page)
         projects = helpers.list_cg_projects(cg_root) if cg_root else []
     except OSError:
         projects = []
