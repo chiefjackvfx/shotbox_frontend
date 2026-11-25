@@ -6,68 +6,30 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
-- [2026-11-25 12:39:18 PM +00:00] Added blue glass iris with stronger radial colour separation.
-
-- [2026-11-25 12:08:14 PM +00:00] Choose iris reveal or no animation in Login settings.
-
-- [2026-11-25 11:34:43 AM +00:00] Reveal workspace with rotating aperture blades and sweeping amber flare.
-
-- [2026-11-25 11:14:06 AM +00:00] Added faint grain and focus highlights to profile circles.
-
-- [2026-11-25 11:08:11 AM +00:00] Added profile colours and smooth, pausable countdown rings.
-
-- [2026-11-25 10:25:40 AM +00:00] Reopen the last profile after three seconds by default.
-
-- [2026-11-24 12:20:41 PM +00:00] Prepare task rows during remaining profile picker time.
-
-- [2026-11-24 11:51:16 AM +00:00] Preload dashboard shots during the artist picker countdown.
-
-- [2026-11-24 11:38:52 AM +00:00] Load artist settings and identity before desktop startup.
-
-- [2026-11-24 09:52:34 AM +00:00] Added standalone VFX profile picker with horizontal initial circles.
-- [2026-11-24 09:58:42 AM +00:00] Profile picker resumes last artist after five-second countdown.
-
 ### Changed
-
-- [2026-11-25 12:10:59 PM +00:00] Wrap login profiles into centred rows sized for the screen.
-
-- [2026-11-25 12:09:06 PM +00:00] Restored borderless login with draggable Shotbox title bar.
-
-- [2026-11-24 03:15:19 PM +00:00] Prepare artist workspace ahead of selection without automatic login.
-
-- [2026-11-24 03:10:08 PM +00:00] Enlarge login layout and retain its size throughout startup.
-
-- [2026-11-24 12:17:53 PM +00:00] Show live shot preparation progress on the profile picker.
-
-- [2026-11-24 09:59:53 AM +00:00] Highlight selected artist and grey out other profile circles.
-- [2026-11-24 10:02:25 AM +00:00] Match profile splash to Shotbox branding and active desktop theme.
-- [2026-11-24 10:08:54 AM +00:00] Pause profile countdown while browsing and show artist names.
-- [2026-11-24 10:11:38 AM +00:00] Give profile splash a frameless Shotbox title bar.
 
 ### Fixed
 
-- [2026-11-25 12:43:29 PM +00:00] Fixed native chromatic iris crash during dashboard capture.
+## 6.1.0 - 2026-11-25
 
-- [2026-11-25 12:06:43 PM +00:00] Reveal live desktop through iris during login.
+### Added
 
-- [2026-11-25 12:01:57 PM +00:00] Hold final iris frame 250ms after dashboard paints.
+- Added profile colours and smooth, pausable countdown rings.
+- Prepare task rows during remaining profile picker time.
+- Preload dashboard shots during the artist picker countdown.
+- Load artist settings and identity before desktop startup.
+- Added standalone VFX profile picker with horizontal initial circles.
 
-- [2026-11-25 11:59:27 AM +00:00] Mask workspace inside iris before showing the main window.
+### Fixed
 
-- [2026-11-24 03:51:24 PM +00:00] Stop activity workers before switching preloaded artist workspaces.
-
-- [2026-11-24 02:00:37 PM +00:00] Keep login visible until dashboard shots and tasks finish loading.
-
-- [2026-11-24 12:06:50 PM +00:00] Prepare shot cards during profile selection without startup progress popup.
-
-- [2026-11-19 10:58:56 AM +00:00] Show failing Houdini executable paths during CG asset creation.
-- [2026-11-19 10:59:09 AM +00:00] Fix frame range reporting in Houdini acceptance checks.
-- [2026-11-19 11:05:47 AM +00:00] Preserve source framing in MP4 previews at 1080 pixels tall.
-- [2026-11-23 12:25:16 PM +00:00] Detect timeline import destinations from project folders.
-- [2026-11-23 12:28:18 PM +00:00] Open Job Assets on left-click, with menu on right-click.
-- [2026-11-23 12:28:58 PM +00:00] Render full Nuke project ranges in batch denoise.
-- [2026-11-23 12:29:03 PM +00:00] Resolve relative ARRIRAW plate paths when loading preview timing.
-- [2026-11-23 04:39:20 PM +00:00] Load offline references saved as Windows network paths.
+- Show failing Houdini executable paths during CG asset creation.
+- Fix frame range reporting in Houdini acceptance checks.
+- Preserve source framing in MP4 previews at 1080 pixels tall.
+- Detect timeline import destinations from project folders.
+- Open Job Assets on left-click, with menu on right-click.
+- Render full Nuke project ranges in batch denoise.
+- Resolve relative ARRIRAW plate paths when loading preview timing.
+- Load offline references saved as Windows network paths.
 
 ## 6.0.1 - 2026-11-18
 
