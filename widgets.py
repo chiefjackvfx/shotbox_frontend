@@ -1676,9 +1676,12 @@ class ShotCard(QWidget):
         return self._default_matchmove_dir()
 
     def _open_shot_assets(self) -> None:
-        assets_dir = self._shot_assets_dir()
-        assets_dir.mkdir(parents=True, exist_ok=True)
-        self.filesIO.openFileLocation(assets_dir)
+        try:
+            assets_dir = self._shot_assets_dir()
+            assets_dir.mkdir(parents=True, exist_ok=True)
+            self.filesIO.openFileLocation(assets_dir)
+        except OSError as exc:
+            QMessageBox.warning(self, "Open Shot Assets", str(exc))
 
     def _update_matchmove_button_visibility(self) -> None:
         self.btn_open_matchmove.setVisible(bool(self._matchmove_projects) and not self._compact_mode)

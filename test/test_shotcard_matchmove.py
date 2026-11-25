@@ -168,6 +168,25 @@ class ShotCardMatchmoveTests(unittest.TestCase):
                 return action
         raise AssertionError(f"Action not found: {text}")
 
+    def test_shot_card_recovers_from_unavailable_asset_share(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shot = Path(tmpdir)
+            project = shot / "shot_assets" / "cg" / "Oak" / "Oak_v001.hip"
+            project.parent.mkdir(parents=True)
+            project.touch()
+            stat = Path.stat
+
+            def deny_shot_access(path, *args, **kwargs):
+                if path == shot or shot in path.parents:
+                    raise OSError(1326, "Logon failure")
+                return stat(path, *args, **kwargs)
+
+            with mock.patch.object(Path, "stat", deny_shot_access):
+                card, _ = self._make_card(tmpdir)
+                self.assertTrue(card.shot_cg_assets.isHidden())
+            card.apply_file_state_snapshot(None)
+            self.assertEqual([b.text() for b in card._shot_cg_buttons], [project.name])
+
     def test_colourspace_context_menu_uses_shared_presets(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             card, _fake_folders = self._make_card(

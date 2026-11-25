@@ -8,7 +8,12 @@ All notable frontend publish changes should be documented in this file.
 
 ### Changed
 
+- [2026-11-25 04:28:51 PM +00:00] Removed bundled rockybtw user settings.
+- [2026-11-25 04:28:51 PM +00:00] Tested shot card recovery after share authentication failures.
+
 ### Fixed
+
+- [2026-11-25 04:28:51 PM +00:00] Handle inaccessible asset shares during shot refresh and actions.
 
 ## 6.1.4 - 2026-11-25
 

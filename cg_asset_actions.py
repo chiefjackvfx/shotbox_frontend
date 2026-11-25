@@ -156,8 +156,8 @@ def update_shot_visibility(card):
 
 
 def refresh_shot_buttons(card):
-    cg_root = shot_cg_root(card)
     try:
+        cg_root = shot_cg_root(card)
         projects = helpers.list_cg_projects(cg_root) if cg_root else []
     except OSError:
         projects = []
@@ -207,11 +207,11 @@ def open_shot_project(card, button):
 
 def create_for_shot(card):
     from cg_asset_dialog import show_create_dialog
-    cg_root = shot_cg_root(card)
-    if cg_root is None:
-        QMessageBox.warning(card, "Create CG Asset", "No shot assets folder could be resolved.")
-        return
     try:
+        cg_root = shot_cg_root(card)
+        if cg_root is None:
+            QMessageBox.warning(card, "Create CG Asset", "No shot assets folder could be resolved.")
+            return
         sources = helpers.discover_exports_in_matchmove([Path(card._resolved_matchmove_dir())])
         title = str((card.data or {}).get("title") or Path(card._normalized_shot_dir()).name)
         project = show_create_dialog(cg_root, sources, configured_houdini(), card, context_title=f"Shot {title}")
