@@ -6,6 +6,12 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-25 11:34:43 AM +00:00] Crossfade the login picker into the ready workspace.
+
+- [2026-11-25 11:14:06 AM +00:00] Added faint grain and focus highlights to profile circles.
+
+- [2026-11-25 11:08:11 AM +00:00] Added profile colours and smooth, pausable countdown rings.
+
 - [2026-11-25 10:25:40 AM +00:00] Reopen the last profile after three seconds by default.
 
 - [2026-11-24 12:20:41 PM +00:00] Prepare task rows during remaining profile picker time.

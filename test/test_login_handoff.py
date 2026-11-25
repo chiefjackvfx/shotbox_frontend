@@ -12,7 +12,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
 import http_help
-from artist_picker import ProfileSplash
+from artist_picker import ArtistCircle, ProfileSplash
 from main import show_after_workspace_load
 from page_nukedash import page_nukedash
 from settings import SettingsManager
@@ -55,7 +55,18 @@ class LoginHandoffTests(unittest.TestCase):
         self.assertEqual(picker.artist_id, "2")
 
         returning = open_picker()
-        QTest.qWait(2500)
+        QTest.qWait(150)
+        alternative = returning.findChildren(ArtistCircle)[1]
+        alternative.setFocus()
+        QTest.qWait(50)
+        self.assertFalse(returning.login_timer.isActive())
+        paused = returning.returning_artist.countdown_fraction
+        self.assertGreater(paused, 0)
+        self.assertEqual(returning.browse_name.text(), "Auto-open paused")
+        QTest.qWait(200)
+        self.assertEqual(returning.returning_artist.countdown_fraction, paused)
+        returning.returning_artist.setFocus()
+        QTest.qWait(2350)
         self.assertIsNone(returning.artist_id)
         QTest.qWait(650)
         self.assertEqual(returning.artist_id, "1")

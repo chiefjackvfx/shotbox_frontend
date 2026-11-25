@@ -1,11 +1,15 @@
 """Frameless artist picker shared by desktop startup and the design preview."""
 
 
-from PyQt6.QtCore import QEvent, QEventLoop, QPointF, QRectF, Qt, QTimer
-from PyQt6.QtGui import QColor, QFont, QPainter, QPen
+from functools import cache
+from random import Random
+from zlib import crc32
+
+from PyQt6.QtCore import QAbstractAnimation, QEasingCurve, QEvent, QEventLoop, QRectF, Qt, QTimer, QVariantAnimation
+from PyQt6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPen
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QProgressBar, QScrollArea, QVBoxLayout, QWidget,
+    QProgressBar, QScrollArea, QStyle, QVBoxLayout, QWidget,
 )
 
 from themes import set_widget_style, theme_colour
@@ -15,6 +19,27 @@ PICKER_WIDTH = 640
 PICKER_HEIGHT = 380
 DIAMETER = 100
 GAP = 24
+LOGIN_MS = 3000
+
+
+def motion_enabled(widget):
+    style = widget.style()
+    return (style.styleHint(QStyle.StyleHint.SH_Widget_Animate)
+            and style.styleHint(QStyle.StyleHint.SH_Widget_Animation_Duration) > 0)
+
+
+@cache
+def circle_grain():
+    side = 128
+    noise = Random(17).randbytes(side * side)
+    tile = QImage(noise, side, side, side, QImage.Format.Format_Indexed8)
+    palette = []
+    for sample in range(256):
+        delta = sample - 128
+        tone = 255 if delta > 0 else 0
+        palette.append(QColor(tone, tone, tone, abs(delta) // 36).rgba())
+    tile.setColorTable(palette)
+    return QBrush(tile)
 
 
 class ArtistCircle(QPushButton):
@@ -27,34 +52,58 @@ class ArtistCircle(QPushButton):
         self.setAccessibleName(f"{name or username} ({username})")
         self.setToolTip(self.accessibleName())
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedSize(DIAMETER + 10, DIAMETER + 10)
+        self.countdown_fraction = None
+        self.highlight = QVariantAnimation(self)
+        self.highlight.setStartValue(0.0)
+        self.highlight.setEndValue(1.0)
+        self.highlight.setDuration(160)
+        self.highlight.setEasingCurve(QEasingCurve.Type.InOutSine)
+        self.highlight.valueChanged.connect(lambda _: self.update())
+        colours = ("#514552", "#394f57", "#4c5041", "#494b62", "#59473c")
+        self.fill = QColor(colours[crc32(username.encode()) % len(colours)]).darker(110)
+        self.setFixedSize(DIAMETER + 18, DIAMETER + 40)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover)
         self.setCheckable(True)
         self.setAutoDefault(True)
 
-    def hitButton(self, point):
-        offset = QPointF(point) - QRectF(self.rect()).center()
-        return QPointF.dotProduct(offset, offset) <= (DIAMETER / 2) ** 2
+    def set_highlighted(self, active):
+        direction = (QAbstractAnimation.Direction.Forward if active
+                     else QAbstractAnimation.Direction.Backward)
+        self.highlight.setDirection(direction)
+        target = self.highlight.duration() if active else 0
+        if not motion_enabled(self):
+            self.highlight.stop()
+            self.highlight.setCurrentTime(target)
+        elif (self.highlight.currentTime() != target
+              and self.highlight.state() != QAbstractAnimation.State.Running):
+            self.highlight.start()
 
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        disc = QRectF(self.rect()).adjusted(5, 5, -5, -5)
+        emphasis = self.highlight.currentValue()
+        lift = 2 * emphasis
+        disc = QRectF((self.width() - DIAMETER) / 2, 8 - lift, DIAMETER, DIAMETER)
         selected = self.isChecked()
         accent = QColor(theme_colour("#ff6b35"))
-        fill = accent if selected else QColor("#373737")
-        ink = QColor(theme_colour("#1a1d23")) if selected else QColor("#d4d4d4")
-        if self.underMouse():
-            fill = fill.lighter(116)
+        fill = self.fill.lighter(100 + round(27 * emphasis))
+        ink = QColor("#d3cfc9").lighter(100 + round(17 * emphasis))
         if self.isDown():
             fill = fill.darker(120)
         painter.setPen(QPen(accent if selected else QColor("#606060"), 1))
         painter.setBrush(fill)
         painter.drawEllipse(disc)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(circle_grain())
+        painter.drawEllipse(disc.adjusted(0.5, 0.5, -0.5, -0.5))
         if selected:
-            painter.setPen(QPen(accent, 2))
+            painter.setPen(QPen(QColor("#62534d"), 2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawEllipse(disc.adjusted(-3, -3, 3, 3))
+            ring = disc.adjusted(-4, -4, 4, 4)
+            painter.drawEllipse(ring)
+            if self.countdown_fraction is not None:
+                painter.setPen(QPen(accent, 3, cap=Qt.PenCapStyle.RoundCap))
+                painter.drawArc(ring, 90 * 16, -round(5760 * self.countdown_fraction))
         if self.hasFocus():
             painter.setPen(QPen(ink, 1, Qt.PenStyle.DotLine))
             painter.setBrush(Qt.BrushStyle.NoBrush)
@@ -65,6 +114,11 @@ class ArtistCircle(QPushButton):
         painter.setFont(font)
         painter.setPen(ink)
         painter.drawText(disc, Qt.AlignmentFlag.AlignCenter, self.text())
+        painter.setFont(self.font())
+        name = painter.fontMetrics().elidedText(
+            self.display_name, Qt.TextElideMode.ElideRight, self.width() - 4)
+        painter.drawText(QRectF(0, DIAMETER + 12, self.width(), 26),
+                         Qt.AlignmentFlag.AlignCenter, name)
 
 
 class ProfileSplash(QDialog):
@@ -172,7 +226,10 @@ class ProfileSplash(QDialog):
         self.login_timer = QTimer(self)
         self.login_timer.setSingleShot(True)
         self.login_timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.login_timer.setInterval(3000)
+        self.remaining_ms = LOGIN_MS
+        self.ring_timer = QTimer(self)
+        self.ring_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self.ring_timer.timeout.connect(self.refresh_ring)
         self.login_timer.timeout.connect(lambda: self.choose(self.returning_artist.artist_id))
         self.retry_button = QPushButton("Retry")
         self.retry_button.hide()
@@ -212,10 +269,7 @@ class ProfileSplash(QDialog):
         scroll.setMinimumHeight(scroll_height)
         artist = self.returning_artist
         if artist:
-            self.status_label.setText(f"Last used · {artist.display_name}")
             artist.setFocus()
-        for control in (self.status_label, self.progress):
-            control.setVisible(artist is not None)
 
         self.update_login_timer()
 
@@ -224,11 +278,39 @@ class ProfileSplash(QDialog):
         self.update_login_timer()
 
     def update_login_timer(self):
-        self.login_timer.stop()
-        if (self.auto_login.isChecked() and self.returning_artist is not None
-                and self.isVisible() and self.artist_id is None
-                and (not self.keep_open_after_choice or self.selection_loop is not None)):
-            self.login_timer.start()
+        artist = self.returning_artist
+        if artist is None:
+            return
+        enabled = (self.auto_login.isChecked() and self.isVisible() and self.artist_id is None
+                   and (not self.keep_open_after_choice or self.selection_loop is not None))
+        browsing = any(isinstance(item, ArtistCircle) and item is not artist
+                       for item in (self.hovered_artist, self.focusWidget()))
+        if enabled and not browsing:
+            if not self.login_timer.isActive():
+                self.login_timer.start(self.remaining_ms)
+                refresh_hz = self.screen().refreshRate() or 60
+                frame_ms = max(1, round(1000 / refresh_hz))
+                self.ring_timer.start(frame_ms if motion_enabled(self) else 1000)
+            self.browse_name.setText(f"Opening as {artist.display_name}…")
+        else:
+            if self.login_timer.isActive():
+                self.remaining_ms = max(1, self.login_timer.remainingTime())
+            self.login_timer.stop()
+            self.ring_timer.stop()
+            if not enabled:
+                self.remaining_ms = LOGIN_MS
+            self.browse_name.setText("Auto-open paused" if enabled
+                                     else f"Last used · {artist.display_name}")
+        self.refresh_ring()
+
+    def refresh_ring(self):
+        artist = self.returning_artist
+        remaining = self.login_timer.remainingTime()
+        if remaining < 0:
+            remaining = self.remaining_ms
+        artist.countdown_fraction = (1 - remaining / LOGIN_MS
+                                     if self.auto_login.isChecked() else None)
+        artist.update()
 
     def set_load_progress(self, text, completed=0, total=0):
         self.progress.show()
@@ -278,13 +360,9 @@ class ProfileSplash(QDialog):
         if self.artist_id is not None or not self.isVisible():
             return
         focused = self.focusWidget()
-        if not isinstance(focused, ArtistCircle):
-            focused = None
-        alternatives = [
-            artist for artist in (self.hovered_artist, focused)
-            if artist is not None and artist is not self.returning_artist
-        ]
-        self.browse_name.setText(alternatives[0].display_name if alternatives else "")
+        for circle in self.findChildren(ArtistCircle):
+            circle.set_highlighted(circle is self.hovered_artist or circle is focused)
+        self.update_login_timer()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -292,6 +370,8 @@ class ProfileSplash(QDialog):
 
     def hideEvent(self, event):
         self.login_timer.stop()
+        self.ring_timer.stop()
+        self.remaining_ms = LOGIN_MS
         self.browse_timer.stop()
         self.hovered_artist = None
         super().hideEvent(event)
@@ -300,6 +380,10 @@ class ProfileSplash(QDialog):
         if self.artist_id is not None:
             return
         self.login_timer.stop()
+        self.ring_timer.stop()
+        if self.returning_artist:
+            self.returning_artist.countdown_fraction = None
+            self.returning_artist.update()
         self.auto_login.hide()
         self.artist_id = artist_id
         if self.selection_loop is None and not self.keep_open_after_choice:
@@ -325,7 +409,6 @@ class ProfileSplash(QDialog):
         self.rejected.connect(self.selection_loop.quit)
         self.show()
         self.update_browsing()
-        self.update_login_timer()
         self.selection_loop.exec()
         self.selection_loop = None
         self.repaint()
