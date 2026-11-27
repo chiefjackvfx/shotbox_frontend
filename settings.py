@@ -27,6 +27,8 @@ from PyQt6.QtCore import QObject, QRunnable, QThreadPool, Qt, pyqtSignal, QSize,
 from PyQt6.QtGui import QDesktopServices, QFont, QIcon, QWheelEvent
 
 import app_update
+from startup_tabs import STARTUP_TABS
+import desktop_launcher
 import plugins_install
 from app_version import UPDATE_BRANCH
 from themes import DEFAULT_THEME, THEMES, normalize_theme
@@ -120,6 +122,7 @@ DEFAULT_SETTINGS = {
     "deadline_concurrent_tasks": 1,
     "threede_exe_path": "",
     "houdini_exe_path": "",
+    "blender_exe_path": "",
     "houdini_user_pref_dir": "",
     
     # UI density settings
@@ -178,7 +181,7 @@ DEFAULT_SETTINGS = {
     },
 
     # Startup behavior
-    "startup_tab": 0,  # 0=Tasks, 1=Review, 2=XML Import, 3=Activity, 4=Settings, 5=Import Timeline
+    "startup_tab": 0,  # Stable ID from STARTUP_TABS.
     "show_startup_loading_dialog": True,
     "login_animation": "iris",
     "enable_assignment_board": False,
@@ -614,6 +617,15 @@ class SettingsPage(QWidget):
         houdini_exe_row.addWidget(self.houdini_exe_browse_btn)
         preview_layout.addRow("Houdini Executable:", houdini_exe_row)
 
+        blender_exe_row = QHBoxLayout()
+        self.blender_exe_path_edit = QLineEdit()
+        self.blender_exe_path_edit.setPlaceholderText("Auto-detect using PATH")
+        blender_exe_row.addWidget(self.blender_exe_path_edit)
+        self.blender_exe_browse_btn = QPushButton("Browse")
+        self.blender_exe_browse_btn.setFixedWidth(80)
+        blender_exe_row.addWidget(self.blender_exe_browse_btn)
+        preview_layout.addRow("Blender Executable:", blender_exe_row)
+
         container_layout.addWidget(preview_group)
 
         deadline_group = self._create_group_box("Deadline Denoise")
@@ -833,43 +845,54 @@ class SettingsPage(QWidget):
         startup_group = self._create_group_box("Startup")
         startup_layout = QFormLayout(startup_group)
 
+        self.desktop_shortcut = desktop_launcher.find_launcher()
+        if self.desktop_shortcut:
+            terminal_check = QCheckBox("Show terminal window when Shotbox starts")
+            terminal_check.setChecked(desktop_launcher.terminal_setting(self.desktop_shortcut))
+            terminal_check.setToolTip("Applies when opening Shotbox from the Linux application menu.")
+            startup_layout.addRow("", terminal_check)
+
+            def change_terminal(checked):
+                try:
+                    desktop_launcher.set_terminal(self.desktop_shortcut, checked)
+                except (OSError, ValueError) as exc:
+                    terminal_check.setChecked(not checked)
+                    QMessageBox.warning(self, "Could not update desktop shortcut", str(exc))
+
+            terminal_check.clicked.connect(change_terminal)
+
         self.startup_tab_combo = NoScrollComboBox()
-        self.startup_tab_combo.addItem("Tasks", 0)
-        self.startup_tab_combo.addItem("Review", 1)
-        self.startup_tab_combo.addItem("XML Import V2", 2)
-        self.startup_tab_combo.addItem("Activity", 3)
-        self.startup_tab_combo.addItem("Settings", 4)
-        self.startup_tab_combo.addItem("Import Timeline", 5)
-        self.startup_tab_combo.addItem("Timeline Review", 6)
-        startup_layout.addRow("Default Tab:", self.startup_tab_combo)
+        for tab_id, (title, _) in STARTUP_TABS.items():
+            self.startup_tab_combo.addItem(title, tab_id)
+        startup_layout.addRow("Default tab:", self.startup_tab_combo)
 
         self.show_startup_loading_check = QCheckBox("Show Loading Dialog on Startup")
         startup_layout.addRow("", self.show_startup_loading_check)
         self.show_startup_loading_check.setVisible(not hasattr(self._settings, "artist"))
 
-        self.enable_assignment_board_check = QCheckBox("Enable Assignment Board Tab")
-        startup_layout.addRow("", self.enable_assignment_board_check)
+        always_available = QLabel("Tasks / Nuke dash, Timeline Review, Toolbox, Settings")
+        always_available.setWordWrap(True)
+        startup_layout.addRow("Always available:", always_available)
 
-        self.enable_review_page_check = QCheckBox("Enable Review Tab")
+        self.enable_assignment_board_check = QCheckBox("Assignment Board")
+        self.enable_review_page_check = QCheckBox("Review")
+        self.enable_timeline_import_page_check = QCheckBox("Import Timeline")
+        self.enable_activity_page_check = QCheckBox("Activity")
+        startup_layout.addRow("Optional tabs:", self.enable_assignment_board_check)
         startup_layout.addRow("", self.enable_review_page_check)
-
-        self.enable_activity_page_check = QCheckBox("Enable Activity Tab")
+        startup_layout.addRow("", self.enable_timeline_import_page_check)
         startup_layout.addRow("", self.enable_activity_page_check)
 
-        self.enable_import_page_check = QCheckBox("Enable Import Tab")
-        startup_layout.addRow("", self.enable_import_page_check)
-
-        self.enable_xml_import_page_check = QCheckBox("Enable XML Import V2 Tab")
+        self.enable_import_page_check = QCheckBox("Import (Legacy)")
+        self.enable_xml_import_page_check = QCheckBox("XML Import V2 (Legacy)")
+        startup_layout.addRow("Legacy tabs:", self.enable_import_page_check)
         startup_layout.addRow("", self.enable_xml_import_page_check)
-        self.enable_timeline_import_page_check = QCheckBox("Enable Import Timeline Tab")
-        startup_layout.addRow("", self.enable_timeline_import_page_check)
 
-        startup_pages_note = QLabel(
-            "Optional page toggles apply on the next app launch."
-        )
+        startup_pages_note = QLabel("Tab visibility changes apply on the next launch. "
+                                    "If the default tab is disabled, Shotbox opens Tasks.")
         startup_pages_note.setWordWrap(True)
         startup_pages_note.setObjectName("startup_pages_note")
-        startup_layout.addRow("", startup_pages_note)
+        startup_layout.addRow(startup_pages_note)
 
         container_layout.addWidget(startup_group)
         
@@ -1239,6 +1262,7 @@ class SettingsPage(QWidget):
         self.deadline_concurrent_tasks_spin.setValue(self._settings.get("deadline_concurrent_tasks", 1))
         self.threede_exe_path_edit.setText(self._settings.get("threede_exe_path", ""))
         self.houdini_exe_path_edit.setText(self._settings.get("houdini_exe_path", ""))
+        self.blender_exe_path_edit.setText(self._settings.get("blender_exe_path", ""))
         self._refresh_plugins_panel()
         self.houdini_pref_combo.setCurrentText(self._settings.get("houdini_user_pref_dir", ""))
         self._refresh_houdini_plugin_panel()
@@ -1417,6 +1441,7 @@ class SettingsPage(QWidget):
         self.nuke_exe_browse_btn.clicked.connect(self._on_browse_nuke_exe)
         self.threede_exe_browse_btn.clicked.connect(self._on_browse_threede_exe)
         self.houdini_exe_browse_btn.clicked.connect(self._on_browse_houdini_exe)
+        self.blender_exe_browse_btn.clicked.connect(self._on_browse_blender_exe)
         self.threede_exe_path_edit.textChanged.connect(self._refresh_plugins_panel)
         self.install_3de_plugins_btn.clicked.connect(self._on_install_3de_plugins)
         self.houdini_pref_combo.currentTextChanged.connect(self._refresh_houdini_plugin_panel)
@@ -1572,6 +1597,7 @@ class SettingsPage(QWidget):
         self._set_pending_setting("deadline_concurrent_tasks", self.deadline_concurrent_tasks_spin.value(), save=False)
         self._set_pending_setting("threede_exe_path", self.threede_exe_path_edit.text().strip(), save=False)
         self._set_pending_setting("houdini_exe_path", self.houdini_exe_path_edit.text().strip(), save=False)
+        self._set_pending_setting("blender_exe_path", self.blender_exe_path_edit.text().strip(), save=False)
         self._set_pending_setting("houdini_user_pref_dir", self.houdini_pref_combo.currentText().strip(), save=False)
         
         # Debug modes
@@ -1702,6 +1728,7 @@ class SettingsPage(QWidget):
             self._emit_saved_setting("nuke_exe_path", self.nuke_exe_path_edit.text().strip())
             self._emit_saved_setting("threede_exe_path", self.threede_exe_path_edit.text().strip())
             self._emit_saved_setting("houdini_exe_path", self.houdini_exe_path_edit.text().strip())
+            self._emit_saved_setting("blender_exe_path", self.blender_exe_path_edit.text().strip())
 
             self._emit_saved_setting("theme_file", self.theme_combo.currentData() or DEFAULT_THEME)
 
@@ -1908,6 +1935,11 @@ class SettingsPage(QWidget):
             self._refresh_houdini_plugin_panel()
         self.houdini_status_label.setText(message)
         (QMessageBox.warning if failed else QMessageBox.information)(self, "Houdini Plugin Installation", message)
+
+    def _on_browse_blender_exe(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Select Blender Executable", "", "All Files (*)")
+        if path:
+            self.blender_exe_path_edit.setText(path)
 
     def _on_browse_houdini_exe(self):
         path, _ = QFileDialog.getOpenFileName(self, "Select Houdini Executable", "", "All Files (*)")

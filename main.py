@@ -30,6 +30,7 @@ from PyQt6 import QtWidgets
 from PyQt6.QtCore import QProcess, QTimer, Qt, qInstallMessageHandler
 from PyQt6.QtWidgets import QMainWindow, QMessageBox, QTabWidget, QSizePolicy
 
+from startup_tabs import STARTUP_TABS
 from artist_picker import ProfileIris, motion_enabled
 from input_behaviour import install_input_wheel_guard
 
@@ -226,7 +227,7 @@ class MainWindow(QMainWindow):
             self.page_nukedash.active_job_changed.connect(self.page_timeline_review.set_initial_job)
         self.tabs.addTab(self.page_timeline_review, 'Timeline Review')
         if hasattr(self, "page_importer"):
-            self.tabs.addTab(self.page_importer, 'Import')
+            self.tabs.addTab(self.page_importer, 'Import (Legacy)')
 
         # XML Import V2 (combined XML parsing + Nuke setup + Django import)
         xml_import_page_class = _load_optional_class(
@@ -234,7 +235,7 @@ class MainWindow(QMainWindow):
         )
         if xml_import_page_class is not None:
             self.page_xmlImport = xml_import_page_class()
-            self.tabs.addTab(self.page_xmlImport, 'XML Import V2')
+            self.tabs.addTab(self.page_xmlImport, 'XML Import V2 (Legacy)')
 
         timeline_import_class = _load_optional_class(
             self._enable_timeline_import_page, 'import_timeline_page', 'ImportTimelinePage'
@@ -451,16 +452,8 @@ class MainWindow(QMainWindow):
             self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
 
     def _startup_tab_widget(self, startup_tab: int):
-        logical_tabs = {
-            0: getattr(self, "page_nukedash", None),
-            1: getattr(self, "page_review", None),
-            2: getattr(self, "page_xmlImport", None),
-            3: getattr(self, "page_activity", None),
-            4: getattr(self, "page_settings", None),
-            5: getattr(self, "page_timelineImport", None),
-            6: getattr(self, "page_timeline_review", None),
-        }
-        return logical_tabs.get(startup_tab)
+        tab = STARTUP_TABS.get(startup_tab)
+        return getattr(self, tab[1], None) if tab else None
 
     def _apply_startup_tab(self) -> None:
         """Select the configured startup tab using stable logical tab ids."""
@@ -1214,6 +1207,8 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
         
+        if hasattr(self, "picker_memory"):
+            self.picker_memory.setValue("workspace_center", self.geometry().center())
         super().closeEvent(event)
 
 def show_after_workspace_load(window, picker):

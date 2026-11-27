@@ -697,6 +697,18 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
+    def test_new_startup_choices_open_the_selected_page(self):
+        for tab_id, attribute in ((7, "page_assignment_board"), (8, "page_importer"),
+                                  (9, "page_toolbox")):
+            with self.subTest(tab_id=tab_id):
+                window = build_main_window(startup_tab=tab_id, extra_settings={
+                    "enable_assignment_board": True, "enable_import_page": True,
+                })
+                try:
+                    self.assertIs(window.tabs.currentWidget(), getattr(window, attribute))
+                finally:
+                    window.close()
+
     def test_timeline_review_has_its_own_tab_and_stable_startup_id(self):
         window = build_main_window(startup_tab=6)
         try:
@@ -735,8 +747,8 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
             self.assertFalse(hasattr(window, "page_xmlImport"))
             self.assertNotIn("Assignment Board", tab_titles)
             self.assertNotIn("Review", tab_titles)
-            self.assertNotIn("Import", tab_titles)
-            self.assertNotIn("XML Import V2", tab_titles)
+            self.assertNotIn("Import (Legacy)", tab_titles)
+            self.assertNotIn("XML Import V2 (Legacy)", tab_titles)
             self.assertNotIn("📋 Activity", tab_titles)
         finally:
             window.close()
@@ -797,8 +809,8 @@ class MainWindowAssignmentBoardTests(unittest.TestCase):
             tab_titles = [window.tabs.tabText(i) for i in range(window.tabs.count())]
             self.assertIn("Assignment Board", tab_titles)
             self.assertIn("Review", tab_titles)
-            self.assertIn("Import", tab_titles)
-            self.assertIn("XML Import V2", tab_titles)
+            self.assertIn("Import (Legacy)", tab_titles)
+            self.assertIn("XML Import V2 (Legacy)", tab_titles)
             self.assertIn("📋 Activity", tab_titles)
             self.assertIs(window.tabs.currentWidget(), window.page_review)
         finally:
@@ -1217,6 +1229,36 @@ class NukeDashFilePollTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+
+    def test_poll_continues_after_share_login_failure_and_retries_shot(self):
+        with tempfile.TemporaryDirectory() as directory:
+            shot = Path(directory) / "umbrella010"
+            comp = shot / "renders" / "comp"
+            comp.mkdir(parents=True)
+            movie = comp / "umbrella010_v001.mov"
+            movie.touch()
+            denied = PollTrackingShotCard(1, str(shot))
+            other = PollTrackingShotCard(2, str(Path(directory) / "other"))
+            harness = FilePollHarness([PollTimelineWidget([denied, other])])
+            self.addCleanup(harness.deleteLater)
+            self.addCleanup(harness.close)
+            harness.filesIO = filesIO.Folders()
+            stat = Path.stat
+
+            def fail_comp_stat(path, *args, **kwargs):
+                if path == comp:
+                    raise OSError(1326, "Logon failure")
+                return stat(path, *args, **kwargs)
+
+            with mock.patch("render_detection.report_loaded_shot"):
+                with mock.patch.object(Path, "stat", fail_comp_stat):
+                    harness._poll_visible_shot_card_file_state_batch()
+                    harness._poll_visible_shot_card_file_state_batch()
+                    self.assertEqual(denied.snapshots, [])
+                    self.assertEqual(len(other.snapshots), 1)
+                    harness._shot_card_api.update_shot.assert_not_called()
+                harness._poll_visible_shot_card_file_state_batch()
+                self.assertEqual(denied.snapshots[0].render_path, str(movie))
 
     def test_file_poll_batches_visible_cards_on_current_timeline_only(self):
         timeline_one_cards = [

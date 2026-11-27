@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import os
+import shutil
 from pathlib import Path
 import sys
 import tempfile
@@ -70,6 +71,47 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
                 settings_manager=InMemorySettingsManager()
             )
 
+    @unittest.skipUnless(sys.platform.startswith("linux") and shutil.which("desktop-file-edit"),
+                         "Requires Linux desktop-file-utils")
+    def test_terminal_checkbox_updates_linux_menu_shortcut(self):
+        from PyQt6.QtWidgets import QCheckBox
+        with tempfile.TemporaryDirectory() as directory, mock.patch.dict(
+            os.environ, {"XDG_DATA_HOME": directory, "GIO_LAUNCHED_DESKTOP_FILE": ""}
+        ):
+            applications = Path(directory) / "applications"
+            applications.mkdir()
+            shortcut = applications / "shotbox.desktop"
+            shortcut.write_text(
+                "[Desktop Entry]\nType=Application\nName=Shotbox\n"
+                f'Exec="{settings.desktop_launcher.RUN_SCRIPT}"\nTerminal=true\n'
+            )
+            for initial in (True, False):
+                page = self._make_settings_page()
+                self.addCleanup(page.close)
+                checkbox = next(box for box in page.findChildren(QCheckBox)
+                                if box.text() == "Show terminal window when Shotbox starts")
+                self.assertEqual(checkbox.isChecked(), initial)
+                checkbox.click()
+                self.assertEqual(settings.desktop_launcher.terminal_setting(shortcut), not initial)
+
+    def test_dedicated_terminal_detaches_only_when_hidden(self):
+        launcher = settings.desktop_launcher
+        for preference in (False, True, None):
+            with (
+                self.subTest(preference=preference),
+                mock.patch.object(launcher, "find_launcher", return_value=Path("shotbox.desktop")),
+                mock.patch.object(launcher, "terminal_setting", return_value=preference),
+                mock.patch.object(launcher.subprocess, "Popen") as spawn,
+                mock.patch.object(launcher.os, "execv") as foreground,
+            ):
+                launcher.launch_from_dedicated_terminal()
+                if preference is False:
+                    self.assertTrue(spawn.call_args.kwargs["start_new_session"])
+                    foreground.assert_not_called()
+                else:
+                    foreground.assert_called_once()
+                    spawn.assert_not_called()
+
     def test_settings_page_has_no_manual_nuke_time_panel_or_private_state_access(self):
         from plugins.nuke.nuke_time_calc import managed_setup
         from PyQt6.QtWidgets import QGroupBox
@@ -130,10 +172,13 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
         self.assertEqual(events, [])
         self.assertIn('Save failed', page.save_status_label.text())
 
-    def test_houdini_executable_browse_and_settings_persistence(self):
+    def test_cg_executables_browse_and_settings_persistence(self):
         page = self._make_settings_page()
         self.addCleanup(page.close)
         self.assertEqual(page.houdini_exe_path_edit.text(), "")
+        with mock.patch.object(settings.QFileDialog, "getOpenFileName", return_value=("/opt/blender", "")):
+            page.blender_exe_browse_btn.click()
+        self.assertEqual(page._settings.get("blender_exe_path"), "")
         with mock.patch.object(settings.QFileDialog, "getOpenFileName", return_value=("/Houdini/bin/houdini", "")):
             page.houdini_exe_browse_btn.click()
         self.assertEqual(page._settings.get("houdini_exe_path"), "")
@@ -141,6 +186,7 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
         self.assertEqual(page._settings.get("houdini_exe_path"), "/Houdini/bin/houdini")
         page._load_current_values()
         self.assertEqual(page.houdini_exe_path_edit.text(), "/Houdini/bin/houdini")
+        self.assertEqual(page.blender_exe_path_edit.text(), "/opt/blender")
 
     def _update_status(self, *, can_update=True):
         return settings.app_update.UpdateStatus(
@@ -377,6 +423,13 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             page = settings.SettingsPage(settings_manager=manager)
 
         try:
+            choices = page.startup_tab_combo
+            self.assertEqual([choices.itemText(i) for i in range(choices.count())], [
+                "Tasks / Nuke dash", "Assignment Board", "Review", "Timeline Review",
+                "Import (Legacy)", "XML Import V2 (Legacy)", "Import Timeline",
+                "Activity", "Toolbox", "Settings",
+            ])
+            choices.setCurrentIndex(choices.findText("Toolbox"))
             self.assertTrue(page.enable_assignment_board_check.isChecked())
             self.assertFalse(page.enable_review_page_check.isChecked())
             self.assertTrue(page.enable_activity_page_check.isChecked())
@@ -394,6 +447,7 @@ class SettingsStartupOptionalPagesTests(unittest.TestCase):
             with mock.patch.object(settings.QMessageBox, "information", lambda *args, **kwargs: None):
                 page._save_all_settings()
 
+            self.assertEqual(manager.get("startup_tab"), 9)
             self.assertFalse(manager.get("enable_assignment_board"))
             self.assertTrue(manager.get("enable_review_page"))
             self.assertFalse(manager.get("enable_activity_page"))

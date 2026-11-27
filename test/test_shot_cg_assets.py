@@ -76,12 +76,12 @@ def test_shot_creation_discovers_only_own_exports_and_publishes_in_shot(make_car
     other.touch()
     prepared = tmp_path / "prepared.hip"
     prepared.write_bytes(b"prepared scene")
-    card = make_card(root)
+    card = make_card(root, duration="121")
     calls = []
 
     def create(cg_root, sources, configured, parent, **kwargs):
         calls.append((cg_root, sources, configured, parent, kwargs))
-        return helpers.publish_scene(prepared, cg_root, "Oak")
+        kwargs.pop("on_created")(helpers.publish_scene(prepared, cg_root, "Oak"))
 
     monkeypatch.setattr("cg_asset_dialog.show_create_dialog", create)
     with mock.patch.object(helpers, "open_scene") as launch:
@@ -90,7 +90,7 @@ def test_shot_creation_discovers_only_own_exports_and_publishes_in_shot(make_car
     assert project.read_bytes() == b"prepared scene"
     assert (project.parent / "geo").is_dir() and (project.parent / "assets").is_dir()
     assert calls == [(project.parent.parent, [own_export], "/configured/houdini", card,
-                      {"context_title": "Shot sho010"})]
+                      {"context_title": "Shot sho010", "shot_duration": "121"})]
     launch.assert_called_once_with(project, "/configured/houdini")
     assert card._shot_cg_buttons[0].text() == project.name
     assert not (root / "job_assets").exists()
@@ -152,7 +152,7 @@ def test_cancel_and_launch_failure_keep_asset_publication_safe(make_card, tmp_pa
     actions.create_for_shot(card)
     assert not (tmp_path / "shot_assets").exists()
     project = add_project(tmp_path)
-    monkeypatch.setattr("cg_asset_dialog.show_create_dialog", lambda *args, **kwargs: project)
+    monkeypatch.setattr("cg_asset_dialog.show_create_dialog", lambda *args, **kwargs: kwargs["on_created"](project))
     with mock.patch.object(helpers, "open_scene", side_effect=OSError("launch failed")), \
             mock.patch.object(actions.QMessageBox, "warning") as warning:
         actions.create_for_shot(card)

@@ -1,6 +1,7 @@
 """Dashboard and shot-card integration for filesystem-backed CG assets."""
 from pathlib import Path
 
+from PyQt6 import sip
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QFrame, QMenu, QMessageBox, QSizePolicy, QToolButton
 
@@ -12,6 +13,12 @@ from presentation_widgets import FlexibleButton
 
 def configured_houdini():
     return str(get_settings_manager().get("houdini_exe_path", "") or "")
+
+
+def configured_scene(project):
+    if helpers.scene_application(project) == "Blender":
+        return str(get_settings_manager().get("blender_exe_path", "") or "")
+    return configured_houdini()
 
 
 def job_cg_root(page):
@@ -53,7 +60,7 @@ def refresh_buttons(page, *, loading=False):
     for button, project in zip(buttons, projects):
         button.setProperty("project_path", str(project))
         button.setText(project.name)
-        button.setToolTip(f"Open Houdini scene\n{project}\nRight-click to open in Explorer")
+        button.setToolTip(f"Open {helpers.scene_application(project)} scene\n{project}\nRight-click to open in Explorer")
         button.show()
     layout.invalidate()
 
@@ -65,8 +72,8 @@ def open_project(page, button):
         projects = helpers.list_cg_projects(cg_root) if cg_root else []
         latest = next((project for project in projects if project.parent == previous.parent), None)
         if latest is None:
-            raise FileNotFoundError(f"This Houdini scene is unavailable:\n{previous}")
-        helpers.open_scene(latest, configured_houdini())
+            raise FileNotFoundError(f"This {helpers.scene_application(previous)} scene is unavailable:\n{previous}")
+        helpers.open_scene(latest, configured_scene(latest))
     except Exception as exc:
         QMessageBox.warning(page, "Open CG Asset", str(exc))
     finally:
@@ -92,6 +99,17 @@ def open_folder(page, folder):
         QMessageBox.warning(page, "Open CG Asset Folder", str(exc))
 
 
+def _open_created_project(project, owner, refresh):
+    if not sip.isdeleted(owner):
+        refresh(owner)
+    try:
+        helpers.open_scene(project, configured_scene(project))
+    except Exception as exc:
+        QMessageBox.warning(None if sip.isdeleted(owner) else owner, "CG Asset Created",
+                            f"Saved {project}\n\nCould not open {helpers.scene_application(project)}:\n{exc}\n\n"
+                            "Use the asset button to retry opening.")
+
+
 def create_for_job(page):
     from cg_asset_dialog import show_create_dialog
     assets = page._resolve_job_assets_dir()
@@ -101,16 +119,13 @@ def create_for_job(page):
     try:
         sources = helpers.discover_camera_exports(
             page._active_job_data() or {}, assets, page.filesIO.convert_path,
-            page._resolved_job_matchmove_dir())
-        project = show_create_dialog(job_cg_root(page), sources, configured_houdini(), page)
-        if project is not None:
-            refresh_buttons(page)
-            try:
-                helpers.open_scene(project, configured_houdini())
-            except Exception as exc:
-                QMessageBox.warning(page, "CG Asset Created",
-                                    f"Saved {project}\n\nCould not open Houdini:\n{exc}\n\n"
-                                    "Use the asset button to retry opening.")
+            page._resolved_job_matchmove_dir(), include_blender=True)
+        configured = configured_houdini()
+
+        def created(project):
+            _open_created_project(project, page, refresh_buttons)
+
+        show_create_dialog(job_cg_root(page), sources, configured, page, on_created=created)
     except Exception as exc:
         QMessageBox.warning(page, "Create CG Asset", str(exc))
 
@@ -183,7 +198,7 @@ def refresh_shot_buttons(card):
     for button, project in zip(buttons, projects):
         button.setProperty("project_path", str(project))
         button.setText(project.name)
-        button.setToolTip(f"Open Houdini scene\n{project}\nRight-click to open in Explorer")
+        button.setToolTip(f"Open {helpers.scene_application(project)} scene\n{project}\nRight-click to open in Explorer")
         button.show()
     update_shot_visibility(card)
     layout.invalidate()
@@ -197,8 +212,8 @@ def open_shot_project(card, button):
         projects = helpers.list_cg_projects(cg_root) if cg_root else []
         latest = next((project for project in projects if project.parent == previous.parent), None)
         if latest is None:
-            raise FileNotFoundError(f"This Houdini scene is unavailable:\n{previous}")
-        helpers.open_scene(latest, configured_houdini())
+            raise FileNotFoundError(f"This {helpers.scene_application(previous)} scene is unavailable:\n{previous}")
+        helpers.open_scene(latest, configured_scene(latest))
     except Exception as exc:
         QMessageBox.warning(card, "Open CG Asset", str(exc))
     finally:
@@ -212,16 +227,15 @@ def create_for_shot(card):
         if cg_root is None:
             QMessageBox.warning(card, "Create CG Asset", "No shot assets folder could be resolved.")
             return
-        sources = helpers.discover_exports_in_matchmove([Path(card._resolved_matchmove_dir())])
+        sources = helpers.discover_exports_in_matchmove([Path(card._resolved_matchmove_dir())], include_blender=True)
         title = str((card.data or {}).get("title") or Path(card._normalized_shot_dir()).name)
-        project = show_create_dialog(cg_root, sources, configured_houdini(), card, context_title=f"Shot {title}")
-        if project is not None:
-            refresh_shot_buttons(card)
-            try:
-                helpers.open_scene(project, configured_houdini())
-            except Exception as exc:
-                QMessageBox.warning(card, "CG Asset Created",
-                                    f"Saved {project}\n\nCould not open Houdini:\n{exc}\n\n"
-                                    "Use the asset button to retry opening.")
+        configured = configured_houdini()
+
+        def created(project):
+            _open_created_project(project, card, refresh_shot_buttons)
+
+        show_create_dialog(cg_root, sources, configured, card,
+                           context_title=f"Shot {title}", shot_duration=(card.data or {}).get("duration"),
+                           on_created=created)
     except Exception as exc:
         QMessageBox.warning(card, "Create CG Asset", str(exc))

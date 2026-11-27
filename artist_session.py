@@ -8,7 +8,7 @@ from threading import Event, Thread
 from time import monotonic
 
 import requests
-from PyQt6.QtCore import QEventLoop, QSettings, Qt, QTimer
+from PyQt6.QtCore import QEventLoop, QPoint, QRect, QSettings, Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QInputDialog, QMessageBox
 
 from artist_picker import ProfileSplash
@@ -244,7 +244,15 @@ def start_artist_session(window_factory, on_finished):
     def begin():
         memory = QSettings("Shotbox", "Desktop")
         memory.beginGroup(workstation.group() + "/picker/" + sha256(server.encode()).hexdigest())
-        dialog = ProfileSplash(None, memory)
+        defaults = legacy or DEFAULT_SETTINGS
+        initial_center = None
+        if defaults.get("remember_window_size", True):
+            initial_center = QRect(
+                defaults.get("window_x"), defaults.get("window_y"),
+                defaults.get("window_width"), defaults.get("window_height"),
+            ).center()
+        center = memory.value("workspace_center", initial_center)
+        dialog = ProfileSplash(None, memory, center if isinstance(center, QPoint) else None)
         dialog.keep_open_after_choice = True
         fetch_roster(server, dialog, lambda result: open_workspace(dialog, memory, result))
 
@@ -271,7 +279,12 @@ def start_artist_session(window_factory, on_finished):
                 manager.startup_picker = dialog
                 manager.startup_shots = preload
                 install_settings_manager(manager)
-                return window_factory()
+                window = window_factory()
+                center = window.geometry().center()
+                if not manager.get("remember_window_size") or QApplication.screenAt(center) is None:
+                    window.move(dialog.workspace_center - window.rect().center())
+                dialog.center_on_workspace(window.geometry().center())
+                return window
 
             if QApplication.platformName() == "windows":
                 app = QApplication.instance()
@@ -337,6 +350,8 @@ def start_artist_session(window_factory, on_finished):
     def confirm(window, memory, selected_id):
         window._settings_manager.confirm()
         window.activate_staged_session()
+        window.picker_memory = memory
+        memory.setValue("workspace_center", window.geometry().center())
         memory.setValue("last_artist", selected_id)
         workstation.setValue("server", server)
 

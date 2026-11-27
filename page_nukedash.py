@@ -929,7 +929,11 @@ class page_nukedash(QMainWindow):
                     self._shot_card_api.base_url, shot_id,
                     Path(self.filesIO.convert_path(shot_dir)) / "renders" / "comp",
                 )
-            snapshot = self.filesIO.scan_shot_file_state(shot_dir)
+            try:
+                snapshot = self.filesIO.scan_shot_file_state(shot_dir)
+            except OSError:
+                # Keep the last complete snapshot and retry on the next pass.
+                continue
             preview_relative = None
             if hasattr(shot_card, "apply_file_state_snapshot"):
                 preview_relative = shot_card.apply_file_state_snapshot(snapshot)

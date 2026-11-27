@@ -6,9 +6,31 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-27 09:50:42 AM +0000] Create Blender job and shot assets with matchmove cameras.
+
+- [2026-11-26 12:06:59 PM +00:00] Configure automatic login delay, defaulting to one second.
+
+- [2026-11-26 12:00:45 PM +00:00] Toggle terminal visibility for Linux application menu launches.
+
+- [2026-11-26 11:54:51 AM +00:00] Use shot duration when creating Houdini CG assets.
+
 ### Changed
 
+- [2026-11-26 12:05:30 PM +00:00] Automatically inspect checked cameras before creating CG assets.
+
+- [2026-11-26 12:01:55 PM +00:00] List every startup tab and label legacy import tabs.
+
+- [2026-11-26 11:56:11 AM +00:00] Open Create CG Asset as an independent desktop window.
+
+- [2026-11-25 04:49:47 PM +00:00] Tested dashboard polling across share login failure and recovery.
+
 ### Fixed
+
+- [2026-11-26 12:04:12 PM +00:00] Dismiss dedicated GNOME terminals when startup visibility is disabled.
+
+- [2026-11-26 11:57:18 AM +00:00] Center the login picker over the dashboard during startup.
+
+- [2026-11-25 04:49:47 PM +00:00] Continue dashboard polling when a shot scan loses access.
 
 ## 6.1.6 - 2026-11-25
 

@@ -24,7 +24,19 @@ class LoginHandoffTests(unittest.TestCase):
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_optional_three_second_login_remembers_setting_and_allows_override(self):
+    def test_picker_stays_centered_as_the_roster_expands(self):
+        directory = Path(self.enterContext(TemporaryDirectory()))
+        memory = QSettings(str(directory / "picker.ini"), QSettings.Format.IniFormat)
+        area = self.app.primaryScreen().availableGeometry()
+        center = area.center()
+        picker = ProfileSplash(None, memory, center)
+        self.addCleanup(picker.close)
+        picker.show()
+        self.assertEqual(picker.geometry().center(), center)
+        picker.populate_profiles([(str(i), str(i), str(i)) for i in range(6)])
+        self.assertEqual(picker.geometry().center(), center)
+
+    def test_configurable_login_delay_is_remembered_and_allows_override(self):
         directory = Path(self.enterContext(TemporaryDirectory()))
         path = str(directory / "picker.ini")
         profiles = [("1", "jack", "Jack"), ("2", "cronk", "Cronk")]
@@ -39,10 +51,13 @@ class LoginHandoffTests(unittest.TestCase):
         self.assertTrue(first.windowFlags() & Qt.WindowType.FramelessWindowHint)
         self.assertTrue(first.auto_login.isChecked())
         self.assertFalse(first.login_timer.isActive())
+        self.assertEqual(first.login_delay.value(), 1)
+        first.login_delay.setValue(3)
         first.settings.setValue("last_artist", "1")
         first.close()
 
         picker = open_picker()
+        self.assertEqual(picker.login_delay.value(), 3)
         self.assertTrue(picker.auto_login.isChecked())
         picker.auto_login.click()
         self.assertFalse(picker.login_timer.isActive())
@@ -71,6 +86,23 @@ class LoginHandoffTests(unittest.TestCase):
         self.assertIsNone(returning.artist_id)
         QTest.qWait(650)
         self.assertEqual(returning.artist_id, "1")
+
+    def test_editing_login_delay_pauses_and_enter_resumes_countdown(self):
+        directory = Path(self.enterContext(TemporaryDirectory()))
+        memory = QSettings(str(directory / "picker.ini"), QSettings.Format.IniFormat)
+        memory.setValue("last_artist", "1")
+        picker = ProfileSplash([("1", "jack", "Jack")], memory)
+        self.addCleanup(picker.close)
+        picker.show()
+        self.assertEqual(picker.login_timer.interval(), 1000)
+        picker.login_delay.setFocus()
+        QTest.qWait(50)
+        self.assertFalse(picker.login_timer.isActive())
+        picker.login_delay.setValue(2)
+        QTest.keyClick(picker.login_delay, Qt.Key.Key_Return)
+        QTest.qWait(50)
+        self.assertTrue(picker.login_timer.isActive())
+        self.assertEqual(picker.login_timer.interval(), 2000)
 
     def test_larger_roster_wraps_and_every_profile_is_visible(self):
         directory = Path(self.enterContext(TemporaryDirectory()))

@@ -10,7 +10,7 @@ from PyQt6.QtCore import QAbstractAnimation, QEasingCurve, QEvent, QEventLoop, Q
 from PyQt6.QtGui import QBrush, QColor, QConicalGradient, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient, QRegion
 from PyQt6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QFrame, QHBoxLayout, QLabel, QPushButton,
-    QProgressBar, QScrollArea, QStyle, QVBoxLayout, QWidget,
+    QProgressBar, QScrollArea, QSpinBox, QStyle, QVBoxLayout, QWidget,
 )
 
 from themes import set_widget_style, theme_colour
@@ -22,7 +22,6 @@ DIAMETER = 100
 TILE_WIDTH = DIAMETER + 18
 TILE_HEIGHT = DIAMETER + 40
 GAP = 24
-LOGIN_MS = 3000
 
 
 def motion_enabled(widget):
@@ -416,7 +415,7 @@ class ProfileIris(QWidget):
 class ProfileSplash(QDialog):
     profile_chosen = pyqtSignal(str)
 
-    def __init__(self, profiles, memory):
+    def __init__(self, profiles, memory, workspace_center=None):
         super().__init__()
         self.artist_id = None
         self.selection_loop = None
@@ -511,14 +510,26 @@ class ProfileSplash(QDialog):
         layout.addWidget(self.progress)
         for control in (self.status_label, self.progress):
             control.setVisible(bool(self.returning_artist))
-        self.auto_login = QCheckBox("Open last profile automatically after 3 seconds")
+        login_options = QHBoxLayout()
+        self.auto_login = QCheckBox("Open last profile automatically after")
         self.auto_login.setChecked(self.settings.value("auto_login", True, type=bool))
         self.auto_login.toggled.connect(self.set_auto_login)
-        layout.addWidget(self.auto_login)
+        login_options.addWidget(self.auto_login)
+        self.login_delay = QSpinBox()
+        self.login_delay.setAccessibleName("Automatic login delay in seconds")
+        self.login_delay.setRange(1, 60)
+        self.login_delay.setSuffix(" s")
+        self.login_delay.setValue(self.settings.value("login_delay_seconds", 1, type=int))
+        self.login_delay.setEnabled(self.auto_login.isChecked())
+        self.login_delay.installEventFilter(self)
+        self.login_delay.valueChanged.connect(self.set_login_delay)
+        login_options.addWidget(self.login_delay)
+        login_options.addStretch()
+        layout.addLayout(login_options)
         self.login_timer = QTimer(self)
         self.login_timer.setSingleShot(True)
         self.login_timer.setTimerType(Qt.TimerType.PreciseTimer)
-        self.remaining_ms = LOGIN_MS
+        self.remaining_ms = self.login_delay.value() * 1000
         self.ring_timer = QTimer(self)
         self.ring_timer.setTimerType(Qt.TimerType.PreciseTimer)
         self.ring_timer.timeout.connect(self.refresh_ring)
@@ -526,9 +537,13 @@ class ProfileSplash(QDialog):
         self.retry_button = QPushButton("Retry")
         self.retry_button.hide()
         layout.addWidget(self.retry_button)
+        screen = QApplication.screenAt(workspace_center) if workspace_center is not None else None
+        self.setScreen(screen or self.screen())
         available = self.screen().availableGeometry()
+        self.workspace_center = workspace_center if screen else available.center()
         self.setMinimumSize(min(PICKER_WIDTH, available.width()), min(PICKER_HEIGHT, available.height()))
         self.resize(self.minimumSize())
+        self.center_on_workspace(self.workspace_center)
         self.loading_logo = QLabel()
         self.loading_logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.loading_logo.setPixmap(QApplication.windowIcon().pixmap(80, 80))
@@ -573,17 +588,30 @@ class ProfileSplash(QDialog):
         width = content_width + 64 + (bar_width if roster_height < content_height else 0)
         self.setMinimumWidth(min(available.width(), max(self.minimumWidth(), width)))
         self.resize(self.minimumWidth(), min(available.height(), max(self.height(), PICKER_HEIGHT + roster_height - TILE_HEIGHT)))
-        if self.isVisible():
-            self.move(max(available.left(), min(self.x(), available.right() + 1 - self.width())),
-                      max(available.top(), min(self.y(), available.bottom() + 1 - self.height())))
+        self.center_on_workspace(self.workspace_center)
         artist = self.returning_artist
         if artist:
             artist.setFocus()
 
         self.update_login_timer()
 
+    def center_on_workspace(self, center):
+        screen = QApplication.screenAt(center) or self.screen()
+        available = screen.availableGeometry()
+        self.workspace_center = center if available.contains(center) else available.center()
+        origin = self.workspace_center - self.rect().center()
+        self.move(max(available.left(), min(origin.x(), available.right() + 1 - self.width())),
+                  max(available.top(), min(origin.y(), available.bottom() + 1 - self.height())))
+
     def set_auto_login(self, enabled):
         self.settings.setValue("auto_login", enabled)
+        self.login_delay.setEnabled(enabled)
+        self.update_login_timer()
+
+    def set_login_delay(self, seconds):
+        self.settings.setValue("login_delay_seconds", seconds)
+        self.login_timer.stop()
+        self.remaining_ms = seconds * 1000
         self.update_login_timer()
 
     def update_login_timer(self):
@@ -594,7 +622,7 @@ class ProfileSplash(QDialog):
                    and (not self.keep_open_after_choice or self.waiting_for_choice or self.selection_loop is not None))
         browsing = any(isinstance(item, ArtistCircle) and item is not artist
                        for item in (self.hovered_artist, self.focusWidget()))
-        if enabled and not browsing:
+        if enabled and not browsing and not self.login_delay.hasFocus():
             if not self.login_timer.isActive():
                 self.login_timer.start(self.remaining_ms)
                 refresh_hz = self.screen().refreshRate() or 60
@@ -607,7 +635,7 @@ class ProfileSplash(QDialog):
             self.login_timer.stop()
             self.ring_timer.stop()
             if not enabled:
-                self.remaining_ms = LOGIN_MS
+                self.remaining_ms = self.login_delay.value() * 1000
             self.browse_name.setText("Auto-open paused" if enabled
                                      else f"Last used · {artist.display_name}")
         self.refresh_ring()
@@ -617,7 +645,7 @@ class ProfileSplash(QDialog):
         remaining = self.login_timer.remainingTime()
         if remaining < 0:
             remaining = self.remaining_ms
-        artist.countdown_fraction = (1 - remaining / LOGIN_MS
+        artist.countdown_fraction = (1 - remaining / (self.login_delay.value() * 1000)
                                      if self.auto_login.isChecked() else None)
         artist.update()
 
@@ -653,6 +681,13 @@ class ProfileSplash(QDialog):
                 handle = self.windowHandle()
                 if handle and handle.startSystemMove():
                     return True
+        if watched is getattr(self, "login_delay", None):
+            if event.type() in (QEvent.Type.FocusIn, QEvent.Type.FocusOut):
+                self.browse_timer.start(0)
+            elif event.type() == QEvent.Type.KeyPress and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                self.login_delay.interpretText()
+                self.auto_login.setFocus()
+                return True
         if isinstance(watched, ArtistCircle):
             event_type = event.type()
             if event_type == QEvent.Type.Enter:
@@ -680,7 +715,7 @@ class ProfileSplash(QDialog):
     def hideEvent(self, event):
         self.login_timer.stop()
         self.ring_timer.stop()
-        self.remaining_ms = LOGIN_MS
+        self.remaining_ms = self.login_delay.value() * 1000
         self.browse_timer.stop()
         self.hovered_artist = None
         super().hideEvent(event)
@@ -694,6 +729,7 @@ class ProfileSplash(QDialog):
             self.returning_artist.countdown_fraction = None
             self.returning_artist.update()
         self.auto_login.hide()
+        self.login_delay.hide()
         self.artist_id = artist_id
         if self.selection_loop is None and not self.keep_open_after_choice:
             self.accept()

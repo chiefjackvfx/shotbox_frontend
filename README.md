@@ -166,6 +166,12 @@ in the frontend folder, then run `echo Exit code: %ERRORLEVEL%`.
 DaVinci Resolve's native scripting library loads only when a Resolve action is
 requested. Normal Shotbox startup does not load or require that library.
 
+On Linux, open Settings → Startup and clear **Show terminal window when Shotbox
+starts** to launch directly into the login picker from the application menu.
+The option appears for a user menu shortcut that runs this installation’s
+`run_shotbox_frontend.sh` when `desktop-file-edit` is available. Recheck it
+to restore the terminal on the next menu launch.
+
 At startup, the terminal shows an ASCII version of the Shotbox logo alongside
 Shotbox, Python, OS, Qt, media and Matte package versions, followed by the active
 Python executable path. Versions come from the running environment's installed
@@ -197,21 +203,20 @@ the change, with identical decoded frames. See
 [batch preview verification](docs/PREVIEW_BATCH_VERIFICATION.md) for measurements,
 test commands, and the limits of this comparison.
 
-## Houdini job and shot assets
+## Houdini and Blender job and shot assets
 
 In NukeDash, click **Job Assets** to open the folder in your file explorer.
 To create an asset, right-click **Job Assets** and choose
-**Create CG Asset**. Enter a new asset name, select camera exports, then use
-**Inspect Cameras** to import them in background Houdini and calculate duration.
+**Create CG Asset**. Enter a new asset name and check the camera exports to include.
+ShotBox imports the checked exports in background Houdini to calculate their duration.
 ShotBox discovers `*_hou.py` exports from job, timeline and shot matchmove export
-folders; **Browse** adds other 3DE Houdini Python exports. Only selected files
-are executed, when you inspect them. No camera is required for an empty scene.
+folders; **Browse** adds other 3DE Houdini Python exports. Checking an export runs its Python code in Houdini. No camera is required for an empty scene.
 
 FPS defaults to 25. Cameras and their keyed hierarchies are shifted to frame
 1001, preserving frame spacing. The longest selected camera sets the duration;
 **Override camera duration** allows another frame count. Static cameras or
-exports without detectable keyframes require a manual duration. Inspect again
-after changing the selection, source files or FPS.
+exports without detectable keyframes require a manual duration. Changing the selection or FPS triggers another inspection.
+**Create and Open** waits for inspection and rechecks exports that changed on disk.
 
 **Create and Open** saves `job_assets/cg/<name>/<name>_v001.hip`, creates `geo/`
 and `assets/`, sets `$JOB` to the asset folder, and launches Houdini. Existing
@@ -232,6 +237,17 @@ Orange filename buttons on the shot card open the latest asset versions;
 right-click opens their folders in Explorer. Buttons wrap in narrow cards,
 shorten long filenames visually, and follow the 3DE controls' compact-mode
 visibility. Full filenames and paths remain available in their tooltips.
+
+For Blender, choose **Blender** in the same dialog. Checking a 3DE
+`*_blender.py` export executes it in background Blender. Each export gets its
+own collection. The first checked export supplies the active camera and render
+settings. Camera, parent and lens animation and camera plate timing move
+together to frame 1001. With no exports checked, enter a duration to create
+an empty Blender scene.
+
+**Create and Open** saves `<name>_v001.blend` in the job or shot CG asset
+folder. The filename button reopens the latest numeric version. Set **Blender
+Executable** in Settings if Blender is unavailable on `PATH`.
 
 Set **Houdini Executable** in Settings if Houdini is not available through `HFS`
 or `PATH`. Its matching `hython` is required, together with an available
@@ -262,7 +278,7 @@ frames and Nuke caches in `.cache/temp/thumbnail-nuke-*`, removed after decoding
 Runtime setup downloads and disposable installation files also use `.cache/temp`,
 protected while setup runs. Persistent Python, setup tools and environment
 backups live under `.runtime` and are not deleted by Clear Cache.
-Houdini CG preparation uses `.cache/temp/houdini-cg-*`, protected until its
+CG scene preparation uses `.cache/temp/cg-asset-*`, protected until its
 worker exits. It includes isolated worker preferences, requests, diagnostics
 and prepared scenes; these files are disposable.
 Proxy JPEGs sit directly inside each job folder, named

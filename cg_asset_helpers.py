@@ -1,4 +1,4 @@
-"""Filesystem and executable helpers for job and shot Houdini assets."""
+"""Filesystem and executable helpers for job and shot CG assets."""
 from __future__ import annotations
 
 import os
@@ -109,7 +109,7 @@ def worker_environment(hython: Path, work_dir: Path) -> dict[str, str]:
 
 
 def discover_camera_exports(job: dict, job_assets: Path, convert_path=lambda path: path,
-                            job_matchmove: Path | None = None) -> list[Path]:
+                            job_matchmove: Path | None = None, *, include_blender=False) -> list[Path]:
     """Inspect known matchmove export directories, never execute their contents."""
     configured_job = job.get("matchmove_path")
     roots = [job_matchmove or (Path(convert_path(configured_job)) if configured_job
@@ -129,18 +129,19 @@ def discover_camera_exports(job: dict, job_assets: Path, convert_path=lambda pat
                 roots.append(Path(convert_path(shot["matchmove_path"])))
             elif shot.get("base_path"):
                 roots.append(asset_path(Path(convert_path(shot["base_path"])), "shot_assets", "matchmove"))
-    return discover_exports_in_matchmove(roots)
+    return discover_exports_in_matchmove(roots, include_blender=include_blender)
 
 
-def discover_exports_in_matchmove(roots: list[Path]) -> list[Path]:
+def discover_exports_in_matchmove(roots: list[Path], *, include_blender=False) -> list[Path]:
     """List exports only in explicitly supplied matchmove folders."""
+    suffixes = ("_hou.py", "_blender.py") if include_blender else ("_hou.py",)
     exports = {}
     for root in roots:
         directory = root / "export"
         if not directory.is_dir():
             continue
         for path in directory.iterdir():
-            if path.is_file() and path.name.lower().endswith("_hou.py"):
+            if path.is_file() and path.name.lower().endswith(suffixes):
                 exports[os.path.normcase(str(path.resolve()))] = path
     return sorted(exports.values(), key=lambda path: (path.name.casefold(), str(path).casefold()))
 
@@ -163,7 +164,7 @@ def list_cg_projects(cg_root: Path) -> list[Path]:
     for folder in sorted(directory.iterdir(), key=lambda path: path.name.casefold()):
         if not folder.is_dir():
             continue
-        pattern = re.compile(r"^" + re.escape(folder.name) + r"_v(\d+)\.hip$", re.IGNORECASE)
+        pattern = re.compile(r"^" + re.escape(folder.name) + r"_v(\d+)\.(?:hip|blend)$", re.IGNORECASE)
         versions = [(int(match.group(1)), path.name, path) for path in folder.iterdir()
                     if path.is_file() and (match := pattern.fullmatch(path.name))]
         if versions:
@@ -173,13 +174,15 @@ def list_cg_projects(cg_root: Path) -> list[Path]:
 
 @app_cache.temporary_cache_task
 def publish_scene(prepared: Path, cg_root: Path, name: str) -> Path:
-    """Publish a saved hip exclusively, rolling back only our own files/directories."""
+    """Publish a saved scene exclusively, rolling back only our own files/directories."""
     destination = asset_destination(cg_root, name)
     validate_new_destination(destination)
+    if prepared.suffix not in (".hip", ".blend"):
+        raise ValueError("Expected a .hip or .blend scene.")
     if not prepared.is_file() or prepared.stat().st_size == 0:
-        raise RuntimeError("Houdini did not write a nonempty scene file.")
+        raise RuntimeError("The worker did not write a nonempty scene file.")
     created_dirs = []
-    output = destination / f"{destination.name}_v001.hip"
+    output = destination / f"{destination.name}_v001{prepared.suffix}"
     owns_output = False
     try:
         # Record each directory separately; never remove unowned parents.
@@ -219,15 +222,32 @@ def publish_scene(prepared: Path, cg_root: Path, name: str) -> Path:
         raise
 
 
+def resolve_blender(configured: str = "") -> Path:
+    value = os.path.expanduser(os.path.expandvars(configured.strip())) or "blender"
+    found = shutil.which(value)
+    if not found:
+        raise FileNotFoundError(f"Could not run Blender ({value}). Set Blender Executable in Settings.")
+    return Path(found).resolve()
+
+
+def scene_application(project: Path) -> str:
+    return "Blender" if project.suffix.lower() == ".blend" else "Houdini"
+
+
 def open_scene(project: Path, configured: str = "") -> None:
     if not project.is_file():
-        raise FileNotFoundError(f"This Houdini scene is unavailable:\n{project}")
-    houdini, _ = resolve_houdini(configured)
+        raise FileNotFoundError(f"This {scene_application(project)} scene is unavailable:\n{project}")
+    if scene_application(project) == "Blender":
+        executable = resolve_blender(configured)
+        env = dict(os.environ)
+    else:
+        executable, _ = resolve_houdini(configured)
+        env = dict(os.environ, JOB=str(project.parent))
     # Passing the hip at startup bypasses personal 123.py (new-scene startup).
     kwargs = {"stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
-              "cwd": str(project.parent), "env": dict(os.environ, JOB=str(project.parent))}
+              "cwd": str(project.parent), "env": env}
     if os.name == "nt":
         kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
     else:
         kwargs["start_new_session"] = True
-    subprocess.Popen([str(houdini), str(project.resolve())], **kwargs)
+    subprocess.Popen([str(executable), str(project.resolve())], **kwargs)

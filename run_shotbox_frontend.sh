@@ -11,4 +11,9 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
 fi
 
 cd "$SCRIPT_DIR"
+# Some desktop shortcuts start GNOME Terminal explicitly, bypassing Terminal=false.
+# A terminal created for Shotbox has the terminal server as its direct parent.
+if [[ -t 1 && -r "/proc/$PPID/comm" && "$(<"/proc/$PPID/comm")" == gnome-terminal-* ]]; then
+  exec "$PYTHON_BIN" desktop_launcher.py
+fi
 exec "$PYTHON_BIN" main.py

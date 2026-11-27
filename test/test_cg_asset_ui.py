@@ -12,12 +12,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest
 from PyQt6.QtCore import QProcess, Qt
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QDialog, QHBoxLayout, QToolButton, QWidget
+from PyQt6.QtWidgets import QApplication, QDialog, QHBoxLayout, QPushButton, QToolButton, QWidget
 
 import app_cache
 import cg_asset_actions as actions
 import cg_asset_helpers as helpers
-from cg_asset_dialog import CgAssetDialog
+from cg_asset_dialog import CgAssetDialog, show_create_dialog
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +42,8 @@ def dialog(app, tmp_path, monkeypatch, request):
     sources = [tmp_path / name for name in ("short_hou.py", "long_hou.py")]
     for path in sources:
         path.write_text("raise AssertionError('the UI must never execute camera scripts')")
-    dialog = CgAssetDialog(tmp_path / request.param / "cg", sources, "", work)
+    dialog = CgAssetDialog(tmp_path / request.param / "cg", sources, "", work,
+                           shot_duration="121" if request.param == "shot_assets" else None)
     warnings = []
     monkeypatch.setattr("cg_asset_dialog.QMessageBox.warning", lambda *args: warnings.append(args[-1]))
     monkeypatch.setattr(helpers, "resolve_houdini", lambda configured: (Path(sys.executable), Path(sys.executable)))
@@ -95,9 +96,8 @@ def test_dialog_inspection_duration_override_invalidation_and_source_changes(app
     dialog.name_edit.setText("Oak")
     for index in range(2):
         dialog.camera_list.item(index).setCheckState(Qt.CheckState.Checked)
-    assert not dialog.create_button.isEnabled()
-    dialog._inspect()
-    wait_until(app, lambda: not dialog._busy)
+    assert dialog.create_button.isEnabled()
+    wait_until(app, lambda: dialog._prepared is not None)
     assert dialog.duration_spin.value() == 120
     assert not dialog.duration_spin.isEnabled()
     assert dialog.create_button.isEnabled()
@@ -108,16 +108,46 @@ def test_dialog_inspection_duration_override_invalidation_and_source_changes(app
     assert dialog.range_label.text() == "1001 – 1050"
     dialog.override_check.setChecked(False)
     assert dialog.duration_spin.value() == 120
-    dialog.selected_sources()[0].write_text("changed")
-    dialog._create()
-    assert "changed" in dialog.test_warnings[-1]
-    assert not dialog._prepared and not dialog.create_button.isEnabled()
-    assert not dialog.cg_root.parent.exists()
-    dialog._inspect()
-    wait_until(app, lambda: not dialog._busy)
-    assert dialog.create_button.isEnabled()
     dialog.camera_list.item(0).setCheckState(Qt.CheckState.Unchecked)
     assert not dialog._prepared and dialog.duration_spin.value() == 0
+    wait_until(app, lambda: dialog._prepared is not None)
+    assert "80 frames" not in dialog.camera_summary.text()
+    dialog.selected_sources()[0].write_text("changed")
+    dialog.create_button.click()
+    wait_until(app, lambda: dialog.project_path is not None)
+    assert not dialog.test_warnings
+
+
+@pytest.mark.parametrize("inspection_started", [True, False])
+def test_create_inspects_then_saves_once(app, dialog, inspection_started):
+    dialog.name_edit.setText("Rain")
+    dialog.camera_list.item(0).setCheckState(Qt.CheckState.Checked)
+    if inspection_started:
+        dialog.inspect_button.click()
+    dialog.create_button.click()
+    wait_until(app, lambda: dialog.project_path is not None)
+    assert dialog.duration_spin.value() == 80
+    assert len(list(dialog.work_dir.glob("*.result.json"))) == 2
+    assert not dialog.test_warnings
+
+
+def test_use_shot_duration_with_and_without_cameras(app, dialog):
+    buttons = [button for button in dialog.findChildren(QPushButton)
+               if button.text().startswith("Use shot duration")]
+    if dialog.cg_root.parent.name == "job_assets":
+        assert not buttons
+        return
+    dialog.name_edit.setText("Rain")
+    buttons[0].click()
+    assert dialog.create_button.isEnabled()
+    assert dialog.range_label.text() == "1001 – 1121"
+    dialog.camera_list.item(0).setCheckState(Qt.CheckState.Checked)
+    assert dialog.create_button.isEnabled()
+    wait_until(app, lambda: dialog._prepared is not None)
+    assert dialog.duration_spin.value() == 121
+    assert dialog.create_button.isEnabled()
+    dialog.override_check.setChecked(False)
+    assert dialog.duration_spin.value() == 80
 
 
 def test_failed_save_and_cancellation_do_not_publish_asset(app, dialog):
@@ -215,7 +245,7 @@ def test_saved_scene_survives_launch_failure(app, tmp_path, monkeypatch):
     project.write_bytes(b"hip")
     page._active_job_data = lambda: {}
     page._resolved_job_matchmove_dir = lambda: page.assets / "matchmove"
-    monkeypatch.setattr("cg_asset_dialog.show_create_dialog", lambda *args: project)
+    monkeypatch.setattr("cg_asset_dialog.show_create_dialog", lambda *args, **kwargs: kwargs["on_created"](project))
     monkeypatch.setattr(actions, "configured_houdini", lambda: "")
     monkeypatch.setattr(helpers, "open_scene", mock.Mock(side_effect=OSError("launch failed")))
     with mock.patch.object(actions.QMessageBox, "warning") as warning:
@@ -224,6 +254,24 @@ def test_saved_scene_survives_launch_failure(app, tmp_path, monkeypatch):
     assert page._job_cg_buttons[0].text() == project.name
     assert "retry" in warning.call_args.args[-1]
     page.close()
+
+
+def test_create_window_is_independent_and_keeps_work_until_close(app, tmp_path, monkeypatch):
+    monkeypatch.setattr(app_cache, "CACHE_ROOT", tmp_path / "cache")
+    owner = QWidget()
+    owner.show()
+    created = mock.Mock()
+    window = show_create_dialog(tmp_path / "cg", [], parent=owner, on_created=created)
+    assert window.isVisible() and window.windowType() == Qt.WindowType.Window
+    assert window.parentWidget() is None and window.windowHandle().transientParent() is None
+    assert not window.isModal() and QApplication.activeModalWidget() is None
+    owner.close()
+    assert window.isVisible() and window.work_dir.is_dir()
+    assert app_cache.clear_cache_files()["active_temp"]
+    window.close()
+    assert not window.work_dir.exists()
+    assert not app_cache.clear_cache_files()["active_temp"]
+    created.assert_not_called()
 
 
 def test_cache_clear_preserves_active_houdini_work(tmp_path, monkeypatch):
