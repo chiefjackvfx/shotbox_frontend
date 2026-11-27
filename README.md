@@ -246,7 +246,11 @@ together to frame 1001. With no exports checked, enter a duration to create
 an empty Blender scene.
 
 **Create and Open** saves `<name>_v001.blend` in the job or shot CG asset
-folder. The filename button reopens the latest numeric version. Set **Blender
+folder. For both Blender and Houdini, existing filenames can include descriptive
+text between the asset folder name and the trailing version, such as
+`park/park_blockout_version_12_v01.blend`. Spaces, underscores, hyphens and
+dots are accepted as separators. The filename button opens the highest trailing
+version number in the folder. Set **Blender
 Executable** in Settings if Blender is unavailable on `PATH`.
 
 Set **Houdini Executable** in Settings if Houdini is not available through `HFS`

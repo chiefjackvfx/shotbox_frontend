@@ -88,6 +88,20 @@ def test_project_versions_use_numeric_order_and_one_button_per_asset(tmp_path):
     assert helpers.list_cg_projects(helpers.resolve_cg_root(assets.parent, "job_assets")) == [folder / "Oak_v010.hip"]
 
 
+@pytest.mark.parametrize("extension", ["blend", "hip"])
+def test_descriptive_asset_names_use_trailing_version(tmp_path, extension):
+    folder = tmp_path / "park"
+    folder.mkdir()
+    first = folder / f"park_blockout_version_12_v01.{extension}"
+    first.touch()
+    assert helpers.list_cg_projects(tmp_path) == [first]
+    latest = folder / f"PARK - blockout.v10.{extension}"
+    for path in (latest, folder / f"park_blockout_version_99_v9.{extension}",
+                 folder / f"parking_v999.{extension}", folder / "park_v999.blend1"):
+        path.touch()
+    assert helpers.list_cg_projects(tmp_path) == [latest]
+
+
 def test_existing_legacy_cg_is_reused_when_lowercase_root_also_exists(tmp_path):
     canonical = tmp_path / "job_assets"
     canonical.mkdir()

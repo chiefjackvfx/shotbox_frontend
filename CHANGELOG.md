@@ -6,7 +6,11 @@ All notable frontend publish changes should be documented in this file.
 
 ### Added
 
+- [2026-11-27 10:26:55 AM +0000] Show Blender and Houdini logos beside CG asset filenames.
+
 ### Changed
+
+- [2026-11-27 10:24:59 AM +0000] Discover versioned CG scenes with descriptive filenames.
 
 ### Fixed
 

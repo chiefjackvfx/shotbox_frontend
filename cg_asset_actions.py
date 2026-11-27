@@ -1,8 +1,10 @@
 """Dashboard and shot-card integration for filesystem-backed CG assets."""
+from functools import lru_cache
 from pathlib import Path
 
 from PyQt6 import sip
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QFrame, QMenu, QMessageBox, QSizePolicy, QToolButton
 
 import cg_asset_helpers as helpers
@@ -31,6 +33,23 @@ def shot_cg_root(card):
     return helpers.resolve_cg_root(Path(root), "shot_assets") if root else None
 
 
+@lru_cache(maxsize=2)
+def _application_icon(application):
+    filename = {"Blender": "blender.svg", "Houdini": "houdini.png"}[application]
+    return QIcon(str(Path(__file__).with_name("ui") / filename))
+
+
+def _set_project_button(button, project):
+    if button.property("project_path") == str(project):
+        return
+    application = helpers.scene_application(project)
+    button.setProperty("project_path", str(project))
+    button.setIcon(_application_icon(application))
+    button.setIconSize(QSize(16, 16))
+    button.setText(project.name)
+    button.setToolTip(f"Open {application} scene\n{project}\nRight-click to open in Explorer")
+
+
 def refresh_buttons(page, *, loading=False):
     buttons = getattr(page, "_job_cg_buttons", [])
     layout = getattr(page, "horizontalLayout_assets_actions", None)
@@ -49,7 +68,7 @@ def refresh_buttons(page, *, loading=False):
     while len(buttons) < len(projects):
         button = QToolButton(page.btn_open_job_assets.parentWidget())
         button.setObjectName("btn_open_job_cg")
-        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         button.clicked.connect(lambda checked=False, button=button: open_project(page, button))
         button.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         button.customContextMenuRequested.connect(
@@ -58,9 +77,7 @@ def refresh_buttons(page, *, loading=False):
         buttons.append(button)
     page._job_cg_buttons = buttons
     for button, project in zip(buttons, projects):
-        button.setProperty("project_path", str(project))
-        button.setText(project.name)
-        button.setToolTip(f"Open {helpers.scene_application(project)} scene\n{project}\nRight-click to open in Explorer")
+        _set_project_button(button, project)
         button.show()
     layout.invalidate()
 
@@ -196,9 +213,7 @@ def refresh_shot_buttons(card):
         buttons.append(button)
     card._shot_cg_buttons = buttons
     for button, project in zip(buttons, projects):
-        button.setProperty("project_path", str(project))
-        button.setText(project.name)
-        button.setToolTip(f"Open {helpers.scene_application(project)} scene\n{project}\nRight-click to open in Explorer")
+        _set_project_button(button, project)
         button.show()
     update_shot_visibility(card)
     layout.invalidate()

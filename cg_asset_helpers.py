@@ -164,7 +164,8 @@ def list_cg_projects(cg_root: Path) -> list[Path]:
     for folder in sorted(directory.iterdir(), key=lambda path: path.name.casefold()):
         if not folder.is_dir():
             continue
-        pattern = re.compile(r"^" + re.escape(folder.name) + r"_v(\d+)\.(?:hip|blend)$", re.IGNORECASE)
+        pattern = re.compile(re.escape(folder.name) + r"(?:[._ -].*)?[._ -]v(\d+)\.(?:hip|blend)",
+                             re.IGNORECASE)
         versions = [(int(match.group(1)), path.name, path) for path in folder.iterdir()
                     if path.is_file() and (match := pattern.fullmatch(path.name))]
         if versions:

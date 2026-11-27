@@ -148,7 +148,8 @@ class FlexibleButton(QPushButton):
         option = QStyleOptionButton()
         self.initStyleOption(option)
         content = self.style().subElementRect(QStyle.SubElement.SE_PushButtonContents, option, self)
-        available = max(0, content.width())
+        icon_space = 0 if option.icon.isNull() else option.iconSize.width() + 4
+        available = max(0, content.width() - icon_space)
         suffix = self.elide_suffix
         suffix_width = option.fontMetrics.horizontalAdvance(suffix)
         # Keep the version and lock owner intact when shortening a filename.
